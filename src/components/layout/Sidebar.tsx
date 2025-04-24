@@ -1,7 +1,7 @@
-
 import { cn } from "@/lib/utils";
 import { HomeIcon, DatabaseIcon, UploadIcon, SettingsIcon, BeakerIcon, UsersIcon } from "lucide-react";
 import { NavLink } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface SidebarProps {
   className?: string;
@@ -34,31 +34,35 @@ const NavItem = ({ icon: Icon, label, href, active }: NavItemProps) => {
 };
 
 export function Sidebar({ className }: SidebarProps) {
+  const { user } = useAuth();
+
   return (
     <div className={cn("flex h-screen w-64 flex-col bg-primary", className)}>
       <div className="flex h-14 items-center border-b border-white/10 px-4">
         <h1 className="flex items-center text-lg font-bold text-white">
           <BeakerIcon className="mr-2 h-6 w-6" />
-          Data Alchemy
+          KernLogic
         </h1>
       </div>
       
       <div className="flex-1 overflow-auto py-4 px-3">
         <nav className="space-y-1">
-          <NavItem icon={HomeIcon} label="Dashboard" href="/" />
-          <NavItem icon={DatabaseIcon} label="Products" href="/products" />
-          <NavItem icon={UploadIcon} label="Upload Data" href="/upload" />
-          <NavItem icon={UsersIcon} label="Team" href="/team" />
-          <NavItem icon={SettingsIcon} label="Settings" href="/settings" />
+          <NavItem icon={HomeIcon} label="Dashboard" href="/app" />
+          <NavItem icon={DatabaseIcon} label="Products" href="/app/products" />
+          <NavItem icon={UploadIcon} label="Upload Data" href="/app/upload" />
+          <NavItem icon={UsersIcon} label="Team" href="/app/team" />
+          <NavItem icon={SettingsIcon} label="Settings" href="/app/settings" />
         </nav>
       </div>
       
       <div className="border-t border-white/10 p-4">
         <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-full bg-white/20" />
+          <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center text-white">
+            {user?.name?.[0]?.toUpperCase()}
+          </div>
           <div>
-            <p className="text-sm font-medium text-white">User Name</p>
-            <p className="text-xs text-slate-300">user@example.com</p>
+            <p className="text-sm font-medium text-white">{user?.name}</p>
+            <p className="text-xs text-slate-300">{user?.email}</p>
           </div>
         </div>
       </div>

@@ -1,4 +1,4 @@
-
+import { useEffect, useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { ProgressCard } from "@/components/dashboard/ProgressCard";
@@ -7,75 +7,54 @@ import { FileUpload } from "@/components/upload/FileUpload";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DatabaseIcon, PackageIcon, TagIcon, FileTextIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { productService } from "@/services/productService";
+import { useNavigate } from "react-router-dom";
 
 const Index = () => {
+  const [stats, setStats] = useState({
+    total_products: 0,
+    total_value: 0,
+    low_stock: 0
+  });
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const data = await productService.getStats();
+        setStats(data);
+      } catch (error) {
+        console.error('Error fetching stats:', error);
+      }
+    };
+
+    fetchStats();
+  }, []);
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground">Welcome to Data Alchemy Suite</p>
+          <p className="text-muted-foreground">Welcome to KernLogic</p>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           <StatCard
             title="Total Products"
-            value="1,284"
+            value={(stats.total_products ?? 0).toString()}
             icon={PackageIcon}
-            trend={{ value: "12%", positive: true }}
           />
           <StatCard
-            title="Processed Data"
-            value="876 MB"
+            title="Total Value"
+            value={`$${(stats.total_value ?? 0).toFixed(2)}`}
             icon={DatabaseIcon}
-            trend={{ value: "4%", positive: true }}
           />
           <StatCard
-            title="Generated Descriptions"
-            value="945"
+            title="Low Stock Items"
+            value={(stats.low_stock ?? 0).toString()}
             icon={FileTextIcon}
-            trend={{ value: "8%", positive: true }}
           />
-          <StatCard
-            title="Applied Tags"
-            value="3,721"
-            icon={TagIcon}
-          />
-        </div>
-
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          <div className="lg:col-span-2">
-            <Card className="h-full">
-              <CardHeader>
-                <CardTitle>Data Processing Overview</CardTitle>
-                <CardDescription>
-                  Current status of your data processing tasks
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-6">
-                  <ProgressCard
-                    title="Industrial Coatings Catalog"
-                    description="Auto-categorization and description generation in progress"
-                    progress={68}
-                  />
-                  <ProgressCard
-                    title="Marine Products Update"
-                    description="Data cleaning and formatting completed, awaiting tagging"
-                    progress={42}
-                  />
-                  <ProgressCard
-                    title="New Specialty Products"
-                    description="Processing complete - review ready"
-                    progress={100}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-          <div>
-            <RecentActivity />
-          </div>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
@@ -87,25 +66,24 @@ const Index = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-2">
-              <Button variant="outline" className="h-auto flex-col items-center justify-center gap-1 p-6">
+              <Button 
+                variant="outline" 
+                className="h-auto flex-col items-center justify-center gap-1 p-6"
+                onClick={() => navigate('/app/products')}
+              >
                 <DatabaseIcon className="h-6 w-6" />
                 <span>View Products</span>
               </Button>
-              <Button variant="outline" className="h-auto flex-col items-center justify-center gap-1 p-6">
-                <FileTextIcon className="h-6 w-6" />
-                <span>Generate Descriptions</span>
-              </Button>
-              <Button variant="outline" className="h-auto flex-col items-center justify-center gap-1 p-6">
-                <TagIcon className="h-6 w-6" />
-                <span>Manage Tags</span>
-              </Button>
-              <Button variant="outline" className="h-auto flex-col items-center justify-center gap-1 p-6">
+              <Button 
+                variant="outline" 
+                className="h-auto flex-col items-center justify-center gap-1 p-6"
+                onClick={() => navigate('/app/products/new')}
+              >
                 <PackageIcon className="h-6 w-6" />
-                <span>Add Products</span>
+                <span>Add Product</span>
               </Button>
             </CardContent>
           </Card>
-          <FileUpload />
         </div>
       </div>
     </DashboardLayout>

@@ -1,9 +1,11 @@
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { BellIcon, SearchIcon } from "lucide-react";
+import { BellIcon, SearchIcon, LogOutIcon } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 export function Header() {
+  const { user, logout } = useAuth();
+
   return (
     <header className="flex h-14 items-center justify-between border-b border-slate-200 bg-white px-6">
       <div className="flex items-center gap-2 md:w-72">
@@ -22,6 +24,15 @@ export function Header() {
           <BellIcon className="h-5 w-5" />
           <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-secondary" />
         </Button>
+
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-slate-600">
+            {user?.name}
+          </span>
+          <Button variant="ghost" size="icon" onClick={logout} className="text-slate-600 hover:text-slate-900">
+            <LogOutIcon className="h-5 w-5" />
+          </Button>
+        </div>
         
         <Button variant="default" className="font-medium">
           Upgrade to Pro

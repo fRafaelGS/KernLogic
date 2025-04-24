@@ -162,126 +162,184 @@ export function ProductsTable() {
   };
   
   return (
-    <div>
-      <div className="mb-4 flex items-center justify-between">
-        <div className="relative w-64">
-          <SearchIcon className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row gap-4 justify-between">
+        <div className="relative w-full sm:w-64">
+          <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-enterprise-400" />
           <Input
             type="search"
             placeholder="Search products..."
-            className="pl-8"
+            className="pl-9 border-enterprise-200 bg-white focus-visible:ring-primary-500 focus-visible:border-primary-500"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap gap-3 items-center">
           <Button 
             variant="outline" 
-            size="icon"
+            size="sm"
             onClick={handleRefresh}
-            title="Refresh Products"
+            className="border-enterprise-200 text-enterprise-700 hover:bg-enterprise-50"
           >
-            <RefreshCw className="h-4 w-4" />
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
           </Button>
-          <Button variant="outline" size="icon">
-            <FilterIcon className="h-4 w-4" />
+          <Button 
+            variant="outline" 
+            size="sm"
+            className="border-enterprise-200 text-enterprise-700 hover:bg-enterprise-50"
+          >
+            <FilterIcon className="h-4 w-4 mr-2" />
+            Filter
           </Button>
-          <Button variant="default" asChild>
-            <Link to="/app/products/new">Add Product</Link>
+          <Button 
+            size="sm" 
+            className="bg-primary-600 hover:bg-primary-700 text-white"
+            asChild
+          >
+            <Link to="/app/products/new">
+              <span className="flex items-center">
+                <span className="h-4 w-4 mr-2">+</span>
+                Add Product
+              </span>
+            </Link>
           </Button>
         </div>
       </div>
       
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>SKU</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Price</TableHead>
-              <TableHead>Stock</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="w-16">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center">
-                  Loading products...
-                </TableCell>
+      <div className="bg-white border border-enterprise-200 rounded-lg overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-enterprise-50 border-b border-enterprise-200">
+                <TableHead className="font-medium text-enterprise-600">Name</TableHead>
+                <TableHead className="font-medium text-enterprise-600">SKU</TableHead>
+                <TableHead className="font-medium text-enterprise-600">Category</TableHead>
+                <TableHead className="font-medium text-enterprise-600">Price</TableHead>
+                <TableHead className="font-medium text-enterprise-600">Stock</TableHead>
+                <TableHead className="font-medium text-enterprise-600">Status</TableHead>
+                <TableHead className="font-medium text-enterprise-600 w-16 text-right">Actions</TableHead>
               </TableRow>
-            ) : filteredProducts.length > 0 ? (
-              filteredProducts.map((product) => (
-                <TableRow key={product.id}>
-                  <TableCell className="font-medium">{product.name}</TableCell>
-                  <TableCell>{product.sku}</TableCell>
-                  <TableCell>{product.category}</TableCell>
-                  <TableCell>${typeof product.price === 'number' 
-                    ? product.price.toFixed(2) 
-                    : parseFloat(product.price).toFixed(2) || "0.00"}</TableCell>
-                  <TableCell>{product.stock}</TableCell>
-                  <TableCell>
-                    <Badge
-                      className={
-                        product.is_active
-                          ? "bg-green-100 text-green-800"
-                          : "bg-red-100 text-red-800"
-                      }
-                      variant="secondary"
-                    >
-                      {product.is_active ? 'Active' : 'Inactive'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreHorizontalIcon className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => product.id && handleEdit(product.id)}>
-                          <EditIcon className="mr-2 h-4 w-4" />
-                          <span>Edit</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem 
-                          className="text-red-600"
-                          onClick={() => product.id && handleDelete(product.id)}
-                        >
-                          <TrashIcon className="mr-2 h-4 w-4" />
-                          <span>Delete</span>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="h-24 text-center">
+                    <div className="flex justify-center">
+                      <div className="animate-pulse flex space-x-4">
+                        <div className="flex-1 space-y-4 py-1">
+                          <div className="h-4 bg-enterprise-100 rounded w-3/4"></div>
+                          <div className="space-y-2">
+                            <div className="h-4 bg-enterprise-100 rounded"></div>
+                            <div className="h-4 bg-enterprise-100 rounded w-5/6"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </TableCell>
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center">
-                  <div className="flex flex-col items-center justify-center gap-2">
-                    <p>No products found</p>
-                    <Button variant="outline" size="sm" onClick={handleRefresh}>
-                      <RefreshCw className="mr-2 h-4 w-4" />
-                      Refresh
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+              ) : filteredProducts.length > 0 ? (
+                filteredProducts.map((product) => (
+                  <TableRow key={product.id} className="hover:bg-enterprise-50 border-b border-enterprise-100">
+                    <TableCell className="font-medium text-enterprise-900">{product.name}</TableCell>
+                    <TableCell className="text-enterprise-600">{product.sku}</TableCell>
+                    <TableCell className="text-enterprise-600">{product.category}</TableCell>
+                    <TableCell className="text-enterprise-700">
+                      ${typeof product.price === 'number' 
+                        ? product.price.toFixed(2) 
+                        : parseFloat(product.price).toFixed(2) || "0.00"}
+                    </TableCell>
+                    <TableCell className="text-enterprise-700">{product.stock}</TableCell>
+                    <TableCell>
+                      <Badge
+                        className={
+                          product.is_active
+                            ? "bg-success-50 text-success-700 border border-success-200 font-medium"
+                            : "bg-danger-50 text-danger-700 border border-danger-200 font-medium"
+                        }
+                        variant="outline"
+                      >
+                        {product.is_active ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="text-enterprise-500 hover:text-enterprise-700 hover:bg-enterprise-100">
+                            <MoreHorizontalIcon className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-36">
+                          <DropdownMenuItem 
+                            onClick={() => product.id && handleEdit(product.id)}
+                            className="cursor-pointer text-enterprise-700 focus:text-enterprise-800 focus:bg-enterprise-50"
+                          >
+                            <EditIcon className="mr-2 h-4 w-4" />
+                            <span>Edit</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem 
+                            className="cursor-pointer text-danger-600 focus:text-danger-700 focus:bg-danger-50"
+                            onClick={() => product.id && handleDelete(product.id)}
+                          >
+                            <TrashIcon className="mr-2 h-4 w-4" />
+                            <span>Delete</span>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={7} className="h-24 text-center">
+                    <div className="flex flex-col items-center justify-center gap-3 py-8">
+                      <p className="text-enterprise-500">No products found</p>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handleRefresh}
+                        className="border-enterprise-200 text-enterprise-700"
+                      >
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        Refresh
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+        {products.length > 0 && (
+          <div className="px-4 py-3 border-t border-enterprise-200 bg-enterprise-50">
+            <div className="flex items-center justify-between text-sm text-enterprise-600">
+              <div>
+                Showing <span className="font-medium">{Math.min(1, filteredProducts.length)}</span> to{" "}
+                <span className="font-medium">{Math.min(filteredProducts.length, 10)}</span> of{" "}
+                <span className="font-medium">{filteredProducts.length}</span> results
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" className="border-enterprise-200 text-enterprise-700" disabled>
+                  Previous
+                </Button>
+                <Button size="sm" variant="outline" className="border-enterprise-200 text-enterprise-700">
+                  Next
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
       
-      {/* Debug info */}
-      <div className="mt-4 text-xs text-muted-foreground">
-        <p>Products count: {products.length}</p>
-        <p>API URL: {API_URL}/products/</p>
-      </div>
+      {/* Debug info - only show in development */}
+      {process.env.NODE_ENV !== 'production' && (
+        <div className="mt-4 text-xs text-enterprise-400">
+          <p>Products count: {products.length}</p>
+          <p>API URL: {API_URL}/products/</p>
+        </div>
+      )}
     </div>
   );
 }

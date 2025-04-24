@@ -9,9 +9,10 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { NewProduct } from '@/pages/NewProduct';
 import { EditProduct } from '@/pages/EditProduct';
-import { LoginPage } from '@/pages/LoginPage';
-import { RegisterPage } from '@/pages/RegisterPage';
+import LoginPage from '@/pages/auth/LoginPage';
+import RegisterPage from '@/pages/auth/RegisterPage';
 import ProductsPage from "@/pages/ProductsPage";
+import ButtonDemo from "@/pages/ButtonDemo";
 
 // Marketing Pages
 import LandingPage from "./pages/marketing/LandingPage";
@@ -98,6 +99,15 @@ export const App: React.FC = () => {
                                         <DashboardLayout>
                                             <EditProduct />
                                         </DashboardLayout>
+                                    </ProtectedRoute>
+                                }
+                            />
+                            {/* UI Component Demo Routes */}
+                            <Route
+                                path="/app/ui/buttons"
+                                element={
+                                    <ProtectedRoute>
+                                        <ButtonDemo />
                                     </ProtectedRoute>
                                 }
                             />

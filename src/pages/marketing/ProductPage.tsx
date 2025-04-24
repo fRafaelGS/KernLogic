@@ -1,84 +1,225 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { 
+  BeakerIcon, 
+  ArrowRight, 
+  Database, 
+  LineChart, 
+  ShieldCheck, 
+  Zap,
+  CheckCircle2,
+  ArrowUpRight,
+  LucideSettings
+} from "lucide-react";
 
 export default function ProductPage() {
   const features = [
     {
       title: "AI-Powered Data Processing",
       description: "Our advanced AI algorithms automatically process and validate your product data, reducing manual work and errors.",
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-        </svg>
-      )
+      icon: <Zap className="h-5 w-5 text-primary-600" />
     },
     {
       title: "Data Consistency",
       description: "Ensure your product data is consistent across all channels and platforms with our validation system.",
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      )
+      icon: <ShieldCheck className="h-5 w-5 text-primary-600" />
     },
     {
       title: "Real-time Analytics",
       description: "Get insights into your product data performance with real-time analytics and reporting.",
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-        </svg>
-      )
+      icon: <LineChart className="h-5 w-5 text-primary-600" />
     }
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-white">
       {/* Navigation */}
-      <nav className="container mx-auto px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="text-2xl font-bold text-gray-900">KernLogic</div>
-          <div className="flex items-center space-x-4">
-            <Link to="/marketing" className="text-gray-600 hover:text-gray-900">Home</Link>
-            <Link to="/marketing/pricing" className="text-gray-600 hover:text-gray-900">Pricing</Link>
-            <Link to="/login" className="text-gray-600 hover:text-gray-900">Login</Link>
-            <Button asChild>
-              <Link to="/register">Get Started</Link>
+      <header className="border-b border-enterprise-100">
+        <nav className="container mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <BeakerIcon className="h-6 w-6 text-primary-600 mr-2" />
+              <span className="text-xl font-bold text-enterprise-900">KernLogic</span>
+            </div>
+            <div className="flex items-center space-x-6">
+              <Link to="/marketing" className="text-enterprise-600 hover:text-primary-600 text-sm font-medium">Home</Link>
+              <Link to="/marketing/pricing" className="text-enterprise-600 hover:text-primary-600 text-sm font-medium">Pricing</Link>
+              <Link to="/login" className="text-enterprise-600 hover:text-primary-600 text-sm font-medium">Login</Link>
+              <Button
+                variant="primary"
+                asChild
+              >
+                <Link to="/register">Get Started</Link>
+              </Button>
+            </div>
+          </div>
+        </nav>
+      </header>
+
+      {/* Hero Section */}
+      <section className="py-20 bg-gradient-to-b from-enterprise-50 to-white border-b border-enterprise-100">
+        <div className="container mx-auto px-6">
+          <div className="max-w-3xl mx-auto text-center">
+            <div className="inline-block px-3 py-1 rounded-full bg-primary-50 text-primary-700 text-xs font-medium tracking-wide mb-4">
+              POWERFUL FEATURES
+            </div>
+            <h1 className="text-4xl font-bold text-enterprise-900 mb-6">
+              Transform Your Product Data Management
+            </h1>
+            <p className="text-lg text-enterprise-600 mb-8 max-w-2xl mx-auto">
+              Our enterprise-grade platform provides all the tools you need to maintain, validate, and leverage your product data efficiently.
+            </p>
+            <Button 
+              variant="primary"
+              size="lg" 
+              asChild
+            >
+              <Link to="/register">
+                Start Free Trial
+                <ArrowRight />
+              </Link>
             </Button>
           </div>
         </div>
-      </nav>
+      </section>
 
-      {/* Hero Section */}
-      <section className="container mx-auto px-6 py-20">
-        <div className="text-center mb-16">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">Powerful Product Data Management</h1>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Transform your B2B product data management with our AI-powered platform. 
-            Streamline your workflow and make better business decisions.
-          </p>
-        </div>
-
-        {/* Features Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-20">
-          {features.map((feature) => (
-            <div key={feature.title} className="bg-white p-8 rounded-lg shadow-sm">
-              <div className="text-blue-500 mb-4">{feature.icon}</div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-4">{feature.title}</h3>
-              <p className="text-gray-600">{feature.description}</p>
+      {/* Features Grid */}
+      <section className="py-20">
+        <div className="container mx-auto px-6">
+          <div className="max-w-5xl mx-auto">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl font-bold text-enterprise-900 mb-4">Key Platform Features</h2>
+              <p className="text-lg text-enterprise-600 max-w-2xl mx-auto">
+                Everything you need to streamline your product data workflow
+              </p>
             </div>
-          ))}
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
+              {features.map((feature) => (
+                <div key={feature.title} className="bg-white p-6 rounded-xl border border-enterprise-200 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="rounded-full bg-primary-50 p-3 w-12 h-12 flex items-center justify-center mb-4">
+                    {feature.icon}
+                  </div>
+                  <h3 className="text-xl font-semibold text-enterprise-900 mb-3">{feature.title}</h3>
+                  <p className="text-enterprise-600 mb-4">{feature.description}</p>
+                  <Link to="/marketing/product" className="inline-flex items-center text-primary-600 hover:text-primary-700 text-sm font-medium">
+                    Learn more
+                    <ArrowUpRight className="ml-1 h-3.5 w-3.5" />
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
+      </section>
+      
+      {/* Platform Benefits */}
+      <section className="py-20 bg-enterprise-50 border-y border-enterprise-100">
+        <div className="container mx-auto px-6">
+          <div className="max-w-5xl mx-auto">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl font-bold text-enterprise-900 mb-4">Why Choose Our Platform</h2>
+              <p className="text-lg text-enterprise-600 max-w-2xl mx-auto">
+                KernLogic helps you optimize your entire product data workflow
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+              <div>
+                <div className="mb-8">
+                  <div className="flex items-start">
+                    <div className="rounded-full bg-success-50 p-2 mt-1 mr-4">
+                      <CheckCircle2 className="h-4 w-4 text-success-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-enterprise-900 mb-2">Reduce Manual Work</h3>
+                      <p className="text-enterprise-600">
+                        Automate tedious tasks like data validation, categorization, and consistency checks. Save valuable time and resources.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="mb-8">
+                  <div className="flex items-start">
+                    <div className="rounded-full bg-success-50 p-2 mt-1 mr-4">
+                      <CheckCircle2 className="h-4 w-4 text-success-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-enterprise-900 mb-2">Eliminate Errors</h3>
+                      <p className="text-enterprise-600">
+                        Our AI-powered validation ensures your product data is accurate and consistent across all channels.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div>
+                <div className="mb-8">
+                  <div className="flex items-start">
+                    <div className="rounded-full bg-success-50 p-2 mt-1 mr-4">
+                      <CheckCircle2 className="h-4 w-4 text-success-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-enterprise-900 mb-2">Centralized Management</h3>
+                      <p className="text-enterprise-600">
+                        Keep all your product data in one secure location, accessible to your entire team.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="mb-8">
+                  <div className="flex items-start">
+                    <div className="rounded-full bg-success-50 p-2 mt-1 mr-4">
+                      <CheckCircle2 className="h-4 w-4 text-success-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-enterprise-900 mb-2">Data-Driven Decisions</h3>
+                      <p className="text-enterprise-600">
+                        Make better business decisions with real-time insights and analytics about your product data.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-        {/* CTA Section */}
-        <div className="text-center">
-          <h2 className="text-3xl font-bold text-gray-900 mb-6">Ready to Get Started?</h2>
-          <p className="text-xl text-gray-600 mb-8">
-            Join thousands of businesses using KernLogic to manage their product data.
-          </p>
-          <Button size="lg" asChild>
-            <Link to="/register">Start Free Trial</Link>
-          </Button>
+      {/* CTA Section */}
+      <section className="py-16 bg-white">
+        <div className="container mx-auto px-6">
+          <div className="max-w-4xl mx-auto bg-primary-600 rounded-xl p-10 text-center text-white">
+            <h2 className="text-2xl md:text-3xl font-bold mb-4">Ready to transform your product data?</h2>
+            <p className="text-primary-100 mb-8 max-w-2xl mx-auto">
+              Join thousands of businesses using KernLogic to streamline their product data management.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Button 
+                variant="secondary"
+                size="lg" 
+                asChild
+              >
+                <Link to="/register">
+                  Start Free Trial
+                  <ArrowRight />
+                </Link>
+              </Button>
+              <Button 
+                variant="ghost"
+                size="lg" 
+                className="text-white hover:text-white hover:bg-primary-700"
+                asChild
+              >
+                <Link to="/marketing/pricing">
+                  View Pricing
+                </Link>
+              </Button>
+            </div>
+          </div>
         </div>
       </section>
     </div>

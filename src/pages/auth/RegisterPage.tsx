@@ -4,28 +4,27 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { BeakerIcon, User, Mail, LockKeyhole, ArrowRight, AlertCircle } from 'lucide-react';
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 export default function RegisterPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { register, loading: authLoading, error: authError } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
+    if (!name || !email || !password || password.length < 6) {
+        toast.error("Please fill in all fields (password must be 6+ characters).");
+        return;
+    }
     
     try {
-      // Mock registration for now
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      navigate('/app');
+      await register(email, password, name);
     } catch (err) {
-      setError('Failed to create account. Please try again.');
-    } finally {
-      setLoading(false);
+      console.error('Registration error (already handled by context):', err);
     }
   };
 
@@ -137,14 +136,14 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            {error && (
+            {authError && (
               <div className="rounded-md bg-danger-50 p-4">
                 <div className="flex">
                   <div className="flex-shrink-0">
                     <AlertCircle className="h-5 w-5 text-danger-400" />
                   </div>
                   <div className="ml-3">
-                    <p className="text-sm text-danger-700">{error}</p>
+                    <p className="text-sm text-danger-700">{authError.message}</p>
                   </div>
                 </div>
               </div>
@@ -155,7 +154,7 @@ export default function RegisterPage() {
                 type="submit"
                 variant="primary"
                 fullWidth={true}
-                isLoading={loading}
+                isLoading={authLoading}
                 loadingText="Creating account..."
               >
                 <div className="flex items-center">

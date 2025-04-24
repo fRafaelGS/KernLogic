@@ -1,6 +1,6 @@
 // API Configuration
 export const API_BASE_URL = ''; // Empty base URL to use the proxy
-export const API_URL = `/api`;
+export const API_URL = `/api`; // Revert to relative path for proxy
 export const API_AUTH_URL = `${API_URL}/auth`;
 
 // Add debug logging
@@ -21,11 +21,11 @@ export const API_ENDPOINTS = {
         testLogin: '/test-login/'
     },
     products: {
-        list: '/products/',
-        create: '/products/',
-        update: (id: number) => `/products/${id}/`,
-        delete: (id: number) => `/products/${id}/`,
-        categories: '/products/categories/',
-        stats: '/products/stats/'
+        list: '/',
+        create: '/',
+        update: (id: number) => `/${id}/`,
+        delete: (id: number) => `/${id}/`,
+        categories: '/categories/',
+        stats: '/stats/'
     }
 }; 

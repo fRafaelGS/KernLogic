@@ -1,100 +1,34 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { API_URL } from '@/config';
+import axiosInstance from '@/lib/axiosInstance';
 
-// Set up global Authorization header if token exists
-const token = localStorage.getItem('access_token');
-if (token) {
-    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    console.log('Set global Authorization header from saved token');
+// PRODUCTS_PATH should be empty string to work with the backend URL structure
+// The backend routes 'api/' to products.urls which registers the viewset at ''
+const PRODUCTS_PATH = ''; 
+
+// REMOVE global header setting - interceptor handles this
+// const token = localStorage.getItem('access_token');
+// if (token) {
+//     axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+//     console.log('Set global Authorization header from saved token');
+// }
+
+// REMOVE local Axios instance creation and interceptors - use shared instance
+// const api = axios.create({
+//     baseURL: BASE,
+//     headers: {
+//         'Content-Type': 'application/json',
+//     },
+//     withCredentials: true,
+// });
+// ... REMOVE INTERCEPTORS ...
+
+export interface ProductImage {
+  id: number;
+  url: string;
+  order: number; // For reordering
+  is_primary: boolean; // To identify the main image
 }
-
-// Configure axios to include credentials
-const api = axios.create({
-    baseURL: API_URL,
-    headers: {
-        'Content-Type': 'application/json',
-    },
-    withCredentials: true,
-});
-
-// Add token to requests
-api.interceptors.request.use((config) => {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-        console.log('Adding authorization header with token');
-        config.headers.Authorization = `Bearer ${token}`;
-    } else {
-        console.log('No token available for request');
-    }
-    console.log('Request URL:', config.url);
-    console.log('Request headers:', config.headers);
-    return config;
-});
-
-// Handle token refresh on 401 errors
-api.interceptors.response.use(
-    (response) => response,
-    async (error) => {
-        const originalRequest = error.config;
-        if (error.response?.status === 401 && !originalRequest._retry) {
-            originalRequest._retry = true;
-            try {
-                const refreshToken = localStorage.getItem('refresh_token');
-                if (!refreshToken) {
-                    throw new Error('No refresh token available');
-                }
-                
-                console.log('Attempting to refresh token...');
-                
-                // Use direct fetch API to bypass interceptors
-                const refreshResponse = await fetch(`${API_URL}/auth/refresh/`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        refresh: refreshToken
-                    })
-                });
-                
-                if (!refreshResponse.ok) {
-                    throw new Error(`Token refresh failed: ${refreshResponse.status}`);
-                }
-                
-                const data = await refreshResponse.json();
-                console.log('Token refresh successful');
-                
-                // Save the new token
-                const newToken = data.access;
-                localStorage.setItem('access_token', newToken);
-                
-                // Apply new token to global axios defaults
-                axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
-                
-                // Create a completely new request with the new token
-                console.log('Creating new request with the fresh token');
-                const newRequest = {
-                    ...originalRequest,
-                    headers: {
-                        ...originalRequest.headers,
-                        Authorization: `Bearer ${newToken}`
-                    },
-                    _retry: true
-                };
-                
-                // Make the request directly with axios to bypass any interceptor issues
-                return axios(newRequest);
-            } catch (refreshError) {
-                console.error('Failed to refresh token:', refreshError);
-                localStorage.removeItem('access_token');
-                localStorage.removeItem('refresh_token');
-                window.location.href = '/login';
-                return Promise.reject(refreshError);
-            }
-        }
-        return Promise.reject(error);
-    }
-);
 
 export interface Product {
     id?: number;
@@ -108,23 +42,29 @@ export interface Product {
     created_at?: string;
     updated_at?: string;
     is_active: boolean;
+    images?: ProductImage[] | null; // Add images array (optional)
 }
 
 export const productService = {
-    // Get all products
+    // Get all products - Use axiosInstance and adjust path
     getProducts: async (): Promise<Product[]> => {
-        console.log('Fetching products from API URL:', `${API_URL}/products/`);
+        const url = `${PRODUCTS_PATH}/`;
+        console.log('Fetching products from:', url); 
         try {
-            // Log token before request
             const token = localStorage.getItem('access_token');
-            console.log('Current access token:', token ? `${token.substring(0, 15)}...` : 'none');
+            console.log('Current access token (from productService):', token ? `${token.substring(0, 15)}...` : 'none');
             
-            const response = await api.get('/products/');
-            console.log('Products API response:', response.data);
+            const response = await axiosInstance.get(url); 
+            // --- DEBUG LOGS --- 
+            console.log('[productService.getProducts] Raw API response data:', response.data); 
+            console.log('[productService.getProducts] Is response.data an array?:', Array.isArray(response.data)); 
+            // --- END DEBUG LOGS ---
+            console.log('Products API response:', response.data); // Original log
             return response.data;
         } catch (error) {
             console.error('Error fetching products:', error);
-            if (axios.isAxiosError(error)) {
+            // Type checking for AxiosError can still be useful
+            if (axios.isAxiosError(error)) { 
                 console.error('Response status:', error.response?.status);
                 console.error('Response data:', error.response?.data);
             }
@@ -134,23 +74,23 @@ export const productService = {
 
     // Get a single product
     getProduct: async (id: number): Promise<Product> => {
-        const response = await api.get(`/products/${id}/`);
+        const url = `${PRODUCTS_PATH}/${id}/`;
+        const response = await axiosInstance.get(url);
         return response.data;
     },
 
     // Create a new product
     createProduct: async (product: Omit<Product, 'id' | 'created_by' | 'created_at' | 'updated_at'>): Promise<Product> => {
-        console.log('Creating product:', product);
+        const url = `${PRODUCTS_PATH}/`;
+        console.log('Creating product at:', url);
         try {
-            // Ensure price and stock are numbers
             const formattedProduct = {
                 ...product,
                 price: Number(product.price),
                 stock: Number(product.stock)
             };
-            
             console.log('Formatted product data:', formattedProduct);
-            const response = await api.post('/products/', formattedProduct);
+            const response = await axiosInstance.post(url, formattedProduct);
             console.log('Create product response:', response.data);
             return response.data;
         } catch (error) {
@@ -161,18 +101,21 @@ export const productService = {
 
     // Update a product
     updateProduct: async (id: number, product: Partial<Product>): Promise<Product> => {
-        const response = await api.patch(`/products/${id}/`, product);
+        const url = `${PRODUCTS_PATH}/${id}/`;
+        const response = await axiosInstance.patch(url, product);
         return response.data;
     },
 
     // Delete a product
     deleteProduct: async (id: number): Promise<void> => {
-        await api.delete(`/products/${id}/`);
+        const url = `${PRODUCTS_PATH}/${id}/`;
+        await axiosInstance.delete(url);
     },
 
     // Get product categories
     getCategories: async (): Promise<string[]> => {
-        const response = await api.get('/products/categories/');
+        const url = `${PRODUCTS_PATH}/categories/`;
+        const response = await axiosInstance.get(url);
         return response.data;
     },
 
@@ -182,7 +125,8 @@ export const productService = {
         total_value: number;
         low_stock: number;
     }> => {
-        const response = await api.get('/products/stats/');
+        const url = `${PRODUCTS_PATH}/stats/`;
+        const response = await axiosInstance.get(url);
         return response.data;
     },
 }; 

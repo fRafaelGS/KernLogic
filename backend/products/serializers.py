@@ -1,15 +1,34 @@
 from rest_framework import serializers
-from .models import Product
+from .models import Product, ProductImage
+
+# --- NEW ProductImage Serializer ---
+class ProductImageSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ProductImage
+        fields = ('id', 'product', 'image', 'url', 'order', 'is_primary', 'uploaded_at')
+        read_only_fields = ('product', 'uploaded_at', 'url')  # Product link shouldn't be changed via this serializer
+
+    def get_url(self, obj):
+        request = self.context.get('request')
+        if obj.image and request:
+            return request.build_absolute_uri(obj.image.url)
+        elif obj.image:
+            return obj.image.url
+        return None
+# --- End ProductImage Serializer ---
 
 class ProductSerializer(serializers.ModelSerializer):
     created_by = serializers.ReadOnlyField(source='created_by.email', required=False)
     price = serializers.FloatField()  # Explicitly use FloatField to ensure numeric values
+    images = ProductImageSerializer(many=True, read_only=True)
 
     class Meta:
         model = Product
         fields = ['id', 'name', 'description', 'sku', 'price', 'stock', 
-                 'category', 'created_by', 'created_at', 'updated_at', 'is_active']
-        read_only_fields = ['created_at', 'updated_at']
+                 'category', 'created_by', 'created_at', 'updated_at', 'is_active', 'images']
+        read_only_fields = ['created_at', 'updated_at', 'images']
 
     def validate_sku(self, value):
         """

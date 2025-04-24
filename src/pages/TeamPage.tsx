@@ -1,110 +1,59 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import React from 'react';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Users } from 'lucide-react';
 
-interface TeamMember {
-  id: string;
-  name: string;
-  role: string;
-  email: string;
-  avatar?: string;
-  status: "active" | "away" | "offline";
-}
-
-const teamMembers: TeamMember[] = [
-  {
-    id: "1",
-    name: "Sarah Chen",
-    role: "Product Manager",
-    email: "sarah.chen@example.com",
-    avatar: "",
-    status: "active",
-  },
-  {
-    id: "2",
-    name: "Mark Johnson",
-    role: "Data Scientist",
-    email: "mark.johnson@example.com",
-    avatar: "",
-    status: "active",
-  },
-  {
-    id: "3",
-    name: "Emily Davis",
-    role: "Product Catalog Specialist",
-    email: "emily.davis@example.com",
-    avatar: "",
-    status: "away",
-  },
-  {
-    id: "4",
-    name: "Alex Wong",
-    role: "Technical Manager",
-    email: "alex.wong@example.com",
-    avatar: "",
-    status: "offline",
-  },
+const teamMembers = [
+  { id: 1, name: 'Ana Rodríguez', role: 'Owner / GM', email: 'ana.rodriguez@example.com', avatar: '/avatars/ana.png' },
+  { id: 2, name: 'Jorge Pérez', role: 'E-com Specialist', email: 'jorge.perez@example.com', avatar: '/avatars/jorge.png' },
+  { id: 3, name: 'María García', role: 'Inventory Manager', email: 'maria.garcia@example.com', avatar: '/avatars/maria.png' },
+  // Add more placeholder members if needed
 ];
 
-const TeamPage = () => {
+const TeamPage: React.FC = () => {
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Team</h1>
-          <p className="text-muted-foreground">Manage your team members and their roles</p>
+          <h1 className="text-3xl font-bold text-enterprise-900">Team Management</h1>
+          <p className="text-enterprise-600 mt-1">
+            Manage team members and permissions. (Full functionality coming soon)
+          </p>
         </div>
-        <Button variant="default">Invite Member</Button>
+        <Button disabled>
+          <Users className="mr-2 h-4 w-4" /> Invite Member
+        </Button>
       </div>
-      
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {teamMembers.map((member) => (
-          <Card key={member.id}>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <Badge
-                  variant="outline"
-                  className={
-                    member.status === "active"
-                      ? "bg-green-100 text-green-800 border-green-200"
-                      : member.status === "away"
-                      ? "bg-amber-100 text-amber-800 border-amber-200"
-                      : "bg-slate-100 text-slate-800 border-slate-200"
-                  }
-                >
-                  {member.status === "active"
-                    ? "Active"
-                    : member.status === "away"
-                    ? "Away"
-                    : "Offline"}
-                </Badge>
-                <Button variant="ghost" size="sm">
-                  Edit
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center space-x-4">
-                <Avatar className="h-12 w-12">
-                  <AvatarImage src={member.avatar} alt={member.name} />
-                  <AvatarFallback className="text-lg bg-primary text-primary-foreground">
-                    {member.name
-                      .split(" ")
-                      .map((n) => n[0])
-                      .join("")}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="font-medium">{member.name}</p>
-                  <p className="text-sm text-muted-foreground">{member.role}</p>
-                  <p className="text-sm text-muted-foreground">{member.email}</p>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Current Team Members</CardTitle>
+          <CardDescription>List of users with access to this workspace.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ul className="space-y-4">
+            {teamMembers.map((member) => (
+              <li key={member.id} className="flex items-center justify-between p-3 bg-white border rounded-md">
+                <div className="flex items-center space-x-4">
+                  <Avatar>
+                    <AvatarImage src={member.avatar} alt={member.name} />
+                    <AvatarFallback>{member.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="text-sm font-medium text-enterprise-900">{member.name}</p>
+                    <p className="text-xs text-enterprise-500">{member.email}</p>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                <div className="flex items-center space-x-4">
+                  <span className="text-sm text-enterprise-600">{member.role}</span>
+                  <Button variant="outline" size="sm" disabled>Manage</Button> {/* Disabled */}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </CardContent>
+      </Card>
     </div>
   );
 };

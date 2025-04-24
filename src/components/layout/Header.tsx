@@ -22,9 +22,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { formatDistanceToNow } from 'date-fns';
 
 export function Header() {
-  const { user, logout } = useAuth();
+  const { user, logout, notifications, unreadCount, markAllAsRead } = useAuth();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   return (
@@ -62,47 +63,72 @@ export function Header() {
               className="relative text-enterprise-500 hover:text-enterprise-700 hover:bg-enterprise-50"
             >
               <Bell className="h-5 w-5" />
-              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary-500" />
+              {unreadCount > 0 && (
+                 <span className="absolute right-1 top-1 flex h-3 w-3 items-center justify-center rounded-full bg-primary-500 text-white text-[9px] font-bold">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                 </span>
+              )}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-80">
             <DropdownMenuLabel className="flex items-center justify-between">
               <span>Notifications</span>
-              <Button variant="ghost" size="sm" className="text-xs text-primary-600 hover:text-primary-700">
+              <Button 
+                variant="link" 
+                size="sm" 
+                className="h-auto p-0 text-xs text-primary-600 hover:text-primary-700 focus-visible:ring-0 focus-visible:ring-offset-0"
+                onClick={markAllAsRead} 
+                disabled={unreadCount === 0} 
+              >
                 Mark all as read
               </Button>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <div className="max-h-[300px] overflow-auto">
-              {[1, 2, 3].map((n) => (
-                <DropdownMenuItem key={n} className="flex flex-col items-start py-2">
-                  <div className="flex w-full">
-                    <div className={cn(
-                      "h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 mr-3",
-                      n === 1 ? "bg-primary-100 text-primary-600" : 
-                      n === 2 ? "bg-success-100 text-success-600" : 
-                      "bg-info-100 text-info-600"
-                    )}>
-                      {n === 1 ? <Bell size={14} /> : 
-                       n === 2 ? <Calendar size={14} /> : 
-                       <MessageSquare size={14} />}
+            <div className="max-h-[300px] overflow-auto p-1">
+              {notifications.length > 0 ? (
+                notifications.map((notification) => (
+                  <DropdownMenuItem 
+                    key={notification.id} 
+                    className={cn(
+                      "flex flex-col items-start py-2.5 px-3 rounded-md transition-colors mb-1",
+                      notification.read ? "bg-white hover:bg-enterprise-50" : "bg-primary-50 hover:bg-primary-100"
+                    )}
+                  >
+                    <div className="flex w-full items-start">
+                      <div className={cn(
+                        "h-7 w-7 rounded-full flex items-center justify-center flex-shrink-0 mr-3 mt-0.5",
+                        notification.type === 'success' ? "bg-success-100 text-success-600" :
+                        notification.type === 'error' ? "bg-danger-100 text-danger-600" :
+                        notification.type === 'warning' ? "bg-warning-100 text-warning-600" :
+                        "bg-info-100 text-info-600"
+                      )}>
+                        <Bell size={14} /> 
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-enterprise-800 mb-0.5">
+                          {notification.message}
+                        </p>
+                        {notification.description && (
+                           <p className="text-xs text-enterprise-500 mb-1">
+                            {notification.description}
+                           </p>
+                        )}
+                        <p className="text-xs text-enterprise-500">
+                           {formatDistanceToNow(notification.timestamp, { addSuffix: true })}
+                        </p>
+                      </div>
+                       {!notification.read && (
+                         <div className="h-2 w-2 rounded-full bg-primary-500 ml-2 mt-1 flex-shrink-0"></div>
+                       )}
                     </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-enterprise-800 mb-0.5">
-                        {n === 1 ? "New product added" : 
-                         n === 2 ? "Team meeting" : 
-                         "Message from support"}
-                      </p>
-                      <p className="text-xs text-enterprise-500">2 hours ago</p>
-                    </div>
-                  </div>
-                </DropdownMenuItem>
-              ))}
+                  </DropdownMenuItem>
+                ))
+              ) : (
+                 <div className="p-4 text-center text-sm text-enterprise-500">
+                   No new notifications
+                 </div>
+              )}
             </div>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="justify-center text-sm text-primary-600 hover:text-primary-700">
-              View all notifications
-            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 

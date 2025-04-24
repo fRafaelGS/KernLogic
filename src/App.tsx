@@ -2,7 +2,6 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -21,6 +20,11 @@ import ProductPage from "./pages/marketing/ProductPage";
 
 // App Pages
 import NotFound from "./pages/NotFound";
+import ReportsPage from './pages/ReportsPage';
+import UploadPage from './pages/UploadPage';
+import DocumentationPage from './pages/DocumentationPage';
+import TeamPage from './pages/TeamPage';
+import SettingsPage from './pages/SettingsPage';
 
 const queryClient = new QueryClient();
 
@@ -48,8 +52,21 @@ export const App: React.FC = () => {
             <QueryClientProvider client={queryClient}>
                 <TooltipProvider>
                     <AuthProvider>
-                        <Toaster />
-                        <Sonner />
+                        <Sonner 
+                          position="top-right"
+                          richColors
+                          toastOptions={{
+                            classNames: {
+                              toast: 'border border-enterprise-200 bg-white text-enterprise-900 shadow-lg',
+                              title: 'text-sm font-semibold',
+                              description: 'text-sm text-enterprise-600',
+                              actionButton:
+                                'bg-primary-600 text-white hover:bg-primary-700',
+                              cancelButton:
+                                'bg-enterprise-100 text-enterprise-700 hover:bg-enterprise-200',
+                            },
+                          }}
+                        />
                         <Routes>
                             {/* Marketing Routes */}
                             <Route path="/" element={<LandingPage />} />
@@ -98,6 +115,56 @@ export const App: React.FC = () => {
                                     <ProtectedRoute>
                                         <DashboardLayout>
                                             <EditProduct />
+                                        </DashboardLayout>
+                                    </ProtectedRoute>
+                                }
+                            />
+                            <Route
+                                path="/app/reports"
+                                element={
+                                    <ProtectedRoute>
+                                        <DashboardLayout>
+                                            <ReportsPage />
+                                        </DashboardLayout>
+                                    </ProtectedRoute>
+                                }
+                            />
+                            <Route
+                                path="/app/upload"
+                                element={
+                                    <ProtectedRoute>
+                                        <DashboardLayout>
+                                            <UploadPage />
+                                        </DashboardLayout>
+                                    </ProtectedRoute>
+                                }
+                            />
+                            <Route
+                                path="/app/documentation"
+                                element={
+                                    <ProtectedRoute>
+                                        <DashboardLayout>
+                                            <DocumentationPage />
+                                        </DashboardLayout>
+                                    </ProtectedRoute>
+                                }
+                            />
+                            <Route
+                                path="/app/team"
+                                element={
+                                    <ProtectedRoute>
+                                        <DashboardLayout>
+                                            <TeamPage />
+                                        </DashboardLayout>
+                                    </ProtectedRoute>
+                                }
+                            />
+                            <Route
+                                path="/app/settings"
+                                element={
+                                    <ProtectedRoute>
+                                        <DashboardLayout>
+                                            <SettingsPage />
                                         </DashboardLayout>
                                     </ProtectedRoute>
                                 }

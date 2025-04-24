@@ -52,10 +52,23 @@ INSTALLED_APPS = [
     "corsheaders",
     "accounts",
     "products",
+    "django_extensions",
 ]
+
+# Custom middleware to exempt API routes from CSRF
+class CsrfExemptForAPI:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        # If request path starts with /api/, mark it as csrf_exempt
+        if request.path.startswith('/api/'):
+            request._dont_enforce_csrf_checks = True
+        return self.get_response(request)
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",  # Must be as high as possible
+    "core.settings.CsrfExemptForAPI",  # Add custom middleware before CsrfViewMiddleware
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -133,6 +146,10 @@ STATICFILES_DIRS = [
     BASE_DIR.parent / "dist",
 ]
 
+# Media files (User uploaded content)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
@@ -158,12 +175,16 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:8080",
     "http://127.0.0.1:8080",
+    "http://localhost:3002",
+    "http://127.0.0.1:3002",
 ]
 
 # Add proper origin patterns with wildcard
 CORS_ALLOWED_ORIGIN_REGEXES = [
     r'^http://localhost:8080$',
     r'^http://127\.0\.0\.1:8080$',
+    r'^http://localhost:3002$',
+    r'^http://127\.0\.0\.1:3002$',
 ]
 
 CORS_ALLOW_METHODS = [
@@ -197,6 +218,8 @@ CSRF_COOKIE_SAMESITE = None
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:8080",
     "http://127.0.0.1:8080",
+    "http://localhost:3002",
+    "http://127.0.0.1:3002",
 ]
 
 # Custom user model

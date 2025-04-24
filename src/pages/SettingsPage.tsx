@@ -1,264 +1,336 @@
-
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import React, { useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
+import { Loader2, AlertCircle } from 'lucide-react';
+import axios from 'axios';
+import { API_URL } from '@/config';
 
-const SettingsPage = () => {
+// --- Zod Schemas ---
+const profileSchema = z.object({
+  name: z.string().min(1, 'Name is required'),
+  email: z.string().email('Invalid email address'),
+});
+type ProfileFormData = z.infer<typeof profileSchema>;
+
+const passwordSchema = z.object({
+  currentPassword: z.string().min(1, 'Current password is required'),
+  newPassword: z.string().min(6, 'New password must be at least 6 characters'),
+  confirmPassword: z.string().min(1, 'Please confirm your new password'),
+}).refine((data) => data.newPassword === data.confirmPassword, {
+  message: "New passwords don't match",
+  path: ["confirmPassword"], // path of error
+});
+type PasswordFormData = z.infer<typeof passwordSchema>;
+
+// --- Settings Page Component ---
+const SettingsPage: React.FC = () => {
+  const { user, updateUserContext } = useAuth();
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
+  
+  // Notification preferences state
+  const [lowStockAlerts, setLowStockAlerts] = useState(false);
+  const [uploadSummaries, setUploadSummaries] = useState(true);
+  const [isSavingNotifications, setIsSavingNotifications] = useState(false);
+
+  // --- React Hook Form Instances ---
+  const { 
+    register: registerProfile, 
+    handleSubmit: handleProfileSubmitHook,
+    formState: { errors: profileErrors },
+    reset: resetProfileForm,
+  } = useForm<ProfileFormData>({
+    resolver: zodResolver(profileSchema),
+    defaultValues: {
+      name: user?.name || '',
+      email: user?.email || '',
+    }
+  });
+
+  const { 
+    register: registerPassword, 
+    handleSubmit: handlePasswordSubmitHook,
+    formState: { errors: passwordErrors },
+    reset: resetPasswordForm,
+    setError: setPasswordError,
+  } = useForm<PasswordFormData>({
+    resolver: zodResolver(passwordSchema),
+  });
+
+  // --- Update Default Values on User Change ---
+  useEffect(() => {
+    if (user) {
+      resetProfileForm({
+        name: user.name || '',
+        email: user.email || '',
+      });
+    }
+  }, [user, resetProfileForm]);
+
+  // --- Handlers ---
+  const handleProfileUpdate = async (data: ProfileFormData) => {
+    setIsSavingProfile(true);
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await axios.put(`${API_URL}/auth/user/`, data, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      updateUserContext(response.data); // Update context state
+      toast.success('Profile updated successfully!');
+    } catch (err: any) {
+      console.error("Profile update error:", err);
+      const errorMsg = err.response?.data?.detail || err.message || 'Failed to update profile';
+      toast.error(errorMsg);
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handlePasswordChange = async (data: PasswordFormData) => {
+    setIsSavingPassword(true);
+    try {
+        const token = localStorage.getItem('access_token');
+        await axios.post(`${API_URL}/auth/password/change/`, {
+            old_password: data.currentPassword,
+            new_password1: data.newPassword,
+            new_password2: data.confirmPassword,
+        }, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        toast.success('Password changed successfully!');
+        resetPasswordForm(); // Clear fields on success
+    } catch (err: any) {
+        console.error("Password change error:", err.response?.data || err);
+        // Map potential backend errors to form fields
+        if (err.response?.data?.old_password) {
+            setPasswordError("currentPassword", { type: "server", message: err.response.data.old_password[0] });
+        } else if (err.response?.data?.new_password2) {
+            setPasswordError("newPassword", { type: "server", message: err.response.data.new_password2[0] });
+            setPasswordError("confirmPassword", { type: "server", message: err.response.data.new_password2[0] });
+        } else {
+             const errorMsg = err.response?.data?.detail || err.message || 'Failed to change password';
+             toast.error(errorMsg);
+        }
+    } finally {
+        setIsSavingPassword(false);
+    }
+  };
+  
+  // Simulated save for notifications (Ensure it's defined before return)
+  const handleSaveNotifications = async () => {
+    setIsSavingNotifications(true);
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    toast.success("Notification preferences saved (simulated)!");
+    setIsSavingNotifications(false);
+  };
+
+  // --- Render ---
   return (
-    <DashboardLayout>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Settings</h1>
-          <p className="text-muted-foreground">
-            Manage your account settings and AI preferences
-          </p>
-        </div>
-
-        <Tabs defaultValue="general" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="general">General</TabsTrigger>
-            <TabsTrigger value="ai">AI Settings</TabsTrigger>
-            <TabsTrigger value="integrations">Integrations</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="general" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Company Information</CardTitle>
-                <CardDescription>
-                  Update your company details and profile
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="company-name">Company Name</Label>
-                    <Input id="company-name" defaultValue="Acme Coatings Ltd." />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="industry">Industry</Label>
-                    <Input id="industry" defaultValue="Industrial Coatings" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="contact-email">Contact Email</Label>
-                    <Input id="contact-email" defaultValue="info@acmecoatings.com" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone</Label>
-                    <Input id="phone" defaultValue="+1 (555) 123-4567" />
-                  </div>
-                </div>
-                
-                <div className="flex justify-end">
-                  <Button>Save Changes</Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Notifications</CardTitle>
-                <CardDescription>Configure how you receive notifications</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Email Notifications</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Receive emails about your data processing tasks
-                    </p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-                
-                <Separator />
-                
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Processing Alerts</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Get notified when AI processing is complete
-                    </p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-                
-                <Separator />
-                
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Weekly Reports</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Receive weekly summary reports of your data quality
-                    </p>
-                  </div>
-                  <Switch />
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="ai" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>AI Processing Settings</CardTitle>
-                <CardDescription>
-                  Configure how the AI processes your product data
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Auto-Generate Missing Descriptions</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Automatically create descriptions for products with missing data
-                      </p>
-                    </div>
-                    <Switch defaultChecked />
-                  </div>
-                  
-                  <Separator />
-                  
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>AI-Powered Categorization</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Use AI to automatically categorize your products
-                      </p>
-                    </div>
-                    <Switch defaultChecked />
-                  </div>
-                  
-                  <Separator />
-                  
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Smart Tagging</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Generate relevant tags for products based on their descriptions
-                      </p>
-                    </div>
-                    <Switch defaultChecked />
-                  </div>
-                  
-                  <div className="space-y-2 pt-4">
-                    <Label htmlFor="industry-context">Industry Context</Label>
-                    <Input 
-                      id="industry-context" 
-                      defaultValue="Industrial and marine coatings for commercial applications"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      This context helps the AI understand your specific industry terminology
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="integrations" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>API Keys</CardTitle>
-                <CardDescription>
-                  Manage your API keys for third-party integrations
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="openai-key">OpenAI API Key</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="openai-key"
-                      type="password"
-                      value="sk-••••••••••••••••••••••••"
-                      disabled
-                    />
-                    <Button variant="outline">Change</Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Used for advanced product description generation
-                  </p>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="database-url">Database Connection</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="database-url"
-                      type="password"
-                      value="postgres://••••••••••••••••••••••••"
-                      disabled
-                    />
-                    <Button variant="outline">Change</Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Connect to your existing product database
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Connected Services</CardTitle>
-                <CardDescription>
-                  Manage your connected third-party services
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-md bg-slate-100 p-2">
-                      <div className="h-full w-full bg-slate-300"></div>
-                    </div>
-                    <div>
-                      <p className="font-medium">E-commerce Platform</p>
-                      <p className="text-sm text-muted-foreground">
-                        Not connected
-                      </p>
-                    </div>
-                  </div>
-                  <Button variant="outline">Connect</Button>
-                </div>
-                
-                <Separator />
-                
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-md bg-slate-100 p-2">
-                      <div className="h-full w-full bg-slate-300"></div>
-                    </div>
-                    <div>
-                      <p className="font-medium">CRM System</p>
-                      <p className="text-sm text-muted-foreground">
-                        Not connected
-                      </p>
-                    </div>
-                  </div>
-                  <Button variant="outline">Connect</Button>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold text-enterprise-900">Settings</h1>
+        <p className="text-enterprise-600 mt-1">
+          Manage your account, security, and notification preferences.
+        </p>
       </div>
-    </DashboardLayout>
+
+      <Tabs defaultValue="profile" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-4 max-w-md">
+          <TabsTrigger value="profile">Profile</TabsTrigger>
+          <TabsTrigger value="security">Security</TabsTrigger>
+          <TabsTrigger value="notifications">Notifications</TabsTrigger>
+          <TabsTrigger value="api">API Keys</TabsTrigger>
+        </TabsList>
+
+        {/* Profile Tab */}
+        <TabsContent value="profile">
+          <Card>
+            <CardHeader>
+              <CardTitle>Profile Information</CardTitle>
+              <CardDescription>Update your personal details.</CardDescription>
+            </CardHeader>
+            <form onSubmit={handleProfileSubmitHook(handleProfileUpdate)}>
+              <CardContent className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="setting-name">Full Name</Label>
+                  <Input 
+                    id="setting-name" 
+                    {...registerProfile("name")} 
+                    placeholder="Your Name" 
+                    disabled={isSavingProfile}
+                    className={profileErrors.name ? 'border-danger-500' : ''}
+                  />
+                  {profileErrors.name && <p className="text-sm text-danger-600 flex items-center mt-1"><AlertCircle className="h-4 w-4 mr-1" />{profileErrors.name.message}</p>}
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="setting-email">Email Address</Label>
+                  <Input 
+                    id="setting-email" 
+                    type="email" 
+                    {...registerProfile("email")} 
+                    placeholder="your@email.com" 
+                    disabled={isSavingProfile} 
+                    className={profileErrors.email ? 'border-danger-500' : ''}
+                  />
+                   {profileErrors.email && <p className="text-sm text-danger-600 flex items-center mt-1"><AlertCircle className="h-4 w-4 mr-1" />{profileErrors.email.message}</p>}
+                </div>
+              </CardContent>
+              <CardFooter className="border-t px-6 py-4">
+                <Button type="submit" variant="primary" disabled={isSavingProfile}>
+                   {isSavingProfile ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</> : 'Update Profile'}
+                </Button>
+              </CardFooter>
+            </form>
+          </Card>
+        </TabsContent>
+
+        {/* Security Tab */}
+        <TabsContent value="security">
+          <Card>
+            <CardHeader>
+              <CardTitle>Password Management</CardTitle>
+              <CardDescription>Change your account password.</CardDescription>
+            </CardHeader>
+            <form onSubmit={handlePasswordSubmitHook(handlePasswordChange)}>
+              <CardContent className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="setting-current-password">Current Password</Label>
+                  <Input 
+                    id="setting-current-password" 
+                    type="password" 
+                    {...registerPassword("currentPassword")} 
+                    placeholder="Enter current password" 
+                    disabled={isSavingPassword}
+                    className={passwordErrors.currentPassword ? 'border-danger-500' : ''}
+                  />
+                   {passwordErrors.currentPassword && <p className="text-sm text-danger-600 flex items-center mt-1"><AlertCircle className="h-4 w-4 mr-1" />{passwordErrors.currentPassword.message}</p>}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="setting-new-password">New Password</Label>
+                    <Input 
+                      id="setting-new-password" 
+                      type="password" 
+                      {...registerPassword("newPassword")} 
+                      placeholder="Enter new password" 
+                      disabled={isSavingPassword}
+                      className={passwordErrors.newPassword ? 'border-danger-500' : ''}
+                    />
+                     {passwordErrors.newPassword && <p className="text-sm text-danger-600 flex items-center mt-1"><AlertCircle className="h-4 w-4 mr-1" />{passwordErrors.newPassword.message}</p>}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="setting-confirm-password">Confirm New Password</Label>
+                    <Input 
+                      id="setting-confirm-password" 
+                      type="password" 
+                      {...registerPassword("confirmPassword")} 
+                      placeholder="Confirm new password" 
+                      disabled={isSavingPassword}
+                      className={passwordErrors.confirmPassword ? 'border-danger-500' : ''}
+                    />
+                     {passwordErrors.confirmPassword && <p className="text-sm text-danger-600 flex items-center mt-1"><AlertCircle className="h-4 w-4 mr-1" />{passwordErrors.confirmPassword.message}</p>}
+                  </div>
+                </div>
+              </CardContent>
+              <CardFooter className="border-t px-6 py-4">
+                 <Button type="submit" variant="primary" disabled={isSavingPassword}>
+                   {isSavingPassword ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</> : 'Change Password'}
+                </Button>
+              </CardFooter>
+            </form>
+          </Card>
+        </TabsContent>
+
+        {/* Notifications Tab */}
+        <TabsContent value="notifications">
+          <Card>
+            <CardHeader>
+              <CardTitle>Notification Preferences</CardTitle>
+              <CardDescription>Manage how you receive notifications.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between p-3 border rounded-md">
+                <div>
+                   <p className="text-sm font-medium">Low Stock Alerts</p>
+                   <p className="text-xs text-enterprise-500">Receive an email when product stock drops below threshold.</p>
+                </div>
+                <Switch 
+                   id="notification-low-stock" 
+                   checked={lowStockAlerts} 
+                   onCheckedChange={setLowStockAlerts} 
+                   disabled={isSavingNotifications}
+                />
+              </div>
+              <div className="flex items-center justify-between p-3 border rounded-md">
+                <div>
+                   <p className="text-sm font-medium">Upload Summaries</p>
+                   <p className="text-xs text-enterprise-500">Get notified after a bulk data upload is complete.</p>
+                </div>
+                <Switch 
+                   id="notification-upload" 
+                   checked={uploadSummaries} 
+                   onCheckedChange={setUploadSummaries}
+                   disabled={isSavingNotifications}
+                />
+              </div>
+            </CardContent>
+             <CardFooter className="border-t px-6 py-4">
+                 <Button 
+                   variant="primary" 
+                   onClick={handleSaveNotifications} 
+                   disabled={isSavingNotifications}
+                  >
+                    {isSavingNotifications ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...
+                      </>
+                    ) : (
+                      'Save Preferences'
+                    )}
+                </Button>
+            </CardFooter>
+          </Card>
+        </TabsContent>
+
+        {/* API Keys Tab */}
+        <TabsContent value="api">
+           <Card>
+            <CardHeader>
+              <CardTitle>API Keys</CardTitle>
+              <CardDescription>Manage API keys for integrations. (Placeholder)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-enterprise-600 mb-4">
+                Generate and manage API keys to connect KernLogic with other applications.
+              </p>
+              <div className="p-4 border rounded-md bg-enterprise-50 text-center text-enterprise-500">
+                API Key management coming soon.
+              </div>
+            </CardContent>
+            <CardFooter className="border-t px-6 py-4">
+               <Button variant="outline" disabled className="mt-4">Generate New Key</Button>
+            </CardFooter>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
   );
 };
 

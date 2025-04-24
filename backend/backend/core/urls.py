@@ -17,8 +17,24 @@ Including another URLconf
 
 from django.contrib import admin
 from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
+# Remove DRF router imports if no longer needed here
+# from rest_framework.routers import DefaultRouter
+# from products.views import ProductViewSet
+
+# Remove router definition from here
+# router = DefaultRouter()
+# router.register(r'products', ProductViewSet, basename='product')
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("api/products/", include("products.urls")),
+    path("api/auth/", include("accounts.urls")),
+    # Uncomment the include for products.urls
+    path("api/products/", include("products.urls")), 
+    # Remove the previous router include
+    # path("api/", include(router.urls)),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

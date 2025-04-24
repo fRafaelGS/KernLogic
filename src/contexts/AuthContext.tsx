@@ -4,11 +4,14 @@ import {
   useState,
   useEffect,
   ReactNode,
+  useCallback,
 } from 'react';
 import axios, { AxiosError } from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-hot-toast';
+import { toast } from 'sonner';
 import { API_URL, API_AUTH_URL, API_ENDPOINTS } from '@/config';
+import { v4 as uuidv4 } from 'uuid';
+import axiosInstance from '@/lib/axiosInstance';
 
 /* ──────────────────── types ──────────────────── */
 interface User {
@@ -25,6 +28,16 @@ interface AuthError {
   field?: string;
 }
 
+// --- Notification Types ---
+export interface Notification {
+  id: string;
+  message: string;
+  description?: string;
+  timestamp: Date;
+  read: boolean;
+  type: 'info' | 'success' | 'error' | 'warning';
+}
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
@@ -33,71 +46,14 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   register: (email: string, password: string, name: string) => Promise<void>;
+  // --- Notification State and Functions ---
+  notifications: Notification[];
+  unreadCount: number;
+  addNotification: (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => void;
+  markAllAsRead: () => void;
+  updateUserContext: (updatedUserData: Partial<User>) => void;
+  // Add markAsRead if needed later
 }
-
-/* ──────────────────── axios instance ──────────────────── */
-const api = axios.create({
-  baseURL: API_AUTH_URL,
-  headers: { 'Content-Type': 'application/json' },
-});
-
-/* ───── token-refresh interceptor ───── */
-api.interceptors.response.use(
-  (res) => res,
-  async (err: AxiosError) => {
-    const original = err.config as any;
-    if (err.response?.status === 401 && original && !original._retry) {
-      original._retry = true;
-      try {
-        const refresh = localStorage.getItem('refresh_token');
-        if (!refresh) throw new Error('No refresh token');
-
-        console.log('Attempting to refresh token...');
-        
-        // Fix URL construction to avoid duplicate /auth path
-        const refreshUrl = `${API_URL}/auth${API_ENDPOINTS.auth.refresh}`;
-        console.log('Using refresh URL:', refreshUrl);
-        
-        // Use fetch instead of axios to avoid sending CSRF token
-        const response = await fetch(refreshUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            refresh,
-          }),
-        });
-        
-        if (!response.ok) {
-          console.error('Token refresh failed:', response.status);
-          throw new Error(`Token refresh failed: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        console.log('Token refresh successful');
-        
-        localStorage.setItem('access_token', data.access);
-
-        original.headers.Authorization = `Bearer ${data.access}`;
-        return api(original);
-      } catch (refreshError) {
-        console.error('Token refresh error:', refreshError);
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        window.location.href = '/login';
-      }
-    }
-    return Promise.reject(err);
-  }
-);
-
-/* ───── auth-header interceptor ───── */
-api.interceptors.request.use((cfg) => {
-  const tk = localStorage.getItem('access_token');
-  if (tk) cfg.headers.Authorization = `Bearer ${tk}`;
-  return cfg;
-});
 
 /* ──────────────────── React context ──────────────────── */
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -106,50 +62,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<AuthError | null>(null);
+  // --- Notification State ---
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+
   const navigate = useNavigate();
 
   /* ─── on mount: validate token ─── */
   useEffect(() => {
     console.log('AuthContext mounted, checking authentication');
-    
-    // First check for an existing token
     const existingToken = localStorage.getItem('access_token');
+    
     if (existingToken) {
       console.log('Found existing token, validating...');
-      // Attempt to validate the token by fetching user data
-      fetch(`${API_URL}/auth/user/`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${existingToken}`
-        }
-      })
-      .then(response => {
-        if (response.ok) {
-          return response.json();
-        } else {
-          console.log('Token invalid, attempting test login instead');
-          throw new Error('Token validation failed');
-        }
-      })
-      .then(userData => {
-        console.log('Token valid, user data:', userData);
-        setUser(userData);
-        setLoading(false);
-      })
-      .catch(error => {
-        console.error('Error validating token:', error);
-        // Token validation failed, try test login as fallback
-        tryTestLogin();
-      });
+      // Use shared axiosInstance for the user validation call
+      // Path is relative to axiosInstance baseURL ('/api')
+      axiosInstance.get('/auth/user/') 
+        .then(response => {
+          console.log('Token valid, user data:', response.data);
+          setUser(response.data);
+          setLoading(false);
+        })
+        .catch(error => {
+          console.error('Error validating token:', error);
+          // Attempting refresh is handled by the interceptor, 
+          // but if it ultimately fails, it redirects. 
+          // If the request fails for non-401 reasons, try test login?
+          if (!axios.isAxiosError(error) || error.response?.status !== 401) {
+             console.log('Non-401 error validating token, trying test login.');
+             tryTestLogin(); 
+          } else {
+             // Let the interceptor handle redirect on final 401
+             setLoading(false); // Stop loading if validation fails and redirect happens
+          }
+        });
     } else {
       // No token, try test login
+      console.log('No existing token, attempting test login.');
       tryTestLogin();
     }
     
     function tryTestLogin() {
       // Use test-login endpoint as a fallback
-      console.log('Attempting test login');
+      // Use fetch as it doesn't need auth header
       const testLoginUrl = `${API_URL}/auth/test-login/`;
       console.log('Using test login URL:', testLoginUrl);
       
@@ -183,6 +138,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // --- Notification Functions ---
+  const addNotification = useCallback((notificationData: Omit<Notification, 'id' | 'timestamp' | 'read'>) => {
+    const newNotification: Notification = {
+      ...notificationData,
+      id: uuidv4(), // Generate unique ID
+      timestamp: new Date(),
+      read: false,
+    };
+    setNotifications(prev => [newNotification, ...prev].slice(0, 50)); // Add to start, limit to 50
+    setUnreadCount(prev => prev + 1);
+    
+    // Optionally show a toast as well
+    // toast[newNotification.type](newNotification.message, { description: newNotification.description });
+  }, []);
+
+  const markAllAsRead = useCallback(() => {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    setUnreadCount(0);
+  }, []);
+
+  // Function to update user state locally
+  const updateUserContext = useCallback((updatedUserData: Partial<User>) => {
+    setUser(prevUser => {
+      if (!prevUser) return null;
+      return { ...prevUser, ...updatedUserData };
+    });
+  }, []);
+
   /* ─── login ─── */
   const login = async (email: string, password: string) => {
     setLoading(true);
@@ -190,14 +173,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       console.log('Login attempt for:', email);
       
-      // Fix URL construction to avoid duplicate /auth path
-      const loginUrl = `${API_URL}/auth${API_ENDPOINTS.auth.login}`;
-      console.log('Fixed login URL:', loginUrl);
+      // Use fetch for login as it doesn't need prior auth
+      // URL needs full path from domain root
+      const loginUrl = `${API_URL}/auth/login/`; 
+      console.log('Login URL:', loginUrl);
       
-      // Make login request with fetch instead of axios
       const loginData = { email, password };
-      console.log('Sending login data:', JSON.stringify(loginData));
-      
       const response = await fetch(loginUrl, {
         method: 'POST',
         headers: {
@@ -252,8 +233,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setError(null);
     try {
-      const { data } = await api.post(API_ENDPOINTS.auth.register, { email, password, name });
-      const { access, refresh, user: userData } = data;
+      // Use shared axiosInstance for registration
+      // Path is relative to axiosInstance baseURL ('/api')
+      const response = await axiosInstance.post('/auth/register/', { email, password, name });
+      const { access, refresh, user: userData } = response.data;
 
       localStorage.setItem('access_token', access);
       localStorage.setItem('refresh_token', refresh);
@@ -276,14 +259,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   /* ─── logout ─── */
   const logout = () => {
-    console.log('Logout called - authentication bypass is active');
-    // Original logout functionality (commented out)
-    /*
+    console.log('Logout called');
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     setUser(null);
+    // Clear Axios default headers if they were ever set (though we removed the explicit setting)
+    delete axiosInstance.defaults.headers.common['Authorization']; 
     navigate('/login');
-    */
+    toast.info("You have been logged out.");
   };
 
   const value = {
@@ -294,6 +277,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login,
     logout,
     register,
+    // --- Provide notification state and functions ---
+    notifications,
+    unreadCount,
+    addNotification,
+    markAllAsRead,
+    updateUserContext,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

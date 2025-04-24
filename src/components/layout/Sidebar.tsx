@@ -12,7 +12,7 @@ import {
   HelpCircle,
   FileText
 } from "lucide-react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 
@@ -94,7 +94,7 @@ export function Sidebar({ className }: SidebarProps) {
           <p className="px-3 text-xs font-medium uppercase tracking-wider text-enterprise-400 mb-3">Management</p>
           <nav className="space-y-1.5">
             <NavItem icon={Upload} label="Upload Data" href="/app/upload" />
-            <NavItem icon={FileText} label="Documentation" href="/app/docs" />
+            <NavItem icon={FileText} label="Documentation" href="/app/documentation" />
             <NavItem icon={Users} label="Team" href="/app/team" />
             <NavItem icon={Settings} label="Settings" href="/app/settings" />
           </nav>
@@ -112,13 +112,16 @@ export function Sidebar({ className }: SidebarProps) {
             <p className="text-xs text-enterprise-600 mb-3">
               Check our documentation or contact support for assistance.
             </p>
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               className="w-full text-enterprise-700 border-enterprise-200 hover:bg-enterprise-100"
+              asChild
             >
-              View Documentation
-              <ChevronRight size={14} className="ml-1" />
+              <Link to="/app/documentation">
+                View Documentation
+                <ChevronRight size={14} className="ml-1" />
+              </Link>
             </Button>
           </div>
         </div>

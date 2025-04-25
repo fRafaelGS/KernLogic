@@ -586,25 +586,71 @@ export function ProductsTable() {
     {
       accessorKey: "is_active",
       header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          className="-ml-4"
-        >
-          Status
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
+        <div className="flex items-center space-x-2">
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="-ml-4"
+          >
+            Status
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-8 text-enterprise-700 focus:ring-0">
+                <FilterIcon className="h-3 w-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-40">
+              <DropdownMenuLabel>Filter Status</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuCheckboxItem
+                checked={filters.status === 'all'}
+                onCheckedChange={() => handleFilterChange('status', 'all')}
+              >
+                All
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={filters.status === 'active'}
+                onCheckedChange={() => handleFilterChange('status', 'active')}
+              >
+                Active
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={filters.status === 'inactive'}
+                onCheckedChange={() => handleFilterChange('status', 'inactive')}
+              >
+                Inactive
+              </DropdownMenuCheckboxItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       ),
       cell: ({ row }) => {
+        const product = row.original;
         const isActive = row.getValue("is_active");
+        
+        const toggleStatus = async () => {
+          try {
+            await productService.updateProduct(product.id!, { is_active: !isActive });
+            toast.success(`Product marked as ${isActive ? 'inactive' : 'active'} successfully`);
+            fetchProducts(); // Refresh the list
+          } catch (error: any) {
+            console.error('Error updating product status:', error);
+            toast.error(error.message || 'Failed to update product status');
+          }
+        };
+
         return (
           <Badge
-            className={
+            className={cn(
               isActive
                 ? "bg-success-50 text-success-700 border border-success-200 font-medium"
-                : "bg-danger-50 text-danger-700 border border-danger-200 font-medium"
-            }
+                : "bg-danger-50 text-danger-700 border border-danger-200 font-medium",
+              "cursor-pointer hover:opacity-80 transition-opacity"
+            )}
             variant="outline"
+            onClick={toggleStatus}
           >
             {isActive ? 'Active' : 'Inactive'}
           </Badge>
@@ -644,7 +690,7 @@ export function ProductsTable() {
         );
       },
     },
-  ], [filteredProducts, editingCell]); // Add editingCell dependency
+  ], [filteredProducts, editingCell, filters, fetchProducts]); // Add all dependencies
 
   // --- Table Instance ---
   const table = useReactTable({
@@ -1004,19 +1050,89 @@ export function ProductsTable() {
         </div>
         {filteredProducts.length > 0 && (
           <div className="px-4 py-3 border-t border-enterprise-200 bg-enterprise-50">
-            <div className="flex items-center justify-between text-sm text-enterprise-600">
-              <div>
-                Showing <span className="font-medium">{Math.min(1, filteredProducts.length)}</span> to{" "}
-                <span className="font-medium">{Math.min(filteredProducts.length, 10)}</span> of{" "}
-                <span className="font-medium">{filteredProducts.length}</span> results
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-sm text-enterprise-600">
+              <div className="flex items-center gap-2">
+                <span>Showing</span>
+                <span className="font-medium">
+                  {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}
+                </span>
+                <span>to</span>
+                <span className="font-medium">
+                  {Math.min(
+                    (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
+                    filteredProducts.length
+                  )}
+                </span>
+                <span>of</span>
+                <span className="font-medium">{filteredProducts.length}</span>
+                <span>results</span>
               </div>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" className="border-enterprise-200 text-enterprise-700" disabled>
-                  Previous
-                </Button>
-                <Button size="sm" variant="outline" className="border-enterprise-200 text-enterprise-700">
-                  Next
-                </Button>
+              <div className="flex flex-col sm:flex-row items-center gap-2">
+                <div className="flex items-center mr-2">
+                  <Label htmlFor="per-page" className="mr-2 text-xs text-enterprise-600">
+                    Items per page:
+                  </Label>
+                  <Select
+                    value={table.getState().pagination.pageSize.toString()}
+                    onValueChange={(value) => {
+                      table.setPageSize(Number(value));
+                    }}
+                  >
+                    <SelectTrigger
+                      id="per-page"
+                      className="h-8 w-20 border-enterprise-200 bg-white text-enterprise-800"
+                    >
+                      <SelectValue placeholder="10" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 border-enterprise-200 text-enterprise-700"
+                    onClick={() => table.setPageIndex(0)}
+                    disabled={!table.getCanPreviousPage()}
+                  >
+                    <ChevronsLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 border-enterprise-200 text-enterprise-700"
+                    onClick={() => table.previousPage()}
+                    disabled={!table.getCanPreviousPage()}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 border-enterprise-200 text-enterprise-700"
+                    onClick={() => table.nextPage()}
+                    disabled={!table.getCanNextPage()}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 border-enterprise-200 text-enterprise-700"
+                    onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+                    disabled={!table.getCanNextPage()}
+                  >
+                    <ChevronsRight className="h-4 w-4" />
+                  </Button>
+                </div>
+                <span className="text-xs text-enterprise-500">
+                  Page {table.getState().pagination.pageIndex + 1} of {Math.max(1, table.getPageCount())}
+                </span>
               </div>
             </div>
           </div>

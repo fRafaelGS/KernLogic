@@ -158,7 +158,7 @@ class DashboardSummarySerializer(serializers.Serializer):
     Serializer for dashboard summary data including KPIs and data completeness
     """
     total_products = serializers.IntegerField()
-    inventory_value = serializers.DecimalField(max_digits=15, decimal_places=2)
+    inventory_value = serializers.FloatField()  # Changed from DecimalField to avoid precision issues
     low_stock_count = serializers.IntegerField()
     team_members = serializers.IntegerField()
     data_completeness = serializers.FloatField()  # Percentage of complete product data
@@ -177,7 +177,7 @@ class InventoryTrendSerializer(serializers.Serializer):
     Serializer for inventory value trend data
     """
     dates = serializers.ListField(child=serializers.DateField())
-    values = serializers.ListField(child=serializers.DecimalField(max_digits=15, decimal_places=2))
+    values = serializers.ListField(child=serializers.FloatField())  # Changed from DecimalField to avoid precision issues
 
 class IncompleteProductSerializer(serializers.ModelSerializer):
     """

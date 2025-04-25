@@ -1,7 +1,7 @@
 // API Configuration
 export const API_BASE_URL = ''; // Empty base URL to use the proxy
-export const API_URL = `/api`; // Revert to relative path for proxy
-export const API_AUTH_URL = `${API_URL}/auth`;
+export const API_URL = ``; // Empty string instead of `/api` since proxy adds this
+export const API_AUTH_URL = `/api/auth`;
 
 // Add debug logging
 console.log('API Configuration:', {

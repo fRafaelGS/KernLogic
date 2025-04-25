@@ -136,7 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('Login attempt for:', email);
       
       // Use fetch for login as it doesn't need prior auth
-      const loginUrl = `${API_URL}/auth/login/`; 
+      const loginUrl = `/api/auth/login/`; 
       console.log('Login URL:', loginUrl);
       
       const loginData = { email, password };

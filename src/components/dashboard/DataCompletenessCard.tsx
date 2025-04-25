@@ -1,15 +1,14 @@
 import React from 'react';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { ArrowUpRight, Info } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Info } from 'lucide-react';
 
 interface DataCompletenessCardProps {
-  completeness: number | undefined; 
-  mostMissingFields: { field: string; count: number }[] | undefined;
+  completeness: number;
+  mostMissingFields: { field: string; count: number }[];
   loading: boolean;
 }
 
@@ -18,36 +17,28 @@ export const DataCompletenessCard: React.FC<DataCompletenessCardProps> = ({
   mostMissingFields,
   loading
 }) => {
-  const navigate = useNavigate();
-  
-  // Determine color based on completeness percentage
-  const getProgressColor = (value: number | undefined) => {
-    if (!value) return "#ef4444"; // default to red
-    if (value > 80) return "#10b981"; // green
-    if (value > 50) return "#f59e0b"; // amber
-    return "#ef4444"; // red
-  };
-
   return (
-    <Card className="bg-white border-enterprise-200 shadow-sm">
+    <Card className="bg-white border-enterprise-200 shadow-sm hover:shadow-md transition-all">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div>
-          <CardTitle className="text-lg font-semibold text-enterprise-900">Data Completeness</CardTitle>
-          <CardDescription className="text-enterprise-500">
-            {loading ? (
+          <CardTitle className="text-sm font-medium uppercase tracking-wider text-gray-700 dark:text-gray-200">Data Completeness</CardTitle>
+          {loading ? (
+            <div className="text-enterprise-500">
               <Skeleton className="h-4 w-40" />
-            ) : (
-              `${completeness || 0}% of catalog has all required fields filled`
-            )}
-          </CardDescription>
+            </div>
+          ) : (
+            <CardDescription className="text-enterprise-500">
+              {`${completeness}% of catalog has all required fields filled`}
+            </CardDescription>
+          )}
         </div>
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-enterprise-600">
+              <button className="text-enterprise-600 hover:text-enterprise-900">
                 <Info className="h-4 w-4" />
                 <span className="sr-only">About data completeness</span>
-              </Button>
+              </button>
             </TooltipTrigger>
             <TooltipContent className="w-80 p-4">
               <p className="text-sm font-medium mb-2">Required fields:</p>
@@ -64,60 +55,49 @@ export const DataCompletenessCard: React.FC<DataCompletenessCardProps> = ({
           </Tooltip>
         </TooltipProvider>
       </CardHeader>
-      <CardContent className="pt-4">
+      <CardContent>
         {loading ? (
-          <Skeleton className="h-8 w-full" />
+          <div className="space-y-4">
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </div>
         ) : (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="space-y-1">
-                  <Progress 
-                    value={completeness || 0} 
-                    className="h-4" 
-                    style={{
-                      background: "#f1f5f9",
-                      "--progress-background": getProgressColor(completeness)
-                    } as React.CSSProperties}
-                  />
-                  <div className="flex justify-between text-xs text-enterprise-500">
-                    <span>0%</span>
-                    <span>50%</span>
-                    <span>100%</span>
-                  </div>
+          <>
+            <div className="flex justify-between items-center text-xs text-enterprise-500 mb-1.5">
+              <span>Completeness</span>
+              <span>{completeness}%</span>
+            </div>
+            <Progress 
+              value={completeness} 
+              className="h-2.5 bg-enterprise-100"
+            />
+            
+            <div className="mt-6">
+              <div className="text-sm font-medium text-enterprise-800 mb-3">Most missing fields</div>
+              {mostMissingFields && mostMissingFields.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {mostMissingFields.map((item) => (
+                    <TooltipProvider key={item.field}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge className="bg-enterprise-100 text-enterprise-700 hover:bg-enterprise-200">
+                            {item.field} ({item.count})
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                          <p className="text-xs">{item.count} products missing {item.field}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ))}
                 </div>
-              </TooltipTrigger>
-              <TooltipContent className="w-80 p-4">
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">Most missing fields:</p>
-                  {mostMissingFields && mostMissingFields.length > 0 ? (
-                    <div className="space-y-1.5">
-                      {mostMissingFields.map((item, index) => (
-                        <div key={index} className="flex justify-between">
-                          <span className="text-xs text-enterprise-600">{item.field}</span>
-                          <span className="text-xs font-medium">{item.count} products</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-enterprise-500">No missing fields detected.</p>
-                  )}
-                </div>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+              ) : (
+                <div className="text-sm text-enterprise-500">No missing fields detected</div>
+              )}
+            </div>
+          </>
         )}
       </CardContent>
-      <CardFooter className="pt-0">
-        <Button 
-          variant="link" 
-          className="text-primary-600 hover:text-primary-700 p-0 h-auto text-sm"
-          onClick={() => navigate('/app/products/new')}
-        >
-          Improve completeness
-          <ArrowUpRight className="ml-1 h-3 w-3" />
-        </Button>
-      </CardFooter>
     </Card>
   );
 }; 

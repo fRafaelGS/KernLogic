@@ -4,7 +4,7 @@ import axiosInstance from '@/lib/axiosInstance';
 
 // PRODUCTS_PATH should be empty string to work with the backend URL structure
 // The backend routes 'api/' to products.urls which registers the viewset at ''
-const PRODUCTS_PATH = ''; 
+const PRODUCTS_PATH = '/api'; // Add /api prefix since API_URL is now empty
 
 // REMOVE global header setting - interceptor handles this
 // const token = localStorage.getItem('access_token');
@@ -59,7 +59,7 @@ export interface Product {
     attributes?: Record<string, string>;
 }
 
-export const PRODUCTS_API_URL = `${API_URL}/products`;
+export const PRODUCTS_API_URL = `/api/products`;
 
 export const productService = {
     // Get all products

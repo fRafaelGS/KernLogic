@@ -84,6 +84,7 @@ export function useDashboardData() {
   const fetchSummary = useCallback(async (force = false) => {
     // Return cached data if valid
     if (!force && isCacheValid(cache.summary)) {
+      console.log('Using cached dashboard summary data:', cache.summary!.data);
       setSummary(cache.summary!.data);
       return;
     }
@@ -92,9 +93,19 @@ export function useDashboardData() {
     setError(prev => ({ ...prev, summary: null }));
 
     try {
+      console.log('Fetching dashboard summary data...');
       const data = await dashboardService.getDashboardSummary();
-      setSummary(data);
-      updateCache('summary', data);
+      console.log('Dashboard summary data received:', data);
+      
+      // Check that data meets expected structure
+      if (data && typeof data === 'object') {
+        console.log('Dashboard data structure looks valid, setting state');
+        setSummary(data);
+        updateCache('summary', data);
+      } else {
+        console.error('Invalid dashboard data format received:', data);
+        throw new Error('Invalid data format received from API');
+      }
     } catch (err: any) {
       console.error('Dashboard summary error:', err);
       // Don't logout on dashboard API failures
@@ -177,8 +188,15 @@ export function useDashboardData() {
 
     try {
       const data = await dashboardService.getRecentActivity();
-      setActivity(data);
-      updateCache('activity', data);
+      
+      // Add validation check for activity data
+      if (!Array.isArray(data)) {
+        console.error('API Error: getRecentActivity did not return an array. Received:', typeof data, data);
+        setActivity([]); // Set to empty array to prevent crash
+      } else {
+        setActivity(data);
+        updateCache('activity', data);
+      }
     } catch (err: any) {
       console.error('Activity error:', err);
       // Don't logout on dashboard API failures

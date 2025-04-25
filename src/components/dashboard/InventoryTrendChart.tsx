@@ -37,7 +37,7 @@ export const InventoryTrendChart: React.FC<InventoryTrendChartProps> = ({
   };
 
   // Convert trend data to chart format
-  const chartData = data 
+  const chartData = data && data.dates && data.values
     ? data.dates.map((date, i) => ({
         date,
         value: data.values[i]
@@ -48,7 +48,7 @@ export const InventoryTrendChart: React.FC<InventoryTrendChartProps> = ({
     <Card className="bg-white border-enterprise-200 shadow-sm">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div>
-          <CardTitle className="text-lg font-semibold text-enterprise-900">Inventory Value Trend</CardTitle>
+          <CardTitle className="text-sm font-medium uppercase tracking-wider text-gray-700 dark:text-gray-200">Inventory Value Trend</CardTitle>
           <CardDescription className="text-enterprise-500">
             {range} day view
           </CardDescription>
@@ -73,19 +73,26 @@ export const InventoryTrendChart: React.FC<InventoryTrendChartProps> = ({
           <div className="h-[240px] bg-enterprise-50 rounded-md flex items-center justify-center">
             <Skeleton className="h-40 w-full" />
           </div>
-        ) : data ? (
-          <AreaChart
-            className="h-[240px]"
-            data={chartData}
-            index="date"
-            categories={["value"]}
-            colors={["primary"]}
-            valueFormatter={(value) => formatCurrency(value)}
-            showLegend={false}
-            showGridLines={false}
-            showAnimation={true}
-            animationDuration={600}
-          />
+        ) : data && data.dates ? (
+          data.dates.length >= 2 ? (
+            <AreaChart
+              className="h-[240px]"
+              data={chartData}
+              index="date"
+              categories={["value"]}
+              colors={["primary"]}
+              valueFormatter={(value) => formatCurrency(value)}
+              showLegend={false}
+              showGridLines={false}
+              showAnimation={true}
+              animationDuration={600}
+            />
+          ) : (
+            <div className="h-[240px] bg-enterprise-50 rounded-md flex flex-col items-center justify-center">
+              <h3 className="text-enterprise-700 font-semibold text-lg">Not enough history yet</h3>
+              <p className="text-enterprise-500 text-sm pt-2">More data points will appear over time</p>
+            </div>
+          )
         ) : (
           <div className="h-[240px] bg-enterprise-50 rounded-md flex items-center justify-center">
             <p className="text-enterprise-500 text-sm">No data available</p>

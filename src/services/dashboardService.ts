@@ -1,5 +1,5 @@
 import axiosInstance from '@/lib/axiosInstance';
-import { API_ENDPOINTS } from '@/config';
+import { API_ENDPOINTS, API_URL } from '@/config';
 
 // Define types for dashboard data
 export interface DashboardSummary {
@@ -37,7 +37,10 @@ export interface IncompleteProduct {
 }
 
 // Define path to dashboard endpoints
-const DASHBOARD_URL = API_ENDPOINTS.dashboard;
+const DASHBOARD_URL = `/api/dashboard`;
+
+// This is the correct URL construction - the proxy in vite.config.ts will add /api
+console.log('Dashboard API endpoints configured at:', DASHBOARD_URL);
 
 /**
  * Fetch dashboard summary data
@@ -53,6 +56,14 @@ export const getDashboardSummary = async (): Promise<DashboardSummary> => {
     });
     
     const response = await axiosInstance.get(`${DASHBOARD_URL}/summary/`);
+    
+    // Debug the response data
+    console.log('Dashboard Summary Response:', {
+      status: response.status,
+      data: response.data,
+      dataType: typeof response.data
+    });
+    
     return response.data;
   } catch (error) {
     console.error('Error fetching dashboard summary:', error);
@@ -79,8 +90,26 @@ export const getInventoryTrend = async (range: 30 | 60 | 90 = 30): Promise<Inven
  */
 export const getRecentActivity = async (): Promise<Activity[]> => {
   try {
+    // Log the request URL for debugging
+    const token = localStorage.getItem('access_token');
+    console.log('Recent Activity API Call:', {
+      url: `${DASHBOARD_URL}/activity/`,
+      hasToken: !!token,
+      tokenPrefix: token ? token.substring(0, 15) + '...' : 'none'
+    });
+    
     const response = await axiosInstance.get(`${DASHBOARD_URL}/activity/`);
-    return response.data;
+    
+    // Debug log to check the response structure
+    console.log('Activity API response:', {
+      status: response.status,
+      isArray: Array.isArray(response.data),
+      dataType: typeof response.data,
+      dataPreview: response.data
+    });
+    
+    // Ensure we always return an array
+    return Array.isArray(response.data) ? response.data : [];
   } catch (error) {
     console.error('Error fetching recent activity:', error);
     throw error;
@@ -92,8 +121,26 @@ export const getRecentActivity = async (): Promise<Activity[]> => {
  */
 export const getIncompleteProducts = async (): Promise<IncompleteProduct[]> => {
   try {
+    // Log the request URL for debugging
+    const token = localStorage.getItem('access_token');
+    console.log('Incomplete Products API Call:', {
+      url: `${DASHBOARD_URL}/incomplete-products/`,
+      hasToken: !!token,
+      tokenPrefix: token ? token.substring(0, 15) + '...' : 'none'
+    });
+    
     const response = await axiosInstance.get(`${DASHBOARD_URL}/incomplete-products/`);
-    return response.data;
+    
+    // Debug log to check the response structure
+    console.log('Incomplete Products API response:', {
+      status: response.status,
+      isArray: Array.isArray(response.data),
+      dataType: typeof response.data,
+      dataPreview: response.data
+    });
+    
+    // Ensure we always return an array
+    return Array.isArray(response.data) ? response.data : [];
   } catch (error) {
     console.error('Error fetching incomplete products:', error);
     throw error;

@@ -15,6 +15,7 @@ import { useNavigate } from 'react-router-dom';
 interface ActivityFeedProps {
   activities: Activity[] | null;
   loading: boolean;
+  error?: Error | null;
   maxItems?: number;
   title?: string;
   showViewAll?: boolean;
@@ -40,7 +41,7 @@ const getTimeAgo = (date: string) => {
 /**
  * Map activity action to an icon
  */
-const getActivityIcon = (action: Activity['action']) => {
+const getActivityIcon = (action: Activity['action'] | 'default') => {
   switch (action) {
     case 'create':
       return <Plus className="h-4 w-4 text-success-600" />;
@@ -53,27 +54,72 @@ const getActivityIcon = (action: Activity['action']) => {
   }
 };
 
+/**
+ * Extract product name from activity message or use fallback
+ */
+const getProductName = (activity: Activity): string => {
+  // Try to extract product name from message using multiple patterns
+  const patterns = [
+    /product "([^"]+)"/,          // product "Name"
+    /Product "([^"]+)"/,          // Product "Name"
+    /added product ([^"]+)/,      // added product Name
+    /updated product ([^"]+)/,    // updated product Name
+    /deleted product ([^"]+)/,    // deleted product Name
+    /product: ([^,]+)/,           // product: Name
+    /Product: ([^,]+)/            // Product: Name
+  ];
+  
+  for (const pattern of patterns) {
+    const match = activity.message.match(pattern);
+    if (match && match[1]) {
+      return match[1].trim();
+    }
+  }
+  
+  return "Unnamed product";
+};
+
+/**
+ * Format the activity message to be more concise and meaningful
+ */
+const formatActivityMessage = (activity: Activity): string => {
+  // Extract user and action for a more meaningful message
+  const userName = activity.user_name || 'A user';
+  const actionText = {
+    'create': 'created',
+    'update': 'updated',
+    'delete': 'deleted'
+  }[activity.action] || 'modified';
+
+  return `${userName} ${actionText} this product`;
+};
+
 export const ActivityFeed: React.FC<ActivityFeedProps> = ({
   activities,
   loading,
-  maxItems = 5,
+  error,
+  maxItems = 10,
   title = "Recent Activity",
   showViewAll = true
 }) => {
   const navigate = useNavigate();
   
+  // Check if activities is an array before using array methods
+  const isValidActivities = Array.isArray(activities);
+  
   return (
     <Card className="bg-white border-enterprise-200 shadow-sm">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div>
-          <CardTitle className="text-lg font-semibold text-enterprise-900">{title}</CardTitle>
+          <CardTitle className="text-sm uppercase tracking-wider text-gray-700 dark:text-gray-200">{title}</CardTitle>
         </div>
         {showViewAll && (
           <Button 
             variant="ghost" 
             size="sm" 
             className="text-enterprise-600 hover:text-enterprise-900"
-            onClick={() => navigate('/app/activity')}
+            disabled={true} // Disable for now
+            title="Coming soon"
           >
             <Eye className="h-4 w-4 mr-1" />
             View All
@@ -81,7 +127,11 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
         )}
       </CardHeader>
       <CardContent className="p-0">
-        {loading ? (
+        {error ? (
+          <div className="bg-red-50 p-4 rounded-md mx-4 my-3 border border-red-200">
+            <p className="text-red-700 text-sm">Unable to load activity data. Please try again later.</p>
+          </div>
+        ) : loading ? (
           <div className="space-y-3 p-6">
             {[1, 2, 3].map((i) => (
               <div key={i} className="flex items-center gap-3">
@@ -93,35 +143,36 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
               </div>
             ))}
           </div>
-        ) : activities && activities.length > 0 ? (
+        ) : isValidActivities && activities.length > 0 ? (
           <div className="divide-y divide-enterprise-100">
             {activities.slice(0, maxItems).map((item) => (
               <div 
-                key={item.id} 
-                className="flex items-center gap-3 px-6 py-3 hover:bg-enterprise-50 cursor-pointer"
-                onClick={() => navigate(`/app/products/${item.entity_id}`)}
+                key={item?.id || Math.random()} 
+                className="flex items-center gap-3 px-6 py-3 hover:bg-enterprise-50 cursor-pointer transition-colors"
+                onClick={() => item?.entity_id ? navigate(`/app/products/${item.entity_id}`) : null}
               >
                 <div className="h-9 w-9 rounded-full bg-primary-50 flex items-center justify-center">
-                  {getActivityIcon(item.action)}
+                  {getActivityIcon(item?.action || 'default')}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-enterprise-800 truncate">
-                    {item.message}
+                    {item ? getProductName(item) : "Unknown product"}
                   </p>
                   <p className="text-xs text-enterprise-500 truncate">
-                    by {item.user_name || 'Admin'}
+                    {item ? formatActivityMessage(item) : "Activity details not available"}
                   </p>
                 </div>
-                <div className="flex items-center text-xs text-enterprise-500">
+                <div className="flex items-center text-xs text-enterprise-500 whitespace-nowrap">
                   <CalendarClock className="h-3.5 w-3.5 mr-1" />
-                  {getTimeAgo(item.created_at)}
+                  {item?.created_at ? getTimeAgo(item.created_at) : "Unknown time"}
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center py-8">
-            <p className="text-enterprise-500 text-sm">No recent activity</p>
+          <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
+            <Package className="h-8 w-8 text-enterprise-300 mb-3" />
+            <p className="text-enterprise-600 text-sm font-medium">No activity yet – make your first change to see history here.</p>
           </div>
         )}
       </CardContent>

@@ -30,7 +30,7 @@ export const IncompleteProductsList: React.FC<IncompleteProductsListProps> = ({
     <Card className="bg-white border-enterprise-200 shadow-sm">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div>
-          <CardTitle className="text-lg font-semibold text-enterprise-900">{title}</CardTitle>
+          <CardTitle className="text-sm font-medium uppercase tracking-wider text-gray-700 dark:text-gray-200">{title}</CardTitle>
           <CardDescription className="text-enterprise-500">{description}</CardDescription>
         </div>
         {showViewAll && (
@@ -38,7 +38,8 @@ export const IncompleteProductsList: React.FC<IncompleteProductsListProps> = ({
             variant="ghost" 
             size="sm" 
             className="text-enterprise-600 hover:text-enterprise-900"
-            onClick={() => navigate('/app/products')}
+            disabled={true}
+            title="Coming soon"
           >
             <Eye className="h-4 w-4 mr-1" />
             View All
@@ -59,27 +60,36 @@ export const IncompleteProductsList: React.FC<IncompleteProductsListProps> = ({
           <div className="divide-y divide-enterprise-100">
             {products.slice(0, maxItems).map((product) => (
               <div 
-                key={product.id} 
+                key={product?.id || Math.random()} 
                 className="px-6 py-4 hover:bg-enterprise-50 cursor-pointer"
-                onClick={() => navigate(`/app/products/${product.id}/edit`)}
+                onClick={() => product?.id ? navigate(`/app/products/${product.id}/edit`) : null}
               >
                 <div className="flex justify-between items-center mb-2">
-                  <h4 className="font-medium text-enterprise-800">{product.name}</h4>
+                  <h4 className="font-medium text-enterprise-800">{product?.name || "Unnamed product"}</h4>
                   <Badge variant="outline" className="bg-enterprise-50">
-                    {product.completeness}% complete
+                    {product?.completeness || 0}% complete
                   </Badge>
                 </div>
-                <div className="text-xs text-enterprise-500 mb-3">SKU: {product.sku}</div>
+                <div className="text-xs text-enterprise-500 mb-3">SKU: {product?.sku || "No SKU"}</div>
                 <div className="flex flex-wrap gap-2">
-                  {product.missing_fields.map((field) => (
+                  {product?.missing_fields && Array.isArray(product.missing_fields) ? (
+                    product.missing_fields.map((field) => (
+                      <Badge 
+                        key={field} 
+                        variant="outline"
+                        className="bg-danger-50 text-danger-700 border-danger-200"
+                      >
+                        Missing: {field}
+                      </Badge>
+                    ))
+                  ) : (
                     <Badge 
-                      key={field} 
                       variant="outline"
                       className="bg-danger-50 text-danger-700 border-danger-200"
                     >
-                      Missing: {field}
+                      Missing data
                     </Badge>
-                  ))}
+                  )}
                 </div>
               </div>
             ))}

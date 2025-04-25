@@ -423,6 +423,9 @@ class DashboardViewSet(viewsets.ViewSet):
             total=Coalesce(Sum(F('price') * F('stock')), Decimal('0.00'))
         )['total']
         
+        # Convert Decimal to float to avoid serialization issues
+        inventory_value = float(inventory_value)
+        
         # Get low stock threshold from settings or default to 10
         low_stock_threshold = getattr(settings, 'LOW_STOCK_THRESHOLD', 10)
         low_stock_count = queryset.filter(stock__lt=low_stock_threshold).count()
@@ -524,7 +527,8 @@ class DashboardViewSet(viewsets.ViewSet):
             ratio += random.uniform(-0.05, 0.05)
             
             value = current_value * Decimal(ratio)
-            values.append(value.quantize(Decimal('0.01')))
+            # Convert decimal to float
+            values.append(float(value.quantize(Decimal('0.01'))))
             
             date += timedelta(days=1)
         

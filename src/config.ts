@@ -13,19 +13,19 @@ console.log('API Configuration:', {
 // API endpoints
 export const API_ENDPOINTS = {
     auth: {
-        login: '/login/',
-        register: '/register/',
-        refresh: '/refresh/',
-        user: '/user/',
-        debugLogin: '/debug-login/',
-        testLogin: '/test-login/'
+        login: '/auth/login/',
+        register: '/auth/register/',
+        refresh: '/auth/refresh/',
+        user: '/auth/user/',
+        debugLogin: '/auth/debug-login/',
+        testLogin: '/auth/test-login/'
     },
     products: {
-        list: '/',
-        create: '/',
-        update: (id: number) => `/${id}/`,
-        delete: (id: number) => `/${id}/`,
-        categories: '/categories/',
-        stats: '/stats/'
+        list: '/products/',
+        create: '/products/',
+        update: (id: number) => `/products/${id}/`,
+        delete: (id: number) => `/products/${id}/`,
+        categories: '/products/categories/',
+        stats: '/products/stats/'
     }
 }; 

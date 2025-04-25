@@ -7,7 +7,7 @@ from .models import Product, ProductImage
 from .serializers import ProductSerializer, ProductImageSerializer, ProductStatsSerializer
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db import transaction, models
 from rest_framework.renderers import JSONRenderer
 from django.db.models import Sum, F, Q, Count
@@ -30,7 +30,7 @@ class ProductViewSet(viewsets.ModelViewSet):
     ordering_fields = ['name', 'created_at', 'price', 'stock', 'brand']
     ordering = ['-created_at']
     renderer_classes = [JSONRenderer]
-    parser_classes = [MultiPartParser, FormParser, filters.OrderingFilter]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options']
 
     def get_queryset(self):
@@ -71,10 +71,10 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     def perform_destroy(self, instance):
         """
-        Soft delete the product by setting is_active to False
+        Permanently delete the product instead of soft deleting it
         """
-        instance.is_active = False
-        instance.save()
+        # Actually delete the product from the database
+        instance.delete()
 
     @action(detail=False, methods=['get'])
     def stats(self, request):
@@ -105,17 +105,57 @@ class ProductViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         return Response(serializer.validated_data)
         
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get', 'post'])
     def categories(self, request):
         """
-        Return a list of unique categories for dropdown menus.
+        GET: Return a list of unique categories for dropdown menus.
+        POST: Create a new category by adding a product with that category.
         """
-        queryset = self.get_queryset()
-        categories = queryset.values_list('category', flat=True).distinct().order_by('category')
-        # Filter out None values
-        categories = [c for c in categories if c]
-        return Response(categories)
+        if request.method == 'GET':
+            queryset = self.get_queryset()
+            categories = queryset.values_list('category', flat=True).distinct().order_by('category')
+            # Filter out None values
+            categories = [c for c in categories if c]
+            return Response(categories)
         
+        elif request.method == 'POST':
+            # For POST, create a minimal product with the new category
+            category_name = request.data.get('category')
+            if not category_name:
+                return Response(
+                    {"error": "Category name is required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+            # Create a temporary product with this category
+            # We generate a random SKU with timestamp to avoid conflicts
+            import time
+            from random import randint
+            temp_sku = f"temp-cat-{int(time.time())}-{randint(1000, 9999)}"
+            
+            product_data = {
+                "name": f"Category Placeholder: {category_name}",
+                "sku": temp_sku,
+                "price": 0.01,
+                "stock": 0,
+                "category": category_name,
+                "is_active": False  # Make it inactive so it doesn't appear in regular products
+            }
+            
+            serializer = self.get_serializer(data=product_data)
+            if serializer.is_valid():
+                self.perform_create(serializer)
+                # Return the category name with success status
+                return Response(
+                    {"id": serializer.data['id'], "category": category_name},
+                    status=status.HTTP_201_CREATED
+                )
+            else:
+                return Response(
+                    {"error": "Failed to create category", "details": serializer.errors},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
     @action(detail=False, methods=['get'])
     def brands(self, request):
         """
@@ -302,3 +342,24 @@ class ProductViewSet(viewsets.ModelViewSet):
         except Exception as e:
              print(f"Error during image reorder: {e}")
              return Response({'detail': 'Failed to update image order.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['post'])
+    def cleanup_category_placeholders(self, request):
+        """
+        Remove all category placeholder products (created when adding categories)
+        """
+        # Find all products that are placeholders (name starts with "Category Placeholder:" and is_active=False)
+        placeholders = Product.objects.filter(
+            name__startswith="Category Placeholder:",
+            is_active=False
+        )
+        
+        count = placeholders.count()
+        # Delete them physically (not just soft delete)
+        placeholder_ids = list(placeholders.values_list('id', flat=True))
+        placeholders.delete()
+        
+        return Response({
+            'message': f'Successfully deleted {count} category placeholder products',
+            'deleted_ids': placeholder_ids
+        }, status=status.HTTP_200_OK)

@@ -34,6 +34,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { CreatableSelect } from "@/components/ui/creatable-select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Spinner } from "@/components/ui/spinner";
+import { FileUpload } from "@/components/ui/file-upload";
+import { Info } from "lucide-react";
 
 // Services
 import { productService, Product } from '@/services/productService';
@@ -42,30 +46,41 @@ import { getCategories, createCategory } from "@/services/categoryService";
 
 const PRODUCTS_BASE_URL = `${API_URL}/products`;
 
+const COUNTRY_CODES = [
+  "US", "CA", "MX", "UK", "FR", "DE", "ES", "IT", "AU", "JP", "CN", "BR", "IN"
+];
+
+const PRODUCT_TYPES = [
+  "Physical", "Digital", "Service", "Subscription", "Bundle"
+];
+
+const UNITS_OF_MEASURE = [
+  "Each", "Pair", "Pack", "Box", "Case", "Pallet", "Kg", "Gram", "Liter", "Meter"
+];
+
 // Schema for product form validation
 const productEditSchema = z.object({
-  name: z.string().min(2, { message: 'Product name must be at least 2 characters' }),
+  name: z.string().min(1, "Name is required"),
   description: z.string().optional(),
-  sku: z.string().min(2, { message: 'SKU must be at least 2 characters' }),
-  price: z.preprocess(
-    (a) => parseFloat(a as string),
-    z.number().min(0, { message: 'Price must be a positive number' })
-  ),
-  stock: z.preprocess(
-    (a) => parseInt(a as string, 10),
-    z.number().min(0, { message: 'Stock must be a positive number' })
-  ),
-  category: z.string().min(1, { message: 'Please select a category' }),
-  is_active: z.boolean(),
+  sku: z.string().min(1, "SKU is required"),
+  price: z.coerce
+    .number({ required_error: "Price is required" })
+    .min(0, "Price must be positive"),
+  stock: z.coerce
+    .number({ required_error: "Stock is required" })
+    .min(0, "Stock must be positive")
+    .int("Stock must be a whole number"),
+  category: z.string().optional(),
+  is_active: z.boolean().default(true),
+  primary_image: z.any().optional(),
   // New fields
   brand: z.string().optional(),
   type: z.string().optional(),
   unit_of_measure: z.string().optional(),
   barcode: z.string().optional(),
-  tags: z.array(z.string()).optional(),
-  country_availability: z.array(z.string()).optional(),
-  attributes: z.record(z.string(), z.string()).optional(),
-  primary_image: z.string().optional(),
+  tags: z.array(z.string()).default([]),
+  country_availability: z.array(z.string()).default([]),
+  attributes: z.record(z.string(), z.string()).default({}),
 });
 
 type ProductFormValues = z.infer<typeof productEditSchema>;
@@ -300,345 +315,422 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          {/* Basic Information Section */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-6">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Product Name *</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="Enter product name" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          <Tabs defaultValue="basic" className="w-full">
+            <TabsList className="mb-4">
+              <TabsTrigger value="basic">Basic Information</TabsTrigger>
+              <TabsTrigger value="details">Details & Metadata</TabsTrigger>
+              <TabsTrigger value="attributes">Technical Specifications</TabsTrigger>
+            </TabsList>
+          
+            <TabsContent value="basic" className="space-y-4">
+              {/* Basic Information */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label htmlFor="name" className="block text-sm font-medium">
+                    Product Name *
+                  </label>
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Input {...field} placeholder="Enter product name" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
-              <FormField
-                control={form.control}
-                name="sku"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>SKU *</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="Enter SKU" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="price"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Price *</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="0.00"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="stock"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Stock *</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type="number"
-                          min="0"
-                          placeholder="0"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <div className="space-y-2">
+                  <label htmlFor="sku" className="block text-sm font-medium">
+                    SKU *
+                  </label>
+                  <FormField
+                    control={form.control}
+                    name="sku"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Input {...field} placeholder="Enter SKU" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
               </div>
-
-              <FormField
-                control={form.control}
-                name="brand"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Brand</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="Enter brand name" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="type"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Product Type</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="Enter product type" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="unit_of_measure"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Unit of Measure</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="e.g. kg, pcs" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="barcode"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Barcode</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="Enter barcode" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-6">
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        {...field}
-                        placeholder="Enter product description"
-                        className="min-h-[120px]"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
 
               <div className="space-y-2">
-                <Label htmlFor="category">Category</Label>
-                <CreatableSelect
-                  options={categories}
-                  value={form.watch("category")}
-                  onChange={(value) => form.setValue("category", value, { shouldValidate: true })}
-                  onCreateOption={handleCreateCategory}
-                  placeholder={categoriesLoading ? "Loading categories..." : "Select or create a category"}
-                  disabled={isLoading || categoriesLoading}
-                  className="w-full"
+                <label htmlFor="description" className="block text-sm font-medium">
+                  Description
+                </label>
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <Textarea
+                          {...field}
+                          placeholder="Enter product description"
+                          className="min-h-[120px]"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-                {form.formState.errors.category && (
-                  <p className="text-red-500 text-sm">
-                    {form.formState.errors.category.message}
-                  </p>
-                )}
               </div>
 
-              <FormField
-                control={form.control}
-                name="tags"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center gap-2">
-                      Tags
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <HelpCircle size={16} className="text-muted-foreground" />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            Press Enter to add a tag
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </FormLabel>
-                    <FormControl>
-                      <TagInput
-                        id="tags"
-                        placeholder="Add tags..."
-                        tags={field.value || []}
-                        setTags={(newTags) => field.onChange(newTags)}
-                        maxTags={10}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="country_availability"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center gap-2">
-                      Country Availability
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <HelpCircle size={16} className="text-muted-foreground" />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            Enter country codes (e.g. US, CA)
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </FormLabel>
-                    <FormControl>
-                      <TagInput
-                        id="countries"
-                        placeholder="Add country codes..."
-                        tags={field.value || []}
-                        setTags={(newTags) => field.onChange(newTags)}
-                        maxTags={15}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div>
-                <FormLabel>Product Image</FormLabel>
-                <div className="mt-2">
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    className="mb-3"
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label htmlFor="price" className="block text-sm font-medium">
+                    Price *
+                  </label>
+                  <FormField
+                    control={form.control}
+                    name="price"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="0.00"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="stock" className="block text-sm font-medium">
+                    Stock *
+                  </label>
+                  <FormField
+                    control={form.control}
+                    name="stock"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type="number"
+                            min="0"
+                            placeholder="0"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="category" className="block text-sm font-medium">
+                  Category
+                </label>
+                <FormField
+                  control={form.control}
+                  name="category"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <CreatableSelect
+                          options={categories}
+                          value={field.value}
+                          onChange={(value) => field.onChange(value)}
+                          onCreateOption={handleCreateCategory}
+                          placeholder={categoriesLoading ? "Loading categories..." : "Select or create a category"}
+                          disabled={isLoading || categoriesLoading}
+                          className="w-full"
+                        />
+                      </FormControl>
+                      {field.value && (
+                        <FormMessage />
+                      )}
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <FormField
+                  control={form.control}
+                  name="is_active"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                      <div>
+                        <FormLabel>Active</FormLabel>
+                        <p className="text-sm text-muted-foreground">
+                          Product will be visible to users
+                        </p>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="image" className="block text-sm font-medium">
+                  Product Image
+                </label>
+                <div className="flex flex-col items-center space-y-4">
                   {imagePreview && (
-                    <div className="mt-2">
+                    <div className="relative w-40 h-40 border rounded-md overflow-hidden">
                       <img
                         src={imagePreview}
                         alt="Product preview"
-                        className="max-h-40 rounded-md border border-gray-300"
+                        className="w-full h-full object-contain"
                       />
                     </div>
                   )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Technical Specifications Section */}
-          <Collapsible
-            open={attributesOpen}
-            onOpenChange={setAttributesOpen}
-            className="border rounded-md p-3"
-          >
-            <CollapsibleTrigger className="flex items-center justify-between w-full font-medium">
-              <span>Technical Specifications</span>
-              {attributesOpen ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
-            </CollapsibleTrigger>
-            
-            <CollapsibleContent className="pt-3 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <Input
-                  placeholder="Attribute name"
-                  value={newAttributeKey}
-                  onChange={(e) => setNewAttributeKey(e.target.value)}
-                />
-                <Input
-                  placeholder="Attribute value"
-                  value={newAttributeValue}
-                  onChange={(e) => setNewAttributeValue(e.target.value)}
-                />
-                <Button type="button" variant="outline" onClick={handleAddAttribute}>
-                  Add Attribute
-                </Button>
-              </div>
-              
-              {/* Display current attributes */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-3">
-                {Object.entries(attributes).map(([key, value]) => (
-                  <Card key={key} className="p-1">
-                    <CardContent className="flex justify-between items-center p-2">
-                      <div>
-                        <span className="font-medium">{key}:</span> {value}
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleRemoveAttribute(key)}
-                      >
-                        Remove
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
-
-          {/* Active status toggle */}
-          <FormField
-            control={form.control}
-            name="is_active"
-            render={({ field }) => (
-              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                <div>
-                  <FormLabel>Active</FormLabel>
-                  <p className="text-sm text-muted-foreground">
-                    Product will be visible to users
-                  </p>
-                </div>
-                <FormControl>
-                  <Switch
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
+                  <Input
+                    id="image"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="w-full"
                   />
-                </FormControl>
-              </FormItem>
-            )}
-          />
+                </div>
+              </div>
+            </TabsContent>
+          
+            <TabsContent value="details" className="space-y-4">
+              {/* Details & Metadata */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label htmlFor="brand" className="block text-sm font-medium">
+                    Brand
+                  </label>
+                  <FormField
+                    control={form.control}
+                    name="brand"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Input {...field} placeholder="Enter brand name" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
-          {/* Form actions */}
-          <div className="flex justify-end gap-3">
+                <div className="space-y-2">
+                  <label htmlFor="type" className="block text-sm font-medium">
+                    Product Type
+                  </label>
+                  <FormField
+                    control={form.control}
+                    name="type"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <CreatableSelect
+                            options={PRODUCT_TYPES}
+                            value={field.value || ""}
+                            onChange={(value) => field.onChange(value)}
+                            onCreateOption={async (value) => {
+                              field.onChange(value);
+                              return Promise.resolve();
+                            }}
+                            placeholder="Select or create a product type"
+                            disabled={isLoading}
+                            className="w-full"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label htmlFor="unit_of_measure" className="block text-sm font-medium">
+                    Unit of Measure
+                  </label>
+                  <FormField
+                    control={form.control}
+                    name="unit_of_measure"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <CreatableSelect
+                            options={UNITS_OF_MEASURE}
+                            value={field.value || ""}
+                            onChange={(value) => field.onChange(value)}
+                            onCreateOption={async (value) => {
+                              field.onChange(value);
+                              return Promise.resolve();
+                            }}
+                            placeholder="Select or create a unit of measure"
+                            disabled={isLoading}
+                            className="w-full"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="barcode" className="block text-sm font-medium">
+                    Barcode / UPC
+                  </label>
+                  <FormField
+                    control={form.control}
+                    name="barcode"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Input {...field} placeholder="Enter barcode number" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <label htmlFor="tags" className="block text-sm font-medium">
+                    Tags
+                  </label>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-4 w-4 ml-2 text-gray-400" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Tags help categorize and search for products
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+                <TagInput
+                  id="tags"
+                  tags={tags}
+                  setTags={setTags}
+                  placeholder="Add tag and press Enter"
+                  maxTags={10}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <label htmlFor="countries" className="block text-sm font-medium">
+                    Country Availability
+                  </label>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-4 w-4 ml-2 text-gray-400" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Enter country codes (e.g., US, CA, UK)
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+                <TagInput
+                  id="countries"
+                  tags={countries}
+                  setTags={setCountries}
+                  placeholder="Add country code and press Enter"
+                  maxTags={20}
+                />
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="attributes" className="space-y-4">
+              {/* Technical Specifications */}
+              <div className="border rounded-md p-4 space-y-4">
+                <h3 className="font-medium">Product Attributes</h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <Input
+                      value={newAttributeKey}
+                      onChange={(e) => setNewAttributeKey(e.target.value)}
+                      placeholder="Attribute name"
+                      className="w-full"
+                    />
+                  </div>
+                  <div>
+                    <Input
+                      value={newAttributeValue}
+                      onChange={(e) => setNewAttributeValue(e.target.value)}
+                      placeholder="Attribute value"
+                      className="w-full"
+                    />
+                  </div>
+                  <div>
+                    <Button 
+                      type="button"
+                      onClick={handleAddAttribute}
+                      disabled={!newAttributeKey.trim() || !newAttributeValue.trim()}
+                      className="w-full"
+                    >
+                      Add Attribute
+                    </Button>
+                  </div>
+                </div>
+                
+                {Object.keys(attributes).length > 0 ? (
+                  <div className="mt-4 border rounded-md divide-y">
+                    {Object.entries(attributes).map(([key, value]) => (
+                      <div key={key} className="flex justify-between items-center p-2 hover:bg-gray-50">
+                        <div>
+                          <span className="font-medium">{key}:</span> {value}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveAttribute(key)}
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-sm mt-2">No attributes added yet.</p>
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
+          
+          <div className="flex justify-end space-x-4">
             <Button
               type="button"
               variant="outline"
               onClick={() => navigate('/app/products')}
+              disabled={isLoading}
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isPending}>
-              {isPending ? 'Saving...' : isEditMode ? 'Update Product' : 'Create Product'}
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? <Spinner className="mr-2 h-4 w-4" /> : isEditMode ? 'Update Product' : 'Create Product'}
             </Button>
           </div>
         </form>

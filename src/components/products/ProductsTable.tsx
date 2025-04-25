@@ -58,6 +58,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/contexts/AuthContext";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 
 // Define filter state type
 interface FilterState {
@@ -83,9 +84,13 @@ export function ProductsTable() {
     minStock: '',
     maxStock: '',
   });
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
-  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
-  const [editingCell, setEditingCell] = useState<{ rowId: string; columnId: string } | null>(null);
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({
+    // Hide some columns by default for better initial UX
+    type: false,
+    barcode: false,
+  });
+  const [rowSelection, setRowSelection] = useState({});
+  const [editingCell, setEditingCell] = useState<{ rowId: string, columnId: string } | null>(null);
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   
@@ -348,24 +353,10 @@ export function ProductsTable() {
     {
       id: "image",
       header: () => <span className="pl-2">Image</span>,
-      cell: ({ row }) => {
-        const images = row.original.images;
-        // Find primary or first image
-        const primaryImage = images?.find(img => img.is_primary) || (images?.[0]); 
-        
-        return (
-          <div className="pl-2">
-            <Avatar className="h-10 w-10 rounded-md border"> {/* Adjust size as needed */}            
-                <AvatarImage src={primaryImage?.url} alt={row.original.name} className="object-cover" />
-                <AvatarFallback className="rounded-md bg-enterprise-100">
-                    <ImageIcon className="h-5 w-5 text-enterprise-400" />
-                </AvatarFallback>
-            </Avatar>
-           </div>
-        );
-      },
+      cell: ({ row }) => <ProductThumbCell product={row.original} />,
       enableSorting: false,
-      enableHiding: true, // Allow hiding this column
+      enableHiding: true,
+      size: 100, // Wider column for thumbnails
     },
     {
       accessorKey: "name",
@@ -408,6 +399,68 @@ export function ProductsTable() {
         </Button>
       ),
       cell: ({ row }) => <div className="text-enterprise-600">{row.getValue("category")}</div>,
+    },
+    {
+      accessorKey: "brand",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="-ml-4"
+        >
+          Brand
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => <div className="text-enterprise-600">{row.getValue("brand") || "-"}</div>,
+      enableHiding: true,
+    },
+    {
+      accessorKey: "type",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="-ml-4"
+        >
+          Type
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => <div className="text-enterprise-600">{row.getValue("type") || "-"}</div>,
+      enableHiding: true,
+    },
+    {
+      accessorKey: "tags",
+      header: () => <span className="pl-2">Tags</span>,
+      cell: ({ row }) => {
+        const tags = row.getValue("tags") as string[] | undefined;
+        if (!tags || tags.length === 0) return <div className="text-muted-foreground text-sm">-</div>;
+        
+        return (
+          <div className="flex flex-wrap gap-1">
+            {tags.slice(0, 3).map((tag, index) => (
+              <Badge key={index} variant="outline" className="bg-primary-50 text-primary-700 border-primary-200">
+                {tag}
+              </Badge>
+            ))}
+            {tags.length > 3 && (
+              <Badge variant="outline" className="bg-enterprise-50 text-enterprise-600">
+                +{tags.length - 3}
+              </Badge>
+            )}
+          </div>
+        );
+      },
+      enableSorting: false,
+      enableHiding: true,
+    },
+    {
+      accessorKey: "barcode",
+      header: () => <span className="pl-2">Barcode</span>,
+      cell: ({ row }) => <div className="text-enterprise-600 font-mono text-xs">{row.getValue("barcode") || "-"}</div>,
+      enableSorting: false,
+      enableHiding: true,
     },
     {
       accessorKey: "price",
@@ -879,7 +932,11 @@ export function ProductsTable() {
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id} className="bg-enterprise-50 border-b border-enterprise-200 hover:bg-enterprise-100">
                   {headerGroup.headers.map((header) => (
-                    <TableHead key={header.id} className="px-4 py-3 font-medium text-enterprise-600">
+                    <TableHead 
+                      key={header.id} 
+                      className="px-4 py-3 font-medium text-enterprise-600"
+                      style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}
+                    >
                       {header.isPlaceholder
                         ? null
                         : flexRender(
@@ -906,10 +963,10 @@ export function ProductsTable() {
                 ))
               ) : filteredProducts.length > 0 ? (
                 table.getRowModel().rows.map((row) => (
-                  <TableRow
-                    key={row.id}
+                  <TableRow 
+                    key={row.id} 
                     data-state={row.getIsSelected() && "selected"}
-                    className="hover:bg-enterprise-50 border-b border-enterprise-100 transition-colors"
+                    className="hover:bg-enterprise-50 border-b border-enterprise-100 transition-colors min-h-[72px]" // Add min-height to accommodate thumbnails
                   >
                     {row.getVisibleCells().map((cell) => (
                       <TableCell key={cell.id} className="px-4 py-3">
@@ -975,3 +1032,50 @@ export function ProductsTable() {
     </div>
   );
 }
+
+// ProductThumbCell component
+const ProductThumbCell: React.FC<{ product: Product }> = ({ product }) => {
+  // Get primary image or first image, or use the new primary_image_thumb field if available
+  const images = product.images;
+  const primaryImage = images?.find(img => img.is_primary) || images?.[0];
+  
+  // Use dedicated thumbnail fields if available, otherwise fall back to the full image
+  const thumbUrl = product.primary_image_thumb || primaryImage?.url;
+  const largeUrl = product.primary_image_large || primaryImage?.url;
+  
+  return (
+    <HoverCard>
+      <HoverCardTrigger asChild>
+        <div className="pl-2">
+          {thumbUrl ? (
+            <img
+              src={thumbUrl}
+              alt={product.name}
+              loading="lazy"
+              decoding="async"
+              className="h-16 w-16 rounded-md object-cover cursor-pointer"
+            />
+          ) : (
+            <div className="h-16 w-16 rounded-md bg-enterprise-100 flex items-center justify-center">
+              <ImageIcon className="h-6 w-6 text-enterprise-400" />
+            </div>
+          )}
+        </div>
+      </HoverCardTrigger>
+      
+      {thumbUrl && (
+        <HoverCardContent
+          side="right"
+          sideOffset={8}
+          className="w-[240px] p-2"
+        >
+          <img
+            src={largeUrl}
+            alt={product.name}
+            className="h-[220px] w-full object-contain rounded"
+          />
+        </HoverCardContent>
+      )}
+    </HoverCard>
+  );
+};

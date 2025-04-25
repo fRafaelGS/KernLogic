@@ -43,13 +43,43 @@ export interface Product {
     updated_at?: string;
     is_active: boolean;
     images?: ProductImage[] | null; // Add images array (optional)
+    // NEW fields for thumbnail display
+    primary_image_thumb?: string;  // 64px webp/jpg 
+    primary_image_large?: string;  // 600-800px original
+    
+    // Additional Product Information (Optional)
+    brand?: string;
+    type?: string;
+    unit_of_measure?: string;
+    tags?: string[];
+    country_availability?: string[];
+    barcode?: string;
+    
+    // Technical Specifications (Optional)
+    attributes?: Record<string, string>;
 }
 
+export const PRODUCTS_API_URL = `${API_URL}/products`;
+
 export const productService = {
-    // Get all products - Use axiosInstance and adjust path
-    getProducts: async (): Promise<Product[]> => {
-        const url = `${PRODUCTS_PATH}/`;
+    // Get all products
+    getProducts: async (filters?: Record<string, any>): Promise<Product[]> => {
+        let url = `${PRODUCTS_PATH}/`;
         console.log('Fetching products from:', url); 
+        
+        // Add query parameters if provided
+        if (filters) {
+            const params = new URLSearchParams();
+            Object.entries(filters).forEach(([key, value]) => {
+                if (value !== undefined && value !== null && value !== '') {
+                    params.append(key, value.toString());
+                }
+            });
+            if (params.toString()) {
+                url += `?${params.toString()}`;
+            }
+        }
+        
         try {
             const token = localStorage.getItem('access_token');
             console.log('Current access token (from productService):', token ? `${token.substring(0, 15)}...` : 'none');
@@ -60,6 +90,13 @@ export const productService = {
             console.log('[productService.getProducts] Is response.data an array?:', Array.isArray(response.data)); 
             // --- END DEBUG LOGS ---
             console.log('Products API response:', response.data); // Original log
+            
+            // Handle paginated response format
+            if (response.data && typeof response.data === 'object' && 'results' in response.data) {
+                console.log('[productService.getProducts] Detected paginated response, returning results array');
+                return response.data.results;
+            }
+            
             return response.data;
         } catch (error) {
             console.error('Error fetching products:', error);
@@ -80,19 +117,31 @@ export const productService = {
     },
 
     // Create a new product
-    createProduct: async (product: Omit<Product, 'id' | 'created_by' | 'created_at' | 'updated_at'>): Promise<Product> => {
+    createProduct: async (product: Omit<Product, 'id' | 'created_by' | 'created_at' | 'updated_at'> | FormData): Promise<Product> => {
         const url = `${PRODUCTS_PATH}/`;
         console.log('Creating product at:', url);
         try {
-            const formattedProduct = {
-                ...product,
-                price: Number(product.price),
-                stock: Number(product.stock)
-            };
-            console.log('Formatted product data:', formattedProduct);
-            const response = await axiosInstance.post(url, formattedProduct);
-            console.log('Create product response:', response.data);
-            return response.data;
+            // Handle FormData or regular object
+            if (product instanceof FormData) {
+                const response = await axiosInstance.post(url, product, {
+                    headers: {
+                        'Content-Type': 'multipart/form-data',
+                    },
+                });
+                console.log('Create product response:', response.data);
+                return response.data;
+            } else {
+                // Regular object handling (existing code)
+                const formattedProduct = {
+                    ...product,
+                    price: Number(product.price),
+                    stock: Number(product.stock)
+                };
+                console.log('Formatted product data:', formattedProduct);
+                const response = await axiosInstance.post(url, formattedProduct);
+                console.log('Create product response:', response.data);
+                return response.data;
+            }
         } catch (error) {
             console.error('Error creating product:', error);
             throw error;
@@ -100,8 +149,20 @@ export const productService = {
     },
 
     // Update a product
-    updateProduct: async (id: number, product: Partial<Product>): Promise<Product> => {
+    updateProduct: async (id: number, product: Partial<Product> | FormData): Promise<Product> => {
         const url = `${PRODUCTS_PATH}/${id}/`;
+        
+        if (product instanceof FormData) {
+            // For FormData, we need to set the correct Content-Type
+            const response = await axiosInstance.patch(url, product, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+            });
+            return response.data;
+        }
+        
+        // For regular objects, use the default Content-Type (application/json)
         const response = await axiosInstance.patch(url, product);
         return response.data;
     },

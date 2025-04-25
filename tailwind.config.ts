@@ -183,6 +183,9 @@ export default {
 			},
 			fontFamily: {
 				sans: ['Inter var', 'sans-serif'],
+			},
+			minHeight: {
+				'72': '72px',
 			}
 		}
 	},

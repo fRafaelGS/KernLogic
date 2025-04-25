@@ -1,716 +1,648 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import React, { useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
+import { useNavigate, useParams } from 'react-router-dom';
+import { z } from 'zod';
+import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query';
+import axios from 'axios';
+import { toast } from 'react-hot-toast';
+
+// UI components
 import { Button } from '@/components/ui/button';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import { Product, productService, ProductImage } from '@/services/productService';
-import { useNavigate } from 'react-router-dom';
-import { toast } from "sonner";
-import { Loader2, AlertCircle, ArrowLeft, Trash2 } from 'lucide-react';
-import { useAuth } from "@/contexts/AuthContext";
-import axios from 'axios';
-import { API_URL } from '@/config';
-import { cn } from "@/lib/utils";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { RichTextEditor } from '@/components/ui/RichTextEditor';
-import { ImageUploader } from '@/components/ui/ImageUploader';
-import { ImageGrid } from '@/components/ui/ImageGrid';
-import { Separator } from "@/components/ui/separator";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { TagInput } from '@/components/ui/tag-input';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
+import { ChevronDown, ChevronRight, HelpCircle, X } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Card, CardContent } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { CreatableSelect } from "@/components/ui/creatable-select";
 
-// Define a consistent base URL for products
+// Services
+import { productService, Product } from '@/services/productService';
+import { API_URL } from '@/config';
+import { getCategories, createCategory } from "@/services/categoryService";
+
 const PRODUCTS_BASE_URL = `${API_URL}/products`;
 
+// Schema for product form validation
 const productEditSchema = z.object({
-  name: z.string()
-    .min(3, 'Name must be at least 3 characters')
-    .max(100, 'Name cannot exceed 100 characters'),
-  description: z.string().max(5000, 'Description cannot exceed 5000 characters').optional(),
-  sku: z.string()
-    .min(3, 'SKU must be at least 3 characters')
-    .max(30, 'SKU cannot exceed 30 characters')
-    .regex(/^[a-zA-Z0-9]+$/, 'SKU must be alphanumeric with no spaces'),
+  name: z.string().min(2, { message: 'Product name must be at least 2 characters' }),
+  description: z.string().optional(),
+  sku: z.string().min(2, { message: 'SKU must be at least 2 characters' }),
   price: z.preprocess(
-    (val) => (val === '' ? undefined : Number(val)),
-    z.number({ required_error: 'Price is required', invalid_type_error: 'Price must be a number' })
-      .positive('Price must be positive')
-      .multipleOf(0.01, { message: 'Price can have maximum 2 decimal places' })
+    (a) => parseFloat(a as string),
+    z.number().min(0, { message: 'Price must be a positive number' })
   ),
   stock: z.preprocess(
-    (val) => (val === '' ? undefined : Number(val)),
-    z.number({ required_error: 'Stock is required', invalid_type_error: 'Stock must be a whole number' })
-      .int('Stock must be a whole number')
-      .nonnegative('Stock cannot be negative')
+    (a) => parseInt(a as string, 10),
+    z.number().min(0, { message: 'Stock must be a positive number' })
   ),
-  category: z.string().min(1, 'Category is required'),
-  is_active: z.boolean().default(true),
+  category: z.string().min(1, { message: 'Please select a category' }),
+  is_active: z.boolean(),
+  // New fields
+  brand: z.string().optional(),
+  type: z.string().optional(),
+  unit_of_measure: z.string().optional(),
+  barcode: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  country_availability: z.array(z.string()).optional(),
+  attributes: z.record(z.string(), z.string()).optional(),
+  primary_image: z.string().optional(),
 });
 
-type ProductFormData = z.infer<typeof productEditSchema>;
+type ProductFormValues = z.infer<typeof productEditSchema>;
 
 interface ProductFormProps {
   product?: Product;
 }
 
-export const ProductForm: React.FC<ProductFormProps> = ({ product }) => {
+export function ProductForm({ product: initialProduct }: ProductFormProps) {
   const navigate = useNavigate();
-  const { addNotification } = useAuth();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [loadingImageAction, setLoadingImageAction] = useState<number | null>(null);
+  const isEditMode = !!id || !!initialProduct;
+  const [attributeKey, setAttributeKey] = useState('');
+  const [attributeValue, setAttributeValue] = useState('');
+  const [showTechSpecs, setShowTechSpecs] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [tags, setTags] = useState<string[]>([]);
+  const [countries, setCountries] = useState<string[]>([]);
+  const [attributesOpen, setAttributesOpen] = useState(false);
+  const [attributes, setAttributes] = useState<Record<string, string>>({});
+  const [newAttributeKey, setNewAttributeKey] = useState("");
+  const [newAttributeValue, setNewAttributeValue] = useState("");
 
-  const isEditMode = !!product?.id;
+  // Use the passed-in product data or fetch it if needed
+  const productId = initialProduct?.id || (id ? Number(id) : undefined);
 
-  const {
-    register,
-    control,
-    handleSubmit,
-    formState: { errors, isDirty },
-    setError,
-    reset,
-    watch,
-  } = useForm<ProductFormData>({
+  // Form definition using react-hook-form with zod resolver
+  const form = useForm<ProductFormValues>({
     resolver: zodResolver(productEditSchema),
-    mode: 'onChange',
     defaultValues: {
-      name: product?.name || '',
-      description: product?.description || '',
-      sku: product?.sku || '',
-      price: product?.price ?? undefined,
-      stock: product?.stock ?? undefined,
-      category: product?.category || '',
-      is_active: product?.is_active ?? true,
+      name: initialProduct?.name || '',
+      description: initialProduct?.description || '',
+      sku: initialProduct?.sku || '',
+      price: initialProduct?.price || 0,
+      stock: initialProduct?.stock || 0,
+      category: initialProduct?.category || '',
+      is_active: initialProduct?.is_active ?? true,
+      brand: initialProduct?.brand || '',
+      type: initialProduct?.type || '',
+      unit_of_measure: initialProduct?.unit_of_measure || '',
+      barcode: initialProduct?.barcode || '',
+      tags: initialProduct?.tags || [],
+      country_availability: initialProduct?.country_availability || [],
+      attributes: initialProduct?.attributes || {},
     },
   });
 
-  const descriptionValue = watch('description');
-
+  // Initialize image preview if product has an image
   useEffect(() => {
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (isDirty) {
-        event.preventDefault();
-        event.returnValue = '';
-      }
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  }, [isDirty]);
+    if (initialProduct?.primary_image_large) {
+      setImagePreview(initialProduct.primary_image_large);
+    }
+  }, [initialProduct]);
 
+  // Only fetch if no initialProduct is provided and we have an ID
+  const { isLoading: queryLoading } = useQuery({
+    queryKey: ['product', productId],
+    queryFn: () => productId ? productService.getProduct(productId) : null,
+    enabled: isEditMode && !initialProduct && !!productId,
+  });
+
+  // Set form data if initialProduct is provided
   useEffect(() => {
-    reset({
-      name: product?.name || '',
-      description: product?.description || '',
-      sku: product?.sku || '',
-      price: product?.price ?? undefined,
-      stock: product?.stock ?? undefined,
-      category: product?.category || '',
-      is_active: product?.is_active ?? true,
-    });
-  }, [product, reset]);
-
-  // --- Fetch Categories for Dropdown ---
-  const { data: categories, isLoading: isLoadingCategories } = useQuery({
-    queryKey: ['productCategories'],
-    queryFn: () => productService.getCategories(),
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
-  });
-
-  // --- React Query Mutation for File Upload ---
-  const uploadFileMutation = useMutation({
-    mutationFn: async (file: File) => {
-        const formData = new FormData();
-        formData.append('image', file); // Ensure backend expects 'image' field
-
-        if (!product?.id) throw new Error("Product ID is missing");
-        
-        // Use axios directly with lots of logging
-        const url = `${PRODUCTS_BASE_URL}/${product.id}/images/`;
-        console.log("Image Upload URL:", url);
-        
-        try {
-            // Get token from local storage
-            const token = localStorage.getItem('access_token');
-            if (!token) throw new Error('Authentication required');
-            
-            // Log the request details
-            console.log("Upload Request Headers:", {
-                'Authorization': `Bearer ${token.substring(0, 15)}...`,
-                'Content-Type': 'multipart/form-data'
-            });
-            console.log("File being uploaded:", file.name, file.type, file.size);
-            
-            // Create the request with axios
-            const response = await axios.post(url, formData, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    // Content-Type is set automatically for FormData
-                },
-                onUploadProgress: (progressEvent) => {
-                    const percentCompleted = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 100));
-                    console.log(`Upload progress: ${percentCompleted}%`);
-                    setUploadProgress(percentCompleted);
-                }
-            });
-            
-            console.log("Upload success response:", response.status, response.data);
-            return response.data;
-        } catch (error) {
-            console.error("Upload error details:", error);
-            if (axios.isAxiosError(error)) {
-                console.error("Axios error response:", error.response?.status, error.response?.data);
-                throw new Error(error.response?.data?.detail || `Failed to upload ${file.name}: ${error.message}`);
-            }
-            throw error;
-        }
-    },
-    onSuccess: () => {
-        toast.success("Image uploaded successfully!");
-        // Invalidate product query to refetch data including new image
-        queryClient.invalidateQueries({ queryKey: ['product', product?.id] }); 
-        setUploadProgress(0); // Reset progress
-    },
-    onError: (error: Error, file) => { // Changed variable name for clarity
-        toast.error(`Upload failed for ${file.name}: ${error.message}`);
-        setUploadProgress(0);
-        addNotification({
-            type: 'error',
-            message: 'Image Upload Failed',
-            description: `Could not upload ${file.name}. ${error.message}`
-        });
-    },
-  });
-
-  // --- Handler for File Uploads ---
-  const handleFilesUpload = (files: File[]) => {
-    // Handle multiple files if backend supports it, or loop
-    files.forEach(file => {
-        // Reset progress before each upload if desired
-        setUploadProgress(0);
-        
-        // No need for progress simulation since axios provides real progress
-        uploadFileMutation.mutate(file, {
-            onSuccess: () => {
-                setTimeout(() => setUploadProgress(0), 1000); // Hide progress bar after a delay
-            }
-        });
-    });
-  };
-
-  // --- Handler for URL Upload (Placeholder/Example) ---
-  const handleUrlUpload = (url: string) => {
-    // TODO: Implement backend call for URL upload if supported
-    // This might involve sending the URL to the backend, 
-    // which then fetches and saves the image.
-    console.log("URL Upload Requested (Not Implemented):", url);
-    toast.info("URL upload functionality is not yet implemented.");
-    // Example mutation call structure:
-    // urlUploadMutation.mutate({ imageUrl: url });
-  };
-
-  // --- Mutation for Deleting an Image ---
-  const deleteImageMutation = useMutation({
-    mutationFn: async (imageId: number) => {
-        if (!product?.id) throw new Error("Product ID is missing");
-        const token = localStorage.getItem('access_token');
-        if (!token) throw new Error('Authentication required');
-
-        // Use the PRODUCTS_BASE_URL constant to ensure consistent URL
-        const url = `${PRODUCTS_BASE_URL}/${product.id}/images/${imageId}/`;
-
-        const response = await fetch(url, {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` },
-        });
-        if (!response.ok) {
-             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `Failed to delete image: ${response.statusText}`);
-        }
-        // No content expected on successful DELETE
-    },
-    onSuccess: (_, imageId) => {
-        toast.success(`Image deleted successfully.`);
-        queryClient.invalidateQueries({ queryKey: ['product', product?.id] });
-        setLoadingImageAction(null); // Clear loading state for this specific image
-         addNotification({
-            type: 'info',
-            message: 'Image Deleted',
-            description: `An image was removed from product "${product?.name || 'N/A'}".`
-        });
-    },
-    onError: (error: Error, imageId) => {
-        toast.error(`Failed to delete image: ${error.message}`);
-        setLoadingImageAction(null);
-         addNotification({
-            type: 'error',
-            message: 'Image Delete Failed',
-            description: error.message
-        });
-    },
-  });
-  
-  // --- Mutation for Setting Primary Image ---
-  const setPrimaryImageMutation = useMutation({
-      mutationFn: async (imageId: number) => {
-        if (!product?.id) throw new Error("Product ID is missing");
-        const token = localStorage.getItem('access_token');
-        if (!token) throw new Error('Authentication required');
-        
-        // Use the PRODUCTS_BASE_URL constant to ensure consistent URL
-        const url = `${PRODUCTS_BASE_URL}/${product.id}/images/${imageId}/`;
-
-        // Assuming PATCH to the image detail endpoint sets it as primary
-        const response = await fetch(url, {
-            method: 'PATCH',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-             },
-             body: JSON.stringify({ is_primary: true })
-        });
-         if (!response.ok) {
-             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `Failed to set primary image: ${response.statusText}`);
-        }
-        return response.json(); // Expecting updated image or product data
-    },
-     onSuccess: (data, imageId) => {
-        toast.success(`Image set as primary.`);
-        queryClient.invalidateQueries({ queryKey: ['product', product?.id] });
-        setLoadingImageAction(null); 
-         addNotification({
-            type: 'info',
-            message: 'Primary Image Set',
-            description: `Primary image updated for product "${product?.name || 'N/A'}".`
-        });
-    },
-    onError: (error: Error, imageId) => {
-        toast.error(`Failed to set primary image: ${error.message}`);
-        setLoadingImageAction(null);
-          addNotification({
-            type: 'error',
-            message: 'Set Primary Failed',
-            description: error.message
-        });
-    },
-  });
-
-  // --- Mutation for Reordering Images ---
-  const reorderImagesMutation = useMutation({
-      mutationFn: async (orderedImageIds: number[]) => {
-        if (!product?.id) throw new Error("Product ID is missing");
-        const token = localStorage.getItem('access_token');
-        if (!token) throw new Error('Authentication required');
-        
-        // Prepare payload: Array of objects with id and new order (index)
-        const payload = orderedImageIds.map((id, index) => ({ id, order: index }));
-        
-        // Use the PRODUCTS_BASE_URL constant to ensure consistent URL
-        const url = `${PRODUCTS_BASE_URL}/${product.id}/images/reorder/`;
-
-        // Assuming PATCH to the base images endpoint handles reordering
-        const response = await fetch(url, {
-            method: 'PATCH',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-             },
-             body: JSON.stringify({ images: payload }) // Send the reordered list
-        });
-         if (!response.ok) {
-             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `Failed to reorder images: ${response.statusText}`);
-        }
-        return response.json(); // Expecting updated product data or success message
-    },
-     onSuccess: (data) => {
-        toast.success(`Image order saved.`);
-        queryClient.invalidateQueries({ queryKey: ['product', product?.id] });
-        // No loading state to clear here as it's a general action
-         addNotification({
-            type: 'info',
-            message: 'Image Order Updated',
-            description: `Image order saved for product "${product?.name || 'N/A'}".`
-        });
-    },
-    onError: (error: Error) => {
-        toast.error(`Failed to save image order: ${error.message}`);
-          addNotification({
-            type: 'error',
-            message: 'Image Reorder Failed',
-            description: error.message
-        });
-        // Optionally refetch to revert optimistic UI update from dnd-kit
-        queryClient.invalidateQueries({ queryKey: ['product', product?.id] }); 
-    },
-  });
-
-  // --- Update Image Action Handlers ---
-  const handleDeleteImage = (imageId: number) => {
-      if (window.confirm('Are you sure you want to delete this image?')) {
-          setLoadingImageAction(imageId); // Set loading state for this specific image
-          deleteImageMutation.mutate(imageId); 
-      }
-  };
-
-  const handleSetPrimaryImage = (imageId: number) => {
-      setLoadingImageAction(imageId); // Set loading state
-      setPrimaryImageMutation.mutate(imageId);
-  };
-
-  const handleReorderImages = (reorderedImageIds: number[]) => {
-      // Call the mutation with the new array of IDs
-      reorderImagesMutation.mutate(reorderedImageIds);
-  };
-
-  // --- Unified Submit Handler ---
-  const onSubmit = async (data: ProductFormData) => {
-    setIsSubmitting(true);
-    // `data` here is already validated by Zod and guaranteed to have required fields
-    const productDataForApi = {
-      name: data.name, 
-      description: data.description || '', 
-      sku: data.sku, 
-      price: Number(data.price),
-      stock: Number(data.stock),
-      category: data.category, 
-      is_active: data.is_active,
-    };
-
-    try {
-      let savedProduct: Product;
-      if (isEditMode) {
-        // Update uses Partial<Product>, so direct data spread is fine
-        savedProduct = await productService.updateProduct(product.id!, productDataForApi);
-        toast.success('Product updated successfully');
-        addNotification({
-          type: 'success',
-          message: 'Product Updated',
-          description: `Product "${savedProduct.name}" (SKU: ${savedProduct.sku}) was updated.`
-        });
-        reset(savedProduct); 
-      } else {
-        // Create expects specific fields, ensure type match
-        // We cast here because Zod ensures required fields are present
-        savedProduct = await productService.createProduct(productDataForApi as Omit<Product, 'id' | 'created_by' | 'created_at' | 'updated_at'>);
-        toast.success('Product created successfully');
-        addNotification({
-          type: 'success',
-          message: 'Product Created',
-          description: `New product "${savedProduct.name}" (SKU: ${savedProduct.sku}) was added.`
-        });
-        navigate(`/app/products/${savedProduct.id}/edit`, { replace: true }); 
-      }
-    } catch (error: any) {
-      console.error('Error saving product:', error);
-      const errorMessage = error.response?.data?.detail || 
-        (typeof error.response?.data === 'string' ? error.response.data : null) ||
-        error.message || 
-        'Failed to save product.';
-
-      addNotification({
-        type: 'error',
-        message: isEditMode ? 'Product Update Failed' : 'Product Creation Failed',
-        description: errorMessage.length > 100 ? errorMessage.substring(0, 97) + '...' : errorMessage
+    if (initialProduct) {
+      // Reset form with data
+      form.reset({
+        name: initialProduct.name,
+        description: initialProduct.description || '',
+        sku: initialProduct.sku,
+        price: initialProduct.price,
+        stock: initialProduct.stock,
+        category: initialProduct.category,
+        is_active: initialProduct.is_active,
+        brand: initialProduct.brand || '',
+        type: initialProduct.type || '',
+        unit_of_measure: initialProduct.unit_of_measure || '',
+        barcode: initialProduct.barcode || '',
+        tags: initialProduct.tags || [],
+        country_availability: initialProduct.country_availability || [],
+        attributes: initialProduct.attributes || {},
       });
 
-      if (error.response?.data?.sku && Array.isArray(error.response.data.sku)) {
-         setError('sku', {
-            type: 'server',
-            message: error.response.data.sku[0]
-         });
-         toast.error(`SKU Error: ${error.response.data.sku[0]}`);
-      } else {
-         toast.error(`${isEditMode ? 'Update' : 'Creation'} failed: ${errorMessage}`);
+      // Set image preview if available
+      if (initialProduct.primary_image_large) {
+        setImagePreview(initialProduct.primary_image_large);
       }
-    } finally {
-      setIsSubmitting(false);
+    }
+  }, [initialProduct, form]);
+
+  // Fetch categories
+  useEffect(() => {
+    const fetchCategories = async () => {
+      setCategoriesLoading(true);
+      try {
+        const categoriesList = await getCategories();
+        setCategories(categoriesList);
+      } catch (error) {
+        console.error("Failed to fetch categories:", error);
+        toast.error("Failed to load categories");
+      } finally {
+        setCategoriesLoading(false);
+      }
+    };
+    
+    fetchCategories();
+  }, []);
+
+  // Initialize tags and countries from product data
+  useEffect(() => {
+    if (form.getValues().tags?.length) {
+      setTags(form.getValues().tags);
+    }
+    if (form.getValues().country_availability?.length) {
+      setCountries(form.getValues().country_availability);
+    }
+    if (form.getValues().attributes) {
+      setAttributes(form.getValues().attributes);
+    }
+  }, [form]);
+
+  // Update form when tags or countries change
+  useEffect(() => {
+    form.setValue("tags", tags);
+  }, [tags, form]);
+
+  useEffect(() => {
+    form.setValue("country_availability", countries);
+  }, [countries, form]);
+
+  // Handler for creating a new category
+  const handleCreateCategory = async (categoryName: string) => {
+    try {
+      await createCategory(categoryName);
+      // Add the new category to the local state
+      setCategories(prev => [...prev, categoryName]);
+      toast.success(`Category "${categoryName}" created successfully`);
+      return;
+    } catch (error) {
+      console.error("Failed to create category:", error);
+      toast.error("Failed to create category");
+      throw error;
     }
   };
 
-  // --- Delete Handler (Only relevant in Edit mode) ---
-  const handleDelete = async () => {
-    if (!isEditMode) return; // Should not be callable in create mode
-    if (window.confirm(`Are you sure you want to mark product "${product.name}" as inactive?`)) {
-        setIsSubmitting(true); 
-        try {
-            await productService.deleteProduct(product.id!); 
-            toast.success(`Product "${product.name}" marked as inactive.`);
-            addNotification({
-                type: 'info',
-                message: 'Product Deactivated',
-                description: `Product "${product.name}" (SKU: ${product.sku}) was marked inactive.`
-            });
-            navigate('/app/products');
-        } catch (error: any) {
-            console.error('Error deleting/deactivating product:', error);
-            const errorMsg = error.message || 'Failed to deactivate product.';
-            toast.error(errorMsg);
-            addNotification({
-                type: 'error',
-                message: 'Deactivation Failed',
-                description: errorMsg
-            });
-            setIsSubmitting(false);
+  // Mutation for create/update
+  const { mutate, isPending } = useMutation({
+    mutationFn: (values: ProductFormValues) => {
+      // Handle file upload if needed
+      const formData = new FormData();
+      
+      // Add all form values to formData
+      Object.entries(values).forEach(([key, value]) => {
+        if (key === 'tags' || key === 'country_availability' || key === 'attributes') {
+          formData.append(key, JSON.stringify(value));
+        } else {
+          formData.append(key, value?.toString() || '');
         }
+      });
+      
+      // Add image if available
+      if (imageFile) {
+        formData.append('primary_image', imageFile);
+      }
+      
+      if (isEditMode && productId) {
+        return productService.updateProduct(productId, formData);
+      }
+      return productService.createProduct(formData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      toast.success(`Product ${isEditMode ? 'updated' : 'created'} successfully`);
+      navigate('/app/products');
+    },
+    onError: (error) => {
+      toast.error(`Failed to ${isEditMode ? 'update' : 'create'} product`);
+      console.error('Error saving product:', error);
+    },
+  });
+
+  // Handle form submission
+  const onSubmit = (values: ProductFormValues) => {
+    mutate(values);
+  };
+
+  // Handle image upload
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setImageFile(file);
+      setImagePreview(URL.createObjectURL(file));
     }
   };
+
+  // Handle adding a new attribute
+  const handleAddAttribute = () => {
+    if (newAttributeKey.trim() && newAttributeValue.trim()) {
+      const newAttributes = {
+        ...attributes,
+        [newAttributeKey]: newAttributeValue
+      };
+      setAttributes(newAttributes);
+      form.setValue("attributes", newAttributes);
+      setNewAttributeKey("");
+      setNewAttributeValue("");
+    }
+  };
+
+  // Handle removing an attribute
+  const handleRemoveAttribute = (key: string) => {
+    const newAttributes = { ...attributes };
+    delete newAttributes[key];
+    setAttributes(newAttributes);
+    form.setValue("attributes", newAttributes);
+  };
+
+  if (queryLoading) {
+    return <div>Loading...</div>;
+  }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Product Details</CardTitle>
-          <CardDescription>Edit the core information for this product.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="space-y-1.5">
-            <Label htmlFor="name" className={cn(errors.name && "text-danger-600")}>Product Name</Label>
-            <Input 
-              id="name" 
-              {...register('name')} 
-              placeholder="Enter product name" 
-              disabled={isSubmitting}
-              className={cn(errors.name && "border-danger-500 focus-visible:ring-danger-500")}
-              aria-invalid={errors.name ? "true" : "false"}
-              aria-describedby={errors.name ? "name-error" : undefined}
-            />
-            {errors.name && (
-              <p id="name-error" role="alert" className="text-sm text-danger-600 flex items-center mt-1"><AlertCircle className="h-4 w-4 mr-1" />{errors.name.message}</p>
-            )}
-          </div>
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-2xl font-bold mb-6">
+        {isEditMode ? 'Edit Product' : 'Add New Product'}
+      </h1>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="sku" className={cn(errors.sku && "text-danger-600")}>SKU</Label>
-            <Input 
-              id="sku" 
-              {...register('sku')} 
-              placeholder="Unique product identifier" 
-              disabled={isSubmitting}
-              className={cn(errors.sku && "border-danger-500 focus-visible:ring-danger-500")}
-              aria-invalid={errors.sku ? "true" : "false"}
-              aria-describedby={errors.sku ? "sku-error" : undefined}
-            />
-            {errors.sku && (
-              <p id="sku-error" role="alert" className="text-sm text-danger-600 flex items-center mt-1"><AlertCircle className="h-4 w-4 mr-1" />{errors.sku.message}</p>
-            )}
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="description" className={cn(errors.description && "text-danger-600")}>Description</Label>
-            <Controller
-                name="description"
-                control={control}
-                defaultValue={product?.description || ''}
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          {/* Basic Information Section */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-6">
+              <FormField
+                control={form.control}
+                name="name"
                 render={({ field }) => (
-                   <RichTextEditor
-                        value={field.value || ''}
-                        onChange={field.onChange}
-                        limit={5000}
-                        disabled={isSubmitting}
-                        error={!!errors.description}
-                   />
+                  <FormItem>
+                    <FormLabel>Product Name *</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Enter product name" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
                 )}
-            />
-            {errors.description && (
-                <p id="description-error" role="alert" className="text-sm text-danger-600 flex items-center mt-1"><AlertCircle className="h-4 w-4 mr-1" />{errors.description.message}</p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Pricing & Inventory</CardTitle>
-          <CardDescription>Manage cost and stock levels.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div className="space-y-1.5">
-            <Label htmlFor="price" className={cn(errors.price && "text-danger-600")}>Price</Label>
-            <div className="relative">
-              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-enterprise-500 sm:text-sm">$</span>
-              <Input 
-                id="price"
-                type="number"
-                step="0.01"
-                {...register('price', { valueAsNumber: true })} 
-                placeholder="0.00"
-                disabled={isSubmitting}
-                className={cn("pl-7", errors.price && "border-danger-500 focus-visible:ring-danger-500")}
-                aria-invalid={errors.price ? "true" : "false"}
-                aria-describedby={errors.price ? "price-error" : undefined}
               />
-            </div>
-            {errors.price && (
-              <p id="price-error" role="alert" className="text-sm text-danger-600 flex items-center mt-1"><AlertCircle className="h-4 w-4 mr-1" />{errors.price.message}</p>
-            )}
-          </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="stock" className={cn(errors.stock && "text-danger-600")}>Stock Quantity</Label>
-            <Input 
-              id="stock"
-              type="number"
-              step="1"
-              min="0"
-              {...register('stock', { valueAsNumber: true })} 
-              placeholder="0"
-              disabled={isSubmitting}
-              className={cn(errors.stock && "border-danger-500 focus-visible:ring-danger-500")}
-              aria-invalid={errors.stock ? "true" : "false"}
-              aria-describedby={errors.stock ? "stock-error" : undefined}
-            />
-            {errors.stock && (
-              <p id="stock-error" role="alert" className="text-sm text-danger-600 flex items-center mt-1"><AlertCircle className="h-4 w-4 mr-1" />{errors.stock.message}</p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-      
-      <Card>
-        <CardHeader>
-          <CardTitle>Organization</CardTitle>
-          <CardDescription>Categorize the product.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-1.5">
-            <Label htmlFor="category" className={cn(errors.category && "text-danger-600")}>Category</Label>
-            <Controller
-                name="category"
-                control={control}
+              <FormField
+                control={form.control}
+                name="sku"
                 render={({ field }) => (
-                    <Select
-                        value={field.value}
-                        onValueChange={field.onChange}
-                        disabled={isSubmitting || isLoadingCategories}
-                    >
-                        <SelectTrigger 
-                            id="category"
-                            className={cn(errors.category && "border-danger-500 focus:ring-danger-500")}
-                            aria-invalid={errors.category ? "true" : "false"}
-                            aria-describedby={errors.category ? "category-error" : undefined}
-                        >
-                            <SelectValue placeholder="Select a category..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {isLoadingCategories ? (
-                                <SelectItem value="loading" disabled>Loading categories...</SelectItem>
-                            ) : (
-                                // Ensure unique categories before mapping
-                                [...new Set(categories || [])].map((categoryName, index) => (
-                                    <SelectItem 
-                                      key={`${categoryName}-${index}`}
-                                      value={categoryName}
-                                    >
-                                        {categoryName}
-                                    </SelectItem>
-                                ))
-                            )}
-                        </SelectContent>
-                    </Select>
+                  <FormItem>
+                    <FormLabel>SKU *</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Enter SKU" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
                 )}
-            />
-            {errors.category && (
-                <p id="category-error" role="alert" className="text-sm text-danger-600 flex items-center mt-1"><AlertCircle className="h-4 w-4 mr-1" />{errors.category.message}</p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+              />
 
-      {/* Card: Images & Media */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Images & Media</CardTitle>
-          <CardDescription>
-            {isEditMode 
-               ? "Upload and manage product images. Drag to reorder."
-               : "You can add images after creating the product."
-            }
-          </CardDescription>
-        </CardHeader>
-        {/* Corrected Conditional Rendering */}            
-        <CardContent className="space-y-4">
-             {isEditMode ? (
-                <> { /* Fragment to group multiple components */}
-                    <ImageUploader 
-                        onFilesUpload={handleFilesUpload}
-                        onUrlUpload={handleUrlUpload}
-                        uploading={uploadFileMutation.isPending} 
-                        progress={uploadProgress}
-                        maxFiles={10} 
-                        maxSizeMB={5} 
-                        currentImageCount={product?.images?.length || 0} 
-                    />
-                    <Separator /> 
-                    <ImageGrid 
-                        images={product?.images || []} 
-                        onDelete={handleDeleteImage}
-                        onSetPrimary={handleSetPrimaryImage}
-                        onReorder={handleReorderImages} 
-                        loadingImageId={loadingImageAction || (deleteImageMutation.isPending ? deleteImageMutation.variables : null) || (setPrimaryImageMutation.isPending ? setPrimaryImageMutation.variables : null)}
-                    />
-                </>
-             ) : (
-                 <div className="text-center text-sm text-enterprise-500 py-8 border border-dashed rounded-md">
-                     Please create the product first to add images.
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="price"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Price *</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="0.00"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="stock"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Stock *</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="number"
+                          min="0"
+                          placeholder="0"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={form.control}
+                name="brand"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Brand</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Enter brand name" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Product Type</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Enter product type" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="unit_of_measure"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Unit of Measure</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="e.g. kg, pcs" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="barcode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Barcode</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="Enter barcode" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        {...field}
+                        placeholder="Enter product description"
+                        className="min-h-[120px]"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="space-y-2">
+                <Label htmlFor="category">Category</Label>
+                <CreatableSelect
+                  options={categories}
+                  value={form.watch("category")}
+                  onChange={(value) => form.setValue("category", value, { shouldValidate: true })}
+                  onCreateOption={handleCreateCategory}
+                  placeholder={categoriesLoading ? "Loading categories..." : "Select or create a category"}
+                  disabled={isLoading || categoriesLoading}
+                  className="w-full"
+                />
+                {form.formState.errors.category && (
+                  <p className="text-red-500 text-sm">
+                    {form.formState.errors.category.message}
+                  </p>
+                )}
+              </div>
+
+              <FormField
+                control={form.control}
+                name="tags"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-2">
+                      Tags
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <HelpCircle size={16} className="text-muted-foreground" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            Press Enter to add a tag
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </FormLabel>
+                    <FormControl>
+                      <TagInput
+                        id="tags"
+                        placeholder="Add tags..."
+                        tags={field.value || []}
+                        setTags={(newTags) => field.onChange(newTags)}
+                        maxTags={10}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="country_availability"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-2">
+                      Country Availability
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <HelpCircle size={16} className="text-muted-foreground" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            Enter country codes (e.g. US, CA)
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </FormLabel>
+                    <FormControl>
+                      <TagInput
+                        id="countries"
+                        placeholder="Add country codes..."
+                        tags={field.value || []}
+                        setTags={(newTags) => field.onChange(newTags)}
+                        maxTags={15}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div>
+                <FormLabel>Product Image</FormLabel>
+                <div className="mt-2">
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="mb-3"
+                  />
+                  {imagePreview && (
+                    <div className="mt-2">
+                      <img
+                        src={imagePreview}
+                        alt="Product preview"
+                        className="max-h-40 rounded-md border border-gray-300"
+                      />
+                    </div>
+                  )}
                 </div>
-             )}
-        </CardContent>
-      </Card>
+              </div>
+            </div>
+          </div>
 
-      <div className="flex justify-between items-center pt-6 mt-6 border-t border-enterprise-200">
-        <div>
-            {isEditMode && (
-                <Button 
-                    type="button"
-                    variant="destructive" 
-                    onClick={handleDelete}
-                    disabled={isSubmitting}
-                    size="sm"
-                >
-                    <Trash2 className="mr-1.5 h-4 w-4" />
-                    Deactivate
+          {/* Technical Specifications Section */}
+          <Collapsible
+            open={attributesOpen}
+            onOpenChange={setAttributesOpen}
+            className="border rounded-md p-3"
+          >
+            <CollapsibleTrigger className="flex items-center justify-between w-full font-medium">
+              <span>Technical Specifications</span>
+              {attributesOpen ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+            </CollapsibleTrigger>
+            
+            <CollapsibleContent className="pt-3 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <Input
+                  placeholder="Attribute name"
+                  value={newAttributeKey}
+                  onChange={(e) => setNewAttributeKey(e.target.value)}
+                />
+                <Input
+                  placeholder="Attribute value"
+                  value={newAttributeValue}
+                  onChange={(e) => setNewAttributeValue(e.target.value)}
+                />
+                <Button type="button" variant="outline" onClick={handleAddAttribute}>
+                  Add Attribute
                 </Button>
+              </div>
+              
+              {/* Display current attributes */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-3">
+                {Object.entries(attributes).map(([key, value]) => (
+                  <Card key={key} className="p-1">
+                    <CardContent className="flex justify-between items-center p-2">
+                      <div>
+                        <span className="font-medium">{key}:</span> {value}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRemoveAttribute(key)}
+                      >
+                        Remove
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+
+          {/* Active status toggle */}
+          <FormField
+            control={form.control}
+            name="is_active"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                <div>
+                  <FormLabel>Active</FormLabel>
+                  <p className="text-sm text-muted-foreground">
+                    Product will be visible to users
+                  </p>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+              </FormItem>
             )}
-        </div>
-        
-        <div className="flex space-x-3">
-            <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => navigate('/app/products')} 
-                disabled={isSubmitting}
+          />
+
+          {/* Form actions */}
+          <div className="flex justify-end gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => navigate('/app/products')}
             >
-                Cancel
+              Cancel
             </Button>
-            <Button 
-                type="submit" 
-                variant="primary" 
-                disabled={isSubmitting || (isEditMode && !isDirty)}
-            >
-                {isSubmitting ? (
-                    <>
-                     <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...
-                    </>
-                ) : (
-                   isEditMode ? 'Save Changes' : 'Create Product'
-                )}
+            <Button type="submit" disabled={isPending}>
+              {isPending ? 'Saving...' : isEditMode ? 'Update Product' : 'Create Product'}
             </Button>
-        </div>
-      </div>
-    </form>
+          </div>
+        </form>
+      </Form>
+    </div>
   );
-};
+}

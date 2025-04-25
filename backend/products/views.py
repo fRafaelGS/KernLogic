@@ -4,46 +4,69 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import Product, ProductImage
-from .serializers import ProductSerializer, ProductImageSerializer
+from .serializers import ProductSerializer, ProductImageSerializer, ProductStatsSerializer
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.db import transaction, models
 from rest_framework.renderers import JSONRenderer
+from django.db.models import Sum, F, Q, Count
+from django.db.models.functions import Coalesce
+from decimal import Decimal
+from .pagination import StandardResultsSetPagination
 
 # Create your views here.
 
 @method_decorator(csrf_exempt, name='dispatch')
 class ProductViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for viewing and editing products.
+    API endpoint for managing product data.
     """
     serializer_class = ProductSerializer
     permission_classes = [permissions.IsAuthenticated]
-    renderer_classes = [JSONRenderer]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['category', 'is_active']
-    search_fields = ['name', 'description', 'sku', 'category']
-    ordering_fields = ['name', 'price', 'stock', 'created_at']
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['name', 'sku', 'description', 'brand', 'tags', 'barcode']
+    ordering_fields = ['name', 'created_at', 'price', 'stock', 'brand']
     ordering = ['-created_at']
+    renderer_classes = [JSONRenderer]
     parser_classes = [MultiPartParser, FormParser, filters.OrderingFilter]
     http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options']
 
     def get_queryset(self):
         """
-        This queryset should filter products based on the request user.
+        Filter products to return only those created by the current user.
+        Allow additional filtering by query parameters.
         """
-        # Revert to filtering by user
-        user = self.request.user
-        if user.is_authenticated:
-            return Product.objects.filter(created_by=user)
-        return Product.objects.none() # Or raise PermissionDenied
+        queryset = Product.objects.all()
+        
+        # Apply user filter if not staff/admin
+        if not self.request.user.is_staff:
+            queryset = queryset.filter(created_by=self.request.user)
+            
+        # Additional filters from query parameters
+        category = self.request.query_params.get('category')
+        brand = self.request.query_params.get('brand')
+        is_active = self.request.query_params.get('is_active')
+        low_stock = self.request.query_params.get('low_stock')
+        
+        if category:
+            queryset = queryset.filter(category=category)
+        if brand:
+            queryset = queryset.filter(brand=brand)
+        if is_active is not None:
+            is_active_bool = is_active.lower() == 'true'
+            queryset = queryset.filter(is_active=is_active_bool)
+        if low_stock is not None:
+            threshold = int(self.request.query_params.get('threshold', 10))
+            queryset = queryset.filter(stock__lt=threshold)
+            
+        return queryset
 
     def perform_create(self, serializer):
         """
-        Set the user when creating a product.
+        Set the created_by field to the current user when creating a product.
         """
-        # No need for dev mode check if IsAuthenticated is used
         serializer.save(created_by=self.request.user)
 
     def perform_destroy(self, instance):
@@ -54,30 +77,95 @@ class ProductViewSet(viewsets.ModelViewSet):
         instance.save()
 
     @action(detail=False, methods=['get'])
-    def categories(self, request):
-        """
-        Return a list of all unique categories
-        """
-        categories = Product.objects.filter(
-            created_by=request.user
-        ).values_list('category', flat=True).distinct()
-        return Response(list(categories))
-
-    @action(detail=False, methods=['get'])
     def stats(self, request):
         """
-        Return basic stats about the user's products
+        Return statistics about products for the dashboard:
+        - Total number of products
+        - Total value of inventory
+        - Number of products with low stock
         """
         queryset = self.get_queryset()
+        
+        # Calculate stats
         total_products = queryset.count()
-        total_value = sum(float(product.price) * product.stock for product in queryset)
-        low_stock = queryset.filter(stock__lt=10).count()
-
-        return Response({
+        total_value = queryset.aggregate(
+            total=Coalesce(Sum(F('price') * F('stock')), Decimal('0.00'))
+        )['total']
+        
+        # Low stock count (less than 10 items)
+        low_stock_threshold = int(request.query_params.get('threshold', 10))
+        low_stock_count = queryset.filter(stock__lt=low_stock_threshold).count()
+        
+        serializer = ProductStatsSerializer(data={
             'total_products': total_products,
             'total_value': total_value,
-            'low_stock': low_stock
+            'low_stock_count': low_stock_count
         })
+        
+        serializer.is_valid(raise_exception=True)
+        return Response(serializer.validated_data)
+        
+    @action(detail=False, methods=['get'])
+    def categories(self, request):
+        """
+        Return a list of unique categories for dropdown menus.
+        """
+        queryset = self.get_queryset()
+        categories = queryset.values_list('category', flat=True).distinct().order_by('category')
+        # Filter out None values
+        categories = [c for c in categories if c]
+        return Response(categories)
+        
+    @action(detail=False, methods=['get'])
+    def brands(self, request):
+        """
+        Return a list of unique brands for dropdown menus.
+        """
+        queryset = self.get_queryset()
+        brands = queryset.values_list('brand', flat=True).distinct().order_by('brand')
+        # Filter out None values
+        brands = [b for b in brands if b]
+        return Response(brands)
+
+    @action(detail=False, methods=['post'])
+    def bulk_create(self, request):
+        """
+        Create multiple products at once from a CSV upload or bulk input.
+        """
+        products_data = request.data
+        
+        if not isinstance(products_data, list):
+            return Response(
+                {"error": "Expected a list of products"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        created_products = []
+        errors = []
+        
+        for index, product_data in enumerate(products_data):
+            serializer = self.get_serializer(data=product_data)
+            if serializer.is_valid():
+                serializer.save(created_by=request.user)
+                created_products.append(serializer.data)
+            else:
+                errors.append({
+                    "index": index,
+                    "data": product_data,
+                    "errors": serializer.errors
+                })
+                
+        result = {
+            "created_count": len(created_products),
+            "total_count": len(products_data),
+            "created_products": created_products
+        }
+        
+        if errors:
+            result["errors"] = errors
+            return Response(result, status=status.HTTP_207_MULTI_STATUS)
+            
+        return Response(result, status=status.HTTP_201_CREATED)
 
     def create(self, request, *args, **kwargs):
         """

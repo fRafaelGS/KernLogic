@@ -76,7 +76,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (existingToken) {
       console.log('Found existing token, validating...');
       // Use shared axiosInstance for the user validation call
-      // Path is relative to axiosInstance baseURL ('/api')
       axiosInstance.get('/auth/user/') 
         .then(response => {
           console.log('Token valid, user data:', response.data);
@@ -85,56 +84,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         })
         .catch(error => {
           console.error('Error validating token:', error);
-          // Attempting refresh is handled by the interceptor, 
-          // but if it ultimately fails, it redirects. 
-          // If the request fails for non-401 reasons, try test login?
-          if (!axios.isAxiosError(error) || error.response?.status !== 401) {
-             console.log('Non-401 error validating token, trying test login.');
-             tryTestLogin(); 
-          } else {
-             // Let the interceptor handle redirect on final 401
-             setLoading(false); // Stop loading if validation fails and redirect happens
+          // Just set loading to false to allow manual login
+          setLoading(false);
+          // Clear tokens if we got a 401 Unauthorized
+          if (axios.isAxiosError(error) && error.response?.status === 401) {
+            console.log('Token invalid (401), clearing local storage');
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
           }
         });
     } else {
-      // No token, try test login
-      console.log('No existing token, attempting test login.');
-      tryTestLogin();
-    }
-    
-    function tryTestLogin() {
-      // Use test-login endpoint as a fallback
-      // Use fetch as it doesn't need auth header
-      const testLoginUrl = `${API_URL}/auth/test-login/`;
-      console.log('Using test login URL:', testLoginUrl);
-      
-      fetch(testLoginUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      })
-      .then(response => {
-        if (!response.ok) {
-          console.error('Test login failed:', response.status);
-          throw new Error(`Test login failed: ${response.status}`);
-        }
-        return response.json();
-      })
-      .then(data => {
-        console.log('Test login successful:', data);
-        
-        if (data.access && data.refresh && data.user) {
-          localStorage.setItem('access_token', data.access);
-          localStorage.setItem('refresh_token', data.refresh);
-          setUser(data.user);
-          console.log('Test login successful, token saved');
-        }
-      })
-      .catch(error => {
-        console.error('Error during test login:', error);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+      // No token, just set loading to false
+      console.log('No existing token, user needs to log in manually');
+      setLoading(false);
     }
   }, []);
 
@@ -174,7 +136,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('Login attempt for:', email);
       
       // Use fetch for login as it doesn't need prior auth
-      // URL needs full path from domain root
       const loginUrl = `${API_URL}/auth/login/`; 
       console.log('Login URL:', loginUrl);
       
@@ -189,22 +150,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       console.log('Login response status:', response.status);
       
+      // Clone the response for potential error handling
+      const responseClone = response.clone();
+      
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Login response error:', errorText);
+        let errorData;
+        try {
+          // Try to parse as JSON first
+          errorData = await responseClone.json();
+          console.error('Login response error:', errorData);
+        } catch (e) {
+          // If the response isn't JSON, try text
+          console.error('Error parsing response as JSON:', e);
+          try {
+            const errorText = await response.text();
+            console.error('Login response error text:', errorText);
+          } catch (textError) {
+            console.error('Could not read response text either:', textError);
+          }
+          throw new Error(`Login failed with status ${response.status}`);
+        }
+        
+        // Handle specific error fields
+        if (errorData.email) {
+          throw new Error(errorData.email);
+        } else if (errorData.password) {
+          throw new Error(errorData.password);
+        } else if (errorData.error) {
+          throw new Error(errorData.error);
+        } else if (errorData.non_field_errors) {
+          throw new Error(errorData.non_field_errors);
+        }
+        
         throw new Error(`Login failed with status ${response.status}`);
       }
       
       const data = await response.json();
       console.log('Login successful, received data:', data);
 
-      if (!data?.user) throw new Error('Malformed response');
-      const { access, refresh, user: userData } = data;
+      if (!data?.user) throw new Error('Malformed response: missing user data');
+      const { access, refresh } = data.tokens;
+      const userData = data.user;
 
       localStorage.setItem('access_token', access);
       localStorage.setItem('refresh_token', refresh);
       setUser(userData);
-      toast.success('Logged in!');
+      toast.success('Logged in successfully!');
       navigate('/app');
     } catch (err: any) {
       console.error('Login error:', err);
@@ -235,7 +226,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       // Use shared axiosInstance for registration
       // Path is relative to axiosInstance baseURL ('/api')
-      const response = await axiosInstance.post('/auth/register/', { email, password, name });
+      const response = await axiosInstance.post('/accounts/register/', { email, password, name });
       const { access, refresh, user: userData } = response.data;
 
       localStorage.setItem('access_token', access);

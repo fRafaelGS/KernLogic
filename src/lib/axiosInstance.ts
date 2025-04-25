@@ -16,14 +16,18 @@ axiosInstance.interceptors.request.use(
         const token = localStorage.getItem('access_token');
         if (token) {
             // Ensure proper format: "Bearer " + token
-            config.headers.Authorization = token.startsWith('Bearer ') 
+            const authHeader = token.startsWith('Bearer ') 
                 ? token 
                 : `Bearer ${token}`;
+            config.headers.Authorization = authHeader;
+            
+            console.log('[Request Interceptor] Added token to request:', {
+                url: config.url,
+                authHeader: authHeader.substring(0, 20) + '...',
+            });
         } else {
-            // console.log('[Request Interceptor] No token found');
-            // Optionally handle requests that should fail without a token
+            console.log('[Request Interceptor] No token found for request:', config.url);
         }
-        // console.log('[Request Interceptor] URL:', config.url);
         return config;
     },
     (error) => {
@@ -38,10 +42,29 @@ axiosInstance.interceptors.response.use(
     async (error: AxiosError) => {
         const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
+        // Log all error responses in detail
+        console.error('[Axios Error]', {
+            status: error.response?.status,
+            url: originalRequest?.url,
+            method: originalRequest?.method,
+            headers: originalRequest?.headers,
+            errorMessage: error.message,
+            responseData: error.response?.data,
+        });
+
         // Check if it's a 401, not from a refresh attempt, and the request exists
         if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
             console.log('[Response Interceptor] Received 401, attempting token refresh...');
             originalRequest._retry = true; // Mark to prevent infinite refresh loops
+
+            // Check if this is a dashboard endpoint - if so, just pass the error
+            // This prevents logout loops when dashboard endpoints are unauthorized
+            const url = originalRequest.url || '';
+            if (url.includes('/dashboard/')) {
+                console.log('[Response Interceptor] Dashboard endpoint unauthorized:', url);
+                // Don't attempt token refresh for dashboard endpoints to prevent logout loops
+                return Promise.reject(error);
+            }
 
             try {
                 const refreshToken = localStorage.getItem('refresh_token');
@@ -51,7 +74,7 @@ axiosInstance.interceptors.response.use(
                 }
 
                 // Use fetch for refresh to bypass this interceptor
-                const refreshUrl = `${API_URL}/auth/refresh/`; 
+                const refreshUrl = `${API_URL}/auth/token/refresh/`; 
                 console.log('[Refresh] Calling refresh URL:', refreshUrl);
 
                 const refreshResponse = await fetch(refreshUrl, {
@@ -86,13 +109,21 @@ axiosInstance.interceptors.response.use(
 
             } catch (refreshError: any) {
                 console.error('[Refresh] Error during token refresh:', refreshError.message);
-                // Clear tokens and redirect to login on refresh failure
-                localStorage.removeItem('access_token');
-                localStorage.removeItem('refresh_token');
-                // Use a more robust way to navigate if possible, but window.location is a fallback
-                window.location.href = '/login?sessionExpired=true'; 
+                
+                // Only clear tokens and redirect for non-dashboard requests
+                if (!originalRequest.url?.includes('/dashboard/')) {
+                    // Clear tokens and redirect to login on refresh failure
+                    localStorage.removeItem('access_token');
+                    localStorage.removeItem('refresh_token');
+                    // Use a more robust way to navigate if possible, but window.location is a fallback
+                    window.location.href = '/login?sessionExpired=true';
+                }
                 return Promise.reject(refreshError); // Reject the promise to prevent original request from proceeding
             }
+        } else if (error.response?.status === 500) {
+            // Better handling for server errors
+            console.error('[Server Error] 500 response:', error.response?.data);
+            // You could show a user-friendly toast message here
         }
 
         // For errors other than 401 or if retry failed, just reject

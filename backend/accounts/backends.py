@@ -10,8 +10,13 @@ class EmailBackend(ModelBackend):
         print("DEBUG: EmailBackend.authenticate() called")
         print("="*80)
         print(f"DEBUG: Authentication attempt for username: {username}")
-        print(f"DEBUG: Request method: {request.method if request else 'None'}")
-        print(f"DEBUG: Request path: {request.path if request else 'None'}")
+        
+        if request:
+            print(f"DEBUG: Request method: {request.method}")
+            print(f"DEBUG: Request path: {request.path}")
+            print(f"DEBUG: Request headers: {dict(request.headers)}")
+        else:
+            print("DEBUG: No request object provided")
         
         if not username or not password:
             print("DEBUG: Missing username or password")
@@ -46,22 +51,27 @@ class EmailBackend(ModelBackend):
                         print("DEBUG: Authentication successful (test user)!")
                         return user
                 
-                # Normal password verification
+                # Normal password verification with improved error handling
                 print(f"DEBUG: Checking password...")
-                password_valid = user.check_password(password)
-                print(f"DEBUG: Password valid: {password_valid}")
-                
-                if password_valid:
-                    print("DEBUG: Password check passed")
-                    can_authenticate = self.user_can_authenticate(user)
-                    print(f"DEBUG: User can authenticate: {can_authenticate}")
-                    if can_authenticate:
-                        print("DEBUG: Authentication successful!")
-                        return user
+                try:
+                    password_valid = user.check_password(password)
+                    print(f"DEBUG: Password valid: {password_valid}")
+                    
+                    if password_valid:
+                        print("DEBUG: Password check passed")
+                        can_authenticate = self.user_can_authenticate(user)
+                        print(f"DEBUG: User can authenticate: {can_authenticate}")
+                        if can_authenticate:
+                            print("DEBUG: Authentication successful!")
+                            return user
+                        else:
+                            print("DEBUG: User cannot authenticate (inactive or other restriction)")
                     else:
-                        print("DEBUG: User cannot authenticate (inactive or other restriction)")
-                else:
-                    print("DEBUG: Password check failed")
+                        print("DEBUG: Password check failed")
+                except Exception as pw_error:
+                    print(f"DEBUG: Error during password check: {str(pw_error)}")
+                    print(f"DEBUG: Password check error details: {traceback.format_exc()}")
+                    # Continue execution without crashing - authentication will fail
                     
             except User.DoesNotExist:
                 print(f"DEBUG: User not found with email: {username}")

@@ -4,7 +4,14 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import Product, ProductImage
-from .serializers import ProductSerializer, ProductImageSerializer, ProductStatsSerializer
+from .serializers import (
+    ProductSerializer, 
+    ProductImageSerializer, 
+    ProductStatsSerializer,
+    DashboardSummarySerializer, 
+    InventoryTrendSerializer, 
+    ActivitySerializer
+)
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
@@ -14,6 +21,15 @@ from django.db.models import Sum, F, Q, Count
 from django.db.models.functions import Coalesce
 from decimal import Decimal
 from .pagination import StandardResultsSetPagination
+from datetime import datetime, timedelta
+from django.utils import timezone
+import json
+from rest_framework.exceptions import ValidationError
+from django.contrib.auth import get_user_model
+from django.conf import settings
+from .models import Activity
+
+User = get_user_model()
 
 # Create your views here.
 
@@ -363,3 +379,219 @@ class ProductViewSet(viewsets.ModelViewSet):
             'message': f'Successfully deleted {count} category placeholder products',
             'deleted_ids': placeholder_ids
         }, status=status.HTTP_200_OK)
+
+# Add endpoints for dashboard data
+class DashboardViewSet(viewsets.ViewSet):
+    """
+    API endpoints for dashboard data
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_company_id(self, request):
+        """
+        Get company ID from user (in a real app, this would come from the auth context)
+        For now, we'll use the user's ID as a proxy for company ID
+        """
+        print(f"DEBUG: DashboardViewSet.get_company_id() called - User: {request.user}")
+        if not request.user or not request.user.is_authenticated:
+            print(f"DEBUG: User not authenticated in DashboardViewSet.get_company_id()")
+            return None
+        return request.user.id
+
+    @action(detail=False, methods=['get'])
+    def summary(self, request):
+        """
+        Return dashboard summary data:
+        - KPI numbers (total products, inventory value, low stock, team members)
+        - Data completeness percentage
+        - Most missing fields
+        - Product status counts
+        """
+        print(f"DEBUG: DashboardViewSet.summary() called - User: {request.user}, Authenticated: {request.user.is_authenticated}")
+        company_id = self.get_company_id(request)
+        if not company_id:
+            print(f"DEBUG: No company_id found in summary()")
+            return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        # Get queryset of products for this company
+        queryset = Product.objects.filter(created_by=request.user)
+        
+        # Calculate KPIs
+        total_products = queryset.count()
+        
+        inventory_value = queryset.aggregate(
+            total=Coalesce(Sum(F('price') * F('stock')), Decimal('0.00'))
+        )['total']
+        
+        # Get low stock threshold from settings or default to 10
+        low_stock_threshold = getattr(settings, 'LOW_STOCK_THRESHOLD', 10)
+        low_stock_count = queryset.filter(stock__lt=low_stock_threshold).count()
+        
+        # Get team members count (in a real app, this would be users in the same company)
+        # For now, we'll return a fixed number or the admin user
+        team_members = User.objects.filter(is_staff=True).count() or 1
+        
+        # Calculate completeness
+        if total_products > 0:
+            # Get completeness for each product
+            completeness_values = [p.get_completeness() for p in queryset]
+            avg_completeness = sum(completeness_values) / len(completeness_values)
+        else:
+            avg_completeness = 0
+        
+        # Get most missing fields
+        missing_fields_count = {}
+        for product in queryset:
+            for field in product.get_missing_fields():
+                if field in missing_fields_count:
+                    missing_fields_count[field] += 1
+                else:
+                    missing_fields_count[field] = 1
+        
+        # Sort missing fields by count and take top 3
+        most_missing = [
+            {"field": field, "count": count}
+            for field, count in sorted(
+                missing_fields_count.items(), 
+                key=lambda x: x[1], 
+                reverse=True
+            )[:3]
+        ]
+        
+        # Get active/inactive counts
+        active_count = queryset.filter(is_active=True).count()
+        inactive_count = queryset.filter(is_active=False).count()
+        
+        # Prepare response data
+        data = {
+            'total_products': total_products,
+            'inventory_value': inventory_value,
+            'low_stock_count': low_stock_count,
+            'team_members': team_members,
+            'data_completeness': round(avg_completeness, 1),
+            'most_missing_fields': most_missing,
+            'active_products': active_count,
+            'inactive_products': inactive_count
+        }
+        
+        serializer = DashboardSummarySerializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        return Response(serializer.validated_data)
+    
+    @action(detail=False, methods=['get'])
+    def inventory_trend(self, request):
+        """
+        Return inventory value trend data for a given time range
+        """
+        company_id = self.get_company_id(request)
+        
+        # Get time range from query params (default to 30 days)
+        range_days = request.query_params.get('range', '30')
+        try:
+            range_days = int(range_days)
+            if range_days not in [30, 60, 90]:
+                range_days = 30  # Default to 30 if invalid
+        except ValueError:
+            range_days = 30
+        
+        # Calculate date range
+        end_date = timezone.now().date()
+        start_date = end_date - timedelta(days=range_days)
+        
+        # Get products for this company
+        queryset = Product.objects.filter(created_by=request.user)
+        
+        # In a real app, we would use historical data for accurate trends
+        # For now, we'll generate synthetic data based on current inventory
+        current_value = queryset.aggregate(
+            total=Coalesce(Sum(F('price') * F('stock')), Decimal('0.00'))
+        )['total']
+        
+        # Generate date range
+        dates = []
+        values = []
+        date = start_date
+        while date <= end_date:
+            dates.append(date)
+            
+            # Generate a value with slight variation (+/- 5%)
+            # In a real app, this would come from historical data
+            day_offset = (date - start_date).days
+            ratio = 0.8 + (day_offset / range_days * 0.4)  # Trend upward from 80% to 120%
+            
+            # Add some randomness
+            import random
+            ratio += random.uniform(-0.05, 0.05)
+            
+            value = current_value * Decimal(ratio)
+            values.append(value.quantize(Decimal('0.01')))
+            
+            date += timedelta(days=1)
+        
+        data = {
+            'dates': dates,
+            'values': values
+        }
+        
+        serializer = InventoryTrendSerializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        return Response(serializer.validated_data)
+    
+    @action(detail=False, methods=['get'])
+    def activity(self, request):
+        """
+        Return recent activity data (limit 10)
+        """
+        print(f"DEBUG: DashboardViewSet.activity() called - User: {request.user}, Authenticated: {request.user.is_authenticated}")
+        company_id = self.get_company_id(request)
+        if not company_id:
+            print(f"DEBUG: No company_id found in activity()")
+            return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        # Get recent activities for this company
+        activities = Activity.objects.filter(
+            company_id=company_id
+        ).select_related('user').order_by('-created_at')[:10]
+        
+        serializer = ActivitySerializer(activities, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def incomplete_products(self, request):
+        """
+        Return the top 5 incomplete products
+        """
+        company_id = self.get_company_id(request)
+        
+        # Get products for this company
+        queryset = Product.objects.filter(created_by=request.user)
+        
+        # Calculate completeness for each product
+        products_with_completeness = []
+        for product in queryset:
+            completeness = product.get_completeness()
+            if completeness < 100:  # Only include incomplete products
+                missing_fields = product.get_missing_fields()
+                products_with_completeness.append({
+                    'product': product,
+                    'completeness': completeness,
+                    'missing_fields': missing_fields
+                })
+        
+        # Sort by completeness (ascending) and take top 5
+        products_with_completeness.sort(key=lambda x: x['completeness'])
+        incomplete_products = products_with_completeness[:5]
+        
+        # Prepare serializer data
+        serializer_data = []
+        for item in incomplete_products:
+            data = {
+                'id': item['product'].id,
+                'name': item['product'].name,
+                'sku': item['product'].sku,
+                'completeness': item['completeness'],
+                'missing_fields': item['missing_fields']
+            }
+            serializer_data.append(data)
+        
+        return Response(serializer_data)

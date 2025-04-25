@@ -15,10 +15,9 @@ export const API_ENDPOINTS = {
     auth: {
         login: '/auth/login/',
         register: '/auth/register/',
-        refresh: '/auth/refresh/',
+        refresh: '/auth/token/refresh/',
         user: '/auth/user/',
-        debugLogin: '/auth/debug-login/',
-        testLogin: '/auth/test-login/'
+        logout: '/auth/logout/'
     },
     products: {
         list: '/products/',
@@ -27,5 +26,6 @@ export const API_ENDPOINTS = {
         delete: (id: number) => `/products/${id}/`,
         categories: '/products/categories/',
         stats: '/products/stats/'
-    }
+    },
+    dashboard: '/dashboard'
 }; 

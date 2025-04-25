@@ -1,4 +1,3 @@
-
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -44,7 +43,7 @@ const recentActivities: ActivityItem[] = [
   },
 ];
 
-export function RecentActivity() {
+export function LegacyActivity() {
   return (
     <Card>
       <CardHeader>

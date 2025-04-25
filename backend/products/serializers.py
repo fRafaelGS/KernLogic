@@ -1,6 +1,9 @@
 from rest_framework import serializers
 import json
-from .models import Product, ProductImage
+from .models import Product, ProductImage, Activity
+from django.db.models import Sum, F, Count, Case, When, Value, FloatField
+from decimal import Decimal
+from django.conf import settings
 
 # --- NEW ProductImage Serializer ---
 class ProductImageSerializer(serializers.ModelSerializer):
@@ -21,7 +24,7 @@ class ProductImageSerializer(serializers.ModelSerializer):
 # --- End ProductImage Serializer ---
 
 class ProductSerializer(serializers.ModelSerializer):
-    created_by = serializers.ReadOnlyField(source='created_by.email', required=False)
+    created_by = serializers.ReadOnlyField(source='created_by.email')
     price = serializers.FloatField()  # Explicitly use FloatField to ensure numeric values
     images = ProductImageSerializer(many=True, read_only=True)
     tags = serializers.ListField(child=serializers.CharField(), required=False)
@@ -40,7 +43,7 @@ class ProductSerializer(serializers.ModelSerializer):
             'attributes', 'primary_image', 'primary_image_thumb', 'primary_image_large',
             'created_by', 'images'
         ]
-        read_only_fields = ['created_at', 'updated_at', 'images', 'created_by']
+        read_only_fields = ['created_by', 'created_at', 'updated_at', 'images']
 
     def get_primary_image_thumb(self, obj):
         if obj.primary_image:
@@ -108,22 +111,16 @@ class ProductSerializer(serializers.ModelSerializer):
 
     def validate_sku(self, value):
         """
-        Check that the SKU is unique (but skip user-specific validation for development)
+        Ensure SKU is unique, but allow the same SKU on update
+        if it's the current instance.
         """
-        request = self.context.get('request')
         instance = getattr(self, 'instance', None)
-        
-        # Skip validation if we're updating existing instance
         if instance and instance.sku == value:
             return value
-            
-        # In development mode, just check that the SKU is unique globally
         if Product.objects.filter(sku=value).exists():
-            # If we're in update mode and this is the same SKU, it's OK
-            if instance and instance.sku == value:
-                return value
-            raise serializers.ValidationError("A product with this SKU already exists.")
-            
+            raise serializers.ValidationError(
+                "A product with this SKU already exists."
+            )
         return value
 
     def validate_price(self, value):
@@ -145,4 +142,50 @@ class ProductSerializer(serializers.ModelSerializer):
 class ProductStatsSerializer(serializers.Serializer):
     total_products = serializers.IntegerField()
     total_value = serializers.DecimalField(max_digits=15, decimal_places=2)
-    low_stock_count = serializers.IntegerField() 
+    low_stock_count = serializers.IntegerField()
+
+class ActivitySerializer(serializers.ModelSerializer):
+    user_name = serializers.ReadOnlyField(source='user.username')
+    
+    class Meta:
+        model = Activity
+        fields = ['id', 'company_id', 'user', 'user_name', 'entity', 'entity_id', 
+                  'action', 'message', 'created_at']
+        read_only_fields = ['created_at']
+
+class DashboardSummarySerializer(serializers.Serializer):
+    """
+    Serializer for dashboard summary data including KPIs and data completeness
+    """
+    total_products = serializers.IntegerField()
+    inventory_value = serializers.DecimalField(max_digits=15, decimal_places=2)
+    low_stock_count = serializers.IntegerField()
+    team_members = serializers.IntegerField()
+    data_completeness = serializers.FloatField()  # Percentage of complete product data
+    
+    # Adjust this field definition
+    most_missing_fields = serializers.ListField(
+        child=serializers.DictField(),
+        required=False
+    )
+    
+    active_products = serializers.IntegerField()
+    inactive_products = serializers.IntegerField()
+
+class InventoryTrendSerializer(serializers.Serializer):
+    """
+    Serializer for inventory value trend data
+    """
+    dates = serializers.ListField(child=serializers.DateField())
+    values = serializers.ListField(child=serializers.DecimalField(max_digits=15, decimal_places=2))
+
+class IncompleteProductSerializer(serializers.ModelSerializer):
+    """
+    Serializer for products with incomplete data
+    """
+    completeness = serializers.IntegerField()
+    missing_fields = serializers.ListField(child=serializers.CharField())
+    
+    class Meta:
+        model = Product
+        fields = ['id', 'name', 'sku', 'completeness', 'missing_fields'] 

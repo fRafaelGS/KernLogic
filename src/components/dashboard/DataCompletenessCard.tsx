@@ -47,7 +47,6 @@ export const DataCompletenessCard: React.FC<DataCompletenessCardProps> = ({
                 <li>SKU</li>
                 <li>Description</li>
                 <li>Price</li>
-                <li>Stock</li>
                 <li>Category</li>
                 <li>Brand</li>
               </ul>

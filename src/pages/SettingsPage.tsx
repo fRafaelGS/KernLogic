@@ -45,9 +45,8 @@ const SettingsPage: React.FC = () => {
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isSavingPassword, setIsSavingPassword] = useState(false);
   
-  // Notification preferences state
-  const [lowStockAlerts, setLowStockAlerts] = useState(false);
-  const [uploadSummaries, setUploadSummaries] = useState(true);
+  // Notification settings state
+  const [emailNotifications, setEmailNotifications] = useState(true);
   const [isSavingNotifications, setIsSavingNotifications] = useState(false);
 
   // --- React Hook Form Instances ---
@@ -268,25 +267,13 @@ const SettingsPage: React.FC = () => {
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between p-3 border rounded-md">
                 <div>
-                   <p className="text-sm font-medium">Low Stock Alerts</p>
-                   <p className="text-xs text-enterprise-500">Receive an email when product stock drops below threshold.</p>
+                   <p className="text-sm font-medium">Email Notifications</p>
+                   <p className="text-xs text-enterprise-500">Receive notifications via email.</p>
                 </div>
                 <Switch 
-                   id="notification-low-stock" 
-                   checked={lowStockAlerts} 
-                   onCheckedChange={setLowStockAlerts} 
-                   disabled={isSavingNotifications}
-                />
-              </div>
-              <div className="flex items-center justify-between p-3 border rounded-md">
-                <div>
-                   <p className="text-sm font-medium">Upload Summaries</p>
-                   <p className="text-xs text-enterprise-500">Get notified after a bulk data upload is complete.</p>
-                </div>
-                <Switch 
-                   id="notification-upload" 
-                   checked={uploadSummaries} 
-                   onCheckedChange={setUploadSummaries}
+                   id="notification-email" 
+                   checked={emailNotifications} 
+                   onCheckedChange={setEmailNotifications} 
                    disabled={isSavingNotifications}
                 />
               </div>

@@ -38,7 +38,8 @@ import {
   HelpCircle,
   MessageSquare,
   Activity as ActivityIcon,
-  Info
+  Info,
+  X
 } from 'lucide-react';
 
 /**
@@ -228,31 +229,35 @@ export const DashboardPage: React.FC = () => {
           </Card>
         </AnimatedDiv>
 
-        {/* Low Stock Items */}
+        {/* Inactive Products */}
         <AnimatedDiv delay={100}>
           <Card 
             className="bg-white border-enterprise-200 shadow-sm hover:shadow-md hover:translate-y-[-2px] transition-all cursor-pointer"
-            onClick={() => handleKpiClick('stock=low')}
-            title="Click to view all low stock products"
+            onClick={() => handleKpiClick('is_active=false')}
+            title="Click to view all inactive products"
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium uppercase tracking-wider text-gray-700 dark:text-gray-200">Low Stock Items</CardTitle>
-              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              <CardTitle className="text-sm font-medium uppercase tracking-wider text-gray-700 dark:text-gray-200">Inactive Products</CardTitle>
+              <X className="h-4 w-4 text-gray-500" />
             </CardHeader>
             <CardContent>
               {loading.summary ? (
                 <Skeleton className="h-8 w-16" />
               ) : (
                 <div className="text-2xl font-bold text-enterprise-900">
-                  <AnimatedValue value={summary?.low_stock_count || 0} />
+                  <AnimatedValue value={summary?.inactive_product_count || 0} />
                 </div>
               )}
               <div className="flex items-center pt-1">
-                <span className="text-xs text-danger-600 font-medium flex items-center mr-2">
-                  <ArrowDownRight className="h-3 w-3 mr-1" />
-                  4
+                <span className="text-xs text-enterprise-500 font-medium flex items-center mr-2">
+                  {summary?.inactive_product_count ? (
+                    <span className="text-xs text-enterprise-600">
+                      {((summary?.inactive_product_count / (summary?.total_products || 1)) * 100).toFixed(1)}% of catalog
+                    </span>
+                  ) : (
+                    <span className="text-xs text-success-600">All products active</span>
+                  )}
                 </span>
-                <span className="text-xs text-enterprise-500">items below threshold</span>
               </div>
             </CardContent>
           </Card>

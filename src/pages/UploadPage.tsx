@@ -23,7 +23,7 @@ import { useNavigate } from 'react-router-dom';
 const PRODUCTS_BASE_URL = `${API_URL}/products`;
 
 // Expected headers in CSV file
-const EXPECTED_HEADERS = ['name', 'sku', 'description', 'price', 'stock', 'category'];
+const EXPECTED_HEADERS = ['name', 'sku', 'description', 'price', 'category'];
 
 type CsvRow = { [key: string]: string };
 type RowError = { rowIndex: number; errors: string[] };

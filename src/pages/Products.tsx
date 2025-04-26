@@ -81,7 +81,6 @@ export const Products: React.FC = () => {
                                     <th>SKU</th>
                                     <th>Category</th>
                                     <th>Price</th>
-                                    <th>Stock</th>
                                     <th>Status</th>
                                     <th>Actions</th>
                                 </tr>
@@ -89,12 +88,22 @@ export const Products: React.FC = () => {
                             <tbody>
                                 {filteredProducts.length > 0 ? (
                                     filteredProducts.map((product) => (
-                                        <tr key={product.id}>
+                                        <tr 
+                                            key={product.id} 
+                                            className="cursor-pointer hover:bg-slate-50"
+                                            onClick={(e) => {
+                                                // Only navigate if not clicking on action buttons
+                                                const target = e.target as HTMLElement;
+                                                const isButtonClick = !!target.closest('button');
+                                                if (!isButtonClick && product.id) {
+                                                    navigate(`/app/products/${product.id}`);
+                                                }
+                                            }}
+                                        >
                                             <td>{product.name}</td>
                                             <td>{product.sku}</td>
                                             <td>{product.category}</td>
                                             <td>${product.price.toFixed(2)}</td>
-                                            <td>{product.stock}</td>
                                             <td>
                                                 <span className={`px-2 py-1 rounded-full text-xs ${
                                                     product.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
@@ -107,14 +116,20 @@ export const Products: React.FC = () => {
                                                     <Button
                                                         variant="secondary"
                                                         size="sm"
-                                                        onClick={() => navigate(`/app/products/${product.id}/edit`)}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            navigate(`/app/products/${product.id}/edit`);
+                                                        }}
                                                     >
                                                         Edit
                                                     </Button>
                                                     <Button
                                                         variant="destructive"
                                                         size="sm"
-                                                        onClick={() => product.id && handleDelete(product.id)}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            product.id && handleDelete(product.id);
+                                                        }}
                                                     >
                                                         Delete
                                                     </Button>

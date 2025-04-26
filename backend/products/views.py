@@ -43,7 +43,7 @@ class ProductViewSet(viewsets.ModelViewSet):
     pagination_class = StandardResultsSetPagination
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'sku', 'description', 'brand', 'tags', 'barcode']
-    ordering_fields = ['name', 'created_at', 'price', 'stock', 'brand']
+    ordering_fields = ['name', 'created_at', 'price', 'brand']
     ordering = ['-created_at']
     renderer_classes = [JSONRenderer]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
@@ -64,7 +64,6 @@ class ProductViewSet(viewsets.ModelViewSet):
         category = self.request.query_params.get('category')
         brand = self.request.query_params.get('brand')
         is_active = self.request.query_params.get('is_active')
-        low_stock = self.request.query_params.get('low_stock')
         
         if category:
             queryset = queryset.filter(category=category)
@@ -73,9 +72,6 @@ class ProductViewSet(viewsets.ModelViewSet):
         if is_active is not None:
             is_active_bool = is_active.lower() == 'true'
             queryset = queryset.filter(is_active=is_active_bool)
-        if low_stock is not None:
-            threshold = int(self.request.query_params.get('threshold', 10))
-            queryset = queryset.filter(stock__lt=threshold)
             
         return queryset
 
@@ -95,29 +91,22 @@ class ProductViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def stats(self, request):
         """
-        Return statistics about products for the dashboard:
-        - Total number of products
-        - Total value of inventory
-        - Number of products with low stock
+        Return basic statistics about products
         """
         queryset = self.get_queryset()
         
-        # Calculate stats
         total_products = queryset.count()
+        
         total_value = queryset.aggregate(
-            total=Coalesce(Sum(F('price') * F('stock')), Decimal('0.00'))
+            total=Coalesce(Sum('price'), Decimal('0.00'))
         )['total']
         
-        # Low stock count (less than 10 items)
-        low_stock_threshold = int(request.query_params.get('threshold', 10))
-        low_stock_count = queryset.filter(stock__lt=low_stock_threshold).count()
-        
-        serializer = ProductStatsSerializer(data={
+        data = {
             'total_products': total_products,
-            'total_value': total_value,
-            'low_stock_count': low_stock_count
-        })
+            'total_value': total_value
+        }
         
+        serializer = ProductStatsSerializer(data=data)
         serializer.is_valid(raise_exception=True)
         return Response(serializer.validated_data)
         
@@ -402,7 +391,7 @@ class DashboardViewSet(viewsets.ViewSet):
     def summary(self, request):
         """
         Return dashboard summary data:
-        - KPI numbers (total products, inventory value, low stock, team members)
+        - KPI numbers (total products, inventory value, inactive products, team members)
         - Data completeness percentage
         - Most missing fields
         - Product status counts
@@ -419,16 +408,16 @@ class DashboardViewSet(viewsets.ViewSet):
         # Calculate KPIs
         total_products = queryset.count()
         
+        # Calculate inventory value without using stock
         inventory_value = queryset.aggregate(
-            total=Coalesce(Sum(F('price') * F('stock')), Decimal('0.00'))
+            total=Coalesce(Sum('price'), Decimal('0.00'))
         )['total']
         
         # Convert Decimal to float to avoid serialization issues
         inventory_value = float(inventory_value)
         
-        # Get low stock threshold from settings or default to 10
-        low_stock_threshold = getattr(settings, 'LOW_STOCK_THRESHOLD', 10)
-        low_stock_count = queryset.filter(stock__lt=low_stock_threshold).count()
+        # Count inactive products instead of low stock
+        inactive_product_count = queryset.filter(is_active=False).count()
         
         # Get team members count (in a real app, this would be users in the same company)
         # For now, we'll return a fixed number or the admin user
@@ -469,7 +458,7 @@ class DashboardViewSet(viewsets.ViewSet):
         data = {
             'total_products': total_products,
             'inventory_value': inventory_value,
-            'low_stock_count': low_stock_count,
+            'inactive_product_count': inactive_product_count,
             'team_members': team_members,
             'data_completeness': round(avg_completeness, 1),
             'most_missing_fields': most_missing,
@@ -505,9 +494,9 @@ class DashboardViewSet(viewsets.ViewSet):
         queryset = Product.objects.filter(created_by=request.user)
         
         # In a real app, we would use historical data for accurate trends
-        # For now, we'll generate synthetic data based on current inventory
+        # For now, we'll generate synthetic data based on current inventory value
         current_value = queryset.aggregate(
-            total=Coalesce(Sum(F('price') * F('stock')), Decimal('0.00'))
+            total=Coalesce(Sum('price'), Decimal('0.00'))
         )['total']
         
         # Generate date range

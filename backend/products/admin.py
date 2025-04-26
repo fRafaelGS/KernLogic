@@ -7,7 +7,7 @@ class ProductImageInline(admin.TabularInline):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ('name', 'sku', 'price', 'stock', 'category', 'is_active', 'created_at')
+    list_display = ('name', 'sku', 'price', 'category', 'is_active', 'created_at')
     list_filter = ('is_active', 'category', 'created_at')
     search_fields = ('name', 'sku', 'description')
     date_hierarchy = 'created_at'

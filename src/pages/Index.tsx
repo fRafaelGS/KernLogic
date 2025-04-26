@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { ProgressCard } from "@/components/dashboard/ProgressCard";
-import { RecentActivity } from "@/components/dashboard/RecentActivity";
 import { FileUpload } from "@/components/upload/FileUpload";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DatabaseIcon, PackageIcon, TagIcon, FileTextIcon } from "lucide-react";
@@ -14,7 +13,6 @@ const Index = () => {
   const [stats, setStats] = useState({
     total_products: 0,
     total_value: 0,
-    low_stock: 0
   });
   const navigate = useNavigate();
 
@@ -49,11 +47,6 @@ const Index = () => {
             title="Total Value"
             value={`$${(stats.total_value ?? 0).toFixed(2)}`}
             icon={DatabaseIcon}
-          />
-          <StatCard
-            title="Low Stock Items"
-            value={(stats.low_stock ?? 0).toString()}
-            icon={FileTextIcon}
           />
         </div>
 

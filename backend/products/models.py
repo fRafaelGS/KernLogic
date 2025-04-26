@@ -12,7 +12,6 @@ class Product(models.Model):
     description = models.TextField(blank=True, null=True)
     sku = models.CharField(max_length=50)
     price = models.DecimalField(max_digits=10, decimal_places=2)
-    stock = models.IntegerField(default=0)
     category = models.CharField(max_length=100, blank=True, null=True)
     is_active = models.BooleanField(default=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
@@ -21,7 +20,6 @@ class Product(models.Model):
     
     # Additional Product Information (Optional)
     brand = models.CharField(max_length=100, blank=True, null=True)
-    type = models.CharField(max_length=100, blank=True, null=True)
     unit_of_measure = models.CharField(max_length=50, blank=True, null=True)
     barcode = models.CharField(max_length=100, blank=True, null=True)
     primary_image = models.ImageField(upload_to='products/', blank=True, null=True)
@@ -79,14 +77,13 @@ class Product(models.Model):
     def get_completeness(self):
         """
         Calculate product data completeness as a percentage.
-        Required fields: name, sku, description, price, stock, category, brand
+        Required fields: name, sku, description, price, category, brand
         """
         required_fields = [
             (self.name is not None and self.name.strip() != ''),
             (self.sku is not None and self.sku.strip() != ''),
             (self.description is not None and self.description.strip() != ''),
             (self.price is not None and self.price > 0),
-            (self.stock is not None),
             (self.category is not None and self.category.strip() != ''),
             (self.brand is not None and self.brand.strip() != '')
         ]
@@ -107,8 +104,6 @@ class Product(models.Model):
             missing.append('Description')
         if not self.price or self.price <= 0:
             missing.append('Price')
-        if self.stock is None:
-            missing.append('Stock')
         if not self.category or self.category.strip() == '':
             missing.append('Category')
         if not self.brand or self.brand.strip() == '':

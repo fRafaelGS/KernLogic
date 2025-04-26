@@ -6,8 +6,15 @@ import { componentTagger } from "lovable-tagger";
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
-    host: "::",
+    host: "localhost",
     port: 3003,
+    strictPort: true,
+    hmr: {
+      protocol: "ws",
+      host: "localhost",
+      port: 3003,
+      clientPort: 3003
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:8000',
@@ -31,7 +38,8 @@ export default defineConfig(({ mode }) => ({
         changeOrigin: true,
         secure: false
       }
-    }
+    },
+    cors: true
   },
   plugins: [
     react(),
@@ -43,4 +51,12 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  optimizeDeps: {
+    include: [
+      'react', 
+      'react-dom', 
+      'react-router-dom',
+      '@reduxjs/toolkit'
+    ]
+  }
 }));

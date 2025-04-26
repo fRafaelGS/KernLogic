@@ -50,13 +50,34 @@ const COUNTRY_CODES = [
   "US", "CA", "MX", "UK", "FR", "DE", "ES", "IT", "AU", "JP", "CN", "BR", "IN"
 ];
 
-const PRODUCT_TYPES = [
-  "Physical", "Digital", "Service", "Subscription", "Bundle"
-];
-
 const UNITS_OF_MEASURE = [
   "Each", "Pair", "Pack", "Box", "Case", "Pallet", "Kg", "Gram", "Liter", "Meter"
 ];
+
+// Validation for GTIN (EAN-8, EAN-13, UPC-A, GTIN-14)
+const isValidGTIN = (code: string): boolean => {
+  // Remove any spaces or dashes
+  code = code.replace(/[\s-]/g, '');
+  
+  // Check if the code contains only digits
+  if (!/^\d+$/.test(code)) return false;
+  
+  // Check for valid length
+  if (![8, 12, 13, 14].includes(code.length)) return false;
+  
+  // Checksum validation (Luhn algorithm for GTIN/EAN/UPC)
+  let sum = 0;
+  const parity = code.length % 2;
+  
+  for (let i = 0; i < code.length - 1; i++) {
+    let digit = parseInt(code[i], 10);
+    if (i % 2 === parity) digit *= 3;
+    sum += digit;
+  }
+  
+  const checkDigit = (10 - (sum % 10)) % 10;
+  return checkDigit === parseInt(code[code.length - 1], 10);
+};
 
 // Schema for product form validation
 const productEditSchema = z.object({
@@ -66,18 +87,17 @@ const productEditSchema = z.object({
   price: z.coerce
     .number({ required_error: "Price is required" })
     .min(0, "Price must be positive"),
-  stock: z.coerce
-    .number({ required_error: "Stock is required" })
-    .min(0, "Stock must be positive")
-    .int("Stock must be a whole number"),
   category: z.string().optional(),
   is_active: z.boolean().default(true),
   primary_image: z.any().optional(),
   // New fields
   brand: z.string().optional(),
-  type: z.string().optional(),
   unit_of_measure: z.string().optional(),
-  barcode: z.string().optional(),
+  barcode: z.string()
+    .refine(val => val === '' || isValidGTIN(val), {
+      message: "Invalid GTIN format. Please enter a valid EAN-8, EAN-13, UPC-A, or GTIN-14 code",
+    })
+    .optional(),
   tags: z.array(z.string()).default([]),
   country_availability: z.array(z.string()).default([]),
   attributes: z.record(z.string(), z.string()).default({}),
@@ -121,11 +141,9 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
       description: initialProduct?.description || '',
       sku: initialProduct?.sku || '',
       price: initialProduct?.price || 0,
-      stock: initialProduct?.stock || 0,
       category: initialProduct?.category || '',
       is_active: initialProduct?.is_active ?? true,
       brand: initialProduct?.brand || '',
-      type: initialProduct?.type || '',
       unit_of_measure: initialProduct?.unit_of_measure || '',
       barcode: initialProduct?.barcode || '',
       tags: initialProduct?.tags || [],
@@ -157,11 +175,9 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
         description: initialProduct.description || '',
         sku: initialProduct.sku,
         price: initialProduct.price,
-        stock: initialProduct.stock,
         category: initialProduct.category,
         is_active: initialProduct.is_active,
         brand: initialProduct.brand || '',
-        type: initialProduct.type || '',
         unit_of_measure: initialProduct.unit_of_measure || '',
         barcode: initialProduct.barcode || '',
         tags: initialProduct.tags || [],
@@ -410,55 +426,32 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
                 </div>
 
                 <div className="space-y-2">
-                  <label htmlFor="stock" className="block text-sm font-medium">
-                    Stock *
+                  <label htmlFor="category" className="block text-sm font-medium">
+                    Category
                   </label>
                   <FormField
                     control={form.control}
-                    name="stock"
+                    name="category"
                     render={({ field }) => (
                       <FormItem>
                         <FormControl>
-                          <Input
-                            {...field}
-                            type="number"
-                            min="0"
-                            placeholder="0"
+                          <CreatableSelect
+                            options={categories}
+                            value={field.value}
+                            onChange={(value) => field.onChange(value)}
+                            onCreateOption={handleCreateCategory}
+                            placeholder={categoriesLoading ? "Loading categories..." : "Select or create a category"}
+                            disabled={isLoading || categoriesLoading}
+                            className="w-full"
                           />
                         </FormControl>
-                        <FormMessage />
+                        {field.value && (
+                          <FormMessage />
+                        )}
                       </FormItem>
                     )}
                   />
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="category" className="block text-sm font-medium">
-                  Category
-                </label>
-                <FormField
-                  control={form.control}
-                  name="category"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormControl>
-                        <CreatableSelect
-                          options={categories}
-                          value={field.value}
-                          onChange={(value) => field.onChange(value)}
-                          onCreateOption={handleCreateCategory}
-                          placeholder={categoriesLoading ? "Loading categories..." : "Select or create a category"}
-                          disabled={isLoading || categoriesLoading}
-                          className="w-full"
-                        />
-                      </FormControl>
-                      {field.value && (
-                        <FormMessage />
-                      )}
-                    </FormItem>
-                  )}
-                />
               </div>
 
               <div className="flex items-center space-x-2">
@@ -529,35 +522,6 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
                     )}
                   />
                 </div>
-
-                <div className="space-y-2">
-                  <label htmlFor="type" className="block text-sm font-medium">
-                    Product Type
-                  </label>
-                  <FormField
-                    control={form.control}
-                    name="type"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormControl>
-                          <CreatableSelect
-                            options={PRODUCT_TYPES}
-                            value={field.value || ""}
-                            onChange={(value) => field.onChange(value)}
-                            onCreateOption={async (value) => {
-                              field.onChange(value);
-                              return Promise.resolve();
-                            }}
-                            placeholder="Select or create a product type"
-                            disabled={isLoading}
-                            className="w-full"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -592,7 +556,7 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
 
                 <div className="space-y-2">
                   <label htmlFor="barcode" className="block text-sm font-medium">
-                    Barcode / UPC
+                    GTIN
                   </label>
                   <FormField
                     control={form.control}
@@ -600,12 +564,15 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
                     render={({ field }) => (
                       <FormItem>
                         <FormControl>
-                          <Input {...field} placeholder="Enter barcode number" />
+                          <Input {...field} placeholder="Enter GTIN number" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
+                  <p className="text-xs text-slate-500">
+                    Enter a valid EAN-8, EAN-13, UPC-A, or GTIN-14 code
+                  </p>
                 </div>
               </div>
 

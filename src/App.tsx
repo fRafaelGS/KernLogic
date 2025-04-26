@@ -8,6 +8,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { NewProduct } from '@/pages/NewProduct';
 import { EditProduct } from '@/pages/EditProduct';
+import { ProductDetail } from '@/pages/ProductDetail';
 import LoginPage from '@/pages/auth/LoginPage';
 import RegisterPage from '@/pages/auth/RegisterPage';
 import ProductsPage from "@/pages/ProductsPage";
@@ -124,6 +125,14 @@ export const App: React.FC = () => {
                                         <DashboardLayout>
                                             <NewProduct />
                                         </DashboardLayout>
+                                    </ProtectedRoute>
+                                }
+                            />
+                            <Route
+                                path="/app/products/:id"
+                                element={
+                                    <ProtectedRoute>
+                                        <ProductDetail />
                                     </ProtectedRoute>
                                 }
                             />

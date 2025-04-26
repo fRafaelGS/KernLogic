@@ -5,7 +5,7 @@ import { API_ENDPOINTS, API_URL } from '@/config';
 export interface DashboardSummary {
   total_products: number;
   inventory_value: number;
-  low_stock_count: number;
+  inactive_product_count: number;
   team_members: number;
   data_completeness: number;
   most_missing_fields: { field: string; count: number }[];

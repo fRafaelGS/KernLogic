@@ -37,8 +37,8 @@ class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = [
-            'id', 'name', 'description', 'sku', 'price', 'stock', 'category',
-            'is_active', 'created_at', 'updated_at', 'brand', 'type',
+            'id', 'name', 'description', 'sku', 'price', 'category',
+            'is_active', 'created_at', 'updated_at', 'brand',
             'unit_of_measure', 'barcode', 'tags', 'country_availability',
             'attributes', 'primary_image', 'primary_image_thumb', 'primary_image_large',
             'created_by', 'images'
@@ -131,18 +131,9 @@ class ProductSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Price must be greater than zero.")
         return value
 
-    def validate_stock(self, value):
-        """
-        Check that the stock is not negative
-        """
-        if value < 0:
-            raise serializers.ValidationError("Stock cannot be negative.")
-        return value
-
 class ProductStatsSerializer(serializers.Serializer):
     total_products = serializers.IntegerField()
     total_value = serializers.DecimalField(max_digits=15, decimal_places=2)
-    low_stock_count = serializers.IntegerField()
 
 class ActivitySerializer(serializers.ModelSerializer):
     user_name = serializers.ReadOnlyField(source='user.username')
@@ -159,7 +150,7 @@ class DashboardSummarySerializer(serializers.Serializer):
     """
     total_products = serializers.IntegerField()
     inventory_value = serializers.FloatField()  # Changed from DecimalField to avoid precision issues
-    low_stock_count = serializers.IntegerField()
+    inactive_product_count = serializers.IntegerField()  # New field to replace low_stock_count
     team_members = serializers.IntegerField()
     data_completeness = serializers.FloatField()  # Percentage of complete product data
     

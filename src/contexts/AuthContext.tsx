@@ -21,6 +21,7 @@ interface User {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  role: 'admin' | 'editor' | 'viewer';
 }
 
 interface AuthError {
@@ -52,11 +53,18 @@ interface AuthContextType {
   addNotification: (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => void;
   markAllAsRead: () => void;
   updateUserContext: (updatedUserData: Partial<User>) => void;
-  // Add markAsRead if needed later
+  checkPermission: (permission: string) => boolean;
 }
 
 /* ──────────────────── React context ──────────────────── */
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// Permission mappings based on roles
+const rolePermissions = {
+  admin: ['product.view', 'product.edit', 'product.revert', 'product.delete'],
+  editor: ['product.view', 'product.edit'],
+  viewer: ['product.view']
+};
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -260,6 +268,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     toast.info("You have been logged out.");
   };
 
+  // Check if user has permission
+  const checkPermission = (permission: string): boolean => {
+    if (!user) return false;
+    
+    const userRole = user.role;
+    const permissions = rolePermissions[userRole] || [];
+    
+    return permissions.includes(permission);
+  };
+
   const value = {
     user,
     loading,
@@ -274,6 +292,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     addNotification,
     markAllAsRead,
     updateUserContext,
+    checkPermission,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

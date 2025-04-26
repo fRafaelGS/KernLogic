@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PencilIcon, AlertCircle, RefreshCcw, PlusIcon } from 'lucide-react';
+import { PencilIcon, AlertCircle, RefreshCcw, PlusIcon, ClockIcon } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
 import { toast } from 'sonner';
@@ -8,10 +8,11 @@ import { Product } from '@/services/productService';
 import { productService } from '@/services/productService';
 import { useAuth } from '@/contexts/AuthContext';
 
-import { Card, CardHeader, CardContent, CardTitle } from '@/components/ui/card';
+import { Card, CardHeader, CardContent, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { RichTextEditor } from '@/components/ui/RichTextEditor';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface ProductDetailDescriptionProps {
   product: Product;
@@ -96,11 +97,42 @@ export const ProductDetailDescription: React.FC<ProductDetailDescriptionProps> =
     setEditing(false);
     setSaveError(null);
   };
+
+  // Get the last edit info (mock data - in a real app we'd get this from the product history)
+  const getLastEditInfo = () => {
+    const mockEditorName = user?.name || 'Admin User';
+    const mockEditDate = new Date(product.updated_at || new Date());
+    
+    return {
+      name: mockEditorName,
+      date: mockEditDate,
+      timeAgo: formatDistanceToNow(mockEditDate, { addSuffix: true })
+    };
+  };
+  
+  const lastEdit = getLastEditInfo();
   
   return (
     <Card>
       <CardHeader className="flex flex-row items-start justify-between">
-        <CardTitle>Description</CardTitle>
+        <div>
+          <CardTitle>Description</CardTitle>
+          {product.description && (
+            <CardDescription className="flex items-center mt-1 text-sm text-muted-foreground">
+              <ClockIcon className="h-3 w-3 mr-1" />
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>Last edited by {lastEdit.name} {lastEdit.timeAgo}</span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{format(lastEdit.date, 'PPpp')}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </CardDescription>
+          )}
+        </div>
         {!editing && hasEditPermission && product.description && (
           <Button 
             variant="ghost" 

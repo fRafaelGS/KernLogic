@@ -20,6 +20,7 @@ import {
   type RowSelectionState,
   type ColumnFiltersState,
   type PaginationState,
+  Header,
 } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +55,14 @@ import {
   XIcon,
   PlusIcon,
   ShoppingBagIcon,
+  ArrowUp,
+  ArrowDown,
+  ChevronUp,
+  Filter,
+  MoreVertical,
+  Cloud,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 import { Product, productService, ProductImage } from "@/services/productService";
 import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
@@ -69,6 +78,14 @@ import { useToast } from '@/components/ui/use-toast';
 import { DndContext, useSensor, useSensors, PointerSensor, DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, arrayMove, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useLayoutEffect } from "react";
+import { 
+  Popover, 
+  PopoverContent, 
+  PopoverTrigger 
+} from "@/components/ui/popover";
+import AsyncCreatableSelect from 'react-select/async-creatable';
+import { ActionMeta, OnChangeValue } from 'react-select';
 
 // Define filter state type
 interface FilterState {
@@ -95,19 +112,177 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue;
 }
 
+// SortableTableHeader component for handling sorting
+interface SortableTableHeaderProps {
+  id: string;
+  header: Header<Product, unknown>;
+}
+
+const SortableTableHeader = ({ id, header }: SortableTableHeaderProps) => {
+  const column = header.column;
+  const isSorted = column.getIsSorted();
+  
+  // Skip sort UI for select column
+  if (id === 'select') {
+    return (
+      <TableHead key={header.id} className="p-2 w-10">
+        {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+      </TableHead>
+    );
+  }
+  
+  // Get sort icon
+  const getSortIcon = () => {
+    if (!isSorted) return null;
+    return isSorted === 'asc' ? <ArrowUp className="ml-2 h-4 w-4" /> : <ArrowDown className="ml-2 h-4 w-4" />;
+  };
+
+  // Use tailwind classes for mobile responsiveness
+  const hideOnMobileClass = ['brand', 'barcode', 'created_at', 'tags'].includes(id) ? 'hidden md:table-cell' : '';
+  
+  return (
+    <TableHead
+      key={header.id}
+      className={`p-2 ${hideOnMobileClass}`}
+      onClick={column.getCanSort() ? column.getToggleSortingHandler() : undefined}
+    >
+      <div className="flex items-center">
+        {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+        {column.getCanSort() && (
+          <div className="flex items-center">
+            {getSortIcon()}
+          </div>
+        )}
+      </div>
+    </TableHead>
+  );
+};
+
+interface TableFallbackProps {
+  columns: ColumnDef<Product>[];
+  loading: boolean;
+  filteredData: Product[];
+  debouncedSearchTerm: string;
+  filters: FilterState;
+  handleClearFilters: () => void;
+  handleRefresh: () => void;
+}
+
+const TableFallback = ({
+  columns,
+  loading,
+  filteredData,
+  debouncedSearchTerm,
+  filters,
+  handleClearFilters,
+  handleRefresh
+}: TableFallbackProps) => {
+  if (loading) {
+    return (
+      <>
+        {/* Skeleton Loading Rows with reduced padding */}
+        {Array.from({ length: 5 }).map((_, index) => (
+          <TableRow key={`skeleton-${index}`} className="border-b border-slate-100 bg-white">
+            {columns.map((column, colIndex) => {
+              // Add mobile responsiveness to table cells
+              const columnId = column.id || 
+                // Access accessorKey safely with a type assertion
+                (column as any).accessorKey?.toString() || '';
+              const hideOnMobileClass = ['brand', 'barcode', 'created_at', 'tags'].includes(columnId) ? 'hidden md:table-cell' : '';
+              
+              return (
+                <TableCell key={`skeleton-${index}-${columnId || colIndex}`} className={`px-2 py-2 ${hideOnMobileClass}`}>
+                  <Skeleton className="h-4 w-4/5" /> 
+                </TableCell>
+              );
+            })}
+          </TableRow>
+        ))}
+      </>
+    );
+  }
+  
+  if (filteredData.length === 0) {
+    return (
+      <TableRow>
+        <TableCell colSpan={columns.length} className="h-24 text-center">
+          <div className="flex flex-col items-center justify-center gap-3 py-8">
+            {(!debouncedSearchTerm && !Object.values(filters).some(v => v !== 'all' && v !== '')) ? (
+              // No filters applied - empty product list
+              <>
+                <p className="text-slate-500">No products available yet</p>
+                <Button
+                  size="sm"
+                  className="bg-primary-600 hover:bg-primary-700 text-white"
+                  asChild
+                >
+                  <Link to="/app/products/new">
+                    <span className="flex items-center">
+                      <span className="h-4 w-4 mr-2">+</span>
+                      Add Your First Product
+                    </span>
+                  </Link>
+                </Button>
+              </>
+            ) : (
+              // Filters applied - no matching results
+              <>
+                <p className="text-slate-500">No products match your search criteria</p>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleClearFilters}
+                  className="text-slate-700 hover:bg-slate-100"
+                >
+                  Clear Filters
+                </Button>
+              </>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={loading}
+              className="border-slate-200 text-slate-700"
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Refresh Results
+            </Button>
+          </div>
+        </TableCell>
+      </TableRow>
+    );
+  }
+  
+  return null;
+};
+
+// Add type for category options
+interface CategoryOption {
+  label: string;
+  value: number | string; // Allow string ID if backend uses it
+}
+
+// Add type for raw category data from API
+interface Category {
+  id: number | string;
+  name: string;
+  // Add other category fields if they exist
+}
+
 export function ProductsTable() {
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]); // State for formatted options
   const [editingCell, setEditingCell] = useState<{ rowIndex: number; columnId: string } | null>(null);
   const [editValue, setEditValue] = useState<string>('');
   
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm, 300); // 300ms debounce
   
-  // Add state to store the current product list with IDs for updates
   const [productRowMap, setProductRowMap] = useState<Record<number, number>>({});
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   
@@ -133,60 +308,54 @@ export function ProductsTable() {
     maxPrice: searchParams.get('maxPrice') || '',
   });
 
-  // Add a new state for column ordering
   const [columnOrder, setColumnOrder] = useState<string[]>([]);
-
-  // Create a sensors configuration for drag-and-drop
+  const [filtersVisible, setFiltersVisible] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 5, // 5px
+        distance: 5,
       },
     })
   );
 
-  // Add function to handle drag end
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
-    
     if (over && active.id !== over.id) {
-      // Update column order on drag completion
       setColumnOrder((prevOrder) => {
         const oldIndex = prevOrder.indexOf(active.id.toString());
         const newIndex = prevOrder.indexOf(over.id.toString());
-        
         const newOrder = arrayMove(prevOrder, oldIndex, newIndex);
-        // Save to session storage for persistence
         sessionStorage.setItem('productTableColumnOrder', JSON.stringify(newOrder));
         return newOrder;
       });
     }
   }, []);
 
-  // Function to fetch products
-  const fetchProducts = useCallback(async () => {
+  // Function to fetch products and categories
+  const fetchData = useCallback(async () => {
     if (!isAuthenticated) return;
-    
     setLoading(true);
     setError(null);
-    
     try {
-      // Use getProducts instead of getAllProducts
-      const fetchedProducts = await productService.getProducts();
+      const [fetchedProducts, fetchedCategories]: [Product[], Category[]] = await Promise.all([
+        productService.getProducts(),
+        productService.getCategories() 
+      ]);
       setProducts(fetchedProducts);
+      setCategoryOptions(fetchedCategories.map(c => ({ label: c.name, value: c.id })));
       console.log('Fetched products:', fetchedProducts);
+      console.log('Fetched categories:', fetchedCategories);
     } catch (err) {
-      console.error('Error fetching products:', err);
-      setError('Failed to fetch products');
+      console.error('Error fetching data:', err);
+      setError('Failed to fetch data');
     } finally {
       setLoading(false);
     }
   }, [isAuthenticated]);
 
-  // Replace filteredProducts with filteredData to avoid duplicate declaration
+  // Re-introduce filteredData calculation
   const filteredData = useMemo(() => {
     let filtered = [...products];
-
     // Apply text search
     if (debouncedSearchTerm) {
       const lowerSearchTerm = debouncedSearchTerm.toLowerCase();
@@ -196,23 +365,19 @@ export function ProductsTable() {
         product.description?.toLowerCase().includes(lowerSearchTerm)
       );
     }
-
     // Apply dropdown filters
     if (filters.category && filters.category !== 'all') {
       if (filters.category === 'uncategorized') {
-        // Special case for uncategorized items
         filtered = filtered.filter(product => !product.category || product.category.trim() === '');
       } else {
         filtered = filtered.filter(product => product.category === filters.category);
       }
     }
-    
     if (filters.status !== 'all') {
       filtered = filtered.filter(product => 
         filters.status === 'active' ? product.is_active : !product.is_active
       );
     }
-
     // Apply numeric range filters
     if (filters.minPrice) {
       const min = parseFloat(filters.minPrice);
@@ -220,14 +385,12 @@ export function ProductsTable() {
         filtered = filtered.filter(product => product.price >= min);
       }
     }
-    
     if (filters.maxPrice) {
       const max = parseFloat(filters.maxPrice);
       if (!isNaN(max)) {
         filtered = filtered.filter(product => product.price <= max);
       }
     }
-
     return filtered;
   }, [products, debouncedSearchTerm, filters]);
 
@@ -241,21 +404,21 @@ export function ProductsTable() {
     });
     setProductRowMap(newMap);
   }, [filteredData]);
-  
-  // Fetch products on mount and when auth changes
+
+  // Fetch data on mount and when auth changes
   useEffect(() => {
-    fetchProducts();
-  }, [fetchProducts]);
-  
+    fetchData();
+  }, [fetchData]);
+
   // Handle refresh button click
   const handleRefresh = () => {
     if (isAuthenticated) {
-        console.log('Manually refreshing products list');
+        console.log('Manually refreshing data');
         setLoading(true);
-        fetchProducts();
+        fetchData();
     } else {
         console.log('Manual refresh skipped, not authenticated.');
-        toast({ title: 'Please log in to refresh products.', variant: 'default' });
+        toast({ title: 'Please log in to refresh data.', variant: 'default' });
     }
   };
   
@@ -277,16 +440,17 @@ export function ProductsTable() {
       try {
         await productService.deleteProduct(productId);
         toast({ title: 'Product marked as inactive successfully', variant: 'default' });
-        fetchProducts();
+        fetchData();
       } catch (error: any) {
         console.error('Error deleting product via service:', error);
         toast({ title: error.message || 'Failed to delete product', variant: 'destructive' });
       }
     }
-  }, [fetchProducts]);
+  }, [fetchData]);
 
+  // Update the handleFilterToggle function to toggle filtersVisible
   const handleFilterToggle = useCallback(() => {
-    setFilters(prev => ({ ...prev, category: 'all', status: 'all', minPrice: '', maxPrice: '' }));
+    setFiltersVisible(prev => !prev);
   }, []);
 
   const handleFilterChange = useCallback(<K extends keyof FilterState>(
@@ -334,7 +498,7 @@ export function ProductsTable() {
         await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
         toast({ title: `${selectedIds.length} product(s) deleted successfully (simulated).`, variant: 'default' });
         setRowSelection({}); // Clear selection
-        fetchProducts(); // Refresh data
+        fetchData(); // Refresh data
       } catch (error: any) {
         console.error("Bulk delete error:", error);
         toast({ title: error.message || "Failed to delete selected products.", variant: 'destructive' });
@@ -362,7 +526,7 @@ export function ProductsTable() {
       await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
       toast({ title: `${selectedIds.length} product(s) marked as ${actionText} (simulated).`, variant: 'default' });
       setRowSelection({}); // Clear selection
-      fetchProducts(); // Refresh data
+      fetchData(); // Refresh data
     } catch (error: any) {
       console.error("Bulk status update error:", error);
       toast({ title: error.message || `Failed to update status for selected products.`, variant: 'destructive' });
@@ -448,9 +612,9 @@ export function ProductsTable() {
       toast({ title: 'Failed to update product', variant: 'destructive' });
       
       // Revert optimistic update
-      fetchProducts();
+      fetchData();
     }
-  }, [fetchProducts, productRowMap, toast]);
+  }, [fetchData, productRowMap, toast]);
 
   // Move the price cell input handler to avoid recreating it on each render
   const handlePriceCellChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -470,7 +634,16 @@ export function ProductsTable() {
   // Handle saving cell edit
   const handleSaveCellEdit = useCallback(() => {
     if (editingCell) {
-      updateData(editingCell.rowIndex, editingCell.columnId, editValue);
+      // Special handling for tags - convert comma-separated string to array
+      if (editingCell.columnId === 'tags') {
+        const tagsArray = editValue
+          .split(',')
+          .map(tag => tag.trim())
+          .filter(Boolean); // Remove empty strings
+        updateData(editingCell.rowIndex, editingCell.columnId, tagsArray);
+      } else {
+        updateData(editingCell.rowIndex, editingCell.columnId, editValue);
+      }
     }
   }, [editingCell, editValue, updateData]);
 
@@ -488,46 +661,85 @@ export function ProductsTable() {
     }
   }, [handleSaveCellEdit, handleCancelEdit]);
 
+  // Add state for tag options
+  const [tagOptions, setTagOptions] = useState<{ label: string; value: string }[]>([]);
+
+  // Fetch tags on component mount
+  useEffect(() => {
+    const loadTags = async () => {
+      try {
+        const tags = await productService.searchTags("");
+        setTagOptions(tags);
+      } catch (error) {
+        console.error("Failed to load tags:", error);
+      }
+    };
+    loadTags();
+  }, []);
+
+  // Improve the function to handle tag creation for inline editing
+  const handleCreateTagOption = useCallback(async (inputValue: string) => {
+    if (!inputValue) return;
+    try {
+      const newTag = await productService.createTag({ name: inputValue });
+      const newOption = { label: newTag.name, value: newTag.id };
+      
+      // Add to options state
+      setTagOptions((prev) => {
+        // Avoid duplicates
+        if (prev.some(tag => tag.value === newTag.id)) {
+          return prev;
+        }
+        return [...prev, newOption];
+      });
+      
+      // If currently editing tags, update the current product
+      if (editingCell && editingCell.columnId === 'tags') {
+        const productId = productRowMap[editingCell.rowIndex];
+        const product = products.find(p => p.id === productId);
+        
+        if (product) {
+          const currentTags = [...(product.tags || [])];
+          // Add the new tag if it's not already there
+          if (!currentTags.includes(newTag.id)) {
+            updateData(editingCell.rowIndex, 'tags', [...currentTags, newTag.id]);
+          }
+        }
+      }
+      
+      // Show success message
+      toast({ title: `Tag "${inputValue}" created`, variant: "default" });
+      
+      return newOption;
+    } catch (error) {
+      console.error("Error creating tag:", error);
+      toast({ title: 'Failed to create tag', variant: 'destructive' });
+    }
+  }, [editingCell, productRowMap, products, updateData, toast]);
+
   // Stabilize column definitions with useMemo
   const columns = useMemo<ColumnDef<Product>[]>(() => [
     {
       id: "select",
       header: ({ table }) => (
-        <div className="flex items-center space-x-1">
+        <div className="px-1">
           <Checkbox
-            checked={table.getIsAllPageRowsSelected()}
+            checked={
+              table.getIsAllPageRowsSelected() ||
+              (table.getIsSomePageRowsSelected() ? "indeterminate" : false)
+            }
             onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
             aria-label="Select all"
-            className="ml-1"
           />
-          <Button
-            variant="outline"
-            className="h-8 capitalize ml-2"
-            onClick={() => table.toggleAllPageRowsSelected(table.getIsAllPageRowsSelected() ? false : true)}
-          >
-            {table.getIsAllPageRowsSelected() ? "Deselect All" : "Select All"}
-          </Button>
         </div>
       ),
       cell: ({ row }) => (
-        <div className="flex items-center space-x-2">
+        <div className="px-1" onClick={(e) => e.stopPropagation()}>
           <Checkbox
             checked={row.getIsSelected()}
             onCheckedChange={(value) => row.toggleSelected(!!value)}
             aria-label="Select row"
-            className="ml-1"
           />
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-7 w-7"
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/app/products/${row.original.id}`);
-            }}
-          >
-            <EditIcon className="h-4 w-4" />
-          </Button>
         </div>
       ),
       enableSorting: false,
@@ -619,9 +831,9 @@ export function ProductsTable() {
         const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.columnId === 'sku';
         
         return isEditing ? (
-          <div className="flex space-x-2 w-full" onClick={(e) => e.stopPropagation()}>
+          <div className="flex space-x-2 w-full p-1" onClick={(e) => e.stopPropagation()}>
             <Input
-              className="h-8 w-full"
+              className="h-8 w-full min-w-[120px]"
               autoFocus
               value={editValue}
               onChange={(e) => setEditValue(e.target.value)}
@@ -637,11 +849,12 @@ export function ProductsTable() {
           </div>
         ) : (
           <div
-            className="truncate cursor-pointer hover:text-primary transition-colors"
+            className="truncate cursor-pointer hover:text-primary transition-colors p-1"
             onClick={(e) => {
               e.stopPropagation();
               handleCellEdit(rowIndex, 'sku', value);
             }}
+            data-editable="true"
           >
             {value}
           </div>
@@ -675,9 +888,9 @@ export function ProductsTable() {
         const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.columnId === 'name';
         
         return isEditing ? (
-          <div className="flex space-x-2 w-full" onClick={(e) => e.stopPropagation()}>
+          <div className="flex space-x-2 w-full p-1" onClick={(e) => e.stopPropagation()}>
             <Input
-              className="h-8 w-full"
+              className="h-8 w-full min-w-[150px]"
               autoFocus
               value={editValue}
               onChange={(e) => setEditValue(e.target.value)}
@@ -693,7 +906,7 @@ export function ProductsTable() {
           </div>
         ) : (
           <div
-            className="truncate cursor-pointer hover:text-primary transition-colors font-medium"
+            className="truncate cursor-pointer hover:text-primary transition-colors font-medium p-1"
             onClick={(e) => {
               e.stopPropagation();
               handleCellEdit(rowIndex, 'name', value);
@@ -728,45 +941,56 @@ export function ProductsTable() {
       },
       cell: ({ row }) => {
         const rowIndex = row.index;
-        const value = row.getValue("category") as string || "";
+        const categoryValue = row.getValue("category") as string | undefined;
         const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.columnId === 'category';
         
+        // Find the current option object for the select value
+        const currentOption = categoryOptions.find(opt => opt.label === categoryValue) || 
+                             (categoryValue ? { label: categoryValue, value: categoryValue } : null);
+
         if (isEditing) {
           return (
-            <div className="flex space-x-2 w-full" onClick={(e) => e.stopPropagation()}>
-              <Select
-                defaultValue={value}
-                onValueChange={(newValue) => {
-                  setEditValue(newValue);
-                  setTimeout(() => handleSaveCellEdit(), 100);
+            <div className="min-w-[150px] p-1" onClick={(e) => e.stopPropagation()}>
+              <AsyncCreatableSelect
+                cacheOptions
+                defaultOptions={categoryOptions} // Show initially fetched categories
+                loadOptions={productService.searchCategories} // Function to search server-side
+                onCreateOption={async (inputValue) => {
+                  if (!inputValue) return;
+                  try {
+                    const newCategory = await productService.createCategory({ name: inputValue });
+                    const newOption = { label: newCategory.name, value: newCategory.id };
+                    setCategoryOptions((prev) => [...prev, newOption]);
+                    // Update the cell value immediately
+                    updateData(rowIndex, 'category', newCategory.name); // Update with name or ID based on backend
+                  } catch (error) {
+                     console.error("Error creating category:", error);
+                     toast({ title: 'Failed to create category', variant: 'destructive' });
+                  }
                 }}
-              >
-                <SelectTrigger className="h-8 w-full">
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {uniqueCategories.map((category) => (
-                    <SelectItem key={category} value={category}>
-                      {category}
-                    </SelectItem>
-                  ))}
-                  <SelectItem value="">Uncategorized</SelectItem>
-                </SelectContent>
-              </Select>
+                onChange={(newValue: OnChangeValue<CategoryOption, false>) => {
+                  if (newValue) {
+                    updateData(rowIndex, 'category', newValue.label); // Update with label or value based on backend
+                  }
+                }}
+                value={currentOption}
+                placeholder="Search or create..."
+                // Add styling if needed
+              />
             </div>
           );
         }
         
         return (
           <div 
-            className="w-[100px] truncate cursor-pointer hover:text-primary transition-colors"
+            className="truncate cursor-pointer hover:text-primary transition-colors p-1"
             onClick={(e) => {
               e.stopPropagation();
-              handleCellEdit(rowIndex, 'category', value);
+              handleCellEdit(rowIndex, 'category', categoryValue || '');
             }}
             data-editable="true"
           >
-            {value || "—"}
+            {categoryValue || "Uncategorized"}
           </div>
         );
       },
@@ -799,9 +1023,9 @@ export function ProductsTable() {
         
         if (isEditing) {
           return (
-            <div className="flex space-x-2 w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="flex space-x-2 w-full p-1" onClick={(e) => e.stopPropagation()}>
               <Input
-                className="h-8 w-full"
+                className="h-8 w-full min-w-[120px]"
                 autoFocus
                 value={editValue}
                 onChange={(e) => setEditValue(e.target.value)}
@@ -820,7 +1044,7 @@ export function ProductsTable() {
         
         return (
           <div 
-            className="w-[100px] truncate cursor-pointer hover:text-primary transition-colors"
+            className="truncate cursor-pointer hover:text-primary transition-colors p-1"
             onClick={(e) => {
               e.stopPropagation();
               handleCellEdit(rowIndex, 'brand', value);
@@ -835,27 +1059,108 @@ export function ProductsTable() {
     },
     {
       accessorKey: "tags",
-      header: "Tags",
+      header: ({column}) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="p-0 hover:bg-transparent"
+          >
+            <span>Tags</span>
+            {column.getIsSorted() === "asc" ? (
+              <ArrowUpDown className="ml-1 h-4 w-4" />
+            ) : column.getIsSorted() === "desc" ? (
+              <ArrowUpDown className="ml-1 h-4 w-4" />
+            ) : (
+              <ArrowUpDown className="ml-1 h-4 w-4 opacity-30" />
+            )}
+          </Button>
+        );
+      },
       cell: ({ row }) => {
-        const tags = row.getValue("tags") as string[] | undefined;
+        const rowIndex = row.index;
+        const tags = (row.getValue("tags") as string[] | undefined) || [];
+        const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.columnId === 'tags';
+        
+        // Convert tag strings/IDs to options for react-select
+        const currentTagOptions = tags.map(tag => {
+          // Check if this tag exists in our tagOptions
+          const existingOption = tagOptions.find(opt => opt.value === tag || opt.label === tag);
+          if (existingOption) {
+            return existingOption;
+          }
+          // If not found, create a new option
+          return { label: tag, value: tag };
+        });
+
+        if (isEditing) {
+          return (
+            <div className="min-w-[200px] p-1" onClick={(e) => e.stopPropagation()}>
+              <AsyncCreatableSelect
+                isMulti
+                cacheOptions
+                defaultOptions={tagOptions} // Use loaded tagOptions 
+                loadOptions={productService.searchTags}
+                onCreateOption={handleCreateTagOption}
+                onChange={(newValue: OnChangeValue<{ label: string; value: string }, true>) => {
+                  const newTags = newValue ? newValue.map(option => option.value) : [];
+                  updateData(rowIndex, 'tags', newTags);
+                }}
+                value={currentTagOptions}
+                placeholder="Add or create tags..."
+                className="min-w-[200px]"
+                menuPortalTarget={document.body}
+                styles={{
+                  menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                }}
+              />
+            </div>
+          );
+        }
         
         return (
-          <div className="flex flex-wrap gap-1 max-w-[150px]">
+          <div 
+            className="flex flex-wrap gap-1 max-w-[150px] cursor-pointer group p-1"
+            onClick={(e) => {
+              e.stopPropagation();
+              // Start editing this cell
+              handleCellEdit(rowIndex, 'tags', tags.length > 0 ? tags.join(',') : '');
+            }}
+            data-editable="true"
+          >
             {tags && tags.length > 0 ? (
-              tags.slice(0, 2).map((tag, i) => (
-                <Badge key={i} variant="outline" className="text-xs whitespace-nowrap">
-                  {tag}
-                </Badge>
-              ))
+              <>
+                {tags.slice(0, 2).map((tag, i) => (
+                  <Badge key={i} variant="outline" className="text-xs whitespace-nowrap">
+                    {tag}
+                  </Badge>
+                ))}
+                {tags.length > 2 && (
+                  <Badge variant="outline" className="text-xs">
+                    +{tags.length - 2}
+                  </Badge>
+                )}
+              </>
             ) : (
-              "—"
+              <span className="text-slate-400 group-hover:text-primary transition-colors">
+                Add tags
+              </span>
             )}
-            {tags && tags.length > 2 && (
-              <Badge variant="outline" className="text-xs">+{tags.length - 2}</Badge>
-            )}
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-5 w-5 ml-1 opacity-0 group-hover:opacity-100"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCellEdit(rowIndex, 'tags', tags.length > 0 ? tags.join(',') : '');
+              }}
+            >
+              <PlusIcon className="h-3 w-3" />
+            </Button>
           </div>
         );
       },
+      enableSorting: true,
     },
     {
       accessorKey: "barcode",
@@ -884,9 +1189,9 @@ export function ProductsTable() {
         
         if (isEditing) {
           return (
-            <div className="flex space-x-2 w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="flex space-x-2 w-full p-1" onClick={(e) => e.stopPropagation()}>
               <Input
-                className="h-8 w-full"
+                className="h-8 w-full min-w-[120px]"
                 autoFocus
                 value={editValue}
                 onChange={(e) => setEditValue(e.target.value)}
@@ -905,7 +1210,7 @@ export function ProductsTable() {
         
         return (
           <div 
-            className="truncate cursor-pointer hover:text-primary transition-colors font-mono text-sm"
+            className="truncate cursor-pointer hover:text-primary transition-colors font-mono text-sm p-1"
             onClick={(e) => {
               e.stopPropagation();
               handleCellEdit(rowIndex, 'barcode', value);
@@ -920,7 +1225,24 @@ export function ProductsTable() {
     },
     {
       accessorKey: 'price',
-      header: 'Price',
+      header: ({column}) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="p-0 hover:bg-transparent"
+          >
+            <span>Price</span>
+            {column.getIsSorted() === "asc" ? (
+              <ArrowUpDown className="ml-1 h-4 w-4" />
+            ) : column.getIsSorted() === "desc" ? (
+              <ArrowUpDown className="ml-1 h-4 w-4" />
+            ) : (
+              <ArrowUpDown className="ml-1 h-4 w-4 opacity-30" />
+            )}
+          </Button>
+        );
+      },
       cell: ({ row, column, table }) => {
         const rowIndex = row.index;
         const value = row.getValue('price');
@@ -928,14 +1250,18 @@ export function ProductsTable() {
         const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.columnId === 'price';
 
         return isEditing ? (
-          <div className="flex space-x-2">
-          <Input
-              className="h-8 w-20"
-              autoFocus
-              value={editValue}
-              onChange={handlePriceCellChange}
-            onKeyDown={handleKeyDown}
-            />
+          <div className="flex space-x-2 p-1" onClick={(e) => e.stopPropagation()}>
+            <div className="relative w-full min-w-[100px]">
+              <span className="absolute left-2 top-1/2 -translate-y-1/2">$</span>
+              <Input
+                className="h-8 w-full pl-6"
+                autoFocus
+                value={editValue}
+                onChange={handlePriceCellChange}
+                onKeyDown={handleKeyDown}
+                onBlur={handleSaveCellEdit}
+              />
+            </div>
             <Button size="sm" variant="ghost" onClick={handleSaveCellEdit}>
               <CheckIcon className="h-4 w-4" />
             </Button>
@@ -945,13 +1271,18 @@ export function ProductsTable() {
           </div>
         ) : (
           <div 
-            className="cursor-pointer hover:text-primary transition-colors"
-            onClick={() => handleCellEdit(rowIndex, 'price', formattedValue)}
-           >
+            className="cursor-pointer hover:text-primary transition-colors p-1"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleCellEdit(rowIndex, 'price', formattedValue);
+            }}
+            data-editable="true"
+          >
             ${formattedValue}
           </div>
         );
       },
+      enableSorting: true,
     },
     {
       accessorKey: "is_active",
@@ -977,20 +1308,41 @@ export function ProductsTable() {
         const isActive = row.getValue("is_active") as boolean;
         const productId = row.original.id;
         
+        const handleToggleStatus = (e: React.MouseEvent) => {
+          e.stopPropagation();
+          if (productId) {
+            // Create a new product object with toggled status
+            const updatedData = {
+              is_active: !isActive
+            };
+            
+            // Optimistically update UI
+            setProducts(prev =>
+              prev.map(p => (p.id === productId ? { ...p, is_active: !isActive } : p))
+            );
+            
+            // Call API to update
+            productService.updateProduct(productId, updatedData)
+              .then(() => {
+                toast({ title: `Product ${!isActive ? 'activated' : 'deactivated'}`, variant: 'default' });
+              })
+              .catch((error) => {
+                toast({ title: 'Failed to update status', variant: 'destructive' });
+                // Revert optimistic update
+                fetchData();
+              });
+          }
+        };
+        
         return (
           <div 
-            className="cursor-pointer"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (productId) {
-                handleStatusChange(productId);
-              }
-            }}
+            className="cursor-pointer p-1"
+            onClick={handleToggleStatus}
             data-editable="true"
           >
             <Badge 
               variant={isActive ? "default" : "secondary"} 
-              className={isActive ? "bg-green-100 text-green-800 hover:bg-green-200" : "bg-gray-100 text-gray-800 hover:bg-gray-200"}
+              className={`w-[80px] justify-center ${isActive ? "bg-green-100 text-green-800 hover:bg-green-200" : "bg-gray-100 text-gray-800 hover:bg-gray-200"}`}
             >
               {isActive ? "Active" : "Inactive"}
             </Badge>
@@ -1001,7 +1353,24 @@ export function ProductsTable() {
     },
     {
       accessorKey: "created_at",
-      header: "Created",
+      header: ({column}) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="p-0 hover:bg-transparent"
+          >
+            <span>Created</span>
+            {column.getIsSorted() === "asc" ? (
+              <ArrowUpDown className="ml-1 h-4 w-4" />
+            ) : column.getIsSorted() === "desc" ? (
+              <ArrowUpDown className="ml-1 h-4 w-4" />
+            ) : (
+              <ArrowUpDown className="ml-1 h-4 w-4 opacity-30" />
+            )}
+          </Button>
+        );
+      },
       cell: ({ row }) => {
         const dateString = row.getValue("created_at") as string;
         
@@ -1013,10 +1382,29 @@ export function ProductsTable() {
         
         return <div>{formattedDate}</div>;
       },
+      sortingFn: 'datetime',
+      enableSorting: true,
     },
     {
       accessorKey: "updated_at",
-      header: "Last Modify",
+      header: ({column}) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="p-0 hover:bg-transparent"
+          >
+            <span>Last Modify</span>
+            {column.getIsSorted() === "asc" ? (
+              <ArrowUpDown className="ml-1 h-4 w-4" />
+            ) : column.getIsSorted() === "desc" ? (
+              <ArrowUpDown className="ml-1 h-4 w-4" />
+            ) : (
+              <ArrowUpDown className="ml-1 h-4 w-4 opacity-30" />
+            )}
+          </Button>
+        );
+      },
       cell: ({ row }) => {
         const dateString = row.getValue("updated_at") as string;
         
@@ -1028,6 +1416,8 @@ export function ProductsTable() {
         
         return <div>{formattedDate}</div>;
       },
+      sortingFn: 'datetime',
+      enableSorting: true,
     },
   ], [
     editingCell, 
@@ -1037,7 +1427,9 @@ export function ProductsTable() {
     handleSaveCellEdit, 
     handleCancelEdit, 
     handleCellEdit,
-    navigate
+    navigate,
+    categoryOptions, // Add dependency
+    handleCreateTagOption // Add dependency
   ]);
 
   // Initialize column order from saved state or create default order
@@ -1045,30 +1437,62 @@ export function ProductsTable() {
     // Only attempt to get column IDs if columns array has items
     if (columns.length === 0) return;
     
-    const savedOrder = sessionStorage.getItem('productTableColumnOrder');
-    if (savedOrder) {
+    const loadUserPreferences = () => {
       try {
-        setColumnOrder(JSON.parse(savedOrder));
+        // Load column order
+        const savedOrder = localStorage.getItem('productTableColumnOrder');
+        if (savedOrder) {
+          try {
+            const parsedOrder = JSON.parse(savedOrder);
+            // Validate that parsedOrder is an array and filter out any null/undefined values
+            if (Array.isArray(parsedOrder) && parsedOrder.length > 0) {
+              setColumnOrder(parsedOrder.filter(Boolean));
+            } else {
+              // Fall back to default if saved order is invalid
+              createDefaultOrder();
+            }
+          } catch (e) {
+            console.error('Error parsing columnOrder from localStorage:', e);
+            createDefaultOrder();
+          }
+        } else {
+          createDefaultOrder();
+        }
+        
+        // Load column visibility
+        const savedVisibility = localStorage.getItem('productTableColumnVisibility');
+        if (savedVisibility) {
+          setColumnVisibility(JSON.parse(savedVisibility));
+        }
+        
+        // Load page size
+        const savedPageSize = localStorage.getItem('productTablePageSize');
+        if (savedPageSize) {
+          setPagination(prev => ({
+            ...prev,
+            pageSize: parseInt(savedPageSize, 10)
+          }));
+        }
       } catch (e) {
-        // If parsing fails, initialize with default order
-        const defaultOrder = columns.map((column) => {
-          // Safely access column id or accessorKey with type checking
+        console.error('Error loading user preferences:', e);
+        createDefaultOrder();
+      }
+    };
+    
+    const createDefaultOrder = () => {
+      // Initialize with default order
+      const defaultOrder = columns
+        .map((column) => {
           return column.id || 
             // @ts-ignore - handle accessorKey which may exist on some column types
             (column.accessorKey ? column.accessorKey.toString() : '');
-        });
-        setColumnOrder(defaultOrder);
-      }
-    } else {
-      // No saved order, use default from columns
-      const defaultOrder = columns.map((column) => {
-        // Safely access column id or accessorKey with type checking
-        return column.id || 
-          // @ts-ignore - handle accessorKey which may exist on some column types
-          (column.accessorKey ? column.accessorKey.toString() : '');
-      });
+        })
+        .filter(Boolean); // Filter out any null or empty strings
+      
       setColumnOrder(defaultOrder);
-    }
+    };
+    
+    loadUserPreferences();
   }, [columns]);
 
   // Configure the table with useReactTable
@@ -1154,8 +1578,54 @@ export function ProductsTable() {
   console.log('[ProductsTable Render] Table Row Count:', table.getRowModel().rows?.length);
   // --- END DEBUGGING LOGS ---
 
+  // Add column filter state and handlers
+  const [columnFilterValues, setColumnFilterValues] = useState<Record<string, any>>({});
+
+  // Handle column filter change
+  const handleColumnFilterChange = useCallback((columnId: string, value: any) => {
+    setColumnFilterValues(prev => ({
+      ...prev,
+      [columnId]: value
+    }));
+    
+    // Update the table filter state
+    table.setColumnFilters(prev => {
+      const existing = prev.find(filter => filter.id === columnId);
+      if (!value) {
+        // Remove filter if value is empty
+        return prev.filter(filter => filter.id !== columnId);
+      }
+      
+      if (existing) {
+        // Update existing filter
+        return prev.map(filter => 
+          filter.id === columnId ? { id: columnId, value } : filter
+        );
+      }
+      
+      // Add new filter
+      return [...prev, { id: columnId, value }];
+    });
+  }, [table]);
+
+  // Save user preferences when they change
+  useEffect(() => {
+    // Save column order
+    localStorage.setItem('productTableColumnOrder', JSON.stringify(columnOrder));
+  }, [columnOrder]);
+
+  useEffect(() => {
+    // Save column visibility
+    localStorage.setItem('productTableColumnVisibility', JSON.stringify(columnVisibility));
+  }, [columnVisibility]);
+
+  useEffect(() => {
+    // Save page size
+    localStorage.setItem('productTablePageSize', JSON.stringify(pagination.pageSize));
+  }, [pagination.pageSize]);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 px-4 sm:px-6 lg:px-8 w-full">
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-4 justify-between">
         <div className="flex flex-col sm:flex-row gap-3 items-center">
@@ -1175,11 +1645,12 @@ export function ProductsTable() {
             onClick={handleFilterToggle}
             className={cn(
               "border-enterprise-200 text-enterprise-700 hover:bg-enterprise-50",
-              table.getState().columnVisibility.category && "bg-enterprise-100 border-primary-300 text-primary-700"
+              filtersVisible && "bg-enterprise-100 border-primary-300 text-primary-700"
             )}
           >
             <FilterIcon className="h-4 w-4 mr-2" />
-            Filter {table.getState().columnVisibility.category ? '(Hide)' : '(Show)'}
+            Filter
+            <ChevronDown className={cn("h-4 w-4 ml-2 transition-transform", filtersVisible && "rotate-180")} />
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -1295,7 +1766,7 @@ export function ProductsTable() {
       <div
         className={cn(
           "overflow-hidden transition-all duration-300 ease-in-out",
-          table.getState().columnVisibility.category ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0"
+          filtersVisible ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0"
         )}
       >
         <div className="bg-enterprise-50 border border-enterprise-200 rounded-lg p-4 mb-6">
@@ -1382,7 +1853,7 @@ export function ProductsTable() {
       </div>
 
       {/* Table Section */}
-      <div className="bg-slate-50 border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+      <div className="bg-slate-50 border border-slate-200 rounded-lg relative h-[calc(100vh-200px)] shadow-sm">
         {/* Selected Row Count Info */}         
         {Object.keys(table.getState().rowSelection).length > 0 && (
            <div className="px-4 py-2 text-sm text-slate-600 border-b bg-slate-100 font-medium">
@@ -1390,316 +1861,352 @@ export function ProductsTable() {
                {table.getFilteredRowModel().rows.length} row(s) selected.
            </div>
         )}
-        <div className="overflow-x-auto">
+        <Table className="w-full">
+          <TableHeader className="w-full">
+            {table.getHeaderGroups().map(headerGroup => (
+              <React.Fragment key={headerGroup.id}>
+                {/* 1) Column titles */}
+                <TableRow className="sticky top-0 z-20 bg-slate-100 border-b border-slate-200">
+                  {headerGroup.headers.map(header =>
+                    <SortableTableHeader key={header.id} id={header.column.id} header={header}/>
+                  )}
+                </TableRow>
+
+                {/* 2) Filter inputs - Always visible now */}
+                <TableRow className="sticky top-12 z-10 bg-slate-50 border-b border-slate-200">
+                  {headerGroup.headers.map((header) => {
+                    const column = header.column;
+                    const columnId = column.id;
+                    
+                    // Skip filter UI for select column
+                    if (columnId === 'select') {
+                      return <TableHead key={`filter-${columnId}`} className="px-2 py-2" />;
+                    }
+                    
+                    // Skip filter UI for thumbnail column
+                    if (columnId === 'thumbnail') {
+                      return <TableHead key={`filter-${columnId}`} className="px-2 py-2" />;
+                    }
+                    
+                    // Use tailwind classes for mobile responsiveness
+                    const hideOnMobileClass = ['brand', 'barcode', 'created_at', 'tags'].includes(columnId) ? 'hidden md:table-cell' : '';
+                    
+                    return (
+                      <TableHead key={`filter-${columnId}`} className={`px-2 py-2 ${hideOnMobileClass}`}>
+                        {(() => {
+                          // Text input filter for text columns
+                          if (['name', 'sku', 'brand', 'barcode'].includes(columnId)) {
+                            return (
+                              <Input
+                                placeholder={`Filter...`}
+                                value={(table.getColumn(columnId)?.getFilterValue() as string) ?? ''}
+                                onChange={(e) => {
+                                  column.setFilterValue(e.target.value);
+                                  handleColumnFilterChange(columnId, e.target.value);
+                                }}
+                                className="h-8 text-xs"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            );
+                          }
+                          
+                          // Dropdown filter for category
+                          if (columnId === 'category') {
+                            return (
+                              <Select
+                                value={(table.getColumn(columnId)?.getFilterValue() as string) ?? ''}
+                                onValueChange={(value) => {
+                                  // Handle special values:
+                                  // 1. "all" - clears the filter completely (undefined)
+                                  // 2. "uncategorized" - sets filter to empty string to find products with no category
+                                  let filterValue;
+                                  if (value === "all") {
+                                    filterValue = undefined;
+                                  } else if (value === "uncategorized") {
+                                    filterValue = "";
+                                  } else {
+                                    filterValue = value;
+                                  }
+                                  column.setFilterValue(filterValue);
+                                  handleColumnFilterChange(columnId, filterValue);
+                                }}
+                              >
+                                <SelectTrigger className="h-8 text-xs" onClick={(e) => e.stopPropagation()}>
+                                  <SelectValue placeholder="Filter..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">All Categories</SelectItem>
+                                  <SelectItem value="uncategorized">Uncategorized</SelectItem>
+                                  {uniqueCategories.map((category) => (
+                                    <SelectItem key={category} value={category || "uncategorized"}>
+                                      {category || "Uncategorized"}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            );
+                          }
+                          
+                          // Dropdown filter for status
+                          if (columnId === 'is_active') {
+                            return (
+                              <Select
+                                value={(table.getColumn(columnId)?.getFilterValue() as string) ?? ''}
+                                onValueChange={(value) => {
+                                  // Convert "all" to undefined to clear the filter
+                                  const filterValue = value === "all" ? undefined : value;
+                                  column.setFilterValue(filterValue);
+                                  handleColumnFilterChange(columnId, filterValue);
+                                }}
+                              >
+                                <SelectTrigger className="h-8 text-xs" onClick={(e) => e.stopPropagation()}>
+                                  <SelectValue placeholder="Filter..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">All</SelectItem>
+                                  <SelectItem value="true">Active</SelectItem>
+                                  <SelectItem value="false">Inactive</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            );
+                          }
+                          
+                          // Price range filter
+                          if (columnId === 'price') {
+                            const priceRange = table.getColumn(columnId)?.getFilterValue() as [number, number] | undefined;
+                            
+                            return (
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="h-8 text-xs w-full justify-between"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    {priceRange ? `$${priceRange[0]} - $${priceRange[1]}` : 'Filter price'}
+                                    <ChevronDown className="h-3 w-3 opacity-50" />
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-80" onClick={(e) => e.stopPropagation()}>
+                                  <div className="space-y-2">
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <div className="space-y-1">
+                                        <Label htmlFor="min-price">Min Price</Label>
+                                        <Input
+                                          id="min-price"
+                                          type="number"
+                                          min={0}
+                                          placeholder="Min"
+                                          value={priceRange?.[0] ?? ''}
+                                          onChange={(e) => {
+                                            const min = e.target.value ? Number(e.target.value) : 0;
+                                            const max = priceRange?.[1] ?? Infinity;
+                                            column.setFilterValue([min, max]);
+                                            handleColumnFilterChange(columnId, [min, max]);
+                                          }}
+                                        />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <Label htmlFor="max-price">Max Price</Label>
+                                        <Input
+                                          id="max-price"
+                                          type="number"
+                                          min={0}
+                                          placeholder="Max"
+                                          value={priceRange?.[1] ?? ''}
+                                          onChange={(e) => {
+                                            const min = priceRange?.[0] ?? 0;
+                                            const max = e.target.value ? Number(e.target.value) : Infinity;
+                                            column.setFilterValue([min, max]);
+                                            handleColumnFilterChange(columnId, [min, max]);
+                                          }}
+                                        />
+                                      </div>
+                                    </div>
+                                    <div className="flex justify-end">
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                          column.setFilterValue(undefined);
+                                          handleColumnFilterChange(columnId, undefined);
+                                        }}
+                                      >
+                                        Reset
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
+                            );
+                          }
+                          
+                          // Date range filter for created_at and updated_at
+                          if (['created_at', 'updated_at'].includes(columnId)) {
+                            return (
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="h-8 text-xs w-full justify-between"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    {column.getFilterValue() ? 'Date filtered' : 'Filter date'}
+                                    <ChevronDown className="h-3 w-3 opacity-50" />
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-80" onClick={(e) => e.stopPropagation()}>
+                                  <div className="space-y-2">
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <div className="space-y-1">
+                                        <Label htmlFor={`${columnId}-from`}>From</Label>
+                                        <Input
+                                          id={`${columnId}-from`}
+                                          type="date"
+                                          onChange={(e) => {
+                                            const dateRange = column.getFilterValue() as [string, string] || ['', ''];
+                                            column.setFilterValue([e.target.value, dateRange[1]]);
+                                            handleColumnFilterChange(columnId, [e.target.value, dateRange[1]]);
+                                          }}
+                                        />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <Label htmlFor={`${columnId}-to`}>To</Label>
+                                        <Input
+                                          id={`${columnId}-to`}
+                                          type="date"
+                                          onChange={(e) => {
+                                            const dateRange = column.getFilterValue() as [string, string] || ['', ''];
+                                            column.setFilterValue([dateRange[0], e.target.value]);
+                                            handleColumnFilterChange(columnId, [dateRange[0], e.target.value]);
+                                          }}
+                                        />
+                                      </div>
+                                    </div>
+                                    <div className="flex justify-end">
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                          column.setFilterValue(undefined);
+                                          handleColumnFilterChange(columnId, undefined);
+                                        }}
+                                      >
+                                        Reset
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
+                            );
+                          }
+
+                          return null;
+                        })()}
+                      </TableHead>
+                    );
+                  })}
+                </TableRow>
+              </React.Fragment>
+            ))}
+          </TableHeader>
+        </Table>
+        
+        <div className="overflow-auto h-[calc(100%-128px)]">
           <DndContext
             sensors={sensors}
             onDragEnd={handleDragEnd}
           >
             <SortableContext
-              items={columnOrder}
+              items={columnOrder.filter(Boolean)} // Extra safety to filter out null/undefined
               strategy={horizontalListSortingStrategy}
             >
               <Table className="w-full">
-                <TableHeader>
-                  {table.getHeaderGroups().map((headerGroup) => (
-                    <TableRow key={headerGroup.id} className="bg-slate-100 border-b border-slate-200 hover:bg-slate-200">
-                      {headerGroup.headers.map((header) => {
-                        // Create a sortable header component
-                        const id = header.column.id;
-                        
-                        return (
-                          <SortableTableHeader
-                            key={header.id}
-                            id={id}
-                            header={header}
-                          />
-                        );
-                      })}
-                    </TableRow>
-                  ))}
-                </TableHeader>
                 <TableBody>
-                  {loading ? (
-                    // Skeleton Loading Rows
-                    Array.from({ length: 5 }).map((_, index) => (
-                      <TableRow key={`skeleton-${index}`} className="border-b border-slate-100 bg-white">
-                        {columns.map((column, colIndex) => (
-                          <TableCell key={`skeleton-${index}-${column.id || colIndex}`} className="px-4 py-4">
-                            <Skeleton className="h-4 w-4/5" /> 
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))
-                  ) : filteredData.length > 0 ? (
-                    table.getRowModel().rows.map((row) => {
-                      // Access the id once outside JSX to avoid potential issues
-                      const productId = row.original.id;
-                      
-                      return (
-                        <TableRow 
-                          key={row.id} 
-                          data-state={row.getIsSelected() && "selected"}
-                          className={cn(
-                            "border-b border-slate-100 transition-colors min-h-[72px] cursor-pointer",
-                            row.getIsSelected() ? "bg-slate-50" : "bg-white hover:bg-slate-50"
-                          )}
-                          onClick={(e) => {
-                            // Only navigate if the click wasn't on an interactive element
-                            const target = e.target as HTMLElement;
-                            const isActionClick = !!target.closest('button, input, [role="combobox"], [data-editable="true"]');
-                            if (!isActionClick && productId) {
-                              handleRowClick(productId);
-                            }
-                          }}
-                        >
-                          {row.getVisibleCells().map((cell) => (
-                            <TableCell key={cell.id} className="px-4 py-3">
+                  <TableFallback 
+                    columns={columns}
+                    loading={loading}
+                    filteredData={filteredData}
+                    debouncedSearchTerm={debouncedSearchTerm}
+                    filters={filters}
+                    handleClearFilters={handleClearFilters}
+                    handleRefresh={handleRefresh}
+                  />
+                  
+                  {!loading && filteredData.length > 0 && table.getRowModel().rows.map((row) => {
+                    // Access the id once outside JSX to avoid potential issues
+                    const productId = row.original.id;
+                    
+                    return (
+                      <TableRow 
+                        key={row.id} 
+                        data-state={row.getIsSelected() && "selected"}
+                        className={cn(
+                          "border-b border-slate-100 transition-colors min-h-[72px] cursor-pointer",
+                          row.getIsSelected() ? "bg-slate-50" : "bg-white hover:bg-slate-50"
+                        )}
+                        onClick={(e) => {
+                          // Only navigate if the click wasn't on an interactive element
+                          const target = e.target as HTMLElement;
+                          const isActionClick = !!target.closest('button, input, [role="combobox"], [data-editable="true"]');
+                          if (!isActionClick && productId) {
+                            handleRowClick(productId);
+                          }
+                        }}
+                      >
+                        {row.getVisibleCells().map((cell) => {
+                          // Add mobile responsiveness to table cells
+                          const columnId = cell.column.id;
+                          const hideOnMobileClass = ['brand', 'barcode', 'created_at', 'tags'].includes(columnId) ? 'hidden md:table-cell' : '';
+                          
+                          return (
+                            <TableCell key={cell.id} className={`px-2 py-2 ${hideOnMobileClass}`}>
                               {flexRender(cell.column.columnDef.cell, cell.getContext())}
                             </TableCell>
-                          ))}
-                        </TableRow>
-                      );
-                    })
-                  ) : (
-                    // Empty State
-                    <TableRow>
-                      <TableCell colSpan={columns.length} className="h-24 text-center">
-                        <div className="flex flex-col items-center justify-center gap-3 py-8">
-                          {(!debouncedSearchTerm && !Object.values(filters).some(v => v !== 'all' && v !== '')) ? (
-                            // No filters applied - empty product list
-                            <>
-                              <p className="text-slate-500">No products available yet</p>
-                              <Button
-                                size="sm"
-                                className="bg-primary-600 hover:bg-primary-700 text-white"
-                                asChild
-                              >
-                                <Link to="/app/products/new">
-                                  <span className="flex items-center">
-                                    <span className="h-4 w-4 mr-2">+</span>
-                                    Add Your First Product
-                                  </span>
-                                </Link>
-                              </Button>
-                            </>
-                          ) : (
-                            // Filters applied - no matching results
-                            <>
-                              <p className="text-slate-500">No products match your search criteria</p>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={handleClearFilters}
-                                className="text-slate-700 hover:bg-slate-100"
-                              >
-                                Clear Filters
-                              </Button>
-                            </>
-                          )}
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={handleRefresh}
-                            disabled={loading}
-                            className="border-slate-200 text-slate-700"
-                          >
-                            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                            Refresh Results
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )}
+                          );
+                        })}
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
-            </SortableContext>
-          </DndContext>
-        </div>
-        {filteredData.length > 0 && (
-          <div className="px-4 py-3 border-t border-slate-200 bg-slate-100">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-sm text-slate-600">
-              <div className="flex items-center gap-2">
-                <span>Showing</span>
-                <span className="font-medium">
-                  {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}
+              
+              {/* PAGINATION */}
+              <div className="flex items-center justify-between p-3 border-t bg-white">
+                <div className="flex space-x-2">
+                  <Button size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+                    <ChevronLeft />
+                  </Button>
+                  <Button size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+                    <ChevronRight />
+                  </Button>
+                </div>
+
+                <span className="text-sm">
+                  Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
                 </span>
-                <span>to</span>
-                <span className="font-medium">
-                  {Math.min(
-                    (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
-                    filteredData.length
-                  )}
-                </span>
-                <span>of</span>
-                <span className="font-medium">{filteredData.length}</span>
-                <span>results</span>
-              </div>
-              <div className="flex flex-col sm:flex-row items-center gap-2">
-                <div className="flex items-center mr-2">
-                  <Label htmlFor="per-page" className="mr-2 text-xs text-slate-600">
-                    Items per page:
-                  </Label>
+
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm">Show</span>
                   <Select
-                    value={table.getState().pagination.pageSize.toString()}
-                    onValueChange={(value) => {
-                      table.setPageSize(Number(value));
-                    }}
+                    value={String(table.getState().pagination.pageSize)}
+                    onValueChange={v => table.setPageSize(Number(v))}
                   >
-                    <SelectTrigger
-                      id="per-page"
-                      className="h-8 w-20 border-slate-200 bg-white text-slate-800"
-                    >
-                      <SelectValue placeholder="10" />
-                    </SelectTrigger>
+                    <SelectTrigger className="h-8 w-[70px]"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="10">10</SelectItem>
-                      <SelectItem value="20">20</SelectItem>
-                      <SelectItem value="50">50</SelectItem>
-                      <SelectItem value="100">100</SelectItem>
+                      {[10, 20, 50].map((n) => (
+                        <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex items-center gap-1">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 border-slate-200 text-slate-700"
-                    onClick={() => table.setPageIndex(0)}
-                    disabled={!table.getCanPreviousPage()}
-                  >
-                    <ChevronsLeft className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 border-slate-200 text-slate-700"
-                    onClick={() => table.previousPage()}
-                    disabled={!table.getCanPreviousPage()}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 border-slate-200 text-slate-700"
-                    onClick={() => table.nextPage()}
-                    disabled={!table.getCanNextPage()}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 border-slate-200 text-slate-700"
-                    onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-                    disabled={!table.getCanNextPage()}
-                  >
-                    <ChevronsRight className="h-4 w-4" />
-                  </Button>
-                </div>
-                <span className="text-xs text-slate-500">
-                  Page {table.getState().pagination.pageIndex + 1} of {Math.max(1, table.getPageCount())}
-                </span>
               </div>
-            </div>
-          </div>
-        )}
-      </div>
-      
-      {/* Debug info - only show in development */}
-      {process.env.NODE_ENV !== 'production' && (
-        <div className="mt-4 text-xs text-enterprise-400">
-          <p>Products count: {products.length}</p>
+            </SortableContext>
+          </DndContext>
         </div>
-      )}
+      </div>
     </div>
   );
 }
-
-// ProductThumbCell component
-const ProductThumbCell: React.FC<{ product: Product }> = ({ product }) => {
-  // Get primary image or first image, or use the new primary_image_thumb field if available
-  const images = product.images;
-  const primaryImage = images?.find(img => img.is_primary) || images?.[0];
-  
-  // Use dedicated thumbnail fields if available, otherwise fall back to the full image
-  const thumbUrl = product.primary_image_thumb || primaryImage?.url;
-  const largeUrl = product.primary_image_large || primaryImage?.url;
-  
-  return (
-    <HoverCard>
-      <HoverCardTrigger asChild>
-        <div className="pl-2">
-          {thumbUrl ? (
-            <img
-              src={thumbUrl}
-              alt={product.name}
-              loading="lazy"
-              className="h-16 w-16 rounded-sm object-contain hover:scale-105 transition-all duration-200"
-            />
-          ) : (
-            <div className="flex h-16 w-16 items-center justify-center rounded-sm bg-slate-100">
-              <ImageIcon className="h-6 w-6 text-slate-400" />
-            </div>
-          )}
-        </div>
-      </HoverCardTrigger>
-      
-      {thumbUrl && (
-        <HoverCardContent
-          side="right"
-          align="start"
-          className="w-[320px] p-2"
-        >
-          <img
-            src={largeUrl}
-            alt={product.name}
-            className="h-[280px] w-full object-contain rounded"
-          />
-          <p className="mt-2 text-sm text-center font-medium">{product.name}</p>
-        </HoverCardContent>
-      )}
-    </HoverCard>
-  );
-};
-
-// Add a SortableTableHeader component
-interface SortableTableHeaderProps {
-  header: any; // Replace with correct type
-  id: string;
-}
-
-const SortableTableHeader = ({ header, id }: SortableTableHeaderProps) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    cursor: 'grab',
-    opacity: isDragging ? 0.8 : 1,
-  };
-
-  return (
-    <TableHead
-      ref={setNodeRef}
-      style={style}
-      className="px-4 py-3 font-medium text-slate-700"
-      {...attributes}
-      {...listeners}
-    >
-      {header.isPlaceholder
-        ? null
-        : flexRender(
-            header.column.columnDef.header,
-            header.getContext()
-          )}
-    </TableHead>
-  );
-};

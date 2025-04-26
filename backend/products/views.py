@@ -369,6 +369,59 @@ class ProductViewSet(viewsets.ModelViewSet):
             'deleted_ids': placeholder_ids
         }, status=status.HTTP_200_OK)
 
+    @action(detail=False, methods=['get', 'post'])
+    def tags(self, request):
+        """
+        GET: Return a list of unique tags from all products.
+        POST: Create a new tag by adding it to a "tag repository" product or returning an existing tag.
+        """
+        if request.method == 'GET':
+            queryset = self.get_queryset()
+            all_tags = set()
+            
+            # Extract tags from all products
+            for product in queryset:
+                if product.tags:
+                    try:
+                        tags = json.loads(product.tags)
+                        if isinstance(tags, list):
+                            all_tags.update(tags)
+                    except json.JSONDecodeError:
+                        pass
+            
+            # Filter tags by search term if provided
+            search_term = request.query_params.get('search', '').lower()
+            if search_term:
+                filtered_tags = [tag for tag in all_tags if search_term in tag.lower()]
+                return Response(sorted(filtered_tags))
+            
+            return Response(sorted(all_tags))
+        
+        elif request.method == 'POST':
+            # Get the tag name from request data
+            tag_name = request.data.get('name')
+            if not tag_name:
+                return Response(
+                    {"error": "Tag name is required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # First check if this tag already exists in any product
+            queryset = self.get_queryset()
+            for product in queryset:
+                if product.tags:
+                    try:
+                        tags = json.loads(product.tags)
+                        if isinstance(tags, list) and tag_name in tags:
+                            # Tag already exists, return it
+                            return Response(tag_name, status=status.HTTP_200_OK)
+                    except json.JSONDecodeError:
+                        pass
+            
+            # If tag doesn't exist, create it by adding to a special "tag repository" product
+            # or just return the new tag name
+            return Response(tag_name, status=status.HTTP_201_CREATED)
+
 # Add endpoints for dashboard data
 class DashboardViewSet(viewsets.ViewSet):
     """
@@ -423,29 +476,58 @@ class DashboardViewSet(viewsets.ViewSet):
         # For now, we'll return a fixed number or the admin user
         team_members = User.objects.filter(is_staff=True).count() or 1
         
-        # Calculate completeness
+        # Calculate completeness with error handling
+        avg_completeness = 0
         if total_products > 0:
             # Get completeness for each product
-            completeness_values = [p.get_completeness() for p in queryset]
-            avg_completeness = sum(completeness_values) / len(completeness_values)
-        else:
-            avg_completeness = 0
+            completeness_values = []
+            for product in queryset:
+                try:
+                    completeness_values.append(product.get_completeness())
+                except json.JSONDecodeError:
+                    # Handle invalid JSON in product fields
+                    print(f"WARNING: JSON decode error for product {product.id} during completeness calculation")
+                    completeness_values.append(0)  # Default to 0% complete for products with invalid JSON
+                except Exception as e:
+                    print(f"ERROR: Failed to calculate completeness for product {product.id}: {str(e)}")
+                    completeness_values.append(0)
+            
+            if completeness_values:
+                avg_completeness = sum(completeness_values) / len(completeness_values)
         
-        # Get most missing fields
+        # Get most missing fields with weights and error handling
         missing_fields_count = {}
         for product in queryset:
-            for field in product.get_missing_fields():
-                if field in missing_fields_count:
-                    missing_fields_count[field] += 1
-                else:
-                    missing_fields_count[field] = 1
+            try:
+                for missing_field in product.get_missing_fields():
+                    field_name = missing_field['field'] 
+                    weight = missing_field['weight']
+                    if field_name in missing_fields_count:
+                        missing_fields_count[field_name]['count'] += 1
+                        # Keep track of total weight for prioritization
+                        missing_fields_count[field_name]['weight'] = weight
+                    else:
+                        missing_fields_count[field_name] = {
+                            'count': 1,
+                            'weight': weight
+                        }
+            except json.JSONDecodeError:
+                print(f"WARNING: JSON decode error for product {product.id} during missing fields calculation")
+                continue
+            except Exception as e:
+                print(f"ERROR: Failed to calculate missing fields for product {product.id}: {str(e)}")
+                continue
         
-        # Sort missing fields by count and take top 3
+        # Sort missing fields by count and weight and take top 3
         most_missing = [
-            {"field": field, "count": count}
-            for field, count in sorted(
+            {
+                "field": field,
+                "count": data['count'],
+                "weight": data['weight']
+            }
+            for field, data in sorted(
                 missing_fields_count.items(), 
-                key=lambda x: x[1], 
+                key=lambda x: (x[1]['count'], x[1]['weight']), 
                 reverse=True
             )[:3]
         ]
@@ -562,14 +644,33 @@ class DashboardViewSet(viewsets.ViewSet):
         # Calculate completeness for each product
         products_with_completeness = []
         for product in queryset:
-            completeness = product.get_completeness()
-            if completeness < 100:  # Only include incomplete products
-                missing_fields = product.get_missing_fields()
-                products_with_completeness.append({
-                    'product': product,
-                    'completeness': completeness,
-                    'missing_fields': missing_fields
-                })
+            try:
+                completeness = product.get_completeness()
+                if completeness < 100:  # Only include incomplete products
+                    try:
+                        missing_fields = product.get_missing_fields()
+                        field_completeness = product.get_field_completeness()
+                        products_with_completeness.append({
+                            'product': product,
+                            'completeness': completeness,
+                            'missing_fields': missing_fields,
+                            'field_completeness': field_completeness
+                        })
+                    except json.JSONDecodeError:
+                        print(f"WARNING: JSON decode error for product {product.id} during missing fields calculation")
+                        # Add product with minimal data
+                        products_with_completeness.append({
+                            'product': product,
+                            'completeness': completeness,
+                            'missing_fields': [{'field': 'Invalid data format', 'weight': 1}],
+                            'field_completeness': []
+                        })
+                    except Exception as e:
+                        print(f"ERROR: Failed to get field data for product {product.id}: {str(e)}")
+            except json.JSONDecodeError:
+                print(f"WARNING: JSON decode error for product {product.id} during completeness calculation")
+            except Exception as e:
+                print(f"ERROR: Failed to calculate completeness for product {product.id}: {str(e)}")
         
         # Sort by completeness (ascending) and take top 5
         products_with_completeness.sort(key=lambda x: x['completeness'])
@@ -583,7 +684,8 @@ class DashboardViewSet(viewsets.ViewSet):
                 'name': item['product'].name,
                 'sku': item['product'].sku,
                 'completeness': item['completeness'],
-                'missing_fields': item['missing_fields']
+                'missing_fields': item['missing_fields'],
+                'field_completeness': item['field_completeness']
             }
             serializer_data.append(data)
         

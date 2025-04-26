@@ -28,13 +28,13 @@ export const ProductStatusChart: React.FC<ProductStatusChartProps> = ({
     <Card className="bg-white border-enterprise-200 shadow-sm hover:shadow-md hover:translate-y-[-2px] transition-all">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium uppercase tracking-wider text-gray-700 dark:text-gray-200">Product Status</CardTitle>
-        <CardDescription className="text-enterprise-500">
-          {loading ? (
-            <span className="inline-block"><Skeleton className="h-4 w-36" /></span>
-          ) : (
-            `${activeProducts} active products`
-          )}
-        </CardDescription>
+        {loading ? (
+          <Skeleton className="h-4 w-36" />
+        ) : (
+          <CardDescription className="text-enterprise-500">
+            {`${activeProducts} active products`}
+          </CardDescription>
+        )}
       </CardHeader>
       <CardContent className="pt-2">
         {loading ? (

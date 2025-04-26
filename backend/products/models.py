@@ -20,13 +20,11 @@ class Product(models.Model):
     
     # Additional Product Information (Optional)
     brand = models.CharField(max_length=100, blank=True, null=True)
-    unit_of_measure = models.CharField(max_length=50, blank=True, null=True)
     barcode = models.CharField(max_length=100, blank=True, null=True)
     primary_image = models.ImageField(upload_to='products/', blank=True, null=True)
     
     # JSON fields (stored as text in SQLite)
     tags = models.TextField(blank=True, null=True)
-    country_availability = models.TextField(blank=True, null=True)
     attributes = models.TextField(blank=True, null=True)
     
     class Meta:
@@ -46,70 +44,176 @@ class Product(models.Model):
             return []
         try:
             return json.loads(self.tags)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            print(f"ERROR: Invalid JSON in tags for product {self.id}: {e}")
+            return []
+        except Exception as e:
+            print(f"ERROR: Failed to parse tags for product {self.id}: {e}")
             return []
         
     def set_tags(self, tags_list):
-        self.tags = json.dumps(tags_list)
-        
-    def get_country_availability(self):
-        if not self.country_availability:
-            return []
         try:
-            return json.loads(self.country_availability)
-        except json.JSONDecodeError:
-            return []
-        
-    def set_country_availability(self, countries_list):
-        self.country_availability = json.dumps(countries_list)
+            self.tags = json.dumps(tags_list)
+        except Exception as e:
+            print(f"ERROR: Failed to serialize tags for product {self.id}: {e}")
+            self.tags = "[]"  # Set a valid empty JSON array as fallback
         
     def get_attributes(self):
         if not self.attributes:
             return {}
         try:
             return json.loads(self.attributes)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            print(f"ERROR: Invalid JSON in attributes for product {self.id}: {e}")
+            return {}
+        except Exception as e:
+            print(f"ERROR: Failed to parse attributes for product {self.id}: {e}")
             return {}
         
     def set_attributes(self, attributes_dict):
-        self.attributes = json.dumps(attributes_dict)
+        try:
+            self.attributes = json.dumps(attributes_dict)
+        except Exception as e:
+            print(f"ERROR: Failed to serialize attributes for product {self.id}: {e}")
+            self.attributes = "{}"  # Set a valid empty JSON object as fallback
         
     def get_completeness(self):
         """
-        Calculate product data completeness as a percentage.
-        Required fields: name, sku, description, price, category, brand
+        Calculate product data completeness as a percentage with weighted fields.
+        Includes all visible fields with different weights for required vs optional fields.
         """
-        required_fields = [
-            (self.name is not None and self.name.strip() != ''),
-            (self.sku is not None and self.sku.strip() != ''),
-            (self.description is not None and self.description.strip() != ''),
-            (self.price is not None and self.price > 0),
-            (self.category is not None and self.category.strip() != ''),
-            (self.brand is not None and self.brand.strip() != '')
-        ]
+        # Define field weights: required fields (2x), optional fields (1x)
+        field_weights = {
+            # Required fields (weight 2)
+            'name': {'weight': 2, 'check': lambda: self.name is not None and self.name.strip() != ''},
+            'sku': {'weight': 2, 'check': lambda: self.sku is not None and self.sku.strip() != ''},
+            'price': {'weight': 2, 'check': lambda: self.price is not None and self.price > 0},
+            
+            # Important fields (weight 1.5)
+            'description': {'weight': 1.5, 'check': lambda: self.description is not None and self.description.strip() != ''},
+            'category': {'weight': 1.5, 'check': lambda: self.category is not None and self.category.strip() != ''},
+            
+            # Optional fields (weight 1)
+            'brand': {'weight': 1, 'check': lambda: self.brand is not None and self.brand.strip() != ''},
+            'barcode': {'weight': 1, 'check': lambda: self.barcode is not None and self.barcode.strip() != ''},
+            'primary_image': {'weight': 1, 'check': lambda: bool(self.primary_image)},
+            'tags': {'weight': 1, 'check': lambda: self._check_tags_not_empty()},
+            'attributes': {'weight': 1, 'check': lambda: self._check_attributes_not_empty()}
+        }
         
-        completed = sum(1 for field in required_fields if field)
-        return round((completed / len(required_fields)) * 100)
+        # Calculate weighted completeness
+        total_weight = sum(field['weight'] for field in field_weights.values())
+        completed_weight = sum(
+            field['weight'] for field in field_weights.values() 
+            if self._safely_check_field(field['check'])
+        )
+        
+        if total_weight == 0:
+            return 0
+            
+        return round((completed_weight / total_weight) * 100)
+    
+    def _safely_check_field(self, check_function):
+        """Helper to safely check field conditions with error handling"""
+        try:
+            return check_function()
+        except Exception as e:
+            print(f"ERROR: Field check failed for product {self.id}: {e}")
+            return False
+            
+    def _check_tags_not_empty(self):
+        """Helper to safely check if tags are not empty"""
+        try:
+            if not self.tags:
+                return False
+            tags = json.loads(self.tags)
+            return bool(tags and len(tags) > 0)
+        except json.JSONDecodeError:
+            return False
+        except Exception:
+            return False
+            
+    def _check_attributes_not_empty(self):
+        """Helper to safely check if attributes are not empty"""
+        try:
+            if not self.attributes:
+                return False
+            attrs = json.loads(self.attributes)
+            return bool(attrs and len(attrs) > 0)
+        except json.JSONDecodeError:
+            return False
+        except Exception:
+            return False
     
     def get_missing_fields(self):
         """
-        Return a list of field names that are missing data
+        Return a list of field names that are missing data along with their weights
         """
         missing = []
-        if not self.name or self.name.strip() == '':
-            missing.append('Name')
-        if not self.sku or self.sku.strip() == '':
-            missing.append('SKU')
-        if not self.description or self.description.strip() == '':
-            missing.append('Description')
-        if not self.price or self.price <= 0:
-            missing.append('Price')
-        if not self.category or self.category.strip() == '':
-            missing.append('Category')
-        if not self.brand or self.brand.strip() == '':
-            missing.append('Brand')
         
+        # Check individual fields
+        if not self.name or self.name.strip() == '':
+            missing.append({'field': 'Name', 'weight': 2})
+        if not self.sku or self.sku.strip() == '':
+            missing.append({'field': 'SKU', 'weight': 2})
+        if not self.price or self.price <= 0:
+            missing.append({'field': 'Price', 'weight': 2})
+        if not self.description or self.description.strip() == '':
+            missing.append({'field': 'Description', 'weight': 1.5})
+        if not self.category or self.category.strip() == '':
+            missing.append({'field': 'Category', 'weight': 1.5})
+        if not self.brand or self.brand.strip() == '':
+            missing.append({'field': 'Brand', 'weight': 1})
+        if not self.barcode or self.barcode.strip() == '':
+            missing.append({'field': 'GTIN/Barcode', 'weight': 1})
+        if not self.primary_image:
+            missing.append({'field': 'Product Image', 'weight': 1})
+            
+        # Check JSON fields safely
+        try:
+            if not self.tags or not json.loads(self.tags or '[]'):
+                missing.append({'field': 'Tags', 'weight': 1})
+        except json.JSONDecodeError:
+            missing.append({'field': 'Tags', 'weight': 1})
+        except Exception:
+            missing.append({'field': 'Tags', 'weight': 1})
+            
+        try:
+            if not self.attributes or not json.loads(self.attributes or '{}'):
+                missing.append({'field': 'Attributes', 'weight': 1})
+        except json.JSONDecodeError:
+            missing.append({'field': 'Attributes', 'weight': 1})
+        except Exception:
+            missing.append({'field': 'Attributes', 'weight': 1})
+            
         return missing
+        
+    def get_field_completeness(self):
+        """
+        Return detailed information about field completeness
+        """
+        # Helper to safely load JSON
+        def safe_json_length(json_str, default='[]'):
+            try:
+                data = json.loads(json_str or default)
+                return len(data) > 0
+            except (json.JSONDecodeError, TypeError, Exception):
+                return False
+                
+        all_fields = [
+            {'field': 'Name', 'weight': 2, 'complete': bool(self.name and self.name.strip())},
+            {'field': 'SKU', 'weight': 2, 'complete': bool(self.sku and self.sku.strip())},
+            {'field': 'Price', 'weight': 2, 'complete': bool(self.price and self.price > 0)},
+            {'field': 'Description', 'weight': 1.5, 'complete': bool(self.description and self.description.strip())},
+            {'field': 'Category', 'weight': 1.5, 'complete': bool(self.category and self.category.strip())},
+            {'field': 'Brand', 'weight': 1, 'complete': bool(self.brand and self.brand.strip())},
+            {'field': 'GTIN/Barcode', 'weight': 1, 'complete': bool(self.barcode and self.barcode.strip())},
+            {'field': 'Product Image', 'weight': 1, 'complete': bool(self.primary_image)},
+            {'field': 'Tags', 'weight': 1, 'complete': safe_json_length(self.tags, '[]')},
+            {'field': 'Attributes', 'weight': 1, 'complete': safe_json_length(self.attributes, '{}')}
+        ]
+        
+        return all_fields
 
 class ProductImage(models.Model):
     product = models.ForeignKey(

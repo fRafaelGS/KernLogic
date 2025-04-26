@@ -4,31 +4,31 @@ from .models import Product, ProductImage, Activity
 from django.db.models import Sum, F, Count, Case, When, Value, FloatField
 from decimal import Decimal
 from django.conf import settings
+from django.utils import timezone
+from django.db.models.functions import TruncDay
 
 # --- NEW ProductImage Serializer ---
 class ProductImageSerializer(serializers.ModelSerializer):
+    """Serializer for product images"""
     url = serializers.SerializerMethodField()
     
     class Meta:
         model = ProductImage
-        fields = ('id', 'product', 'image', 'url', 'order', 'is_primary', 'uploaded_at')
-        read_only_fields = ('product', 'uploaded_at', 'url')  # Product link shouldn't be changed via this serializer
-
+        fields = ['id', 'url', 'order', 'is_primary']
+    
     def get_url(self, obj):
-        request = self.context.get('request')
-        if obj.image and request:
-            return request.build_absolute_uri(obj.image.url)
-        elif obj.image:
+        """Get absolute URL for the image"""
+        if obj.image:
             return obj.image.url
         return None
 # --- End ProductImage Serializer ---
 
 class ProductSerializer(serializers.ModelSerializer):
+    """Serializer for products with JSON fields handling"""
     created_by = serializers.ReadOnlyField(source='created_by.email')
     price = serializers.FloatField()  # Explicitly use FloatField to ensure numeric values
     images = ProductImageSerializer(many=True, read_only=True)
     tags = serializers.ListField(child=serializers.CharField(), required=False)
-    country_availability = serializers.ListField(child=serializers.CharField(), required=False)
     attributes = serializers.JSONField(required=False)
     primary_image = serializers.ImageField(required=False, allow_null=True)
     primary_image_thumb = serializers.SerializerMethodField()
@@ -39,21 +39,25 @@ class ProductSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'description', 'sku', 'price', 'category',
             'is_active', 'created_at', 'updated_at', 'brand',
-            'unit_of_measure', 'barcode', 'tags', 'country_availability',
-            'attributes', 'primary_image', 'primary_image_thumb', 'primary_image_large',
+            'barcode', 'tags', 'attributes', 'primary_image', 'primary_image_thumb', 'primary_image_large',
             'created_by', 'images'
         ]
         read_only_fields = ['created_by', 'created_at', 'updated_at', 'images']
 
     def get_primary_image_thumb(self, obj):
-        if obj.primary_image:
+        """Return URL for primary image thumbnail"""
+        primary_image = obj.images.filter(is_primary=True).first()
+        if primary_image and primary_image.image:
+            return primary_image.image.url
+        elif obj.primary_image:
             return obj.primary_image.url
         return None
 
     def get_primary_image_large(self, obj):
-        if obj.primary_image:
-            return obj.primary_image.url
-        return None
+        """Return URL for primary image large version"""
+        # For now, we'll return the same URL as thumbnail
+        # In production, you'd resize images or use different versions
+        return self.get_primary_image_thumb(obj)
 
     def to_representation(self, instance):
         """
@@ -62,30 +66,29 @@ class ProductSerializer(serializers.ModelSerializer):
         ret = super().to_representation(instance)
         
         # Handle tags
-        try:
-            if instance.tags:
-                ret['tags'] = json.loads(instance.tags)
-            else:
+        if instance.tags:
+            try:
+                # Check if tags is already a list (don't try to parse again)
+                if isinstance(instance.tags, list):
+                    ret['tags'] = instance.tags
+                else:
+                    ret['tags'] = json.loads(instance.tags)
+            except json.JSONDecodeError:
                 ret['tags'] = []
-        except (TypeError, json.JSONDecodeError):
+        else:
             ret['tags'] = []
         
-        # Handle country_availability
-        try:
-            if instance.country_availability:
-                ret['country_availability'] = json.loads(instance.country_availability)
-            else:
-                ret['country_availability'] = []
-        except (TypeError, json.JSONDecodeError):
-            ret['country_availability'] = []
-        
         # Handle attributes
-        try:
-            if instance.attributes:
-                ret['attributes'] = json.loads(instance.attributes)
-            else:
+        if instance.attributes:
+            try:
+                # Check if attributes is already a dict (don't try to parse again)
+                if isinstance(instance.attributes, dict):
+                    ret['attributes'] = instance.attributes
+                else:
+                    ret['attributes'] = json.loads(instance.attributes)
+            except json.JSONDecodeError:
                 ret['attributes'] = {}
-        except (TypeError, json.JSONDecodeError):
+        else:
             ret['attributes'] = {}
         
         return ret
@@ -94,30 +97,37 @@ class ProductSerializer(serializers.ModelSerializer):
         """
         Convert Python objects to JSON strings for storage
         """
-        # Handle incoming JSON data that might be strings already
-        if 'tags' in data and not isinstance(data['tags'], str):
-            data = data.copy()  # Make a mutable copy
-            data['tags'] = json.dumps(data['tags'])
-            
-        if 'country_availability' in data and not isinstance(data['country_availability'], str):
-            data = data.copy() if isinstance(data, dict) else data
-            data['country_availability'] = json.dumps(data['country_availability'])
-            
-        if 'attributes' in data and not isinstance(data['attributes'], str):
-            data = data.copy() if isinstance(data, dict) else data
-            data['attributes'] = json.dumps(data['attributes'])
+        # First perform the basic validation
+        validated_data = super().to_internal_value(data)
         
-        return super().to_internal_value(data)
+        # Handle tags
+        if 'tags' in data and not isinstance(data['tags'], str):
+            validated_data['tags'] = json.dumps(data['tags'])
+        
+        # Handle attributes
+        if 'attributes' in data and not isinstance(data['attributes'], str):
+            validated_data['attributes'] = json.dumps(data['attributes'])
+        
+        return validated_data
 
     def validate_sku(self, value):
         """
         Ensure SKU is unique, but allow the same SKU on update
         if it's the current instance.
         """
+        request = self.context.get('request')
+        if not request or not request.user:
+            return value
+        
         instance = getattr(self, 'instance', None)
         if instance and instance.sku == value:
             return value
-        if Product.objects.filter(sku=value).exists():
+        if Product.objects.filter(
+            created_by=request.user,
+            sku=value
+        ).exclude(
+            pk=instance.pk if instance else None
+        ).exists():
             raise serializers.ValidationError(
                 "A product with this SKU already exists."
             )
@@ -154,14 +164,26 @@ class DashboardSummarySerializer(serializers.Serializer):
     team_members = serializers.IntegerField()
     data_completeness = serializers.FloatField()  # Percentage of complete product data
     
-    # Adjust this field definition
+    # Adjust field definition for weighted missing fields
     most_missing_fields = serializers.ListField(
         child=serializers.DictField(),
         required=False
     )
     
+    # Completeness thresholds for UI
+    completeness_thresholds = serializers.SerializerMethodField()
+    
     active_products = serializers.IntegerField()
     inactive_products = serializers.IntegerField()
+    
+    def get_completeness_thresholds(self, obj):
+        """Return thresholds for data completeness levels"""
+        return {
+            'poor': 0,
+            'fair': 60,
+            'good': 80,
+            'excellent': 95
+        }
 
 class InventoryTrendSerializer(serializers.Serializer):
     """
@@ -175,8 +197,13 @@ class IncompleteProductSerializer(serializers.ModelSerializer):
     Serializer for products with incomplete data
     """
     completeness = serializers.IntegerField()
-    missing_fields = serializers.ListField(child=serializers.CharField())
+    missing_fields = serializers.ListField(child=serializers.DictField())
+    field_completeness = serializers.SerializerMethodField()
     
     class Meta:
         model = Product
-        fields = ['id', 'name', 'sku', 'completeness', 'missing_fields'] 
+        fields = ['id', 'name', 'sku', 'completeness', 'missing_fields', 'field_completeness']
+        
+    def get_field_completeness(self, obj):
+        """Return the detailed field completeness data"""
+        return obj.get_field_completeness() if hasattr(obj, 'get_field_completeness') else [] 

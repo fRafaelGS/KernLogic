@@ -6,7 +6,11 @@ import {
   ListOrdered, 
   Link as LinkIcon, 
   Heading1, 
-  Heading2
+  Heading2,
+  Code,
+  EyeIcon,
+  EditIcon,
+  Minus
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { 
@@ -15,6 +19,8 @@ import {
   TooltipProvider, 
   TooltipTrigger 
 } from '@/components/ui/tooltip';
+import ReactMarkdown from 'react-markdown';
+import { cn } from '@/lib/utils';
 
 interface RichTextEditorProps {
   value: string;
@@ -28,6 +34,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   placeholder = 'Enter text here...'
 }) => {
   const [selection, setSelection] = useState<{ start: number; end: number } | null>(null);
+  const [isPreview, setIsPreview] = useState(false);
   
   const handleFormat = (formatType: string) => {
     if (!selection) return;
@@ -58,6 +65,12 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       case 'link':
         replacement = `[${selectedText}](https://)`;
         break;
+      case 'code':
+        replacement = `\`\`\`\n${selectedText}\n\`\`\``;
+        break;
+      case 'hr':
+        replacement = `${selectedText ? selectedText + '\n\n' : ''}---\n\n`;
+        break;
       default:
         return;
     }
@@ -74,126 +87,210 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     });
   };
   
+  const togglePreview = () => {
+    setIsPreview(!isPreview);
+  };
+  
   return (
     <div className="border rounded-md overflow-hidden">
-      <div className="bg-slate-50 p-2 border-b flex flex-wrap gap-1">
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button 
-                type="button" 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => handleFormat('bold')}
-                className="h-8 w-8 p-0"
-              >
-                <Bold className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Bold</TooltipContent>
-          </Tooltip>
-          
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button 
-                type="button" 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => handleFormat('italic')}
-                className="h-8 w-8 p-0"
-              >
-                <Italic className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Italic</TooltipContent>
-          </Tooltip>
-          
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button 
-                type="button" 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => handleFormat('h1')}
-                className="h-8 w-8 p-0"
-              >
-                <Heading1 className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Heading 1</TooltipContent>
-          </Tooltip>
-          
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button 
-                type="button" 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => handleFormat('h2')}
-                className="h-8 w-8 p-0"
-              >
-                <Heading2 className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Heading 2</TooltipContent>
-          </Tooltip>
-          
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button 
-                type="button" 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => handleFormat('ul')}
-                className="h-8 w-8 p-0"
-              >
-                <List className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Bullet List</TooltipContent>
-          </Tooltip>
-          
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button 
-                type="button" 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => handleFormat('ol')}
-                className="h-8 w-8 p-0"
-              >
-                <ListOrdered className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Numbered List</TooltipContent>
-          </Tooltip>
-          
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button 
-                type="button" 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => handleFormat('link')}
-                className="h-8 w-8 p-0"
-              >
-                <LinkIcon className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Link</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+      <div className="bg-slate-50 p-2 border-b flex flex-wrap gap-1 justify-between">
+        <div className="flex flex-wrap gap-1">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => handleFormat('bold')}
+                  className="h-8 w-8 p-0"
+                  disabled={isPreview}
+                >
+                  <Bold className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Bold</TooltipContent>
+            </Tooltip>
+            
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => handleFormat('italic')}
+                  className="h-8 w-8 p-0"
+                  disabled={isPreview}
+                >
+                  <Italic className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Italic</TooltipContent>
+            </Tooltip>
+            
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => handleFormat('h1')}
+                  className="h-8 w-8 p-0"
+                  disabled={isPreview}
+                >
+                  <Heading1 className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Heading 1</TooltipContent>
+            </Tooltip>
+            
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => handleFormat('h2')}
+                  className="h-8 w-8 p-0"
+                  disabled={isPreview}
+                >
+                  <Heading2 className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Heading 2</TooltipContent>
+            </Tooltip>
+            
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => handleFormat('ul')}
+                  className="h-8 w-8 p-0"
+                  disabled={isPreview}
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Bullet List</TooltipContent>
+            </Tooltip>
+            
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => handleFormat('ol')}
+                  className="h-8 w-8 p-0"
+                  disabled={isPreview}
+                >
+                  <ListOrdered className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Numbered List</TooltipContent>
+            </Tooltip>
+            
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => handleFormat('link')}
+                  className="h-8 w-8 p-0"
+                  disabled={isPreview}
+                >
+                  <LinkIcon className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Link</TooltipContent>
+            </Tooltip>
+            
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => handleFormat('code')}
+                  className="h-8 w-8 p-0"
+                  disabled={isPreview}
+                >
+                  <Code className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Code Block</TooltipContent>
+            </Tooltip>
+            
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => handleFormat('hr')}
+                  className="h-8 w-8 p-0"
+                  disabled={isPreview}
+                >
+                  <Minus className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Horizontal Rule</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+        
+        <div>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={togglePreview}
+                  className="h-8 px-2"
+                >
+                  {isPreview ? (
+                    <>
+                      <EditIcon className="h-4 w-4 mr-1" />
+                      <span className="text-xs">Edit</span>
+                    </>
+                  ) : (
+                    <>
+                      <EyeIcon className="h-4 w-4 mr-1" />
+                      <span className="text-xs">Preview</span>
+                    </>
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{isPreview ? 'Edit mode' : 'Preview mode'}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
       </div>
       
-      <textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onSelect={handleSelectionChange}
-        onMouseUp={handleSelectionChange}
-        onKeyUp={handleSelectionChange}
-        placeholder={placeholder}
-        className="w-full p-3 min-h-[200px] resize-y outline-none focus:ring-0"
-      />
+      {isPreview ? (
+        <div className="w-full p-3 min-h-[200px] prose max-w-none">
+          {value ? (
+            <ReactMarkdown>{value}</ReactMarkdown>
+          ) : (
+            <p className="text-muted-foreground">{placeholder}</p>
+          )}
+        </div>
+      ) : (
+        <textarea
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onSelect={handleSelectionChange}
+          onMouseUp={handleSelectionChange}
+          onKeyUp={handleSelectionChange}
+          placeholder={placeholder}
+          className="w-full p-3 min-h-[200px] resize-y outline-none focus:ring-0"
+        />
+      )}
     </div>
   );
 }; 

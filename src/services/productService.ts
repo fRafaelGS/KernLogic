@@ -61,9 +61,7 @@ export interface Product {
     
     // Additional Product Information (Optional)
     brand?: string;
-    unit_of_measure?: string;
     tags?: string[];
-    country_availability?: string[];
     barcode?: string;
     
     // Technical Specifications (Optional)
@@ -189,6 +187,19 @@ const createAttribute = async (
   return response.data;
 };
 
+// Add Category type definition here if not already present globally
+interface Category {
+  id: number | string;
+  name: string;
+  // Add other category fields if they exist
+}
+
+// Add type for category options used by react-select
+interface CategoryOption {
+  label: string;
+  value: number | string;
+}
+
 export const productService = {
     // Get all products
     getProducts: async (filters?: Record<string, any>): Promise<Product[]> => {
@@ -251,6 +262,18 @@ export const productService = {
         try {
             // Handle FormData or regular object
             if (product instanceof FormData) {
+                console.log('Product data is FormData, preparing to send...');
+                
+                // Debug: Log FormData contents
+                console.log('FormData contents:');
+                for (const pair of product.entries()) {
+                    console.log(`${pair[0]}: ${pair[1]}`);
+                }
+                
+                // Get auth token for debugging
+                const token = localStorage.getItem('access_token');
+                console.log('Using auth token (first 15 chars):', token ? token.substring(0, 15) + '...' : 'none');
+                
                 const response = await axiosInstance.post(url, product, {
                     headers: {
                         'Content-Type': 'multipart/form-data',
@@ -260,6 +283,7 @@ export const productService = {
                 return response.data;
             } else {
                 // Regular object handling (existing code)
+                console.log('Product data is regular object, converting to proper format...');
                 const formattedProduct = {
                     ...product,
                     price: Number(product.price)
@@ -271,6 +295,21 @@ export const productService = {
             }
         } catch (error) {
             console.error('Error creating product:', error);
+            
+            // More detailed error logging
+            if (axios.isAxiosError(error)) {
+                console.error('Request config:', error.config);
+                console.error('Response status:', error.response?.status);
+                console.error('Response headers:', error.response?.headers);
+                console.error('Response data:', error.response?.data);
+                
+                // Check if it's an authentication error
+                if (error.response?.status === 401) {
+                    console.error('Authentication error - token may be invalid or expired');
+                    // You might want to trigger a re-login here
+                }
+            }
+            
             throw error;
         }
     },
@@ -326,11 +365,126 @@ export const productService = {
         await axiosInstance.delete(url);
     },
 
-    // Get product categories
-    getCategories: async (): Promise<string[]> => {
-        const url = `${PRODUCTS_PATH}/categories/`;
-        const response = await axiosInstance.get(url);
-        return response.data;
+    // Get all categories (Updated to use real API data)
+    getCategories: async (): Promise<Category[]> => {
+        console.log('Fetching categories from API...');
+        try {
+            const response = await axiosInstance.get(`${PRODUCTS_PATH}/categories/`);
+            // Transform the response to match the expected format
+            // The API returns an array of category names, we need to convert to objects
+            return response.data.map((categoryName: string) => ({
+                id: categoryName,
+                name: categoryName
+            }));
+        } catch (error) {
+            console.error('Error fetching categories:', error);
+            // Return empty array as fallback
+            return [];
+        }
+    },
+
+    // Search categories (Updated to use real API data)
+    searchCategories: async (inputValue: string): Promise<CategoryOption[]> => {
+        console.log(`Searching categories for: "${inputValue}"`);
+        try {
+            // Fetch all categories from the API
+            const response = await axiosInstance.get(`${PRODUCTS_PATH}/categories/`);
+            // Filter categories based on input value
+            const filteredCategories = response.data
+                .filter((categoryName: string) => 
+                    categoryName.toLowerCase().includes(inputValue.toLowerCase()))
+                .map((categoryName: string) => ({
+                    label: categoryName,
+                    value: categoryName
+                }));
+            return filteredCategories;
+        } catch (error) {
+            console.error('Error searching categories:', error);
+            return []; // Return empty array as fallback
+        }
+    },
+
+    // Create a new category (Updated to use real API)
+    createCategory: async (data: { name: string }): Promise<Category> => {
+        console.log('Creating category:', data);
+        try {
+            const response = await axiosInstance.post(`${PRODUCTS_PATH}/categories/`, {
+                category: data.name
+            });
+            // The API returns { id: number, category: string }
+            return {
+                id: response.data.category, // Use the category name as the ID
+                name: response.data.category
+            };
+        } catch (error) {
+            console.error('Error creating category:', error);
+            throw error; // Propagate error to be handled by the caller
+        }
+    },
+
+    // Search tags - Updated to use real API
+    searchTags: async (inputValue: string): Promise<{ label: string; value: string }[]> => {
+        console.log(`Searching tags for: "${inputValue}"`);
+        try {
+            // Call API endpoint for tags
+            const response = await axiosInstance.get(`${PRODUCTS_PATH}/tags/`, {
+                params: { search: inputValue }
+            });
+            
+            // Transform the response to the expected format for react-select
+            // The API should return an array of tag names or objects
+            const tags = response.data;
+            
+            if (Array.isArray(tags)) {
+                // If API returns array of strings (tag names)
+                if (typeof tags[0] === 'string') {
+                    return tags.map(tagName => ({ 
+                        label: tagName, 
+                        value: tagName 
+                    }));
+                } 
+                // If API returns array of objects with id and name props
+                else if (tags[0] && typeof tags[0] === 'object') {
+                    return tags.map((tag: any) => ({ 
+                        label: tag.name, 
+                        value: tag.id || tag.name 
+                    }));
+                }
+            }
+            
+            // Fallback to empty array if response format is unexpected
+            return [];
+        } catch (error) {
+            console.error('Error searching tags:', error);
+            // Return empty array as fallback
+            return [];
+        }
+    },
+
+    // Create a new tag - Updated to use real API
+    createTag: async (data: { name: string }): Promise<{ id: string; name: string }> => {
+        console.log('Creating tag:', data);
+        try {
+            // Call API to create tag
+            const response = await axiosInstance.post(`${PRODUCTS_PATH}/tags/`, data);
+            
+            // Return the created tag - format depends on backend response
+            if (response.data.id) {
+                return {
+                    id: response.data.id,
+                    name: response.data.name
+                };
+            } else {
+                // If the API returns just the tag name
+                return {
+                    id: response.data,  // Use the returned value as ID
+                    name: data.name
+                };
+            }
+        } catch (error) {
+            console.error('Error creating tag:', error);
+            throw error; // Propagate error to be handled by the caller
+        }
     },
 
     // Get product statistics

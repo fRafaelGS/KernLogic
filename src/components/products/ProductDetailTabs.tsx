@@ -54,6 +54,8 @@ import axios from 'axios';
 import axiosInstance from '@/lib/axiosInstance';
 import { Slot } from '@radix-ui/react-slot';
 import { cn } from '@/lib/utils';
+// Import the CompletenessDrilldown component
+import { CompletenessDrilldown } from './CompletenessDrilldown';
 
 // ====== ATTRIBUTES INTERFACES (EXACT MATCH TO SPEC) ======
 // (Following exactly the backend shape specified in the requirements)
@@ -100,10 +102,6 @@ interface ProductDetailTabsProps {
 
 export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, onProductUpdate }) => {
   const [activeTab, setActiveTab] = useState('overview');
-  const [editing, setEditing] = useState(false);
-  const [editedDescription, setEditedDescription] = useState(product.description || '');
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
   
   // States for dynamic data
   const [attributes, setAttributes] = useState<ProductAttribute[]>([]);
@@ -128,6 +126,9 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
   const [attributeSaveError, setAttributeSaveError] = useState<{id: number, message: string} | null>(null);
   const [attributeSetId, setAttributeSetId] = useState<number | null>(null);
   
+  // Data completeness state
+  const [showDrilldown, setShowDrilldown] = useState(false);
+  
   // Loading states
   const [loadingAttributes, setLoadingAttributes] = useState(false);
   const [loadingAssets, setLoadingAssets] = useState(false);
@@ -141,11 +142,6 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
   // Permissions check
   const hasEditPermission = checkPermission ? checkPermission('product.edit') : true;
   const hasRevertPermission = checkPermission ? checkPermission('product.revert') : true;
-  
-  // Update local state when product prop changes
-  useEffect(() => {
-    setEditedDescription(product.description || '');
-  }, [product.description]);
   
   // Load data when component mounts or product changes
   useEffect(() => {
@@ -435,8 +431,8 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
   
   // Cancel editing an attribute
   const handleCancelEdit = () => {
-    setEditingAttributeId(null);
     setCurrentEditValue(null);
+    setEditingAttributeId(null);
     setAttributeSaveError(null);
   };
   
@@ -657,103 +653,88 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
     return availableAttributes.filter(attr => !usedIds.includes(attr.id));
   };
   
-  // Handle saving description
-  const handleSaveDescription = async () => {
-    // Reset error state
-    setSaveError(null);
-    
-    // Validate character limit
-    if (editedDescription.length > 10000) {
-      toast.error('Description exceeds maximum length of 10,000 characters');
-      return;
-    }
-    
-    // Remove script tags for security
-    const sanitizedDescription = editedDescription.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-    
-    setSaving(true);
-    try {
-      // Make a real API call to update the product description
-      if (product.id) {
-        const updatedProduct = await productService.updateProduct(product.id, { 
-          description: sanitizedDescription 
-        });
-        
-        // Update the product in the parent component if callback exists
-        if (onProductUpdate) {
-          onProductUpdate(updatedProduct);
-        } else {
-          // Fallback: update the product reference directly (less ideal)
-          product.description = sanitizedDescription;
-        }
-        
-        setEditing(false);
-        toast.success('Description updated successfully');
-      } else {
-        throw new Error('Product ID is missing');
-      }
-    } catch (error) {
-      console.error('Error updating description:', error);
-      
-      // Set error message for retry UI
-      setSaveError('Failed to update description. Please try again.');
-      
-      // Show toast with less detail
-      toast.error('Failed to update description');
-    } finally {
-      setSaving(false);
-    }
-  };
-  
-  // Retry save after error
-  const handleRetrySave = () => {
-    setSaveError(null);
-    handleSaveDescription();
-  };
-  
   // Calculate data completeness percentage and missing fields
   const calculateCompleteness = () => {
-    const requiredFields = [
-      { key: 'name', label: 'Name' },
-      { key: 'sku', label: 'SKU' },
-      { key: 'price', label: 'Price' },
-      { key: 'category', label: 'Category' },
-      { key: 'description', label: 'Description' },
-      { key: 'brand', label: 'Brand' },
-      { key: 'barcode', label: 'GTIN/Barcode' },
-      { key: 'tags', label: 'Tags' },
-      { key: 'images', label: 'Images' }
+    // Define field weights (match backend weights)
+    const fieldDefinitions = [
+      { key: 'name', label: 'Name', weight: 2 },
+      { key: 'sku', label: 'SKU', weight: 2 },
+      { key: 'price', label: 'Price', weight: 2 },
+      { key: 'description', label: 'Description', weight: 1.5 },
+      { key: 'category', label: 'Category', weight: 1.5 },
+      { key: 'brand', label: 'Brand', weight: 1 },
+      { key: 'barcode', label: 'GTIN/Barcode', weight: 1 },
+      { key: 'tags', label: 'Tags', weight: 1 },
+      { key: 'images', label: 'Images', weight: 1 }
     ];
     
-    const missingFields = requiredFields.filter(field => {
+    // Check which fields are complete
+    const fieldsStatus = fieldDefinitions.map(field => {
       const value = product[field.key as keyof Product];
-      if (field.key === 'tags' || field.key === 'images') {
-        return !value || (Array.isArray(value) && value.length === 0);
+      let isComplete = false;
+      
+      if (field.key === 'tags') {
+        isComplete = Array.isArray(value) && value.length > 0;
+      } else if (field.key === 'images') {
+        isComplete = Array.isArray(value) && value.length > 0 || !!product.primary_image_large;
+      } else if (field.key === 'price') {
+        isComplete = typeof value === 'number' && value > 0;
+      } else {
+        isComplete = !!value && (typeof value !== 'string' || value.trim() !== '');
       }
-      return !value && value !== 0;
-    }).map(field => field.label);
+      
+      return {
+        ...field,
+        complete: isComplete
+      };
+    });
     
     // Also check for mandatory attributes
-    // Make sure attributes is an array before using filter
     const mandatoryAttributes = Array.isArray(attributes) 
-      ? attributes.filter(attr => attr.isMandatory) 
+      ? attributes.filter(attr => attr.isMandatory).map(attr => ({
+          key: `attr_${attr.id}`, 
+          label: `${attr.group}: ${attr.name}`,
+          weight: 1.5, // Give mandatory attributes higher weight
+          complete: !!attr.value && attr.value.trim() !== ''
+        }))
       : [];
-      
-    const missingAttributes = mandatoryAttributes
-      .filter(attr => !attr.value || attr.value.trim() === '')
-      .map(attr => `${attr.group}: ${attr.name}`);
     
-    const allMissingFields = [...missingFields, ...missingAttributes];
+    // Combine all fields
+    const allFields = [...fieldsStatus, ...mandatoryAttributes];
     
-    // Calculate percentage
-    const totalFields = requiredFields.length + mandatoryAttributes.length;
-    const completedFields = totalFields - allMissingFields.length;
-    const percentage = Math.round((completedFields / totalFields) * 100);
+    // Calculate weighted percentage
+    const totalWeight = allFields.reduce((sum, field) => sum + field.weight, 0);
+    const completedWeight = allFields
+      .filter(field => field.complete)
+      .reduce((sum, field) => sum + field.weight, 0);
     
-    return { percentage, missingFields: allMissingFields };
+    const percentage = Math.round((completedWeight / totalWeight) * 100);
+    
+    // Get missing fields
+    const missingFields = allFields
+      .filter(field => !field.complete)
+      .map(field => field.label);
+    
+    return { 
+      percentage, 
+      missingFields,
+      fieldStatus: allFields
+    };
   };
   
-  const { percentage: completenessPercentage, missingFields } = calculateCompleteness();
+  const { 
+    percentage: completenessPercentage, 
+    missingFields,
+    fieldStatus 
+  } = calculateCompleteness();
+  
+  // Status text based on percentage
+  const getCompletenessStatus = (percentage: number) => {
+    if (percentage < 60) return "Poor";
+    if (percentage < 80) return "Fair";
+    if (percentage < 95) return "Good";
+    return "Excellent";
+  };
   
   // Helper function to get icon for asset type
   const getAssetIcon = (type: string) => {
@@ -1468,97 +1449,8 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
       {/* OVERVIEW TAB */}
       <TabsContent value="overview">
         <div className="space-y-6">
-          {/* Product Description */}
-          <Card>
-            <CardHeader className="flex flex-row items-start justify-between">
-              <CardTitle>Description</CardTitle>
-              {!editing && hasEditPermission && product.description && (
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => setEditing(true)}
-                  className="h-8 px-2"
-                >
-                  <PencilIcon className="h-4 w-4 mr-2" />
-                  Edit
-                </Button>
-              )}
-            </CardHeader>
-            <CardContent>
-              {saveError && (
-                <Alert variant="destructive" className="mb-4">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription className="flex items-center justify-between">
-                    <span>{saveError}</span>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={handleRetrySave}
-                      className="ml-2"
-                    >
-                      <RefreshCcw className="h-3 w-3 mr-1" />
-                      Retry
-                    </Button>
-                  </AlertDescription>
-                </Alert>
-              )}
-              
-              {editing ? (
-                <div className="space-y-4">
-                  <RichTextEditor 
-                    value={editedDescription} 
-                    onChange={setEditedDescription}
-                    placeholder="Enter product description using Markdown formatting..."
-                  />
-                  <div className="flex justify-between items-center">
-                    <span className={`text-xs ${editedDescription.length > 10000 ? 'text-red-500 font-medium' : 'text-slate-500'}`}>
-                      {editedDescription.length}/10,000 characters
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <Button 
-                        variant="outline" 
-                        onClick={handleCancelEdit} 
-                        disabled={saving}
-                      >
-                        Cancel
-                      </Button>
-                      <Button 
-                        onClick={handleSaveDescription} 
-                        disabled={saving || editedDescription.length > 10000}
-                      >
-                        {saving ? 'Saving...' : 'Save'}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {product.description ? (
-                    <div className="prose max-w-none">
-                      <ReactMarkdown>{product.description}</ReactMarkdown>
-                    </div>
-                  ) : (
-                    <div className="text-center py-10 text-slate-400">
-                      <p>No description available for this product.</p>
-                      {hasEditPermission && (
-                        <Button 
-                          variant="outline" 
-                          className="mt-4"
-                          onClick={() => setEditing(true)}
-                        >
-                          <PlusIcon className="h-4 w-4 mr-2" />
-                          Add description
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
-            </CardContent>
-          </Card>
-          
           {/* Data Completeness */}
-          <Card>
+          <Card className="relative">
             <CardHeader>
               <CardTitle>Data Completeness</CardTitle>
               <CardDescription>
@@ -1567,40 +1459,82 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="flex justify-between cursor-help">
-                        <span className="text-sm font-medium">
-                          {completenessPercentage}% Complete
-                        </span>
-                        <span className="text-sm text-slate-500">
-                          {completenessPercentage < 70 ? 'Needs improvement' : 'Good'}
-                        </span>
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent className="max-w-xs">
-                      {missingFields.length > 0 ? (
-                        <div>
-                          <p className="font-medium mb-1">Missing fields:</p>
-                          <ul className="list-disc pl-4 text-xs space-y-1">
-                            {missingFields.slice(0, 10).map((field, i) => (
-                              <li key={i}>{field}</li>
-                            ))}
-                            {missingFields.length > 10 && (
-                              <li>+{missingFields.length - 10} more</li>
-                            )}
-                          </ul>
-                        </div>
-                      ) : (
-                        <p>All required fields completed!</p>
-                      )}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-                <Progress value={completenessPercentage} className="h-2" />
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium">
+                    {completenessPercentage}% Complete
+                  </span>
+                  <span className={`text-sm ${
+                    completenessPercentage < 60 ? 'text-red-500' :
+                    completenessPercentage < 80 ? 'text-amber-500' :
+                    completenessPercentage < 95 ? 'text-green-500' :
+                    'text-emerald-500'
+                  }`}>
+                    {getCompletenessStatus(completenessPercentage)}
+                  </span>
+                </div>
+                
+                <div className="relative">
+                  <Progress 
+                    value={completenessPercentage} 
+                    className={`h-2.5 cursor-pointer ${
+                      completenessPercentage < 60 ? 'bg-red-100 text-red-500' :
+                      completenessPercentage < 80 ? 'bg-amber-100 text-amber-500' :
+                      completenessPercentage < 95 ? 'bg-green-100 text-green-500' :
+                      'bg-emerald-100 text-emerald-500'
+                    }`} 
+                    onClick={() => setShowDrilldown(true)}
+                  />
+                  {/* Threshold markers */}
+                  <div className="absolute top-0 left-[60%] h-2.5 border-r border-gray-300"></div>
+                  <div className="absolute top-0 left-[80%] h-2.5 border-r border-gray-300"></div>
+                  <div className="absolute top-0 left-[95%] h-2.5 border-r border-gray-300"></div>
+                </div>
+                
+                {missingFields.length > 0 ? (
+                  <div className="mt-3">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="text-xs"
+                            onClick={() => setShowDrilldown(true)}
+                          >
+                            View {missingFields.length} missing fields
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <div>
+                            <p className="font-medium mb-1">Missing fields:</p>
+                            <ul className="list-disc pl-4 text-xs space-y-1">
+                              {missingFields.slice(0, 5).map((field, i) => (
+                                <li key={i}>{field}</li>
+                              ))}
+                              {missingFields.length > 5 && (
+                                <li>+{missingFields.length - 5} more</li>
+                              )}
+                            </ul>
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                ) : (
+                  <p className="text-xs text-emerald-500 mt-1">
+                    All required fields completed!
+                  </p>
+                )}
               </div>
             </CardContent>
+            
+            {/* Completeness Drilldown */}
+            <CompletenessDrilldown
+              open={showDrilldown}
+              onOpenChange={setShowDrilldown}
+              percentage={completenessPercentage}
+              fieldStatus={fieldStatus}
+            />
           </Card>
           
           {/* Media Carousel (if there are images) */}

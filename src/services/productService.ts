@@ -114,6 +114,16 @@ export interface PriceHistory {
     user: string;
 }
 
+// Type for explicit product relations
+export interface ProductRelation {
+  id: number;
+  product_id: number;
+  related_product_id: number;
+  relationship_type: string;
+  is_pinned: boolean;
+  created_at: string;
+}
+
 // Fetch available attributes for an attribute set (by setId)
 const getAttributeSet = async (setId: number) => {
   // Example endpoint: /api/attribute-sets/:setId/
@@ -620,6 +630,7 @@ export const productService = {
         }
         
         try {
+            // Keep the original "related" path since the backend still uses this URL pattern for DELETE
             const url = `${PRODUCTS_API_URL}/${productId}/related/${relatedProductId}/`;
             await axiosInstance.delete(url);
             return true;
@@ -648,6 +659,18 @@ export const productService = {
             return Array.isArray(response.data) ? response.data : [];
         } catch (error) {
             console.error('Error searching products:', error);
+            return [];
+        }
+    },
+
+    // Get explicit product relations
+    getExplicitRelations: async (productId: number): Promise<ProductRelation[]> => {
+        try {
+            const url = `${PRODUCTS_API_URL}/${productId}/explicit-relations/`;
+            const response = await axiosInstance.get(url);
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching explicit relations:', error);
             return [];
         }
     },

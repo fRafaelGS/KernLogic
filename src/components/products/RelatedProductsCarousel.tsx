@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeftIcon, ChevronRightIcon, X, RefreshCw } from 'lucide-react';
+import { ChevronLeftIcon, ChevronRightIcon, X, RefreshCw, Link2, TagIcon } from 'lucide-react';
 import { Card, CardContent, CardFooter } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -8,6 +8,7 @@ import { Skeleton } from '../ui/skeleton';
 import { productService, Product } from '../../services/productService';
 import AddRelatedProductPanel from './AddRelatedProductPanel';
 import { toast } from 'sonner';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 
 // Helper function to format currency
 const formatCurrency = (price: number): string => {
@@ -22,11 +23,15 @@ interface RelatedProductsCarouselProps {
   onRefresh?: () => void;
 }
 
+interface ExtendedProduct extends Product {
+  isExplicitlyRelated?: boolean;
+}
+
 const RelatedProductsCarousel: React.FC<RelatedProductsCarouselProps> = ({ 
   productId, 
   onRefresh 
 }) => {
-  const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
+  const [relatedProducts, setRelatedProducts] = useState<ExtendedProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -50,8 +55,22 @@ const RelatedProductsCarousel: React.FC<RelatedProductsCarouselProps> = ({
     setError(null);
     
     try {
+      // 1. Get all related products (explicit + category matches)
       const products = await productService.getRelatedProducts(productId);
-      setRelatedProducts(products);
+      
+      // 2. Get explicit relationships to identify which products are explicitly related
+      const explicitRelations = await productService.getExplicitRelations(productId)
+        .catch(() => []);
+      
+      const explicitProductIds = new Set(explicitRelations.map(rel => rel.related_product_id));
+      
+      // 3. Mark products that are explicitly related
+      const extendedProducts: ExtendedProduct[] = products.map(product => ({
+        ...product,
+        isExplicitlyRelated: explicitProductIds.has(product.id as number)
+      }));
+      
+      setRelatedProducts(extendedProducts);
     } catch (err) {
       console.error('Error loading related products:', err);
       setError('Failed to load related products');
@@ -64,7 +83,10 @@ const RelatedProductsCarousel: React.FC<RelatedProductsCarouselProps> = ({
   // Handle adding a new related product
   const handleAddRelatedProduct = async (product: Product) => {
     // Optimistically update UI
-    setRelatedProducts(prev => [product, ...prev]);
+    setRelatedProducts(prev => [{
+      ...product,
+      isExplicitlyRelated: true
+    }, ...prev]);
     
     // Call API to add the relation
     try {
@@ -87,9 +109,15 @@ const RelatedProductsCarousel: React.FC<RelatedProductsCarouselProps> = ({
   };
   
   // Handle removing a related product
-  const handleRemoveRelatedProduct = async (productToRemove: Product) => {
+  const handleRemoveRelatedProduct = async (productToRemove: ExtendedProduct) => {
     if (!productToRemove.id) {
       toast.error("Invalid product selected for removal");
+      return;
+    }
+    
+    // Can only remove explicitly related products
+    if (!productToRemove.isExplicitlyRelated) {
+      toast.info("This product is shown as related because it shares the same category. It can't be removed.");
       return;
     }
     
@@ -225,27 +253,52 @@ const RelatedProductsCarousel: React.FC<RelatedProductsCarouselProps> = ({
             {visibleProducts.map((product) => (
               <Card key={product.id} className="h-full flex flex-col">
                 <CardContent className="p-4 flex-grow relative">
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="absolute top-1 right-1 h-6 w-6 rounded-full opacity-60 hover:opacity-100"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      handleRemoveRelatedProduct(product);
-                    }}
-                    aria-label={`Remove ${product.name} from related products`}
-                  >
-                    <X className="h-3 w-3" />
-                    <span className="sr-only">Remove</span>
-                  </Button>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className={`absolute top-1 right-1 h-6 w-6 rounded-full ${product.isExplicitlyRelated ? 'opacity-60 hover:opacity-100' : 'opacity-40 hover:opacity-60'}`}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleRemoveRelatedProduct(product);
+                          }}
+                          aria-label={product.isExplicitlyRelated ? 
+                            `Remove ${product.name} from related products` :
+                            `${product.name} is related by category`}
+                        >
+                          {product.isExplicitlyRelated ? (
+                            <X className="h-3 w-3" />
+                          ) : (
+                            <TagIcon className="h-3 w-3" />
+                          )}
+                          <span className="sr-only">
+                            {product.isExplicitlyRelated ? "Remove" : "Category match"}
+                          </span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="left">
+                        {product.isExplicitlyRelated 
+                          ? "Remove related product" 
+                          : "This product is shown as related because it shares the same category"}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                   
-                  <Link 
-                    to={`/app/products/${product.id}`} 
-                    className="block hover:underline font-medium mb-2 truncate"
-                  >
-                    {product.name}
-                  </Link>
+                  <div className="flex items-center mb-2">
+                    <Link 
+                      to={`/app/products/${product.id}`} 
+                      className="block hover:underline font-medium truncate flex-1"
+                    >
+                      {product.name}
+                    </Link>
+                    
+                    {product.isExplicitlyRelated && (
+                      <Link2 className="h-3 w-3 text-muted-foreground ml-1 flex-shrink-0" />
+                    )}
+                  </div>
                   
                   <p className="text-sm text-muted-foreground mb-2 truncate">
                     SKU: {product.sku}

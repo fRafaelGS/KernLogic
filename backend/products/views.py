@@ -591,6 +591,31 @@ class ProductViewSet(viewsets.ModelViewSet):
             status=status.HTTP_405_METHOD_NOT_ALLOWED
         )
 
+    @action(detail=True, methods=['get'], url_path='explicit-relations')
+    def explicit_relations(self, request, pk=None):
+        """
+        Return only the explicitly related products through ProductRelation model.
+        Does not include category matches.
+        """
+        # Get the current product
+        product = self.get_object()
+        
+        # Get only explicit relations from the ProductRelation model
+        relations = ProductRelation.objects.filter(
+            product=product
+        ).select_related('related_product')
+        
+        # Serialize the relations
+        from rest_framework import serializers
+        
+        class RelationSerializer(serializers.ModelSerializer):
+            class Meta:
+                model = ProductRelation
+                fields = ['id', 'related_product_id', 'relationship_type', 'is_pinned', 'created_at']
+                
+        serializer = RelationSerializer(relations, many=True)
+        return Response(serializer.data)
+
 # Add endpoints for dashboard data
 class DashboardViewSet(viewsets.ViewSet):
     """

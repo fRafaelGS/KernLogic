@@ -18,6 +18,23 @@ const CORE_FIELDS = [
   'is_active'
 ];
 
+// Helper function to check for HTML responses
+const isHtmlResponse = (data: any): boolean => {
+  if (typeof data === 'string' && data.trim().startsWith('<!DOCTYPE html>')) {
+    console.error('HTML response detected instead of JSON data');
+    // This could trigger a re-login if needed
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    
+    // Only redirect if we're not already on the login page
+    if (!window.location.pathname.includes('/login')) {
+      window.location.href = '/login?sessionExpired=true';
+    }
+    return true;
+  }
+  return false;
+};
+
 // REMOVE global header setting - interceptor handles this
 // const token = localStorage.getItem('access_token');
 // if (token) {
@@ -89,6 +106,10 @@ export interface ProductAsset {
     resolution?: string;
     uploaded_by: string;
     uploaded_at: string;
+    is_primary?: boolean;
+    is_archived?: boolean;
+    parent_asset_id?: number;
+    version?: string;
 }
 
 export interface ProductActivity {
@@ -239,6 +260,11 @@ export const productService = {
             console.log('[productService.getProducts] Is response.data an array?:', Array.isArray(response.data)); 
             // --- END DEBUG LOGS ---
             console.log('Products API response:', response.data); // Original log
+            
+            // Check for HTML response
+            if (isHtmlResponse(response.data)) {
+                return [];
+            }
             
             // Handle paginated response format
             if (response.data && typeof response.data === 'object' && 'results' in response.data) {
@@ -523,8 +549,28 @@ export const productService = {
     // Get product assets
     getProductAssets: async (productId: number): Promise<ProductAsset[]> => {
         try {
-            const url = `${PRODUCTS_PATH}/${productId}/assets/`;
+            // Use /api/products/:id/ format to match the working attributes endpoint
+            const url = `/api/products/${productId}/assets/`;
+            console.log('[getProductAssets] Requesting assets from URL:', url);
+            
             const response = await axiosInstance.get(url);
+            
+            // Check if response is HTML first
+            if (typeof response.data === 'string' && response.data.startsWith('<!DOCTYPE')) {
+                console.error("[getProductAssets] Received HTML response instead of JSON. Try using a different endpoint.");
+                return [];
+            }
+            
+            // Then check if response is an array
+            if (!Array.isArray(response.data)) {
+                console.error("[getProductAssets] Invalid response format for product assets: ", 
+                  typeof response.data === 'string' && response.data.startsWith('<!DOCTYPE') 
+                    ? "HTML response received instead of JSON" 
+                    : response.data
+                );
+                return [];
+            }
+            
             return response.data;
         } catch (error) {
             console.error('Error fetching product assets:', error);
@@ -535,8 +581,27 @@ export const productService = {
     // Get product activity log
     getProductActivities: async (productId: number): Promise<ProductActivity[]> => {
         try {
-            const url = `${PRODUCTS_PATH}/${productId}/activities/`;
+            const url = `/api/products/${productId}/activities/`;
+            console.log('[getProductActivities] Requesting activities from URL:', url);
+            
             const response = await axiosInstance.get(url);
+            
+            // Check if response is HTML first
+            if (typeof response.data === 'string' && response.data.startsWith('<!DOCTYPE')) {
+                console.error("[getProductActivities] Received HTML response instead of JSON. Try using a different endpoint.");
+                return [];
+            }
+            
+            // Check if response is an array
+            if (!Array.isArray(response.data)) {
+                console.error("[getProductActivities] Invalid response format for product activities:", 
+                    typeof response.data === 'string' && response.data.startsWith('<!DOCTYPE') 
+                        ? "HTML response received instead of JSON" 
+                        : response.data
+                );
+                return [];
+            }
+            
             return response.data;
         } catch (error) {
             console.error('Error fetching product activities:', error);
@@ -547,8 +612,27 @@ export const productService = {
     // Get product versions
     getProductVersions: async (productId: number): Promise<ProductVersion[]> => {
         try {
-            const url = `${PRODUCTS_PATH}/${productId}/versions/`;
+            const url = `/api/products/${productId}/versions/`;
+            console.log('[getProductVersions] Requesting versions from URL:', url);
+            
             const response = await axiosInstance.get(url);
+            
+            // Check if response is HTML first
+            if (typeof response.data === 'string' && response.data.startsWith('<!DOCTYPE')) {
+                console.error("[getProductVersions] Received HTML response instead of JSON. Try using a different endpoint.");
+                return [];
+            }
+            
+            // Check if response is an array
+            if (!Array.isArray(response.data)) {
+                console.error("[getProductVersions] Invalid response format for product versions:", 
+                    typeof response.data === 'string' && response.data.startsWith('<!DOCTYPE') 
+                        ? "HTML response received instead of JSON" 
+                        : response.data
+                );
+                return [];
+            }
+            
             return response.data;
         } catch (error) {
             console.error('Error fetching product versions:', error);
@@ -559,8 +643,27 @@ export const productService = {
     // Get product price history
     getPriceHistory: async (productId: number): Promise<PriceHistory[]> => {
         try {
-            const url = `${PRODUCTS_PATH}/${productId}/price-history/`;
+            const url = `/api/products/${productId}/price-history/`;
+            console.log('[getPriceHistory] Requesting price history from URL:', url);
+            
             const response = await axiosInstance.get(url);
+            
+            // Check if response is HTML first
+            if (typeof response.data === 'string' && response.data.startsWith('<!DOCTYPE')) {
+                console.error("[getPriceHistory] Received HTML response instead of JSON. Try using a different endpoint.");
+                return [];
+            }
+            
+            // Check if response is an array
+            if (!Array.isArray(response.data)) {
+                console.error("[getPriceHistory] Invalid response format for price history:", 
+                    typeof response.data === 'string' && response.data.startsWith('<!DOCTYPE') 
+                        ? "HTML response received instead of JSON" 
+                        : response.data
+                );
+                return [];
+            }
+            
             return response.data;
         } catch (error) {
             console.error('Error fetching price history:', error);
@@ -672,6 +775,19 @@ export const productService = {
         } catch (error) {
             console.error('Error fetching explicit relations:', error);
             return [];
+        }
+    },
+
+    // Set an asset as primary (POST method instead of PATCH)
+    setPrimaryAsset: async (productId: number, assetId: number | string): Promise<boolean> => {
+        try {
+            // Use POST method with a specific endpoint for setting primary
+            const url = `${PRODUCTS_API_URL}/${productId}/assets/${assetId}/set-primary/`;
+            await axiosInstance.post(url);
+            return true;
+        } catch (error) {
+            console.error('Error setting asset as primary:', error);
+            return false;
         }
     },
 

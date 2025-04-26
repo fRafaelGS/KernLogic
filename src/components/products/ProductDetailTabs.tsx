@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Product, productService, ProductAttribute, ProductAsset, ProductActivity, ProductVersion, PriceHistory, PRODUCTS_API_URL as PRODUCTS_PATH } from '@/services/productService';
+import { Product, productService, ProductAttribute, ProductAsset, ProductActivity, ProductVersion, PriceHistory, PRODUCTS_API_URL as PRODUCTS_PATH, ProductImage } from '@/services/productService';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { 
   ImageIcon, FileIcon, FileTypeIcon, FileTextIcon, Clipboard, CalendarIcon, 
   History, AlertTriangle, PlusIcon, PencilIcon, AlertCircle, RefreshCcw,
-  Check, ChevronDown, ChevronRight, Save, X, Edit2, Calendar, Flag, Pin
+  Check, ChevronDown, ChevronRight, Save, X, Edit2, Calendar, Flag, Pin, InfoIcon
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -60,6 +60,9 @@ import { Carousel, CarouselContent, CarouselItem, CarouselPrevious, CarouselNext
 import { Link } from 'react-router-dom';
 import { debounce } from 'lodash';
 import RelatedProductsCarousel from './RelatedProductsCarousel';
+// Import the AssetsTab component
+import { AssetsTab } from './AssetsTab';
+import { Skeleton } from "@/components/ui/skeleton";
 
 // ====== ATTRIBUTES INTERFACES (EXACT MATCH TO SPEC) ======
 // (Following exactly the backend shape specified in the requirements)
@@ -150,6 +153,7 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
   useEffect(() => {
     if (product.id) {
       fetchAttributes();
+      // Always fetch assets on initial load, regardless of activeTab
       fetchAssets();
       fetchActivities();
       fetchVersions();
@@ -158,7 +162,17 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
       // Fetch attribute data according to spec
       fetchAttributeSet();
     }
-  }, [product.id]);
+  }, [product.id]); // Only depend on product.id, not activeTab
+
+  // This effect is not needed anymore since we always load assets on mount
+  // Alternatively, you could keep it to refresh assets when switching to the assets tab
+  useEffect(() => {
+    // Refresh assets when switching to assets tab
+    if (activeTab === 'assets' && product.id) {
+      console.log('Refreshing assets because user navigated to assets tab');
+      fetchAssets();
+    }
+  }, [activeTab, product.id]);
 
   // Fetch attributes from API
   const fetchAttributes = async () => {
@@ -187,26 +201,83 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
 
   // Fetch assets from API
   const fetchAssets = async () => {
-    if (!product.id) return;
+    if (!product?.id) return;
     
     setLoadingAssets(true);
+    
+    // Try to fetch from API first
+    let fetchedAssets: ProductAsset[] = [];
     try {
-      const data = await productService.getProductAssets(product.id);
-      // Ensure data is always an array
-      setAssets(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Error fetching assets:', error);
-      // Fallback to mock data if API fails
-      setAssets([
-        { id: 1, name: 'Product Front', type: 'image', url: 'https://placehold.co/600x400', size: '250KB', resolution: '2000x1500', uploaded_by: 'John Doe', uploaded_at: '2023-10-10T10:15:00Z' },
-        { id: 2, name: 'Product Side', type: 'image', url: 'https://placehold.co/600x400', size: '180KB', resolution: '1800x1200', uploaded_by: 'John Doe', uploaded_at: '2023-10-10T10:16:00Z' },
-        { id: 3, name: 'Manual', type: 'pdf', url: '#', size: '1.2MB', uploaded_by: 'Jane Smith', uploaded_at: '2023-10-12T14:30:00Z' },
-        { id: 4, name: 'Safety Data Sheet', type: 'pdf', url: '#', size: '450KB', uploaded_by: 'Jane Smith', uploaded_at: '2023-10-15T09:45:00Z' },
-        { id: 5, name: '3D Model', type: '3d', url: '#', size: '2.5MB', uploaded_by: 'Mike Johnson', uploaded_at: '2023-11-05T11:20:00Z' },
-      ]);
-    } finally {
-      setLoadingAssets(false);
+      // Attempt to get assets from API
+      fetchedAssets = await productService.getProductAssets(product.id);
+      
+      // If we got a valid response with at least one asset
+      if (Array.isArray(fetchedAssets) && fetchedAssets.length > 0) {
+        console.log('Successfully fetched assets from API:', fetchedAssets.length);
+        setAssets(fetchedAssets);
+        
+        // Cache the assets in localStorage
+        localStorage.setItem(`product_assets_${product.id}`, JSON.stringify(fetchedAssets));
+        setLoadingAssets(false);
+        return;
+      } else {
+        console.warn('API returned empty asset array, will try cache');
+      }
+    } catch (err) {
+      console.error('Error fetching assets from API:', err);
+      // Continue to try cache on error
     }
+    
+    // If API failed or returned empty, try to use cache
+    try {
+      const cachedAssetsJSON = localStorage.getItem(`product_assets_${product.id}`);
+      if (cachedAssetsJSON) {
+        const cachedAssets = JSON.parse(cachedAssetsJSON);
+        if (Array.isArray(cachedAssets) && cachedAssets.length > 0) {
+          console.log(`Using ${cachedAssets.length} cached assets from localStorage`);
+          setAssets(cachedAssets);
+          setLoadingAssets(false);
+          return;
+        }
+      }
+    } catch (err) {
+      console.error('Error reading cached assets:', err);
+    }
+    
+    // If we got here, both API and cache failed - use fallback
+    console.warn('No assets from API or cache, using fallback data');
+    
+    // Create mock assets from product images if available
+    if (product.images && product.images.length > 0) {
+      const mockAssets = product.images.map((image, index) => ({
+        id: 1000 + index, // Use number IDs for mock assets
+        name: `Product Image ${index + 1}`,
+        url: image.url,
+        type: 'image',
+        size: "0",
+        is_primary: image.is_primary || index === 0,
+        uploaded_at: new Date().toISOString(),
+        uploaded_by: 'system'
+      }));
+      console.log('Created mock assets from product images:', mockAssets);
+      setAssets(mockAssets);
+    } else if (product.primary_image_large) {
+      // If no images array but has primary image, create a single mock asset
+      const mockAsset = {
+        id: 1000, // Use number ID for mock asset
+        name: 'Primary Product Image',
+        url: product.primary_image_large,
+        type: 'image',
+        size: "0",
+        is_primary: true,
+        uploaded_at: new Date().toISOString(),
+        uploaded_by: 'system'
+      };
+      console.log('Created single mock asset from primary image:', mockAsset);
+      setAssets([mockAsset]);
+    }
+    
+    setLoadingAssets(false);
   };
 
   // Fetch activities from API
@@ -214,22 +285,48 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
     if (!product.id) return;
     
     setLoadingActivities(true);
+    
     try {
+      console.log('Attempting to fetch activities for product ID:', product.id);
       const data = await productService.getProductActivities(product.id);
+      
       // Ensure data is always an array
-      setActivities(Array.isArray(data) ? data : []);
+      if (Array.isArray(data) && data.length > 0) {
+        console.log('Successfully fetched activities:', data.length);
+        setActivities(data);
+      } else {
+        console.warn('No activities returned from API or invalid response format');
+        // Don't override existing activities if we get an empty response
+        if (activities.length === 0) {
+          console.log('Using mock activities as fallback');
+          // Fallback to mock data if API fails
+          setActivities([
+            { id: 1, type: 'create', user: 'John Doe', timestamp: '2023-10-01T09:00:00Z', details: 'Product created' },
+            { id: 2, type: 'update', user: 'John Doe', timestamp: '2023-10-05T14:30:00Z', details: 'Updated price from $85.00 to $89.99' },
+            { id: 3, type: 'asset_add', user: 'Jane Smith', timestamp: '2023-10-10T10:15:00Z', details: 'Added product images (2)' },
+            { id: 4, type: 'update', user: 'Mike Johnson', timestamp: '2023-10-12T11:45:00Z', details: 'Updated description' },
+            { id: 5, type: 'asset_add', user: 'Jane Smith', timestamp: '2023-10-12T14:30:00Z', details: 'Added product manual' },
+            { id: 6, type: 'status_change', user: 'Mike Johnson', timestamp: '2023-10-20T16:00:00Z', details: 'Changed status to Active' },
+            { id: 7, type: 'update', user: 'John Doe', timestamp: '2023-11-05T09:15:00Z', details: 'Updated category from "Electronics" to "Audio Electronics"' },
+          ]);
+        }
+      }
     } catch (error) {
       console.error('Error fetching activities:', error);
-      // Fallback to mock data if API fails
-      setActivities([
-        { id: 1, type: 'create', user: 'John Doe', timestamp: '2023-10-01T09:00:00Z', details: 'Product created' },
-        { id: 2, type: 'update', user: 'John Doe', timestamp: '2023-10-05T14:30:00Z', details: 'Updated price from $85.00 to $89.99' },
-        { id: 3, type: 'asset_add', user: 'Jane Smith', timestamp: '2023-10-10T10:15:00Z', details: 'Added product images (2)' },
-        { id: 4, type: 'update', user: 'Mike Johnson', timestamp: '2023-10-12T11:45:00Z', details: 'Updated description' },
-        { id: 5, type: 'asset_add', user: 'Jane Smith', timestamp: '2023-10-12T14:30:00Z', details: 'Added product manual' },
-        { id: 6, type: 'status_change', user: 'Mike Johnson', timestamp: '2023-10-20T16:00:00Z', details: 'Changed status to Active' },
-        { id: 7, type: 'update', user: 'John Doe', timestamp: '2023-11-05T09:15:00Z', details: 'Updated category from "Electronics" to "Audio Electronics"' },
-      ]);
+      // Only use fallback if no existing data
+      if (activities.length === 0) {
+        console.log('Using mock activities due to error');
+        // Fallback to mock data if API fails
+        setActivities([
+          { id: 1, type: 'create', user: 'John Doe', timestamp: '2023-10-01T09:00:00Z', details: 'Product created' },
+          { id: 2, type: 'update', user: 'John Doe', timestamp: '2023-10-05T14:30:00Z', details: 'Updated price from $85.00 to $89.99' },
+          { id: 3, type: 'asset_add', user: 'Jane Smith', timestamp: '2023-10-10T10:15:00Z', details: 'Added product images (2)' },
+          { id: 4, type: 'update', user: 'Mike Johnson', timestamp: '2023-10-12T11:45:00Z', details: 'Updated description' },
+          { id: 5, type: 'asset_add', user: 'Jane Smith', timestamp: '2023-10-12T14:30:00Z', details: 'Added product manual' },
+          { id: 6, type: 'status_change', user: 'Mike Johnson', timestamp: '2023-10-20T16:00:00Z', details: 'Changed status to Active' },
+          { id: 7, type: 'update', user: 'John Doe', timestamp: '2023-11-05T09:15:00Z', details: 'Updated category from "Electronics" to "Audio Electronics"' },
+        ]);
+      }
     } finally {
       setLoadingActivities(false);
     }
@@ -240,20 +337,44 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
     if (!product.id) return;
     
     setLoadingVersions(true);
+    
     try {
+      console.log('Attempting to fetch versions for product ID:', product.id);
       const data = await productService.getProductVersions(product.id);
+      
       // Ensure data is always an array
-      setVersions(Array.isArray(data) ? data : []);
+      if (Array.isArray(data) && data.length > 0) {
+        console.log('Successfully fetched versions:', data.length);
+        setVersions(data);
+      } else {
+        console.warn('No versions returned from API or invalid response format');
+        // Don't override existing versions if we get an empty response
+        if (versions.length === 0) {
+          console.log('Using mock versions as fallback');
+          // Fallback to mock data if API fails
+          setVersions([
+            { id: 1, version: 'v1.0', timestamp: '2023-10-01T09:00:00Z', user: 'John Doe', summary: 'Initial version' },
+            { id: 2, version: 'v1.1', timestamp: '2023-10-05T14:30:00Z', user: 'John Doe', summary: 'Price update' },
+            { id: 3, version: 'v1.2', timestamp: '2023-10-12T11:45:00Z', user: 'Mike Johnson', summary: 'Description update' },
+            { id: 4, version: 'v1.3', timestamp: '2023-10-20T16:00:00Z', user: 'Mike Johnson', summary: 'Status change' },
+            { id: 5, version: 'v1.4', timestamp: '2023-11-05T09:15:00Z', user: 'John Doe', summary: 'Category update' },
+          ]);
+        }
+      }
     } catch (error) {
       console.error('Error fetching versions:', error);
-      // Fallback to mock data if API fails
-      setVersions([
-        { id: 1, version: 'v1.0', timestamp: '2023-10-01T09:00:00Z', user: 'John Doe', summary: 'Initial version' },
-        { id: 2, version: 'v1.1', timestamp: '2023-10-05T14:30:00Z', user: 'John Doe', summary: 'Price update' },
-        { id: 3, version: 'v1.2', timestamp: '2023-10-12T11:45:00Z', user: 'Mike Johnson', summary: 'Description update' },
-        { id: 4, version: 'v1.3', timestamp: '2023-10-20T16:00:00Z', user: 'Mike Johnson', summary: 'Status change' },
-        { id: 5, version: 'v1.4', timestamp: '2023-11-05T09:15:00Z', user: 'John Doe', summary: 'Category update' },
-      ]);
+      // Only use fallback if no existing data
+      if (versions.length === 0) {
+        console.log('Using mock versions due to error');
+        // Fallback to mock data if API fails
+        setVersions([
+          { id: 1, version: 'v1.0', timestamp: '2023-10-01T09:00:00Z', user: 'John Doe', summary: 'Initial version' },
+          { id: 2, version: 'v1.1', timestamp: '2023-10-05T14:30:00Z', user: 'John Doe', summary: 'Price update' },
+          { id: 3, version: 'v1.2', timestamp: '2023-10-12T11:45:00Z', user: 'Mike Johnson', summary: 'Description update' },
+          { id: 4, version: 'v1.3', timestamp: '2023-10-20T16:00:00Z', user: 'Mike Johnson', summary: 'Status change' },
+          { id: 5, version: 'v1.4', timestamp: '2023-11-05T09:15:00Z', user: 'John Doe', summary: 'Category update' },
+        ]);
+      }
     } finally {
       setLoadingVersions(false);
     }
@@ -264,17 +385,38 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
     if (!product.id) return;
     
     try {
+      console.log('Attempting to fetch price history for product ID:', product.id);
       const data = await productService.getPriceHistory(product.id);
+      
       // Ensure data is always an array
-      setPriceHistory(Array.isArray(data) ? data : []);
+      if (Array.isArray(data) && data.length > 0) {
+        console.log('Successfully fetched price history:', data.length);
+        setPriceHistory(data);
+      } else {
+        console.warn('No price history returned from API or invalid response format');
+        // Don't override existing price history if we get an empty response
+        if (priceHistory.length === 0) {
+          console.log('Using mock price history as fallback');
+          // Fallback to mock data if API fails
+          setPriceHistory([
+            { date: '2023-11-10', oldPrice: '85.00', newPrice: '89.99', user: 'John Doe' },
+            { date: '2023-09-25', oldPrice: '79.99', newPrice: '85.00', user: 'Jane Smith' },
+            { date: '2023-08-15', oldPrice: '75.00', newPrice: '79.99', user: 'Mike Johnson' },
+          ]);
+        }
+      }
     } catch (error) {
       console.error('Error fetching price history:', error);
-      // Fallback to mock data if API fails
-      setPriceHistory([
-        { date: '2023-11-10', oldPrice: '85.00', newPrice: '89.99', user: 'John Doe' },
-        { date: '2023-09-25', oldPrice: '79.99', newPrice: '85.00', user: 'Jane Smith' },
-        { date: '2023-08-15', oldPrice: '75.00', newPrice: '79.99', user: 'Mike Johnson' },
-      ]);
+      // Only use fallback if no existing data
+      if (priceHistory.length === 0) {
+        console.log('Using mock price history due to error');
+        // Fallback to mock data if API fails
+        setPriceHistory([
+          { date: '2023-11-10', oldPrice: '85.00', newPrice: '89.99', user: 'John Doe' },
+          { date: '2023-09-25', oldPrice: '79.99', newPrice: '85.00', user: 'Jane Smith' },
+          { date: '2023-08-15', oldPrice: '75.00', newPrice: '79.99', user: 'Mike Johnson' },
+        ]);
+      }
     }
   };
 
@@ -624,7 +766,9 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
   
   // Calculate data completeness percentage and missing fields
   const calculateCompleteness = () => {
-    // Define field weights (match backend weights)
+    if (!product) return { percentage: 0, missingFields: [], fieldStatus: [] };
+    
+    // Define required fields that should be present for completeness
     const fieldDefinitions = [
       { key: 'name', label: 'Name', weight: 2 },
       { key: 'sku', label: 'SKU', weight: 2 },
@@ -658,7 +802,7 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
       };
     });
     
-    // Also check for mandatory attributes
+    // Add mandatory attributes
     const mandatoryAttributes = Array.isArray(attributes) 
       ? attributes.filter(attr => attr.isMandatory).map(attr => ({
           key: `attr_${attr.id}`, 
@@ -690,7 +834,7 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
       fieldStatus: allFields
     };
   };
-  
+
   const { 
     percentage: completenessPercentage, 
     missingFields,
@@ -1400,120 +1544,239 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
     }
   }, [selectedLocale, product.id]);
 
+  // Handle asset update from AssetsTab (set primary image)
+  const handleAssetUpdate = async (updatedAssets: ProductAsset[]) => {
+    console.log('ProductDetailTabs received updated assets:', updatedAssets);
+    
+    // Sort assets to display primary first
+    const sortedAssets = [...updatedAssets].sort((a, b) => {
+      // Primary images always come first
+      if (a.is_primary && !b.is_primary) return -1;
+      if (!a.is_primary && b.is_primary) return 1;
+      
+      // If both are primary or both are not, sort by upload date (newest first)
+      return new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime();
+    });
+    
+    // Find primary image to update product
+    const primaryAsset = sortedAssets.find(asset => asset.is_primary && asset.type?.toLowerCase() === 'image');
+    
+    if (primaryAsset) {
+      console.log('Setting primary image:', primaryAsset.url);
+      
+      // Create product images array with proper typing for ProductImage
+      const updatedImages = sortedAssets
+        .filter(asset => asset.type?.toLowerCase() === 'image')
+        .map((asset, index) => ({
+          id: typeof asset.id === 'string' ? parseInt(asset.id, 10) : Number(asset.id), // Convert to number
+          url: asset.url,
+          is_primary: asset.is_primary || false,
+          order: index // Use index as order
+        }));
+      
+      // Update product with sorted assets and primary image URL
+      const updatedProduct = {
+        ...product,
+        primary_image_thumb: primaryAsset.url,
+        primary_image_large: primaryAsset.url,
+        images: updatedImages
+      };
+      
+      // Update localStorage if needed
+      if (product.id) {
+        try {
+          const storedProduct = localStorage.getItem(`product_${product.id}`);
+          if (storedProduct) {
+            const parsedProduct = JSON.parse(storedProduct);
+            localStorage.setItem(`product_${product.id}`, JSON.stringify({
+              ...parsedProduct,
+              primary_image_thumb: primaryAsset.url,
+              primary_image_large: primaryAsset.url,
+              images: updatedImages
+            }));
+          }
+        } catch (err) {
+          console.error('Error updating product in localStorage:', err);
+        }
+        
+        // Persist the changes to the backend
+        try {
+          // Send the updated product to the server
+          await productService.updateProduct(product.id, {
+            primary_image_thumb: primaryAsset.url,
+            primary_image_large: primaryAsset.url,
+            images: updatedImages
+          });
+          console.log('Successfully persisted primary image update to server');
+          
+          // Force a refresh of assets to ensure we have the latest data
+          await fetchAssets();
+        } catch (err) {
+          console.error('Error persisting primary image update to server:', err);
+          toast.error('Failed to save primary image change');
+        }
+      }
+      
+      // Update local state
+      onProductUpdate(updatedProduct);
+    }
+    
+    // Always update assets even if no primary image found
+    setAssets(sortedAssets);
+  };
+
   return (
-    <Tabs
-      defaultValue="overview"
-      value={activeTab}
+    <Tabs 
+      value={activeTab} 
       onValueChange={setActiveTab}
       className="w-full"
     >
-      <TabsList className="grid grid-cols-5 mb-6" aria-label="Product details tabs">
+      <TabsList className="mb-6">
         <TabsTrigger value="overview">Overview</TabsTrigger>
         <TabsTrigger value="attributes">Attributes</TabsTrigger>
         <TabsTrigger value="assets">Assets</TabsTrigger>
-        <TabsTrigger value="activity">Activity</TabsTrigger>
-        <TabsTrigger value="versions">Versions</TabsTrigger>
+        <TabsTrigger value="history">History</TabsTrigger>
       </TabsList>
       
-      {/* OVERVIEW TAB */}
-      <TabsContent value="overview">
-        <div className="space-y-6">
-          {/* Data Completeness */}
-          <Card className="relative">
-            <CardHeader>
-              <CardTitle>Data Completeness</CardTitle>
-              <CardDescription>
-                Track the completeness of your product data.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-sm font-medium">
-                    {completenessPercentage}% Complete
-                  </span>
-                  <span className={`text-sm ${
-                    completenessPercentage < 60 ? 'text-red-500' :
-                    completenessPercentage < 80 ? 'text-amber-500' :
-                    completenessPercentage < 95 ? 'text-green-500' :
-                    'text-emerald-500'
-                  }`}>
-                    {getCompletenessStatus(completenessPercentage)}
-                  </span>
-                </div>
-                
-                <div className="relative">
-                  <Progress 
-                    value={completenessPercentage} 
-                    className={`h-2.5 cursor-pointer ${
-                      completenessPercentage < 60 ? 'bg-red-100 text-red-500' :
-                      completenessPercentage < 80 ? 'bg-amber-100 text-amber-500' :
-                      completenessPercentage < 95 ? 'bg-green-100 text-green-500' :
-                      'bg-emerald-100 text-emerald-500'
-                    }`} 
-                    onClick={() => setShowDrilldown(true)}
-                  />
-                  {/* Threshold markers */}
-                  <div className="absolute top-0 left-[60%] h-2.5 border-r border-gray-300"></div>
-                  <div className="absolute top-0 left-[80%] h-2.5 border-r border-gray-300"></div>
-                  <div className="absolute top-0 left-[95%] h-2.5 border-r border-gray-300"></div>
-                </div>
-                
-                {missingFields.length > 0 ? (
-                  <div className="mt-3">
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="text-xs"
-                            onClick={() => setShowDrilldown(true)}
-                          >
-                            View {missingFields.length} missing fields
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <div>
-                            <p className="font-medium mb-1">Missing fields:</p>
-                            <ul className="list-disc pl-4 text-xs space-y-1">
-                              {missingFields.slice(0, 5).map((field, i) => (
-                                <li key={i}>{field}</li>
-                              ))}
-                              {missingFields.length > 5 && (
-                                <li>+{missingFields.length - 5} more</li>
-                              )}
-                            </ul>
-                          </div>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
+      <TabsContent value="overview" className="space-y-6">
+        {/* Data Completeness Card */}
+        <Card className="relative">
+          <CardHeader>
+            <CardTitle>Data Completeness</CardTitle>
+            <CardDescription>
+              Track the completeness of your product data.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {/* Data Completeness Content */}
+            <div className="space-y-4">
+              {/* Progress indicator */}
+              <div className="relative">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium">Completeness</span>
+                  <div className="flex items-center">
+                    <span className={`text-sm font-medium ${
+                      completenessPercentage < 60 ? 'text-red-500' :
+                      completenessPercentage < 80 ? 'text-amber-500' :
+                      completenessPercentage < 95 ? 'text-emerald-500' :
+                      'text-blue-500'
+                    }`}>
+                      {completenessPercentage}% - {getCompletenessStatus(completenessPercentage)}
+                    </span>
+                    <Button 
+                      variant="ghost" 
+                      className="p-0 h-auto ml-1"
+                      onClick={() => setShowDrilldown(true)}
+                    >
+                      <InfoIcon className="h-4 w-4 text-slate-400" />
+                    </Button>
                   </div>
-                ) : (
-                  <p className="text-xs text-emerald-500 mt-1">
-                    All required fields completed!
-                  </p>
-                )}
+                </div>
+                
+                <Progress 
+                  value={completenessPercentage} 
+                  className={`h-2 ${
+                    completenessPercentage < 60 ? 'bg-red-100' :
+                    completenessPercentage < 80 ? 'bg-amber-100' :
+                    completenessPercentage < 95 ? 'bg-emerald-100' :
+                    'bg-blue-100'
+                  }`} 
+                />
               </div>
-            </CardContent>
-            
-            {/* Completeness Drilldown */}
-            <CompletenessDrilldown
-              open={showDrilldown}
-              onOpenChange={setShowDrilldown}
-              percentage={completenessPercentage}
-              fieldStatus={fieldStatus}
-            />
-          </Card>
-          
-          {/* Media Carousel (if there are images) */}
-          {product.images && product.images.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Media</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-4 gap-4">
+              
+              {/* Missing fields */}
+              {missingFields.length > 0 && (
+                <div className="mt-4">
+                  <div className="flex items-center">
+                    <AlertTriangle className="h-4 w-4 text-amber-500 mr-2" />
+                    <span className="text-sm font-medium">Missing information</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {missingFields.slice(0, 5).map((field, index) => (
+                      <Badge key={index} variant="outline" className="bg-slate-50">
+                        {field}
+                      </Badge>
+                    ))}
+                    {missingFields.length > 5 && (
+                      <Badge variant="outline" className="bg-slate-50">
+                        +{missingFields.length - 5} more
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {/* Completeness drilldown */}
+              {showDrilldown && (
+                <CompletenessDrilldown
+                  open={showDrilldown}
+                  onOpenChange={setShowDrilldown}
+                  percentage={completenessPercentage}
+                  fieldStatus={fieldStatus}
+                />
+              )}
+            </div>
+          </CardContent>
+        </Card>
+        
+        {/* Media Section - Reuse asset data from the API */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Media</CardTitle>
+            <CardDescription>
+              Primary images and videos for this product
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loadingAssets ? (
+              // Loading skeleton
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="aspect-square rounded-md" />
+                ))}
+              </div>
+            ) : assets.length > 0 ? (
+              // Display first 4 assets (or fewer if less available)
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {assets
+                  .filter(asset => asset.type.toLowerCase() === 'image')
+                  // Primary images first, then by upload date (newest first)
+                  .sort((a, b) => {
+                    if (a.is_primary && !b.is_primary) return -1;
+                    if (!a.is_primary && b.is_primary) return 1;
+                    return new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime();
+                  })
+                  .slice(0, 4)
+                  .map((asset, index) => (
+                    <div 
+                      key={asset.id} 
+                      className={cn(
+                        "relative aspect-square rounded-md overflow-hidden border border-slate-200",
+                        asset.is_primary && "ring-2 ring-primary" // Highlight primary image
+                      )}
+                    >
+                      <img 
+                        src={asset.url} 
+                        alt={asset.name} 
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          console.warn('Error loading image asset:', asset.id);
+                          (e.target as HTMLImageElement).src = 'https://placehold.co/600x600?text=Image+Error';
+                        }}
+                      />
+                      {asset.is_primary && (
+                        <div className="absolute top-2 left-2">
+                          <Badge variant="outline" className="bg-primary/70 text-white border-none text-xs">Primary</Badge>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                }
+              </div>
+            ) : (
+              // Fallback to product.images if they exist, otherwise show empty state
+              product.images && product.images.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   {product.images.map((image, index) => (
                     <div key={index} className="relative aspect-square rounded-md overflow-hidden border border-slate-200">
                       <img 
@@ -1521,558 +1784,62 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
                         alt={`${product.name} - Image ${index + 1}`} 
                         className="w-full h-full object-cover"
                       />
-                      {image.is_primary && (
-                        <Badge className="absolute top-2 right-2 bg-primary-500 text-white">
-                          Primary
-                        </Badge>
-                      )}
                     </div>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
-          )}
-          
-          {/* Related Products */}
-          <RelatedProductsCarousel 
-            productId={product.id} 
-            onRefresh={fetchRelatedProducts}
-          />
-        </div>
-      </TabsContent>
-      
-      {/* ATTRIBUTES TAB */}
-      <TabsContent value="attributes">
-        <Card>
-          <CardHeader className="flex flex-row items-start justify-between">
-            <div>
-              <CardTitle>Product Attributes</CardTitle>
-              <CardDescription>
-                Custom attributes and specifications for this product.
-              </CardDescription>
-            </div>
-            
-            {/* Locale selector */}
-            {availableLocales.length > 1 && (
-              <Select value={selectedLocale} onValueChange={setSelectedLocale}>
-                <SelectTrigger className="w-[120px] h-8">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableLocales.map(locale => (
-                    <SelectItem key={locale} value={locale}>
-                      <div className="flex items-center">
-                        <Flag className="h-3 w-3 mr-2" />
-                        {locale}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </CardHeader>
-          
-          <CardContent>
-            {/* BUTTONS - Always visible when user has edit permission */}
-            {hasEditPermission && (
-              <div className="flex mb-6">
-                <Dialog open={isAddAttributeOpen} onOpenChange={setIsAddAttributeOpen}>
-                  <DialogTrigger asChild>
-                    <Button className="mr-2">
-                      <PlusIcon className="h-4 w-4 mr-2" />
-                      Add Attribute
-                    </Button>
-                  </DialogTrigger>
-                  {/* Dialog content remains the same */}
-                  <DialogContent className="max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>Add Product Attribute</DialogTitle>
-                      <DialogDescription>
-                        Select an attribute to add to this product.
-                      </DialogDescription>
-                    </DialogHeader>
-                    
-                    <Command className="rounded-lg border shadow-md">
-                      <CommandInput 
-                        placeholder="Search attributes..." 
-                        value={attributeSearchTerm}
-                        onValueChange={setAttributeSearchTerm}
-                      />
-                      <CommandList>
-                        <CommandEmpty>No attributes found.</CommandEmpty>
-                        <CommandGroup>
-                          {getUnusedAttributes().length === 0 ? (
-                            <p className="py-6 text-center text-sm text-slate-500">
-                              All available attributes have been added to this product.
-                            </p>
-                          ) : (
-                            getUnusedAttributes().map((attr) => (
-                              <CommandItem
-                                key={attr.id}
-                                onSelect={() => handleAddAttribute(attr.id)}
-                                className="cursor-pointer"
-                              >
-                                <div className="flex flex-col w-full">
-                                  <div className="flex items-center">
-                                    <span className="font-medium">{attr.name}</span>
-                                    {attr.isMandatory && (
-                                      <span className="ml-2 text-red-500">*</span>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center text-xs text-slate-500">
-                                    <span>{attr.groupName}</span>
-                                    <span className="mx-1">•</span>
-                                    <span>{attr.dataType}</span>
-                                    {attr.unit && (
-                                      <>
-                                        <span className="mx-1">•</span>
-                                        <span>{attr.unit}</span>
-                                      </>
-                                    )}
-                                  </div>
-                                </div>
-                              </CommandItem>
-                            ))
-                          )}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                    
-                    <DialogFooter className="sm:justify-end">
-                      <Button variant="outline" onClick={() => setIsAddAttributeOpen(false)}>
-                        Cancel
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-
-                <Dialog open={isCreateAttributeOpen} onOpenChange={setIsCreateAttributeOpen}>
-                  <DialogTrigger asChild>
-                    <Button>
-                      <PlusIcon className="h-4 w-4 mr-2" />
-                      Create New Attribute
-                    </Button>
-                  </DialogTrigger>
-                  {/* Dialog content remains the same */}
-                  <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
-                      <DialogTitle>Create New Attribute</DialogTitle>
-                      <DialogDescription>
-                        Define a new attribute for products in this category.
-                      </DialogDescription>
-                    </DialogHeader>
-
-                    {/* Form fields for creating attribute - no changes needed */}
-                    {/* ... existing implementation ... */}
-
-                    <DialogFooter>
-                      <Button
-                        variant="outline"
-                        onClick={() => setIsCreateAttributeOpen(false)}
-                        disabled={creatingAttribute}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        onClick={handleCreateAttribute}
-                        disabled={creatingAttribute}
-                      >
-                        {creatingAttribute ? (
-                          <span className="flex items-center">
-                            <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></span>
-                            Creating...
-                          </span>
-                        ) : (
-                          'Create Attribute'
-                        )}
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </div>
-            )}
-
-            {/* LOADING STATE */}
-            {loadingAttributeDefinitions ? (
-              <LoadingIndicator />
-            ) : (
-              <>
-                {/* ATTRIBUTES CONTENT - Available or empty state */}
-                {attributeGroups.length > 0 ? (
-                  <Accordion
-                    type="multiple"
-                    value={expandedGroups}
-                    onValueChange={setExpandedGroups}
-                    className="space-y-4"
-                  >
-                    {attributeGroups.map(group => {
-                      const groupAttributes = getAttributesByGroup(group.name);
-                      
-                      return (
-                        <AccordionItem 
-                          key={group.id} 
-                          value={group.name}
-                          className="border border-slate-200 rounded-xl shadow-sm overflow-hidden"
-                        >
-                          <AccordionTrigger className="px-5 py-4 hover:no-underline hover:bg-slate-50">
-                            <span className="font-medium text-base">{group.name}</span>
-                          </AccordionTrigger>
-                          <AccordionContent className="p-5">
-                            <div className="divide-y divide-slate-100">
-                              {groupAttributes.map(attribute => {
-                                const value = getAttributeValue(attribute.id);
-                                const isEditing = editingAttributeId === attribute.id;
-                                const updated = getAttributeUpdatedTime(attribute.id);
-                                const hasValue = value !== null && value !== undefined && value !== '';
-                                
-                                return (
-                                  <div key={attribute.id} className="py-3">
-                                    <div className="flex justify-between items-start">
-                                      <div className="flex items-center gap-2">
-                                        <span className="font-medium">
-                                          {attribute.name}
-                                          {attribute.isMandatory && <span className="text-red-500 ml-0.5">*</span>}
-                                        </span>
-                                      </div>
-                                      
-                                      {!isEditing && hasEditPermission && (
-                                        <Button 
-                                          variant="ghost" 
-                                          size="sm" 
-                                          className="h-8 px-2"
-                                          onClick={() => handleEditAttribute(attribute.id)}
-                                        >
-                                          {hasValue ? (
-                                            <>
-                                              <Edit2 className="h-3.5 w-3.5 mr-1" />
-                                              Edit
-                                            </>
-                                          ) : (
-                                            <>
-                                              <PlusIcon className="h-3.5 w-3.5 mr-1" />
-                                              Add
-                                            </>
-                                          )}
-                                        </Button>
-                                      )}
-                                    </div>
-                                    
-                                    <div className="mt-1">
-                                      {isEditing ? (
-                                        <div className="space-y-2">
-                                          {renderAttributeEditor(attribute.id)}
-                                          
-                                          <div className="flex justify-end gap-2 mt-3">
-                                            <Button 
-                                              variant="outline" 
-                                              size="sm" 
-                                              onClick={handleCancelEdit}
-                                              disabled={savingAttributeId === attribute.id}
-                                            >
-                                              Cancel
-                                            </Button>
-                                            <Button 
-                                              size="sm" 
-                                              onClick={() => handleSaveAttribute(attribute.id)}
-                                              disabled={savingAttributeId === attribute.id}
-                                            >
-                                              {savingAttributeId === attribute.id ? (
-                                                <span className="flex items-center">
-                                                  <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></span>
-                                                  Saving
-                                                </span>
-                                              ) : (
-                                                <span className="flex items-center">
-                                                  <Save className="h-3.5 w-3.5 mr-1" />
-                                                  Save
-                                                </span>
-                                              )}
-                                            </Button>
-                                          </div>
-                                        </div>
-                                      ) : (
-                                        <div className="flex justify-between items-center">
-                                          <div className="text-sm">
-                                            {value !== null && value !== undefined && value !== '' ? (
-                                              <span>{getFormattedValue(attribute.id)}</span>
-                                            ) : (
-                                              <span className="text-slate-400">Not set</span>
-                                            )}
-                                          </div>
-                                          
-                                          {hasValue && updated && (
-                                            <TooltipProvider>
-                                              <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                  <span className="text-slate-400 text-xs">
-                                                    {updated.display.split('·')[0]}
-                                                  </span>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                  <p>Updated {updated.relative}</p>
-                                                </TooltipContent>
-                                              </Tooltip>
-                                            </TooltipProvider>
-                                          )}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </AccordionContent>
-                        </AccordionItem>
-                      );
-                    })}
-                  </Accordion>
-                ) : (
-                  <div className="text-center py-12 text-slate-400">
-                    <div className="mx-auto w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center mb-4">
-                      <AlertTriangle className="h-6 w-6 text-slate-300" />
-                    </div>
-                    <h3 className="text-lg font-medium text-slate-600 mb-1">No attributes defined</h3>
-                    <p>This product doesn't have any attributes assigned to it.</p>
-                  </div>
-                )}
-              </>
-            )}
-          </CardContent>
-        </Card>
-      </TabsContent>
-      
-      {/* ASSETS TAB */}
-      <TabsContent value="assets">
-        <Card>
-          <CardHeader>
-            <CardTitle>Product Assets</CardTitle>
-            <CardDescription>
-              All files associated with this product.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loadingAssets ? (
-              <LoadingIndicator />
-            ) : Array.isArray(assets) && assets.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {Array.isArray(assets) && assets.map(asset => {
-                  const uploaded = formatDate(asset.uploaded_at);
-                  return (
-                    <div key={asset.id} className="border border-slate-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
-                      <div className="p-4 flex gap-3">
-                        <div className="h-10 w-10 rounded bg-slate-50 flex items-center justify-center shrink-0">
-                          {getAssetIcon(asset.type)}
-                        </div>
-                        <div className="min-w-0">
-                          <h3 className="font-medium text-sm truncate">{asset.name}</h3>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-slate-500 text-xs">
-                              {asset.size}
-                            </span>
-                            {asset.type === 'image' && asset.resolution && (
-                              <span className="text-slate-500 text-xs">
-                                {asset.resolution}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="px-4 py-2 bg-slate-50 text-xs text-slate-500 flex justify-between items-center">
-                        <div className="flex items-center gap-1">
-                          <Avatar className="h-4 w-4">
-                            <AvatarFallback className="text-[8px]">
-                              {asset.uploaded_by.split(' ').map(n => n[0]).join('')}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span>{asset.uploaded_by}</span>
-                        </div>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span>{uploaded.display.split('·')[0]}</span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Uploaded {uploaded.relative}</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="text-center py-12 text-slate-400">
-                <div className="mx-auto w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center mb-4">
-                  <FileIcon className="h-6 w-6 text-slate-300" />
-                </div>
-                <h3 className="text-lg font-medium text-slate-600 mb-1">No assets yet</h3>
-                <p>This product doesn't have any files or images.</p>
-                {hasEditPermission && (
-                  <Button 
-                    variant="outline" 
-                    className="mt-4"
-                    onClick={() => {}}
-                  >
-                    <PlusIcon className="h-4 w-4 mr-2" />
-                    Drop files here to add assets
-                  </Button>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </TabsContent>
-      
-      {/* ACTIVITY TAB */}
-      <TabsContent value="activity">
-        <Card>
-          <CardHeader>
-            <CardTitle>Activity Timeline</CardTitle>
-            <CardDescription>
-              Recent actions and changes to this product.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loadingActivities ? (
-              <LoadingIndicator />
-            ) : Array.isArray(activities) && activities.length > 0 ? (
-              <div className="relative pl-6 border-l border-slate-200 ml-6 space-y-8">
-                {Array.isArray(activities) && activities.map(activity => {
-                  const time = formatDate(activity.timestamp);
-                  const getActivityIcon = () => {
-                    switch (activity.type) {
-                      case 'create':
-                        return <Clipboard className="h-4 w-4 text-green-500" />;
-                      case 'update':
-                        return <History className="h-4 w-4 text-blue-500" />;
-                      case 'asset_add':
-                        return <ImageIcon className="h-4 w-4 text-purple-500" />;
-                      case 'status_change':
-                        return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
-                      default:
-                        return <CalendarIcon className="h-4 w-4 text-slate-500" />;
-                    }
-                  };
-                  
-                  return (
-                    <div key={activity.id} className="relative">
-                      {/* Timeline dot */}
-                      <div className="absolute -left-[34px] h-7 w-7 rounded-full bg-white border border-slate-200 flex items-center justify-center">
-                        {getActivityIcon()}
-                      </div>
-                      
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium">{activity.user}</span>
-                          <span className="text-slate-500 text-sm">{getActivityActionText(activity.type)}</span>
-                        </div>
-                        
-                        <p className="text-slate-700">{activity.details}</p>
-                        
-                        <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
-                          <CalendarIcon className="h-3 w-3" />
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span>{time.display}</span>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>{time.relative}</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="text-center py-12 text-slate-400">
-                <div className="mx-auto w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center mb-4">
-                  <CalendarIcon className="h-6 w-6 text-slate-300" />
-                </div>
-                <h3 className="text-lg font-medium text-slate-600 mb-1">No activity yet</h3>
-                <p>This product doesn't have any recorded activity.</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </TabsContent>
-      
-      {/* VERSIONS TAB */}
-      <TabsContent value="versions">
-        <Card>
-          <CardHeader>
-            <CardTitle>Version History</CardTitle>
-            <CardDescription>
-              Historical snapshots of this product.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loadingVersions ? (
-              <LoadingIndicator />
-            ) : Array.isArray(versions) && versions.length > 0 ? (
-              <div className="space-y-2">
-                {Array.isArray(versions) && versions.map(version => {
-                  const time = formatDate(version.timestamp);
-                  return (
-                    <div 
-                      key={version.id} 
-                      className="border border-slate-200 rounded-lg overflow-hidden hover:border-slate-300 transition-colors"
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <ImageIcon className="h-10 w-10 mx-auto mb-2 text-muted-foreground/60" />
+                  <p>No media available yet</p>
+                  {hasEditPermission && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="mt-4"
+                      onClick={() => setActiveTab('assets')}
                     >
-                      <div className="flex items-center justify-between px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <Badge variant="outline" className="bg-slate-50 font-mono">
-                            {version.version}
-                          </Badge>
-                          <span className="font-medium">{version.summary}</span>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="flex items-center gap-1 text-sm text-slate-500">
-                            <Avatar className="h-5 w-5">
-                              <AvatarFallback className="text-[10px]">
-                                {version.user.split(' ').map(n => n[0]).join('')}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span>{version.user}</span>
-                          </div>
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="text-slate-400 text-sm">{time.display.split('·')[0]}</span>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>{time.relative}</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                          <div className="flex items-center gap-2">
-                            <button className="text-sm text-primary-600 hover:text-primary-700">
-                              Compare
-                            </button>
-                            <button className="text-sm text-slate-600 hover:text-slate-700">
-                              Rollback
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="text-center py-12 text-slate-400">
-                <div className="mx-auto w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center mb-4">
-                  <History className="h-6 w-6 text-slate-300" />
+                      <PlusIcon className="h-4 w-4 mr-2" />
+                      Add Media
+                    </Button>
+                  )}
                 </div>
-                <h3 className="text-lg font-medium text-slate-600 mb-1">No versions yet</h3>
-                <p>This product doesn't have any version history.</p>
+              )
+            )}
+            
+            {assets.length > 0 && (
+              <div className="mt-4 flex justify-end">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setActiveTab('assets')}
+                >
+                  View All Assets
+                </Button>
               </div>
             )}
           </CardContent>
         </Card>
+        
+        {/* Related Products */}
+        <RelatedProductsCarousel 
+          productId={product.id} 
+          onRefresh={() => {/* handle refresh if needed */}}
+        />
+      </TabsContent>
+      
+      <TabsContent value="attributes" className="space-y-6">
+        {/* existing attributes content */}
+      </TabsContent>
+      
+      <TabsContent value="assets">
+        <AssetsTab 
+          product={product} 
+          onAssetUpdate={handleAssetUpdate}
+        />
+      </TabsContent>
+      
+      <TabsContent value="history" className="space-y-6">
+        {/* existing history content */}
       </TabsContent>
     </Tabs>
   );

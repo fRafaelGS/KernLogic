@@ -143,11 +143,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       console.log('Login attempt for:', email);
       
+      // Development shortcut for easier testing
+      // Remove in production!
+      if (email === 'dev' && password === 'dev') {
+        console.log('Development login shortcut detected - using admin credentials');
+        email = 'admin@example.com';
+        password = 'admin123';
+      }
+      
       // Use fetch for login as it doesn't need prior auth
       const loginUrl = `/api/auth/login/`; 
       console.log('Login URL:', loginUrl);
       
       const loginData = { email, password };
+      console.log('Sending login request with data:', JSON.stringify(loginData));
+      
       const response = await fetch(loginUrl, {
         method: 'POST',
         headers: {
@@ -157,6 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       
       console.log('Login response status:', response.status);
+      console.log('Login response headers:', JSON.stringify([...response.headers.entries()]));
       
       // Clone the response for potential error handling
       const responseClone = response.clone();

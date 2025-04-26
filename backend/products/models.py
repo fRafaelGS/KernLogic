@@ -240,6 +240,45 @@ class ProductImage(models.Model):
     def __str__(self):
         return f"Image for {self.product.name} (Order: {self.order})"
 
+class ProductRelation(models.Model):
+    """
+    Stores relationships between products (e.g., related products, accessories)
+    """
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name='relations'
+    )
+    related_product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name='related_to'
+    )
+    relationship_type = models.CharField(
+        max_length=50,
+        default='related',
+        help_text="Type of relationship (e.g., 'related', 'accessory', 'alternative')"
+    )
+    is_pinned = models.BooleanField(
+        default=False,
+        help_text="Whether this related product should be highlighted"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='created_product_relations'
+    )
+
+    class Meta:
+        ordering = ['-is_pinned', '-created_at']
+        # Prevent duplicate relationships between the same products
+        unique_together = ['product', 'related_product']
+
+    def __str__(self):
+        return f"{self.product.name} → {self.related_product.name} ({self.relationship_type})"
+
 class Activity(models.Model):
     """
     Activity log for tracking user actions on products

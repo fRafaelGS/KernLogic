@@ -22,6 +22,7 @@ export const AddRelatedProductPanel: React.FC<AddRelatedProductPanelProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [results, setResults] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [addingProduct, setAddingProduct] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   
@@ -53,7 +54,7 @@ export const AddRelatedProductPanel: React.FC<AddRelatedProductPanelProps> = ({
         setResults(filteredProducts.slice(0, 10)); // Limit to 10 results
       } catch (err) {
         console.error('Error searching products:', err);
-        setError('Failed to search products. Please try again.');
+        setError('Failed to search products');
       } finally {
         setIsLoading(false);
       }
@@ -76,33 +77,31 @@ export const AddRelatedProductPanel: React.FC<AddRelatedProductPanelProps> = ({
   
   // Handle adding the selected product
   const handleAddProduct = async () => {
-    if (!selectedProduct) return;
+    if (!selectedProduct || !selectedProduct.id) return;
     
+    setAddingProduct(true);
     try {
-      // Optimistically update UI
+      // Let the parent component know about the new product first
       onProductAdded(selectedProduct);
       
-      // Call API to add related product
-      const success = await productService.toggleRelatedProduct(
-        productId,
-        selectedProduct.id!,
-        true // isPinned = true
-      );
+      // Reset the form immediately for better UX
+      setSearchTerm('');
+      setResults([]);
+      setSelectedProduct(null);
       
-      if (!success) {
-        // If API call fails, let parent component handle the rollback
-        toast.error("Couldn't add product—please try again.");
-      } else {
-        // Reset the form
-        setSearchTerm('');
-        setResults([]);
-        setSelectedProduct(null);
-        // Focus the search input again
-        searchInputRef.current?.focus();
-      }
+      // Show temporary success message
+      toast.success("Product added to related products");
+      
+      // API call happens in the parent component via onProductAdded
+      // This component doesn't need to handle API calls directly
+      
+      // Focus the search input again
+      searchInputRef.current?.focus();
     } catch (err) {
-      console.error('Error adding related product:', err);
-      toast.error("Couldn't add product—please try again.");
+      console.error('Error in add product flow:', err);
+      toast.error("Something went wrong - please try again");
+    } finally {
+      setAddingProduct(false);
     }
   };
   
@@ -156,11 +155,11 @@ export const AddRelatedProductPanel: React.FC<AddRelatedProductPanelProps> = ({
         <Button
           id="add-related-product-button"
           onClick={handleAddProduct}
-          disabled={!selectedProduct}
+          disabled={!selectedProduct || addingProduct}
           size="sm"
           aria-label="Add selected product to related products"
         >
-          Add
+          {addingProduct ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add"}
         </Button>
       </div>
       

@@ -561,57 +561,70 @@ export const productService = {
     // Get related products
     getRelatedProducts: async (productId: number): Promise<Product[]> => {
         try {
-            const url = `${PRODUCTS_PATH}/products/${productId}/related/`;
-            console.log(`Fetching related products from: ${url}`);
+            const url = `${PRODUCTS_API_URL}/${productId}/related-list/`;
             
             const response = await axiosInstance.get(url);
             
-            // Handle HTML responses - backends often return HTML for 404 or when endpoints aren't implemented yet
-            if (typeof response.data === 'string' && (
-                response.data.includes('<!DOCTYPE html>') || 
-                response.data.includes('<html') ||
-                response.data.trim().startsWith('<')
-            )) {
-                console.error('Received HTML instead of JSON for related products');
-                // Return mock data for development
-                return [
-                    // Empty array for now - could add mock data if needed
-                ];
-            }
-            
-            // Add array check
+            // Simple validation - if it's not an array, log error and return empty array
             if (!Array.isArray(response.data)) {
-                console.error("Related products response was not an array", response.data);
+                console.error("Invalid response format for related products:", response.data);
                 return [];
             }
             
-            // Add formatting for pinned items as suggested
-            return response.data.map(p => ({ 
-                ...p, 
-                isPinned: p.tags?.includes("pinned") 
-            }));
+            return response.data;
         } catch (error) {
             console.error('Error fetching related products:', error);
             return [];
         }
     },
 
-    // Toggle related product (pin/unpin)
+    // Add or update related product relationship
     toggleRelatedProduct: async (productId: number, relatedProductId: number, isPinned: boolean): Promise<boolean> => {
         try {
-            // This would normally call an API endpoint like:
-            // const url = `${PRODUCTS_PATH}/products/${productId}/related/${relatedProductId}/`;
-            // const response = await axiosInstance.patch(url, { isPinned });
+            const url = `${PRODUCTS_API_URL}/${productId}/related-add/`;
             
-            // Since the backend endpoint might not exist yet, we'll mock success
-            console.log(`Toggling related product ${relatedProductId} for product ${productId} to isPinned=${isPinned}`);
-            
-            // Simulate API call success
-            await new Promise(resolve => setTimeout(resolve, 300));
+            const response = await axiosInstance.post(url, {
+                related_product_id: relatedProductId,
+                is_pinned: isPinned
+            });
             
             return true;
         } catch (error) {
-            console.error('Error toggling related product:', error);
+            // If it's already related and we're trying to update the is_pinned status,
+            // we should use PATCH instead
+            if (axios.isAxiosError(error) && 
+                error.response?.status === 400 && 
+                error.response.data?.error?.includes('already exists')) {
+                
+                try {
+                    // Try updating the existing relationship
+                    const updateUrl = `${PRODUCTS_API_URL}/${productId}/related/${relatedProductId}/`;
+                    await axiosInstance.patch(updateUrl, { is_pinned: isPinned });
+                    return true;
+                } catch (updateError) {
+                    console.error('Error updating related product:', updateError);
+                    return false;
+                }
+            }
+            
+            console.error('Error adding related product:', error);
+            return false;
+        }
+    },
+
+    // Remove related product
+    removeRelatedProduct: async (productId: number, relatedProductId: number): Promise<boolean> => {
+        if (!productId || !relatedProductId) {
+            console.error('Invalid product IDs for removing relation');
+            return false;
+        }
+        
+        try {
+            const url = `${PRODUCTS_API_URL}/${productId}/related/${relatedProductId}/`;
+            await axiosInstance.delete(url);
+            return true;
+        } catch (error) {
+            console.error('Error removing related product:', error);
             return false;
         }
     },

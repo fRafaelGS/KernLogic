@@ -1,6 +1,6 @@
 from rest_framework import serializers
 import json
-from .models import Product, ProductImage, Activity
+from .models import Product, ProductImage, Activity, ProductRelation
 from django.db.models import Sum, F, Count, Case, When, Value, FloatField
 from decimal import Decimal
 from django.conf import settings
@@ -140,6 +140,19 @@ class ProductSerializer(serializers.ModelSerializer):
         if value <= 0:
             raise serializers.ValidationError("Price must be greater than zero.")
         return value
+
+class ProductRelationSerializer(serializers.ModelSerializer):
+    """Serializer for product relations"""
+    class Meta:
+        model = ProductRelation
+        fields = ['id', 'product', 'related_product', 'relationship_type', 'is_pinned', 'created_at']
+        read_only_fields = ['created_at', 'created_by']
+
+    def validate(self, data):
+        """Prevent self-referential relationships"""
+        if data['product'] == data['related_product']:
+            raise serializers.ValidationError("A product cannot be related to itself.")
+        return data
 
 class ProductStatsSerializer(serializers.Serializer):
     total_products = serializers.IntegerField()

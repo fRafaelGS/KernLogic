@@ -3,14 +3,15 @@ from rest_framework import viewsets, permissions, status, filters
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Product, ProductImage
+from .models import Product, ProductImage, ProductRelation
 from .serializers import (
     ProductSerializer, 
     ProductImageSerializer, 
     ProductStatsSerializer,
     DashboardSummarySerializer, 
     InventoryTrendSerializer, 
-    ActivitySerializer
+    ActivitySerializer,
+    ProductRelationSerializer
 )
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
@@ -422,7 +423,7 @@ class ProductViewSet(viewsets.ModelViewSet):
             # or just return the new tag name
             return Response(tag_name, status=status.HTTP_201_CREATED)
 
-    @action(detail=True, methods=['get'], url_path='related')
+    @action(detail=True, methods=['get'], url_path='related-list')
     def related_products(self, request, pk=None):
         """
         Return a list of related products based on the same category.
@@ -431,57 +432,164 @@ class ProductViewSet(viewsets.ModelViewSet):
         # Get the current product
         product = self.get_object()
         
-        # Base queryset excluding current product
-        base_queryset = self.get_queryset().exclude(pk=product.pk)
+        # Get explicitly related products from the ProductRelation model
+        relation_queryset = ProductRelation.objects.filter(
+            product=product
+        ).select_related('related_product')
         
-        # First attempt: Find products with exactly the same category
+        explicit_related_products = [relation.related_product for relation in relation_queryset]
+        explicit_related_product_ids = [p.id for p in explicit_related_products]
+        
+        # Base queryset excluding current product and already explicitly related products
+        base_queryset = self.get_queryset().exclude(
+            pk__in=[product.pk] + explicit_related_product_ids
+        )
+        
+        # If we have enough explicit relations, just return those
+        if len(explicit_related_products) >= 5:
+            serializer = self.get_serializer(explicit_related_products, many=True)
+            return Response(serializer.data)
+        
+        # Otherwise, supplement with category-based recommendations
         if product.category and product.category.strip():
-            queryset = base_queryset.filter(
+            category_matches = base_queryset.filter(
                 category=product.category,
                 is_active=True
-            )[:5]
+            )[:5-len(explicit_related_products)]
+            
+            # Combine explicit relations with category matches
+            combined_products = explicit_related_products + list(category_matches)
             
             # If we found enough related products, return them
-            if queryset.count() >= 3:
-                serializer = self.get_serializer(queryset, many=True)
+            if len(combined_products) >= 3:
+                serializer = self.get_serializer(combined_products, many=True)
                 return Response(serializer.data)
                 
-            # If we found some but not enough, keep them and look for more
-            related_products = list(queryset)
-            
-            # Second attempt: Try case-insensitive search if needed
-            if len(related_products) < 5:
+            # If we still need more, try case-insensitive search
+            if len(combined_products) < 5:
                 # Look for more products with case-insensitive category
                 case_insensitive_matches = base_queryset.filter(
                     category__iexact=product.category,
                     is_active=True
-                ).exclude(pk__in=[p.pk for p in related_products])
+                ).exclude(pk__in=[p.id for p in combined_products])
                 
                 # Add to our list, up to 5 total
-                related_products.extend(case_insensitive_matches[:5-len(related_products)])
+                combined_products.extend(case_insensitive_matches[:5-len(combined_products)])
                 
             # If we still need more, try without the is_active filter
-            if len(related_products) < 5:
+            if len(combined_products) < 5:
                 inactive_matches = base_queryset.filter(
                     category=product.category
                 ).exclude(
-                    pk__in=[p.pk for p in related_products]
-                )[:5-len(related_products)]
+                    pk__in=[p.id for p in combined_products]
+                )[:5-len(combined_products)]
                 
-                related_products.extend(inactive_matches)
-                
-            # If we found any related products, return them
-            if related_products:
-                serializer = self.get_serializer(related_products, many=True)
-                return Response(serializer.data)
+                combined_products.extend(inactive_matches)
+            
+            # Return the combined result    
+            serializer = self.get_serializer(combined_products, many=True)
+            return Response(serializer.data)
         
-        # Fallback: return newest products (excluding current) if no category matches
-        fallback_products = base_queryset.filter(
+        # If no category or explicit relations, return newest products (excluding current)
+        fallback_products = explicit_related_products + list(base_queryset.filter(
             is_active=True
-        ).order_by('-created_at')[:5]
+        ).order_by('-created_at')[:5-len(explicit_related_products)])
         
         serializer = self.get_serializer(fallback_products, many=True)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['post'], url_path='related-add')
+    def add_related_product(self, request, pk=None):
+        """
+        Add a related product to this product
+        """
+        product = self.get_object()
+        
+        # Validate the related product ID
+        related_product_id = request.data.get('related_product_id')
+        is_pinned = request.data.get('is_pinned', False)
+        relationship_type = request.data.get('relationship_type', 'related')
+        
+        if not related_product_id:
+            return Response(
+                {"error": "Related product ID is required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        try:
+            related_product = Product.objects.get(pk=related_product_id)
+        except Product.DoesNotExist:
+            return Response(
+                {"error": "Related product not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+            
+        # Prevent self-reference
+        if product.id == related_product.id:
+            return Response(
+                {"error": "A product cannot be related to itself"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # Create or update the relation
+        relation, created = ProductRelation.objects.update_or_create(
+            product=product,
+            related_product=related_product,
+            defaults={
+                'is_pinned': is_pinned,
+                'relationship_type': relationship_type,
+                'created_by': request.user
+            }
+        )
+        
+        serializer = ProductRelationSerializer(relation)
+        return Response(
+            serializer.data, 
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK
+        )
+        
+    @action(detail=True, methods=['patch', 'delete'], url_path='related/(?P<related_id>[^/.]+)')
+    def manage_related_product(self, request, pk=None, related_id=None):
+        """
+        Update or delete a related product relationship
+        """
+        product = self.get_object()
+        
+        # Get the relation
+        try:
+            relation = ProductRelation.objects.get(
+                product=product,
+                related_product_id=related_id
+            )
+        except ProductRelation.DoesNotExist:
+            return Response(
+                {"error": "Related product relationship not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+            
+        if request.method == 'DELETE':
+            # Delete the relation
+            relation.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+            
+        elif request.method == 'PATCH':
+            # Update the relation
+            serializer = ProductRelationSerializer(
+                relation, 
+                data=request.data, 
+                partial=True
+            )
+            
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data)
+                
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+        return Response(
+            {"error": "Method not allowed"}, 
+            status=status.HTTP_405_METHOD_NOT_ALLOWED
+        )
 
 # Add endpoints for dashboard data
 class DashboardViewSet(viewsets.ViewSet):

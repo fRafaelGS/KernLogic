@@ -255,7 +255,7 @@ export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className={`font-medium ${product.price > 0 ? 'text-green-600' : 'text-slate-400'}`}>
-                    ${product.price.toFixed(2)}
+                    ${(product.price || 0).toFixed(2)}
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="left" className="max-w-xs">

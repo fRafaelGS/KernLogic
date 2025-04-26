@@ -28,16 +28,31 @@ export const ProductDetail = () => {
 
   useEffect(() => {
     const fetchProduct = async () => {
-      if (!id) return;
+      if (!id) {
+        console.warn('No product ID provided in URL params');
+        setError('Product ID is missing from the URL');
+        setLoading(false);
+        return;
+      }
       
       try {
+        console.log(`Fetching product with ID: ${id}`);
         setLoading(true);
         const data = await productService.getProduct(Number(id));
-        setProduct(data);
-        setError(null);
+        
+        if (!data) {
+          console.error('API returned empty product data');
+          setError('Product not found or returned empty data');
+          setProduct(null);
+        } else {
+          console.log('Product data received:', data);
+          setProduct(data);
+          setError(null);
+        }
       } catch (err) {
         console.error('Error fetching product:', err);
         setError('Failed to load product details. Please try again.');
+        setProduct(null);
         toast.error('Failed to load product details');
       } finally {
         setLoading(false);

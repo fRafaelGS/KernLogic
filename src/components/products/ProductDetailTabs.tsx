@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Product, productService, ProductAttribute, ProductAsset, ProductActivity, ProductVersion, PriceHistory } from '@/services/productService';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { Product, productService, ProductAttribute, ProductAsset, ProductActivity, ProductVersion, PriceHistory, PRODUCTS_API_URL as PRODUCTS_PATH } from '@/services/productService';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { 
   ImageIcon, FileIcon, FileTypeIcon, FileTextIcon, Clipboard, CalendarIcon, 
   History, AlertTriangle, PlusIcon, PencilIcon, AlertCircle, RefreshCcw,
-  Check, ChevronDown, ChevronRight, Save, X, Edit2, Calendar, Flag
+  Check, ChevronDown, ChevronRight, Save, X, Edit2, Calendar, Flag, Pin
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -56,6 +56,10 @@ import { Slot } from '@radix-ui/react-slot';
 import { cn } from '@/lib/utils';
 // Import the CompletenessDrilldown component
 import { CompletenessDrilldown } from './CompletenessDrilldown';
+import { Carousel, CarouselContent, CarouselItem, CarouselPrevious, CarouselNext } from '@/components/ui/carousel';
+import { Link } from 'react-router-dom';
+import { debounce } from 'lodash';
+import RelatedProductsCarousel from './RelatedProductsCarousel';
 
 // ====== ATTRIBUTES INTERFACES (EXACT MATCH TO SPEC) ======
 // (Following exactly the backend shape specified in the requirements)
@@ -109,7 +113,6 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
   const [activities, setActivities] = useState<ProductActivity[]>([]);
   const [versions, setVersions] = useState<ProductVersion[]>([]);
   const [priceHistory, setPriceHistory] = useState<PriceHistory[]>([]);
-  const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
   
   // States for the enhanced attributes tab
   const [availableAttributes, setAvailableAttributes] = useState<AvailableAttribute[]>([]);
@@ -135,7 +138,7 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
   const [loadingActivities, setLoadingActivities] = useState(false);
   const [loadingVersions, setLoadingVersions] = useState(false);
   const [loadingAttributeDefinitions, setLoadingAttributeDefinitions] = useState(false);
-
+  
   // Get current user and permissions from auth context
   const { user, checkPermission } = useAuth();
   
@@ -151,7 +154,6 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
       fetchActivities();
       fetchVersions();
       fetchPriceHistory();
-      fetchRelatedProducts();
       
       // Fetch attribute data according to spec
       fetchAttributeSet();
@@ -276,54 +278,21 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
     }
   };
 
-  // Fetch related products
-  const fetchRelatedProducts = async () => {
-    if (!product.id) return;
+  // Fetch related products (callback for RelatedProductsCarousel)
+  const fetchRelatedProducts = useCallback(async () => {
+    if (!product || !product.id) {
+      console.warn('Cannot fetch related products: product ID is undefined');
+      return;
+    }
     
     try {
-      const data = await productService.getRelatedProducts(product.id);
-      // Ensure data is always an array
-      setRelatedProducts(Array.isArray(data) ? data : []);
+      // Actually fetch the related products
+      await productService.getRelatedProducts(product.id);
+      console.log('Related products refreshed successfully');
     } catch (error) {
-      console.error('Error fetching related products:', error);
-      // Fallback to mock data if API fails
-      setRelatedProducts([
-        { 
-          id: 101, 
-          name: 'Similar Product 1', 
-          category: product.category, 
-          price: 79.99, 
-          images: [{ id: 1, url: 'https://placehold.co/300x300', order: 1, is_primary: true }], 
-          sku: 'SKU101', 
-          stock: 100, 
-          description: '', 
-          is_active: true 
-        },
-        { 
-          id: 102, 
-          name: 'Similar Product 2', 
-          category: product.category, 
-          price: 99.99, 
-          images: [{ id: 2, url: 'https://placehold.co/300x300', order: 1, is_primary: true }], 
-          sku: 'SKU102', 
-          stock: 50, 
-          description: '', 
-          is_active: true 
-        },
-        { 
-          id: 103, 
-          name: 'Similar Product 3', 
-          category: product.category, 
-          price: 109.99, 
-          images: [{ id: 3, url: 'https://placehold.co/300x300', order: 1, is_primary: true }], 
-          sku: 'SKU103', 
-          stock: 75, 
-          description: '', 
-          is_active: true 
-        },
-      ]);
+      console.error('Error refreshing related products:', error);
     }
-  };
+  }, [product?.id]);
   
   // Fetch the product's attribute set
   const fetchAttributeSet = async () => {
@@ -1565,42 +1534,10 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
           )}
           
           {/* Related Products */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Related Products</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {relatedProducts.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {relatedProducts.map(relatedProduct => (
-                    <div 
-                      key={relatedProduct.id} 
-                      className="border border-slate-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow"
-                    >
-                      <div className="aspect-video bg-slate-100">
-                        <img 
-                          src={relatedProduct.images?.[0]?.url || 'https://placehold.co/300x300'} 
-                          alt={relatedProduct.name} 
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <div className="p-3">
-                        <h3 className="font-medium text-sm truncate">{relatedProduct.name}</h3>
-                        <div className="flex justify-between items-center mt-2">
-                          <span className="text-slate-500 text-xs">{relatedProduct.category}</span>
-                          <span className="font-medium">${relatedProduct.price}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-slate-400">
-                  <p>No related products found</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <RelatedProductsCarousel 
+            productId={product.id} 
+            onRefresh={fetchRelatedProducts}
+          />
         </div>
       </TabsContent>
       

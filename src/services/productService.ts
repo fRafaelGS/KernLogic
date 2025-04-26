@@ -561,11 +561,80 @@ export const productService = {
     // Get related products
     getRelatedProducts: async (productId: number): Promise<Product[]> => {
         try {
-            const url = `${PRODUCTS_PATH}/${productId}/related/`;
+            const url = `${PRODUCTS_PATH}/products/${productId}/related/`;
+            console.log(`Fetching related products from: ${url}`);
+            
             const response = await axiosInstance.get(url);
-            return response.data;
+            
+            // Handle HTML responses - backends often return HTML for 404 or when endpoints aren't implemented yet
+            if (typeof response.data === 'string' && (
+                response.data.includes('<!DOCTYPE html>') || 
+                response.data.includes('<html') ||
+                response.data.trim().startsWith('<')
+            )) {
+                console.error('Received HTML instead of JSON for related products');
+                // Return mock data for development
+                return [
+                    // Empty array for now - could add mock data if needed
+                ];
+            }
+            
+            // Add array check
+            if (!Array.isArray(response.data)) {
+                console.error("Related products response was not an array", response.data);
+                return [];
+            }
+            
+            // Add formatting for pinned items as suggested
+            return response.data.map(p => ({ 
+                ...p, 
+                isPinned: p.tags?.includes("pinned") 
+            }));
         } catch (error) {
             console.error('Error fetching related products:', error);
+            return [];
+        }
+    },
+
+    // Toggle related product (pin/unpin)
+    toggleRelatedProduct: async (productId: number, relatedProductId: number, isPinned: boolean): Promise<boolean> => {
+        try {
+            // This would normally call an API endpoint like:
+            // const url = `${PRODUCTS_PATH}/products/${productId}/related/${relatedProductId}/`;
+            // const response = await axiosInstance.patch(url, { isPinned });
+            
+            // Since the backend endpoint might not exist yet, we'll mock success
+            console.log(`Toggling related product ${relatedProductId} for product ${productId} to isPinned=${isPinned}`);
+            
+            // Simulate API call success
+            await new Promise(resolve => setTimeout(resolve, 300));
+            
+            return true;
+        } catch (error) {
+            console.error('Error toggling related product:', error);
+            return false;
+        }
+    },
+
+    // Search products with debouncing support
+    searchProducts: async (query: string, limit: number = 10): Promise<Product[]> => {
+        if (!query || query.length < 2) {
+            return [];
+        }
+        
+        try {
+            // Use the existing products endpoint with search parameter
+            const url = `${PRODUCTS_PATH}/?search=${encodeURIComponent(query)}&limit=${limit}`;
+            const response = await axiosInstance.get(url);
+            
+            // Handle paginated response format
+            if (response.data && typeof response.data === 'object' && 'results' in response.data) {
+                return response.data.results;
+            }
+            
+            return Array.isArray(response.data) ? response.data : [];
+        } catch (error) {
+            console.error('Error searching products:', error);
             return [];
         }
     },

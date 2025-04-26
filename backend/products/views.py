@@ -422,6 +422,67 @@ class ProductViewSet(viewsets.ModelViewSet):
             # or just return the new tag name
             return Response(tag_name, status=status.HTTP_201_CREATED)
 
+    @action(detail=True, methods=['get'], url_path='related')
+    def related_products(self, request, pk=None):
+        """
+        Return a list of related products based on the same category.
+        Excludes the source product from the results.
+        """
+        # Get the current product
+        product = self.get_object()
+        
+        # Base queryset excluding current product
+        base_queryset = self.get_queryset().exclude(pk=product.pk)
+        
+        # First attempt: Find products with exactly the same category
+        if product.category and product.category.strip():
+            queryset = base_queryset.filter(
+                category=product.category,
+                is_active=True
+            )[:5]
+            
+            # If we found enough related products, return them
+            if queryset.count() >= 3:
+                serializer = self.get_serializer(queryset, many=True)
+                return Response(serializer.data)
+                
+            # If we found some but not enough, keep them and look for more
+            related_products = list(queryset)
+            
+            # Second attempt: Try case-insensitive search if needed
+            if len(related_products) < 5:
+                # Look for more products with case-insensitive category
+                case_insensitive_matches = base_queryset.filter(
+                    category__iexact=product.category,
+                    is_active=True
+                ).exclude(pk__in=[p.pk for p in related_products])
+                
+                # Add to our list, up to 5 total
+                related_products.extend(case_insensitive_matches[:5-len(related_products)])
+                
+            # If we still need more, try without the is_active filter
+            if len(related_products) < 5:
+                inactive_matches = base_queryset.filter(
+                    category=product.category
+                ).exclude(
+                    pk__in=[p.pk for p in related_products]
+                )[:5-len(related_products)]
+                
+                related_products.extend(inactive_matches)
+                
+            # If we found any related products, return them
+            if related_products:
+                serializer = self.get_serializer(related_products, many=True)
+                return Response(serializer.data)
+        
+        # Fallback: return newest products (excluding current) if no category matches
+        fallback_products = base_queryset.filter(
+            is_active=True
+        ).order_by('-created_at')[:5]
+        
+        serializer = self.get_serializer(fallback_products, many=True)
+        return Response(serializer.data)
+
 # Add endpoints for dashboard data
 class DashboardViewSet(viewsets.ViewSet):
     """

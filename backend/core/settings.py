@@ -177,6 +177,12 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:8080",
     "http://localhost:3002",
     "http://127.0.0.1:3002",
+    "http://localhost:3003",
+    "http://127.0.0.1:3003",
+    "http://localhost:3004",
+    "http://127.0.0.1:3004",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
 ]
 
 # Add proper origin patterns with wildcard
@@ -185,6 +191,12 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
     r'^http://127\.0\.0\.1:8080$',
     r'^http://localhost:3002$',
     r'^http://127\.0\.0\.1:3002$',
+    r'^http://localhost:3003$',
+    r'^http://127\.0\.0\.1:3003$',
+    r'^http://localhost:3004$',
+    r'^http://127\.0\.0\.1:3004$',
+    r'^http://localhost:8000$',
+    r'^http://127\.0\.0\.1:8000$',
 ]
 
 CORS_ALLOW_METHODS = [

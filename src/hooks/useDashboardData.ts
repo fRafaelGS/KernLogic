@@ -115,7 +115,7 @@ export function useDashboardData() {
         const emptyData = {
           total_products: 0,
           inventory_value: 0,
-          low_stock_count: 0, 
+          inactive_product_count: 0, 
           team_members: 0,
           data_completeness: 0,
           most_missing_fields: [],

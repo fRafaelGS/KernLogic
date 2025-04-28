@@ -45,11 +45,18 @@ class ProductSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_by', 'created_at', 'updated_at', 'images']
 
     def get_primary_image_thumb(self, obj):
-        """Return URL for primary image thumbnail"""
+        """
+        Return URL for the primary image thumbnail (or None).
+        Handles the case where no images exist or images are not prefetched.
+        """
+        # If 'images' was prefetched this is a cached RelatedManager;
+        # if not, the ORM will still handle .filter() safely.
         primary_image = obj.images.filter(is_primary=True).first()
         if primary_image and primary_image.image:
             return primary_image.image.url
-        elif obj.primary_image:
+
+        # Fallback: use standalone primary_image field if set
+        if obj.primary_image:
             return obj.primary_image.url
         return None
 
@@ -224,4 +231,5 @@ class IncompleteProductSerializer(serializers.ModelSerializer):
 class ProductAssetSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductAsset
-        fields = "__all__" 
+        fields = "__all__"
+        read_only_fields = ['product']  # Make product read-only so it's not required in input 

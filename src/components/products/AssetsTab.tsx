@@ -318,17 +318,21 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
   // Upload file to API
   const uploadFile = async (upload: UploadingAsset, productId: number) => {
     const formData = new FormData();
-    formData.append('image', upload.file);
+    formData.append('file', upload.file);
     formData.append('name', upload.file.name);
     
+    // Log all FormData entries for debugging
+    console.log(`Attempting to upload file to ${PRODUCTS_API_URL}/${productId}/assets/`);
+    console.log('FormData contents:', [...formData.entries()].map(entry => 
+      entry[0] === 'file' ? `${entry[0]}: [File ${upload.file.name}, ${upload.file.size} bytes, ${upload.file.type}]` : `${entry[0]}: ${entry[1]}`
+    ));
+    
     try {
-      console.log(`Attempting to upload file to ${PRODUCTS_API_URL}/${productId}/images/`);
-      
-      // First try using POST to the standard endpoint
+      // Use the assets endpoint instead of images
       let response;
       try {
         response = await axiosInstance.post(
-          `${PRODUCTS_API_URL}/${productId}/images/`,
+          `${PRODUCTS_API_URL}/${productId}/assets/`,
           formData,
           {
             headers: {
@@ -343,9 +347,18 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
           }
         );
       } catch (error: any) {
+        // Enhanced error logging
+        if (error.response) {
+          console.error('Upload error response:', {
+            status: error.response.status,
+            data: error.response.data,
+            headers: error.response.headers
+          });
+        }
+        
         // If we get a 405 Method Not Allowed, the endpoint might exist but not support POST
         if (error?.response?.status === 405) {
-          console.warn('POST method not allowed on images endpoint, adding file as mock data');
+          console.warn('POST method not allowed on assets endpoint, adding file as mock data');
           
           // Convert file to base64 data URL instead of blob URL for persistence across page reloads
           updateUploadProgress(upload.id, 50); // Update to 50% while converting
@@ -519,65 +532,38 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
   };
 
   // Make an asset primary
-  const makePrimary = async (assetId: number | string) => {
+  const makeAssetPrimary = async (asset: ProductAsset) => {
+    if (asset.is_primary) return; // Already primary
+
+    // Optimistically update UI
+    const oldAssets = [...assets];
+    const newAssets = assets.map(a => ({
+      ...a,
+      is_primary: a.id === asset.id
+    }));
+    
+    setAssets(newAssets);
+    
+    console.log(`Setting asset ${asset.id} as primary for product ${product.id}`);
+    
     try {
-      setIsMakingPrimary(assetId);
+      const success = await productService.setAssetPrimary(product.id, asset.id);
       
-      // Find the asset being set as primary to get its URL
-      const assetBeingSetAsPrimary = assets.find(asset => asset.id === assetId);
-      if (!assetBeingSetAsPrimary) {
-        toast.error("Could not find the selected asset");
-        return;
-      }
-      
-      // Call API to set as primary using the productService
-      if (product?.id) {
-        // This updates the asset's primary status in the assets collection
-        await productService.setPrimaryAsset(product.id, assetId);
-        
-        // We also need to update the product itself with the new primary image URLs
-        if (assetBeingSetAsPrimary.type?.toLowerCase() === 'image') {
-          await productService.updateProduct(product.id, {
-            primary_image_thumb: assetBeingSetAsPrimary.url,
-            primary_image_large: assetBeingSetAsPrimary.url,
-            // Also update the images array if it exists
-            ...(product.images && {
-              images: product.images.map(img => ({
-                ...img,
-                is_primary: img.url === assetBeingSetAsPrimary.url
-              }))
-            })
-          });
-          console.log('Updated product with new primary image:', assetBeingSetAsPrimary.url);
+      if (success) {
+        toast.success('Primary asset updated');
+        // Ensure parent components know about the change
+        if (onAssetUpdate) {
+          onAssetUpdate(newAssets);
         }
+      } else {
+        // Revert if API call failed
+        setAssets(oldAssets);
+        toast.error('Failed to update primary asset');
       }
-      
-      // Update local state - mark selected asset as primary and all others as non-primary
-      const updatedAssets = assets.map(asset => ({
-        ...asset,
-        is_primary: asset.id === assetId,
-      }));
-      
-      // 1) update local state
-      setAssets(updatedAssets);
-      
-      // 2) update localStorage
-      if (product?.id) {
-        localStorage.setItem(`product_assets_${product.id}`, JSON.stringify(updatedAssets));
-      }
-      
-      // 3) notify the parent *with the correct array*
-      if (onAssetUpdate) {
-        console.log('Notifying parent about updated assets with new primary');
-        onAssetUpdate(updatedAssets);
-      }
-      
-      toast.success("Asset set as primary");
     } catch (error) {
-      console.error("Error setting asset as primary:", error);
-      toast.error("Failed to set asset as primary");
-    } finally {
-      setIsMakingPrimary(null);
+      console.error('Error making asset primary:', error);
+      setAssets(oldAssets);
+      toast.error('Failed to update primary asset');
     }
   };
 
@@ -589,7 +575,7 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     if (!confirmDelete) return;
     
     try {
-      await axiosInstance.delete(`${PRODUCTS_API_URL}/${product.id}/images/${assetId}/`);
+      await axiosInstance.delete(`${PRODUCTS_API_URL}/${product.id}/assets/${assetId}/`);
       
       // Update local state
       setAssets(prev => prev.filter(asset => asset.id !== assetId));
@@ -1027,7 +1013,7 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
                                 variant="ghost" 
                                 size="sm" 
                                 className="px-2 py-0 h-6 text-xs hover:bg-primary/10 hover:text-primary"
-                                onClick={() => makePrimary(asset.id)}
+                                onClick={() => makeAssetPrimary(asset)}
                               >
                                 Set as Primary
                               </Button>
@@ -1050,7 +1036,7 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
                           </DropdownMenuItem>
                           
                           {!asset.is_primary && (
-                            <DropdownMenuItem onClick={() => makePrimary(asset.id)}>
+                            <DropdownMenuItem onClick={() => makeAssetPrimary(asset)}>
                               <CheckCircle2 className="h-4 w-4 mr-2" />
                               Set as Primary
                             </DropdownMenuItem>

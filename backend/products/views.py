@@ -56,11 +56,11 @@ class ProductViewSet(viewsets.ModelViewSet):
         Filter products to return only those created by the current user.
         Allow additional filtering by query parameters.
         """
-        queryset = Product.objects.all()
+        qs = Product.objects.all()
         
         # Apply user filter if not staff/admin
         if not self.request.user.is_staff:
-            queryset = queryset.filter(created_by=self.request.user)
+            qs = qs.filter(created_by=self.request.user)
             
         # Additional filters from query parameters
         category = self.request.query_params.get('category')
@@ -68,14 +68,15 @@ class ProductViewSet(viewsets.ModelViewSet):
         is_active = self.request.query_params.get('is_active')
         
         if category:
-            queryset = queryset.filter(category=category)
+            qs = qs.filter(category=category)
         if brand:
-            queryset = queryset.filter(brand=brand)
+            qs = qs.filter(brand=brand)
         if is_active is not None:
             is_active_bool = is_active.lower() == 'true'
-            queryset = queryset.filter(is_active=is_active_bool)
+            qs = qs.filter(is_active=is_active_bool)
             
-        return queryset
+        # Always bring images in one query to avoid extra hits in serializer
+        return qs.prefetch_related('images')
 
     def perform_create(self, serializer):
         """
@@ -144,7 +145,6 @@ class ProductViewSet(viewsets.ModelViewSet):
                 "name": f"Category Placeholder: {category_name}",
                 "sku": temp_sku,
                 "price": 0.01,
-                "stock": 0,
                 "category": category_name,
                 "is_active": False  # Make it inactive so it doesn't appear in regular products
             }
@@ -611,37 +611,39 @@ class ProductViewSet(viewsets.ModelViewSet):
         serializer = RelationSerializer(relations, many=True)
         return Response(serializer.data)
 
-    @action(detail=True, methods=['post'], url_path='assets/(?P<asset_id>[^/.]+)/set-primary')
-    def set_asset_primary(self, request, pk=None, asset_id=None):
+    @action(detail=True, methods=['post'], url_path='set-primary')
+    def set_asset_primary(self, request, pk=None, product_pk=None):
         """
-        Set an asset as primary for a product.
-        This uses POST method to be more compatible with frontend frameworks.
+        Set an asset as primary
         """
-        product = self.get_object()  # Get the product and check permissions
-        
         try:
-            # Try to find the asset by ID
-            asset_id = int(asset_id) if asset_id.isdigit() else asset_id
+            product = Product.objects.get(pk=product_pk)
             
-            # If we have a ProductAsset model, we'd use that
-            # For now, since the assets are likely handled differently, we'll use a placeholder
-            # Example if using ProductImage model:
-            # asset = ProductImage.objects.get(product=product, id=asset_id)
+            try:
+                asset_id = request.data.get('asset_id')
+                if not asset_id:
+                    return Response({'detail': 'Asset ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+                
+                asset = ProductAsset.objects.get(pk=asset_id, product=product)
+                
+                # First, unset primary for all other assets
+                ProductAsset.objects.filter(product=product, is_primary=True).update(is_primary=False)
+                
+                # Set this asset as primary
+                asset.is_primary = True
+                asset.save()
+                
+                return Response({'detail': 'Asset set as primary successfully'}, status=status.HTTP_200_OK)
+                
+            except ProductAsset.DoesNotExist:
+                return Response({'detail': 'Asset not found'}, status=status.HTTP_404_NOT_FOUND)
+            except ValueError:
+                return Response({'detail': 'Invalid asset ID format'}, status=status.HTTP_400_BAD_REQUEST)
             
-            # Here we'd implement the setting of the primary asset
-            # Example: 
-            # with transaction.atomic():
-            #     ProductImage.objects.filter(product=product).update(is_primary=False)
-            #     asset.is_primary = True
-            #     asset.save()
-            
-            # For now, we'll just return success
-            return Response({"status": "success", "message": "Asset set as primary"}, status=status.HTTP_200_OK)
-            
-        except (ValueError, TypeError):
-            return Response({"error": "Invalid asset ID format"}, status=status.HTTP_400_BAD_REQUEST)
+        except Product.DoesNotExist:
+            return Response({'detail': 'Product not found'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # Add endpoints for dashboard data
 class DashboardViewSet(viewsets.ViewSet):
@@ -919,15 +921,45 @@ class AssetViewSet(viewsets.ModelViewSet):
     """
     serializer_class = ProductAssetSerializer
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
-    #          ↓ filter to the parent product
+    # Filter to the parent product
     def get_queryset(self):
         return ProductAsset.objects.filter(product_id=self.kwargs["product_pk"])
+        
+    def get_serializer_context(self):
+        """
+        Extra context provided to the serializer class.
+        """
+        context = super().get_serializer_context()
+        context.update({
+            'product_id': self.kwargs.get('product_pk')
+        })
+        return context
 
-    #          ↓ attach the FK on create
+    # Attach the FK on create
     def perform_create(self, serializer):
-        product = Product.objects.get(pk=self.kwargs["product_pk"])
-        serializer.save(product=product)
+        try:
+            product = Product.objects.get(pk=self.kwargs["product_pk"])
+            
+            # Check if file field exists in request
+            if 'file' not in self.request.data and 'file' not in self.request.FILES:
+                raise ValidationError({"file": "No file was submitted"})
+            
+            # Check if file is empty
+            file_data = self.request.data.get('file') or self.request.FILES.get('file')
+            if not file_data:
+                raise ValidationError({"file": "The submitted file is empty"})
+                
+            # Save the asset
+            serializer.save(product=product)
+            
+        except Product.DoesNotExist:
+            raise ValidationError({"product": f"Product with ID {self.kwargs.get('product_pk')} does not exist"})
+        except Exception as e:
+            if hasattr(e, '__class__') and e.__class__.__name__ == 'ValidationError':
+                raise  # Re-raise ValidationError as is
+            raise ValidationError({"detail": str(e)})
 
     # -------- custom actions ---------------------------------
 

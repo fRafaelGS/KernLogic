@@ -7,13 +7,13 @@ import path from "path";
 export default defineConfig(({ mode }) => ({
   server: {
     host: "localhost",
-    port: 3003,
+    port: 3004,
     strictPort: true,
     hmr: {
       protocol: "ws",
       host: "localhost",
-      port: 3003,
-      clientPort: 3003
+      port: 3004,
+      clientPort: 3004
     },
     proxy: {
       '/api': {
@@ -23,13 +23,13 @@ export default defineConfig(({ mode }) => ({
         rewrite: (path) => path,
         configure: (proxy, _options) => {
           proxy.on('error', (err, _req, _res) => {
-            console.log('proxy error', err);
+            console.log('Proxy error:', err);
           });
           proxy.on('proxyReq', (proxyReq, req, _res) => {
-            console.log('Sending Request:', req.method, req.url);
+            console.log('Proxying request:', req.method, req.url, '→', 'http://localhost:8000' + req.url);
           });
           proxy.on('proxyRes', (proxyRes, req, _res) => {
-            console.log('Received Response:', proxyRes.statusCode, req.url);
+            console.log('Proxy response:', proxyRes.statusCode, req.url, proxyRes.headers['content-type']);
           });
         }
       },

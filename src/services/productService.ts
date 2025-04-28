@@ -1,10 +1,10 @@
-    import axios, { AxiosError } from 'axios';
+    import axios, { AxiosError, AxiosProgressEvent } from 'axios';
     import { API_URL } from '@/config';
     import axiosInstance from '@/lib/axiosInstance';
 
     // PRODUCTS_PATH should be empty string to work with the backend URL structure
     // The backend routes 'api/' to products.urls which registers the viewset at ''
-    const PRODUCTS_PATH = '/api'; // Add /api prefix since API_URL is now empty
+    const PRODUCTS_PATH = '/api/products'; // Add /api prefix since API_URL is now empty
 
     // Define core fields that should trigger activity logging when changed
     const CORE_FIELDS = [
@@ -65,7 +65,6 @@
         description: string;
         sku: string;
         price: number;
-        stock: number; // Add stock property
         category: string;
         created_by?: string;
         created_at?: string;
@@ -110,6 +109,8 @@
         is_archived?: boolean;
         parent_asset_id?: number;
         version?: string;
+        order?: number;
+        archived?: boolean;
     }
 
     export interface ProductActivity {
@@ -234,22 +235,9 @@
     export const productService = {
         // Get all products
         getProducts: async (filters?: Record<string, any>): Promise<Product[]> => {
-            const page = 1;
-            const pageSize = 50;
-            const sorting = 'updated_at:desc';
-            let url = `${PRODUCTS_PATH}/?page=${page}&page_size=${pageSize}&sort=${sorting}`;
+            let url = `${PRODUCTS_PATH}/`;
             
-            // Add any active filters
-            if (filters) {
-                const queryParams = Object.entries(filters)
-                    .filter(([_, value]) => value !== undefined && value !== null && value !== '')
-                    .map(([key, value]) => `${key}=${encodeURIComponent(value.toString())}`)
-                    .join('&');
-                
-                if (queryParams) {
-                    url += `&${queryParams}`;
-                }
-            }
+            console.log('Fetching products from:', url);
             
             try {
                 const token = localStorage.getItem('access_token');
@@ -609,42 +597,35 @@
 
         // Get product assets
         getProductAssets: async (productId: number): Promise<ProductAsset[]> => {
+            const url = `${PRODUCTS_API_URL}/${productId}/assets/`;
+            console.log(`[getProductAssets] Fetching product assets from ${url}`);
+            
             try {
-                // Use the real assets endpoint
-                const url = `${PRODUCTS_API_URL}/${productId}/assets/`;
-                console.log('[getProductAssets] Requesting product assets from URL:', url);
-                
                 const response = await axiosInstance.get(url);
                 
-                // Check if response is HTML first
-                if (typeof response.data === 'string' && response.data.startsWith('<!DOCTYPE')) {
-                    console.error("[getProductAssets] Received HTML response instead of JSON. Try using a different endpoint.");
+                if (isHtmlResponse(response)) {
+                    console.error('Received HTML response instead of JSON');
                     return [];
                 }
                 
-                // The response should be an array of assets
-                if (!Array.isArray(response.data)) {
-                    console.log('[getProductAssets] No assets found in response');
-                    return [];
-                }
+                // Handle different response formats
+                const data = Array.isArray(response.data) ? response.data : 
+                    (response.data.results ? response.data.results : []);
                 
-                // Convert to ProductAsset[]
-                const assets: ProductAsset[] = response.data.map((asset: any) => ({
+                console.log('[getProductAssets] Raw response data:', data);
+                
+                return data.map((asset: any) => ({
                     id: asset.id,
-                    name: asset.name || `Asset ${asset.id}`,
-                    type: asset.type || 'image',
-                    url: asset.url,
-                    size: asset.size || 'Unknown',
-                    uploaded_by: asset.uploaded_by || 'System',
+                    name: asset.name || (asset.file ? asset.file.split('/').pop() : 'Unknown'),
+                    type: asset.asset_type || 'image',
+                    url: asset.file || '',
+                    size: asset.file_size || 0,
+                    uploaded_by: asset.uploaded_by_name || 'System',
                     uploaded_at: asset.uploaded_at || new Date().toISOString(),
-                    is_primary: asset.is_primary,
-                    is_archived: asset.is_archived,
-                    parent_asset_id: asset.parent_asset_id,
-                    version: asset.version
+                    is_primary: asset.is_primary || false,
+                    order: asset.order || 0,
+                    archived: asset.archived || false
                 }));
-                
-                console.log('[getProductAssets] Successfully fetched', assets.length, 'assets');
-                return assets;
             } catch (error) {
                 console.error('Error fetching product assets:', error);
                 return [];
@@ -851,42 +832,48 @@
             }
         },
 
-        // Upload an asset (image) for a product
-        uploadAsset: async (productId: number, file: File): Promise<ProductAsset> => {
-            const url = `${PRODUCTS_API_URL}/${productId}/images/`;
-            console.log('[uploadAsset] Uploading file to:', url);
+        // Upload asset (image) for a product
+        uploadAsset: async (
+            productId: number,
+            file: File,
+            onUploadProgress?: (progressEvent: AxiosProgressEvent) => void
+        ): Promise<ProductAsset> => {
+            const url = `${PRODUCTS_API_URL}/${productId}/assets/`;
+            console.log(`[uploadAsset] Uploading asset to ${url}`);
             
             const formData = new FormData();
             formData.append('file', file);
+            formData.append('name', file.name);  // Add name explicitly to match backend expectation
             
-            try {
-                const response = await axiosInstance.post(url, formData, {
-                    headers: {
-                        'Content-Type': 'multipart/form-data',
-                    },
-                });
-                
-                // Convert the response to ProductAsset format
-                const image = response.data;
-                return {
-                    id: image.id,
-                    name: file.name,
-                    type: 'image',
-                    url: image.url,
-                    size: `${Math.round(file.size / 1024)} KB`,
-                    uploaded_by: 'You',
-                    uploaded_at: new Date().toISOString(),
-                    is_primary: image.is_primary
-                };
-            } catch (error) {
-                console.error('Error uploading asset:', error);
-                throw error;
+            const response = await axiosInstance.post(url, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+                onUploadProgress,
+            });
+            
+            if (response.status !== 201 && response.status !== 200) {
+                throw new Error(`Unexpected response status: ${response.status}`);
             }
+            
+            const data = response.data;
+            return {
+                id: data.id,
+                name: data.name || file.name,
+                type: data.asset_type || 'image',
+                url: data.file || '',
+                size: data.file_size || file.size,
+                uploaded_by: data.uploaded_by_name || 'System',
+                uploaded_at: data.uploaded_at || new Date().toISOString(),
+                is_primary: data.is_primary || false,
+                order: data.order || 0,
+                archived: data.archived || false
+            };
         },
 
         // Delete an asset
         deleteAsset: async (productId: number, assetId: number): Promise<void> => {
-            const url = `${PRODUCTS_API_URL}/${productId}/images/${assetId}/`;
+            const url = `${PRODUCTS_API_URL}/${productId}/assets/${assetId}/`;
             console.log('[deleteAsset] Deleting asset at:', url);
             
             try {
@@ -898,9 +885,9 @@
         },
 
         // Set an asset as primary (POST method instead of PATCH)
-        setPrimaryAsset: async (productId: number, assetId: number | string): Promise<boolean> => {
-            const url = `${PRODUCTS_API_URL}/${productId}/images/${assetId}/set-primary/`;
-            console.log('[setPrimaryAsset] Setting asset as primary at:', url);
+        setAssetPrimary: async (productId: number, assetId: number | string): Promise<boolean> => {
+            const url = `${PRODUCTS_API_URL}/${productId}/assets/${assetId}/set-primary/`;
+            console.log('[setAssetPrimary] Setting asset as primary at:', url);
             
             try {
                 await axiosInstance.post(url);

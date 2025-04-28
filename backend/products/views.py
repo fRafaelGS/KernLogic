@@ -3,7 +3,7 @@ from rest_framework import viewsets, permissions, status, filters
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Product, ProductImage, ProductRelation
+from .models import Product, ProductImage, ProductRelation, ProductAsset
 from .serializers import (
     ProductSerializer, 
     ProductImageSerializer, 
@@ -11,7 +11,8 @@ from .serializers import (
     DashboardSummarySerializer, 
     InventoryTrendSerializer, 
     ActivitySerializer,
-    ProductRelationSerializer
+    ProductRelationSerializer,
+    ProductAssetSerializer
 )
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
@@ -910,3 +911,38 @@ class DashboardViewSet(viewsets.ViewSet):
             serializer_data.append(data)
         
         return Response(serializer_data)
+
+class AssetViewSet(viewsets.ModelViewSet):
+    """
+    Nested under /products/<product_pk>/assets/.
+    Handles upload, delete, reorder and set-primary.
+    """
+    serializer_class = ProductAssetSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    #          ↓ filter to the parent product
+    def get_queryset(self):
+        return ProductAsset.objects.filter(product_id=self.kwargs["product_pk"])
+
+    #          ↓ attach the FK on create
+    def perform_create(self, serializer):
+        product = Product.objects.get(pk=self.kwargs["product_pk"])
+        serializer.save(product=product)
+
+    # -------- custom actions ---------------------------------
+
+    @action(detail=False, methods=["post"])
+    def reorder(self, request, product_pk=None):
+        """POST body: [{id: 3, order: 1}, …]"""
+        for item in request.data:
+            ProductAsset.objects.filter(pk=item["id"], product_id=product_pk)\
+                                .update(order=item["order"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["post"])
+    def set_primary(self, request, pk=None, product_pk=None):
+        ProductAsset.objects.filter(product_id=product_pk).update(is_primary=False)
+        (ProductAsset.objects
+                     .filter(pk=pk, product_id=product_pk)
+                     .update(is_primary=True))
+        return Response(status=status.HTTP_204_NO_CONTENT)

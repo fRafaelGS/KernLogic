@@ -1,6 +1,6 @@
 from rest_framework import serializers
 import json
-from .models import Product, ProductImage, Activity, ProductRelation
+from .models import Product, ProductImage, Activity, ProductRelation, ProductAsset
 from django.db.models import Sum, F, Count, Case, When, Value, FloatField
 from decimal import Decimal
 from django.conf import settings
@@ -219,4 +219,9 @@ class IncompleteProductSerializer(serializers.ModelSerializer):
         
     def get_field_completeness(self, obj):
         """Return the detailed field completeness data"""
-        return obj.get_field_completeness() if hasattr(obj, 'get_field_completeness') else [] 
+        return obj.get_field_completeness() if hasattr(obj, 'get_field_completeness') else []
+
+class ProductAssetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductAsset
+        fields = "__all__" 

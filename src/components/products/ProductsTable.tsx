@@ -336,22 +336,66 @@ export function ProductsTable() {
     if (!isAuthenticated) return;
     setLoading(true);
     setError(null);
+    
     try {
-      const [fetchedProducts, fetchedCategories]: [Product[], Category[]] = await Promise.all([
-        productService.getProducts(),
-        productService.getCategories() 
-      ]);
+      console.log('[ProductsTable] Fetching data, auth status:', isAuthenticated);
+      
+      // Make the requests one at a time to avoid race conditions
+      let fetchedProducts: Product[] = [];
+      let fetchedCategories: Category[] = [];
+      
+      try {
+        fetchedProducts = await productService.getProducts();
+        console.log('[ProductsTable] Fetched products:', fetchedProducts);
+        // Guard against non-array responses
+        if (!Array.isArray(fetchedProducts)) {
+          console.error('[ProductsTable] Products response is not an array:', fetchedProducts);
+          fetchedProducts = [];
+        }
+      } catch (productsError) {
+        console.error('[ProductsTable] Error fetching products:', productsError);
+        // Don't throw, continue to fetch categories
+        fetchedProducts = [];
+      }
+      
+      try {
+        fetchedCategories = await productService.getCategories();
+        console.log('[ProductsTable] Fetched categories:', fetchedCategories);
+        // Guard against non-array responses
+        if (!Array.isArray(fetchedCategories)) {
+          console.error('[ProductsTable] Categories response is not an array:', fetchedCategories);
+          fetchedCategories = [];
+        }
+      } catch (categoriesError) {
+        console.error('[ProductsTable] Error fetching categories:', categoriesError);
+        // Don't throw, continue with empty categories
+        fetchedCategories = [];
+      }
+      
+      // Update state with whatever data we managed to get
       setProducts(fetchedProducts);
-      setCategoryOptions(fetchedCategories.map(c => ({ label: c.name, value: c.id })));
-      console.log('Fetched products:', fetchedProducts);
-      console.log('Fetched categories:', fetchedCategories);
+      const categoryOpts = fetchedCategories.map(c => ({ 
+        label: typeof c === 'object' ? c.name : c,
+        value: typeof c === 'object' ? c.id : c
+      }));
+      setCategoryOptions(categoryOpts);
+      
+      // Log success
+      console.log('[ProductsTable] Data fetch completed successfully');
+      
     } catch (err) {
-      console.error('Error fetching data:', err);
+      console.error('[ProductsTable] Error in fetchData:', err);
       setError('Failed to fetch data');
+      // Don't logout the user, let them retry
+      toast({ 
+        title: 'Could not load products',
+        description: 'Please try refreshing the page',
+        variant: 'destructive'
+      });
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, toast]);
 
   // Re-introduce filteredData calculation
   const filteredData = useMemo(() => {

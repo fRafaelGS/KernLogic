@@ -2,21 +2,19 @@
 
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import ProductViewSet, DashboardViewSet
+from rest_framework_nested.routers import NestedSimpleRouter
+from .views import ProductViewSet, DashboardViewSet, AssetViewSet
 
-# Create two routers for different URL patterns
-main_router = DefaultRouter()
-products_router = DefaultRouter()
-dashboard_router = DefaultRouter()
+# /api/products/…
+router = DefaultRouter()
+router.register(r"products", ProductViewSet, basename="product")
+router.register(r"dashboard", DashboardViewSet, basename="dashboard")
 
-# Register with empty string for /api/<pk>/ format (original)
-main_router.register('', ProductViewSet, basename='product')
+# /api/products/<product_pk>/assets/…
+assets_router = NestedSimpleRouter(router, r"products", lookup="product")
+assets_router.register(r"assets", AssetViewSet, basename="product-assets")
 
-# Register with 'products' prefix for /api/products/<pk>/ format (for image uploads)
-products_router.register('products', ProductViewSet, basename='product-alt')
-
-# Register dashboard viewset
-dashboard_router.register('dashboard', DashboardViewSet, basename='dashboard')
-
-# Combine all router URL patterns
-urlpatterns = main_router.urls + products_router.urls + dashboard_router.urls 
+urlpatterns = [
+    path("", include(router.urls)),
+    path("", include(assets_router.urls)),
+] 

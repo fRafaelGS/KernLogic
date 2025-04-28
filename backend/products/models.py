@@ -312,3 +312,58 @@ class Activity(models.Model):
     
     def __str__(self):
         return f"{self.action} {self.entity} {self.entity_id} by {self.user}"
+
+class ProductAsset(models.Model):
+    """
+    Stores product assets (images, documents, etc.)
+    """
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name='assets'
+    )
+    file = models.FileField(
+        upload_to='product_assets/'
+    )
+    asset_type = models.CharField(
+        max_length=20,
+        default='image',
+        help_text="Type of asset (image, video, document, etc.)"
+    )
+    name = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True
+    )
+    order = models.PositiveIntegerField(
+        default=0,
+        help_text="Order in which assets are displayed"
+    )
+    is_primary = models.BooleanField(
+        default=False,
+        help_text="Is this the main asset for the product?"
+    )
+    content_type = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="MIME type of the file"
+    )
+    file_size = models.PositiveIntegerField(
+        default=0,
+        help_text="Size of the file in bytes"
+    )
+    uploaded_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='uploaded_assets'
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['order']
+        verbose_name_plural = 'Product Assets'
+
+    def __str__(self):
+        return f"{self.asset_type.capitalize()} for {self.product.name} (Order: {self.order})"

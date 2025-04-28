@@ -23,6 +23,7 @@ axiosInstance.interceptors.request.use(
             
             console.log('[Request Interceptor] Added token to request:', {
                 url: config.url,
+                method: config.method,
                 authHeader: authHeader.substring(0, 20) + '...',
             });
         } else {
@@ -36,9 +37,42 @@ axiosInstance.interceptors.request.use(
     }
 );
 
+// Helper function to check for HTML responses (DRF browsable API)
+const isHtmlResponse = (data: any): boolean => {
+    if (typeof data === 'string' && (
+        data.trim().startsWith('<!DOCTYPE html>') || 
+        data.trim().startsWith('<html>') ||
+        data.includes('<head>') && data.includes('<body>')
+    )) {
+        console.error('[Response Interceptor] HTML response detected instead of JSON data');
+        return true;
+    }
+    return false;
+};
+
 // Interceptor to handle token refresh on 401 errors
 axiosInstance.interceptors.response.use(
-    (response) => response, // Pass through successful responses
+    (response) => {
+        // Check if response is HTML when expecting JSON
+        const contentType = response.headers['content-type'] || '';
+        if (contentType.includes('text/html') || isHtmlResponse(response.data)) {
+            console.error('[Response Interceptor] Received HTML instead of JSON:', {
+                url: response.config.url,
+                status: response.status,
+            });
+            
+            // For GET requests, we'll return empty data instead of failing
+            if (response.config.method?.toLowerCase() === 'get') {
+                // Return empty array or object based on expected response type
+                if (Array.isArray(response.data)) {
+                    return { ...response, data: [] };
+                } else {
+                    return { ...response, data: {} };
+                }
+            }
+        }
+        return response;
+    }, 
     async (error: AxiosError) => {
         const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
@@ -52,27 +86,37 @@ axiosInstance.interceptors.response.use(
             responseData: error.response?.data,
         });
 
+        // Check if there's an HTML response in the error (DRF browsable API)
+        if (error.response && typeof error.response.data === 'string' && 
+            isHtmlResponse(error.response.data)) {
+            
+            console.error('[Response Interceptor] HTML error response detected');
+            
+            // If this is a GET request, return empty data
+            if (originalRequest.method?.toLowerCase() === 'get') {
+                console.log('[Response Interceptor] Returning empty data for HTML response');
+                return Promise.resolve({ 
+                    ...error.response, 
+                    data: originalRequest.url?.includes('categories') ? [] : {} 
+                });
+            }
+        }
+
         // Check if it's a 401, not from a refresh attempt, and the request exists
         if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
             console.log('[Response Interceptor] Received 401, attempting token refresh...');
             originalRequest._retry = true; // Mark to prevent infinite refresh loops
 
-            // Check if this is a dashboard endpoint - if so, just pass the error
-            // This prevents logout loops when dashboard endpoints are unauthorized
-            const url = originalRequest.url || '';
-            if (url.includes('/dashboard/')) {
-                console.log('[Response Interceptor] Dashboard endpoint unauthorized:', url);
-                // Don't attempt token refresh for dashboard endpoints to prevent logout loops
-                return Promise.reject(error);
+            // Check if refresh token exists
+            const refreshToken = localStorage.getItem('refresh_token');
+            if (!refreshToken) {
+                console.error('[Refresh] No refresh token found.');
+                localStorage.removeItem('access_token');
+                window.location.href = '/login?sessionExpired=true';
+                return Promise.reject(new Error('No refresh token available'));
             }
 
             try {
-                const refreshToken = localStorage.getItem('refresh_token');
-                if (!refreshToken) {
-                    console.error('[Refresh] No refresh token found.');
-                    throw new Error('No refresh token available');
-                }
-
                 // Use fetch for refresh to bypass this interceptor
                 const refreshUrl = `${API_URL}/auth/token/refresh/`; 
                 console.log('[Refresh] Calling refresh URL:', refreshUrl);
@@ -110,15 +154,16 @@ axiosInstance.interceptors.response.use(
             } catch (refreshError: any) {
                 console.error('[Refresh] Error during token refresh:', refreshError.message);
                 
-                // Only clear tokens and redirect for non-dashboard requests
-                if (!originalRequest.url?.includes('/dashboard/')) {
-                    // Clear tokens and redirect to login on refresh failure
-                    localStorage.removeItem('access_token');
-                    localStorage.removeItem('refresh_token');
-                    // Use a more robust way to navigate if possible, but window.location is a fallback
+                // Clear tokens and redirect to login on refresh failure
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('refresh_token');
+                
+                // Only redirect if we're not already on the login page to avoid loops
+                if (!window.location.pathname.includes('/login')) {
                     window.location.href = '/login?sessionExpired=true';
                 }
-                return Promise.reject(refreshError); // Reject the promise to prevent original request from proceeding
+                
+                return Promise.reject(refreshError);
             }
         } else if (error.response?.status === 500) {
             // Better handling for server errors

@@ -318,17 +318,17 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
   // Upload file to API
   const uploadFile = async (upload: UploadingAsset, productId: number) => {
     const formData = new FormData();
-    formData.append('file', upload.file);
+    formData.append('image', upload.file);
     formData.append('name', upload.file.name);
     
     try {
-      console.log(`Attempting to upload file to ${PRODUCTS_API_URL}/${productId}/assets/`);
+      console.log(`Attempting to upload file to ${PRODUCTS_API_URL}/${productId}/images/`);
       
       // First try using POST to the standard endpoint
       let response;
       try {
         response = await axiosInstance.post(
-          `${PRODUCTS_API_URL}/${productId}/assets/`,
+          `${PRODUCTS_API_URL}/${productId}/images/`,
           formData,
           {
             headers: {
@@ -345,7 +345,7 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
       } catch (error: any) {
         // If we get a 405 Method Not Allowed, the endpoint might exist but not support POST
         if (error?.response?.status === 405) {
-          console.warn('POST method not allowed on assets endpoint, adding file as mock data');
+          console.warn('POST method not allowed on images endpoint, adding file as mock data');
           
           // Convert file to base64 data URL instead of blob URL for persistence across page reloads
           updateUploadProgress(upload.id, 50); // Update to 50% while converting
@@ -444,12 +444,24 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
       // Handle successful upload
       updateUploadStatus(upload.id, 'success');
       
+      // Convert the response to ProductAsset format
+      const newAsset: ProductAsset = {
+        id: response.data.id,
+        name: upload.file.name,
+        type: 'image',
+        url: response.data.url,
+        size: `${Math.round(upload.file.size / 1024)} KB`,
+        uploaded_by: 'You',
+        uploaded_at: new Date().toISOString(),
+        is_primary: response.data.is_primary
+      };
+      
       // Add the new asset to the list
-      setAssets(prev => [response.data, ...prev]);
+      setAssets(prev => [newAsset, ...prev]);
       
       // Notify parent component if callback exists
       if (onAssetUpdate) {
-        onAssetUpdate([response.data, ...assets]);
+        onAssetUpdate([newAsset, ...assets]);
       }
       
       toast.success('File uploaded successfully');
@@ -577,7 +589,7 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     if (!confirmDelete) return;
     
     try {
-      await axiosInstance.delete(`${PRODUCTS_API_URL}/${product.id}/assets/${assetId}/`);
+      await axiosInstance.delete(`${PRODUCTS_API_URL}/${product.id}/images/${assetId}/`);
       
       // Update local state
       setAssets(prev => prev.filter(asset => asset.id !== assetId));

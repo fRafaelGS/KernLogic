@@ -243,14 +243,11 @@ class ProductViewSet(viewsets.ModelViewSet):
             parser_classes=[MultiPartParser, FormParser]) # Specify parsers for this action
     def upload_image(self, request, pk=None):
         product = self.get_object() # Checks user permission via get_queryset
-        image_file = request.FILES.get('image')
-
-        if not image_file:
+        if 'image' not in request.FILES:
             return Response({'detail': 'No image file provided.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Basic validation (can add more: size, type)
         if product.images.count() >= 10: # Example limit
-             return Response({'detail': 'Maximum number of images reached (10).'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'Maximum number of images reached (10).'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Determine order (append to end)
         last_order = product.images.aggregate(models.Max('order')).get('order__max')
@@ -259,15 +256,12 @@ class ProductViewSet(viewsets.ModelViewSet):
         # Set first image as primary if none exists
         is_first_image = not product.images.exists()
 
-        image_data = {
-            'product': product.id,
-            'image': image_file,
-            'order': current_order,
-            'is_primary': is_first_image
-        }
-        
-        # Use context to pass request for absolute URL generation
-        serializer = ProductImageSerializer(data=image_data, context=self.get_serializer_context())
+        # Use request.data and update order/is_primary
+        data = request.data.copy()
+        data['order'] = current_order
+        data['is_primary'] = is_first_image
+
+        serializer = ProductImageSerializer(data=data, context=self.get_serializer_context())
         if serializer.is_valid():
             serializer.save(product=product) # Explicitly pass product instance
             # Return the full product data with updated images

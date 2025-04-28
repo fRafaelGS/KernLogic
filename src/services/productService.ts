@@ -549,9 +549,9 @@ export const productService = {
     // Get product assets
     getProductAssets: async (productId: number): Promise<ProductAsset[]> => {
         try {
-            // Use /api/products/:id/ format to match the working attributes endpoint
-            const url = `/api/products/${productId}/assets/`;
-            console.log('[getProductAssets] Requesting assets from URL:', url);
+            // Use the real assets endpoint
+            const url = `${PRODUCTS_API_URL}/${productId}/assets/`;
+            console.log('[getProductAssets] Requesting product assets from URL:', url);
             
             const response = await axiosInstance.get(url);
             
@@ -561,17 +561,29 @@ export const productService = {
                 return [];
             }
             
-            // Then check if response is an array
+            // The response should be an array of assets
             if (!Array.isArray(response.data)) {
-                console.error("[getProductAssets] Invalid response format for product assets: ", 
-                  typeof response.data === 'string' && response.data.startsWith('<!DOCTYPE') 
-                    ? "HTML response received instead of JSON" 
-                    : response.data
-                );
+                console.log('[getProductAssets] No assets found in response');
                 return [];
             }
             
-            return response.data;
+            // Convert to ProductAsset[]
+            const assets: ProductAsset[] = response.data.map((asset: any) => ({
+                id: asset.id,
+                name: asset.name || `Asset ${asset.id}`,
+                type: asset.type || 'image',
+                url: asset.url,
+                size: asset.size || 'Unknown',
+                uploaded_by: asset.uploaded_by || 'System',
+                uploaded_at: asset.uploaded_at || new Date().toISOString(),
+                is_primary: asset.is_primary,
+                is_archived: asset.is_archived,
+                parent_asset_id: asset.parent_asset_id,
+                version: asset.version
+            }));
+            
+            console.log('[getProductAssets] Successfully fetched', assets.length, 'assets');
+            return assets;
         } catch (error) {
             console.error('Error fetching product assets:', error);
             return [];
@@ -778,11 +790,58 @@ export const productService = {
         }
     },
 
+    // Upload an asset (image) for a product
+    uploadAsset: async (productId: number, file: File): Promise<ProductAsset> => {
+        const url = `${PRODUCTS_API_URL}/${productId}/images/`;
+        console.log('[uploadAsset] Uploading file to:', url);
+        
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        try {
+            const response = await axiosInstance.post(url, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+            });
+            
+            // Convert the response to ProductAsset format
+            const image = response.data;
+            return {
+                id: image.id,
+                name: file.name,
+                type: 'image',
+                url: image.url,
+                size: `${Math.round(file.size / 1024)} KB`,
+                uploaded_by: 'You',
+                uploaded_at: new Date().toISOString(),
+                is_primary: image.is_primary
+            };
+        } catch (error) {
+            console.error('Error uploading asset:', error);
+            throw error;
+        }
+    },
+
+    // Delete an asset
+    deleteAsset: async (productId: number, assetId: number): Promise<void> => {
+        const url = `${PRODUCTS_API_URL}/${productId}/images/${assetId}/`;
+        console.log('[deleteAsset] Deleting asset at:', url);
+        
+        try {
+            await axiosInstance.delete(url);
+        } catch (error) {
+            console.error('Error deleting asset:', error);
+            throw error;
+        }
+    },
+
     // Set an asset as primary (POST method instead of PATCH)
     setPrimaryAsset: async (productId: number, assetId: number | string): Promise<boolean> => {
+        const url = `${PRODUCTS_API_URL}/${productId}/images/${assetId}/set-primary/`;
+        console.log('[setPrimaryAsset] Setting asset as primary at:', url);
+        
         try {
-            // Use POST method with a specific endpoint for setting primary
-            const url = `${PRODUCTS_API_URL}/${productId}/assets/${assetId}/set-primary/`;
             await axiosInstance.post(url);
             return true;
         } catch (error) {

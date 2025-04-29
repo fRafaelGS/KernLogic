@@ -232,6 +232,22 @@
     value: number | string;
     }
 
+    export interface ProductEvent {
+        id: number;
+        event_type: string;
+        summary: string;
+        payload: Record<string, any>;
+        created_at: string;        // ISO
+        created_by_name: string;
+    }
+
+    export interface PaginatedResponse<T> {
+        count: number;
+        next: string | null;
+        previous: string | null;
+        results: T[];
+    }
+
     export const productService = {
         // Get all products
         getProducts: async (filters?: Record<string, any>): Promise<Product[]> => {
@@ -949,4 +965,68 @@
         createAttributeValue,
         logAttributeActivity,
         createAttribute,
+
+        getProductHistory: async (
+            productId: number,
+            page = 1,
+            pageSize = 20
+        ): Promise<PaginatedResponse<ProductEvent>> => {
+            try {
+                const res = await axiosInstance.get(
+                    `${PRODUCTS_API_URL}/${productId}/history/`,
+                    { params: { page, page_size: pageSize } }
+                );
+                
+                // Handle different response formats
+                const data = res.data;
+                
+                // If response is empty array or object
+                if (
+                    (Array.isArray(data) && data.length === 0) || 
+                    (typeof data === 'object' && Object.keys(data).length === 0)
+                ) {
+                    console.log('Empty history response, returning formatted empty data');
+                    return {
+                        count: 0,
+                        next: null,
+                        previous: null,
+                        results: []
+                    };
+                }
+                
+                // If response is array but not paginated (backend didn't format properly)
+                if (Array.isArray(data) && !('results' in data)) {
+                    console.log('Non-paginated array response, formatting to paginated structure');
+                    return {
+                        count: data.length,
+                        next: null,
+                        previous: null,
+                        results: data
+                    };
+                }
+                
+                // Normal paginated response
+                if (data && typeof data === 'object' && 'results' in data) {
+                    return data;
+                }
+                
+                // Fallback for unexpected formats
+                console.warn('Unexpected response format from history API:', data);
+                return {
+                    count: 0,
+                    next: null,
+                    previous: null,
+                    results: []
+                };
+            } catch (error) {
+                console.error('Error fetching product history:', error);
+                // Return empty paginated response on error
+                return {
+                    count: 0,
+                    next: null,
+                    previous: null,
+                    results: []
+                };
+            }
+        },
     }; 

@@ -59,6 +59,32 @@ paths:
                 $ref: '#/components/schemas/TokenRefresh'
           description: ''
   /products/:
+    post:
+      operationId: products_create
+      description: Create a new product
+      tags:
+      - products
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
     get:
       operationId: products_list
       description: API endpoint for managing product data.
@@ -97,32 +123,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedProductList'
-          description: ''
-    post:
-      operationId: products_create
-      description: Create a new product
-      tags:
-      - products
-      requestBody:
-        content:
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/ProductRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/ProductRequest'
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ProductRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Product'
           description: ''
   /products/brands/:
     get:
@@ -167,22 +167,6 @@ paths:
                 $ref: '#/components/schemas/Product'
           description: ''
   /products/categories/:
-    get:
-      operationId: products_categories_retrieve
-      description: |-
-        GET: Return a list of unique categories for dropdown menus.
-        POST: Create a new category by adding a product with that category.
-      tags:
-      - products
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Product'
-          description: ''
     post:
       operationId: products_categories_create
       description: |-
@@ -202,6 +186,22 @@ paths:
             schema:
               $ref: '#/components/schemas/ProductRequest'
         required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
+    get:
+      operationId: products_categories_retrieve
+      description: |-
+        GET: Return a list of unique categories for dropdown menus.
+        POST: Create a new category by adding a product with that category.
+      tags:
+      - products
       security:
       - jwtAuth: []
       responses:
@@ -254,22 +254,6 @@ paths:
                 $ref: '#/components/schemas/Product'
           description: ''
   /products/tags/:
-    get:
-      operationId: products_tags_retrieve
-      description: |-
-        GET: Return a list of unique tags from all products.
-        POST: Create a new tag by adding it to a "tag repository" product or returning an existing tag.
-      tags:
-      - products
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Product'
-          description: ''
     post:
       operationId: products_tags_create
       description: |-
@@ -298,9 +282,25 @@ paths:
               schema:
                 $ref: '#/components/schemas/Product'
           description: ''
-  /products/{id}/:
     get:
-      operationId: products_retrieve
+      operationId: products_tags_retrieve
+      description: |-
+        GET: Return a list of unique tags from all products.
+        POST: Create a new tag by adding it to a "tag repository" product or returning an existing tag.
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
+  /products/{id}/:
+    patch:
+      operationId: products_partial_update
       description: API endpoint for managing product data.
       parameters:
       - in: path
@@ -310,6 +310,17 @@ paths:
         required: true
       tags:
       - products
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProductRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProductRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProductRequest'
       security:
       - jwtAuth: []
       responses:
@@ -335,8 +346,8 @@ paths:
       responses:
         '204':
           description: No response body
-    patch:
-      operationId: products_partial_update
+    get:
+      operationId: products_retrieve
       description: API endpoint for managing product data.
       parameters:
       - in: path
@@ -346,17 +357,6 @@ paths:
         required: true
       tags:
       - products
-      requestBody:
-        content:
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedProductRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedProductRequest'
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedProductRequest'
       security:
       - jwtAuth: []
       responses:
@@ -423,27 +423,6 @@ paths:
                 $ref: '#/components/schemas/Product'
           description: ''
   /products/{id}/images/{image_pk}/:
-    delete:
-      operationId: products_images_destroy
-      description: API endpoint for managing product data.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      - in: path
-        name: image_pk
-        schema:
-          type: string
-        required: true
-      tags:
-      - products
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
     patch:
       operationId: products_images_partial_update
       description: API endpoint for managing product data.
@@ -480,10 +459,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Product'
           description: ''
-  /products/{id}/related/{related_id}/:
     delete:
-      operationId: products_related_destroy
-      description: Update or delete a related product relationship
+      operationId: products_images_destroy
+      description: API endpoint for managing product data.
       parameters:
       - in: path
         name: id
@@ -491,7 +469,7 @@ paths:
           type: string
         required: true
       - in: path
-        name: related_id
+        name: image_pk
         schema:
           type: string
         required: true
@@ -502,6 +480,7 @@ paths:
       responses:
         '204':
           description: No response body
+  /products/{id}/related/{related_id}/:
     patch:
       operationId: products_related_partial_update
       description: Update or delete a related product relationship
@@ -538,6 +517,27 @@ paths:
               schema:
                 $ref: '#/components/schemas/Product'
           description: ''
+    delete:
+      operationId: products_related_destroy
+      description: Update or delete a related product relationship
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: related_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /products/{id}/related-list/:
     get:
       operationId: products_related_list_retrieve
@@ -706,30 +706,6 @@ paths:
         '200':
           description: No response body
   /products/{product_pk}/assets/:
-    get:
-      operationId: products_assets_list
-      description: |-
-        Nested under /products/<product_pk>/assets/.
-        Handles upload, delete, reorder and set-primary.
-      parameters:
-      - in: path
-        name: product_pk
-        schema:
-          type: string
-        required: true
-      tags:
-      - products
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ProductAsset'
-          description: ''
     post:
       operationId: products_assets_create
       description: |-
@@ -763,6 +739,30 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProductAsset'
+          description: ''
+    get:
+      operationId: products_assets_list
+      description: |-
+        Nested under /products/<product_pk>/assets/.
+        Handles upload, delete, reorder and set-primary.
+      parameters:
+      - in: path
+        name: product_pk
+        schema:
+          type: string
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProductAsset'
           description: ''
   /products/{product_pk}/assets/reorder/:
     post:
@@ -798,6 +798,44 @@ paths:
                 $ref: '#/components/schemas/ProductAsset'
           description: ''
   /products/{product_pk}/assets/{id}/:
+    patch:
+      operationId: products_assets_partial_update
+      description: |-
+        Nested under /products/<product_pk>/assets/.
+        Handles upload, delete, reorder and set-primary.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: product_pk
+        schema:
+          type: string
+        required: true
+      tags:
+      - products
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProductAssetRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProductAssetRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProductAssetRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductAsset'
+          description: ''
     get:
       operationId: products_assets_retrieve
       description: |-
@@ -887,44 +925,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProductAsset'
           description: ''
-    patch:
-      operationId: products_assets_partial_update
-      description: |-
-        Nested under /products/<product_pk>/assets/.
-        Handles upload, delete, reorder and set-primary.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      - in: path
-        name: product_pk
-        schema:
-          type: string
-        required: true
-      tags:
-      - products
-      requestBody:
-        content:
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedProductAssetRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedProductAssetRequest'
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedProductAssetRequest'
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProductAsset'
-          description: ''
   /products/{product_pk}/assets/{id}/set_primary/:
     post:
       operationId: products_assets_set_primary_create
@@ -965,6 +965,38 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProductAsset'
           description: ''
+  /products/{product_pk}/history/:
+    get:
+      operationId: products_history_list
+      summary: Retrieve product-specific history events
+      parameters:
+      - name: product_pk
+        in: path
+        required: true
+        schema: { type: integer }
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags: [products]
+      security:
+      - jwtAuth: []
+      responses:
+        "200":
+          description: Paginated list of events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProductEventList'
+
 components:
   schemas:
     PaginatedProductList:
@@ -1146,6 +1178,9 @@ components:
         file:
           type: string
           format: uri
+        file_url:
+          type: string
+          readOnly: true
         asset_type:
           type: string
           description: Type of asset (image, video, document, etc.)
@@ -1168,6 +1203,15 @@ components:
         file_size:
           type: integer
           description: Size of the file in bytes
+        file_size_formatted:
+          type: string
+          readOnly: true
+        uploaded_by:
+          type: integer
+          nullable: true
+        uploaded_by_name:
+          type: string
+          readOnly: true
         uploaded_at:
           type: string
           format: date-time
@@ -1175,14 +1219,14 @@ components:
         product:
           type: integer
           readOnly: true
-        uploaded_by:
-          type: integer
-          nullable: true
       required:
       - file
+      - file_size_formatted
+      - file_url
       - id
       - product
       - uploaded_at
+      - uploaded_by_name
     ProductAssetRequest:
       type: object
       properties:
@@ -1337,6 +1381,53 @@ components:
           minLength: 1
       required:
       - refresh
+    PaginatedProductEventList:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/products/1/history/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/products/1/history/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductEvent'
+    ProductEvent:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        event_type:
+          type: string
+          description: Type of the event (e.g. created, price_changed)
+        summary:
+          type: string
+          description: Human-readable summary of the event
+        payload:
+          type: object
+          description: Additional data or diff for power users
+        created_at:
+          type: string
+          format: date-time
+          description: When the event occurred
+        created_by_name:
+          type: string
+          description: Name of the user who performed the action
+      required:
+        - id
+        - event_type
+        - summary
+        - created_at
   securitySchemes:
     jwtAuth:
       type: http

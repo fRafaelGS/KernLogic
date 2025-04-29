@@ -3,7 +3,7 @@ from rest_framework import viewsets, permissions, status, filters
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Product, ProductImage, ProductRelation, ProductAsset
+from .models import Product, ProductImage, ProductRelation, ProductAsset, ProductEvent
 from .serializers import (
     ProductSerializer, 
     ProductImageSerializer, 
@@ -12,7 +12,8 @@ from .serializers import (
     InventoryTrendSerializer, 
     ActivitySerializer,
     ProductRelationSerializer,
-    ProductAssetSerializer
+    ProductAssetSerializer,
+    ProductEventSerializer
 )
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
@@ -30,6 +31,9 @@ from rest_framework.exceptions import ValidationError
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from .models import Activity
+from rest_framework import mixins
+from rest_framework.pagination import PageNumberPagination
+from .events import record
 
 User = get_user_model()
 
@@ -82,12 +86,73 @@ class ProductViewSet(viewsets.ModelViewSet):
         """
         Set the created_by field to the current user when creating a product.
         """
-        serializer.save(created_by=self.request.user)
+        product = serializer.save(created_by=self.request.user)
+        
+        # Record product creation event
+        record(
+            product=product,
+            user=self.request.user,
+            event_type="created",
+            summary=f"Product '{product.name}' was created",
+            payload={"product_id": product.id, "sku": product.sku, "name": product.name}
+        )
+
+    def perform_update(self, serializer):
+        """
+        Record the update event when a product is updated
+        """
+        # Get the old product before update
+        old_product = self.get_object()
+        old_data = {
+            "name": old_product.name,
+            "price": float(old_product.price),
+            "sku": old_product.sku,
+            "category": old_product.category,
+            "is_active": old_product.is_active
+        }
+        
+        # Save the updated product
+        product = serializer.save()
+        
+        # Collect changes
+        changes = {}
+        if old_product.name != product.name:
+            changes["name"] = {"old": old_product.name, "new": product.name}
+        if float(old_product.price) != float(product.price):
+            changes["price"] = {"old": float(old_product.price), "new": float(product.price)}
+        if old_product.sku != product.sku:
+            changes["sku"] = {"old": old_product.sku, "new": product.sku}
+        if old_product.category != product.category:
+            changes["category"] = {"old": old_product.category, "new": product.category}
+        if old_product.is_active != product.is_active:
+            changes["is_active"] = {"old": old_product.is_active, "new": product.is_active}
+        
+        if changes:
+            # Record product update event
+            record(
+                product=product,
+                user=self.request.user,
+                event_type="updated",
+                summary=f"Product '{product.name}' was updated",
+                payload={
+                    "changes": changes,
+                    "old_data": old_data,
+                }
+            )
 
     def perform_destroy(self, instance):
         """
         Permanently delete the product instead of soft deleting it
         """
+        # Record product deletion event before deleting
+        record(
+            product=instance,
+            user=self.request.user,
+            event_type="deleted",
+            summary=f"Product '{instance.name}' was deleted",
+            payload={"product_id": instance.id, "sku": instance.sku, "name": instance.name}
+        )
+        
         # Actually delete the product from the database
         instance.delete()
 
@@ -952,7 +1017,20 @@ class AssetViewSet(viewsets.ModelViewSet):
                 raise ValidationError({"file": "The submitted file is empty"})
                 
             # Save the asset
-            serializer.save(product=product)
+            asset = serializer.save(product=product)
+            
+            # Record asset creation event
+            record(
+                product=product,
+                user=self.request.user,
+                event_type="asset_added",
+                summary=f"Asset '{file_data.name if hasattr(file_data, 'name') else 'file'}' was added to product '{product.name}'",
+                payload={
+                    "asset_id": asset.id,
+                    "asset_type": asset.asset_type,
+                    "file_name": file_data.name if hasattr(file_data, 'name') else "unknown"
+                }
+            )
             
         except Product.DoesNotExist:
             raise ValidationError({"product": f"Product with ID {self.kwargs.get('product_pk')} does not exist"})
@@ -1012,3 +1090,34 @@ class AssetViewSet(viewsets.ModelViewSet):
                 {"error": f"Failed to set primary asset: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+    def perform_destroy(self, instance):
+        """Record event and delete asset"""
+        try:
+            product = Product.objects.get(pk=self.kwargs["product_pk"])
+            
+            # Record asset deletion event
+            record(
+                product=product,
+                user=self.request.user,
+                event_type="asset_removed",
+                summary=f"Asset '{instance.name or 'file'}' was removed from product '{product.name}'",
+                payload={
+                    "asset_id": instance.id,
+                    "asset_type": instance.asset_type,
+                    "file_name": instance.name or "unknown"
+                }
+            )
+            
+            # Then proceed with deletion
+            super().perform_destroy(instance)
+        except Exception as e:
+            raise ValidationError({"detail": f"Error deleting asset: {str(e)}"})
+
+class ProductEventViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    serializer_class = ProductEventSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    pagination_class = PageNumberPagination
+
+    def get_queryset(self):
+        return ProductEvent.objects.filter(product_id=self.kwargs["product_pk"])

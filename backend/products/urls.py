@@ -3,12 +3,13 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_nested.routers import NestedSimpleRouter
-from .views import ProductViewSet, DashboardViewSet, AssetViewSet
+from .views import ProductViewSet, DashboardViewSet, AssetViewSet, ProductEventViewSet
 
 # /api/products/…
 router = DefaultRouter()
 router.register(r"products", ProductViewSet, basename="product")
 router.register(r"dashboard", DashboardViewSet, basename="dashboard")
+router.register(r"products/(?P<product_pk>\d+)/history", ProductEventViewSet, basename="product-history")
 
 # /api/products/<product_pk>/assets/…
 assets_router = NestedSimpleRouter(router, r"products", lookup="product")

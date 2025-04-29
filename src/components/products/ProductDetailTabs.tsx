@@ -63,6 +63,8 @@ import RelatedProductsCarousel from './RelatedProductsCarousel';
 // Import the AssetsTab component
 import { AssetsTab } from './AssetsTab';
 import { Skeleton } from "@/components/ui/skeleton";
+import ProductHistoryTab from './ProductHistoryTab';
+import { Suspense } from 'react';
 
 // ====== ATTRIBUTES INTERFACES (EXACT MATCH TO SPEC) ======
 // (Following exactly the backend shape specified in the requirements)
@@ -1628,8 +1630,15 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
   return (
     <Tabs 
       value={activeTab} 
-      onValueChange={setActiveTab}
+      onValueChange={(value) => {
+        // Prevent default scroll behavior when changing tabs
+        const currentPosition = window.scrollY;
+        setActiveTab(value);
+        // Small timeout to ensure we override any potential scroll effects
+        setTimeout(() => window.scrollTo(0, currentPosition), 0);
+      }}
       className="w-full"
+      defaultValue="overview"
     >
       <TabsList className="mb-6">
         <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -1868,7 +1877,9 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
       </TabsContent>
       
       <TabsContent value="history" className="space-y-6">
-        {/* existing history content */}
+        <Suspense fallback={<Skeleton className="h-48 w-full" />}>
+          <ProductHistoryTab productId={product.id} />
+        </Suspense>
       </TabsContent>
     </Tabs>
   );

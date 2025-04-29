@@ -1,6 +1,6 @@
 from rest_framework import serializers
 import json
-from .models import Product, ProductImage, Activity, ProductRelation, ProductAsset
+from .models import Product, ProductImage, Activity, ProductRelation, ProductAsset, ProductEvent
 from django.db.models import Sum, F, Count, Case, When, Value, FloatField
 from decimal import Decimal
 from django.conf import settings
@@ -262,4 +262,11 @@ class ProductAssetSerializer(serializers.ModelSerializer):
         elif size < 1024 * 1024:
             return f"{size/1024:.1f} KB"
         else:
-            return f"{size/(1024*1024):.1f} MB" 
+            return f"{size/(1024*1024):.1f} MB"
+
+class ProductEventSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.CharField(source="created_by.first_name", read_only=True)
+
+    class Meta:
+        model = ProductEvent
+        fields = ["id", "event_type", "summary", "payload", "created_at", "created_by_name"] 

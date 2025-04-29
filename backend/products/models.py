@@ -367,3 +367,14 @@ class ProductAsset(models.Model):
 
     def __str__(self):
         return f"{self.asset_type.capitalize()} for {self.product.name} (Order: {self.order})"
+
+class ProductEvent(models.Model):
+    product      = models.ForeignKey("products.Product", on_delete=models.CASCADE, related_name="events")
+    event_type   = models.CharField(max_length=50)               # e.g. "created", "price_changed"
+    summary      = models.CharField(max_length=255)              # short sentence for cards
+    payload      = models.JSONField(null=True, blank=True)       # diff or extra data for power-users
+    created_at   = models.DateTimeField(auto_now_add=True)
+    created_by   = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+
+    class Meta:
+        ordering = ["-created_at"]

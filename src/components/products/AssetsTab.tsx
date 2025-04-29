@@ -321,11 +321,41 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     formData.append('file', upload.file);
     formData.append('name', upload.file.name);
     
+    // Add asset type based on file MIME type
+    let assetType = 'other';
+    const mimeType = upload.file.type.toLowerCase();
+    
+    if (mimeType.startsWith('image/')) {
+      assetType = 'image';
+    } else if (mimeType.includes('pdf')) {
+      assetType = 'pdf';
+    } else if (mimeType.includes('spreadsheet') || mimeType.includes('excel') || mimeType.includes('csv')) {
+      assetType = 'spreadsheet';
+    } else if (mimeType.includes('document') || mimeType.includes('word') || mimeType.includes('text')) {
+      assetType = 'document';
+    }
+    
+    // Also check filename extension as a fallback
+    const fileExtension = upload.file.name.split('.').pop()?.toLowerCase() || '';
+    if (assetType === 'other') {
+      if (['pdf'].includes(fileExtension)) {
+        assetType = 'pdf';
+      } else if (['xls', 'xlsx', 'csv'].includes(fileExtension)) {
+        assetType = 'spreadsheet';
+      } else if (['doc', 'docx', 'txt'].includes(fileExtension)) {
+        assetType = 'document';
+      }
+    }
+    
+    // Add the asset type to the form data
+    formData.append('asset_type', assetType);
+    
     // Log all FormData entries for debugging
     console.log(`Attempting to upload file to ${PRODUCTS_API_URL}/${productId}/assets/`);
     console.log('FormData contents:', [...formData.entries()].map(entry => 
       entry[0] === 'file' ? `${entry[0]}: [File ${upload.file.name}, ${upload.file.size} bytes, ${upload.file.type}]` : `${entry[0]}: ${entry[1]}`
     ));
+    console.log('Determined asset type:', assetType);
     
     try {
       // Update progress to indicate we're starting
@@ -447,9 +477,88 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     setUploading(prev => prev.filter(item => item.id !== uploadId));
   };
 
-  // Make an asset primary
+  // Get file type based on mime type, name and url
+  const getFileType = (asset: ProductAsset): string => {
+    console.log(`Detecting type for asset: ${asset.name}`);
+    
+    // Normalize inputs for more consistent matching
+    const url = (asset.url || '').toLowerCase();
+    const name = (asset.name || '').toLowerCase();
+    const type = (asset.type || '').toLowerCase();
+    
+    // Check for PDF first (most specific case)
+    if (
+      name.endsWith('.pdf') || 
+      url.endsWith('.pdf') || 
+      type.includes('pdf') ||
+      type === 'application/pdf'
+    ) {
+      console.log(`Detected PDF: ${asset.name}`);
+      return 'pdf';
+    }
+    
+    // Check for images
+    if (
+      type.includes('image/') || 
+      /\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i.test(name) ||
+      /\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i.test(url)
+    ) {
+      // Warning for TIFF images which might not display properly in browser
+      if (name.endsWith('.tiff') || name.endsWith('.tif') || type.includes('tiff')) {
+        console.warn(`TIFF image detected (${asset.name}), may not display in all browsers`);
+      }
+      
+      console.log(`Detected image: ${asset.name}`);
+      return 'image';
+    }
+    
+    // Check for spreadsheets
+    if (
+      /\.(xlsx|xls|csv|ods)$/i.test(name) || 
+      type.includes('spreadsheet') ||
+      type.includes('excel') ||
+      type.includes('csv')
+    ) {
+      console.log(`Detected spreadsheet: ${asset.name}`);
+      return 'spreadsheet';
+    }
+    
+    // Check for documents
+    if (
+      /\.(doc|docx|txt|rtf|odt)$/i.test(name) || 
+      type.includes('document') ||
+      type.includes('word') ||
+      type.includes('text/')
+    ) {
+      console.log(`Detected document: ${asset.name}`);
+      return 'document';
+    }
+    
+    // Handle unknown file types
+    console.warn(`Unknown file type for asset: ${asset.name} (type: ${type})`);
+    return 'unknown';
+  };
+
+  // Check if the asset can be displayed as an image
+  const isImageAsset = (asset?: ProductAsset): boolean => {
+    if (!asset) return false;
+    
+    const fileType = getFileType(asset);
+    console.log(`Asset ${asset.name} has file type: ${fileType}`);
+    
+    // Only return true if it's actually an image
+    return fileType === 'image';
+  };
+
+  // Make an asset primary (only for images)
   const makeAssetPrimary = async (asset: ProductAsset) => {
     if (asset.is_primary) return; // Already primary
+    
+    // Only allow images to be set as primary
+    if (!isImageAsset(asset)) {
+      toast.error('Only image files can be set as primary');
+      return;
+    }
 
     // Optimistically update UI
     const oldAssets = [...assets];
@@ -466,7 +575,7 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
       const success = await productService.setAssetPrimary(product.id, asset.id);
       
       if (success) {
-        toast.success('Primary asset updated');
+        toast.success('Primary image updated');
         
         // Create updated product with new primary image
         const updatedProduct = {
@@ -501,8 +610,16 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
             console.log('Product refreshed:', refreshedProduct);
             
             // Update the product in the parent component if a callback is provided
-            if (window.parent && window.parent.onProductUpdated) {
-              window.parent.onProductUpdated(refreshedProduct);
+            if (window.parent) {
+              try {
+                // Use safer approach with type assertion
+                const parentWindow = window.parent as any;
+                if (typeof parentWindow.onProductUpdated === 'function') {
+                  parentWindow.onProductUpdated(refreshedProduct);
+                }
+              } catch (error) {
+                console.error('Error calling parent window function:', error);
+              }
             }
           } catch (err) {
             console.error('Error updating product:', err);
@@ -665,25 +782,6 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     setAllSelected(!allSelected);
   };
 
-  // Determine asset icon based on file type
-  const getAssetIcon = (type: string) => {
-    switch (type.toLowerCase()) {
-      case 'image':
-        return <ImageIcon className="h-5 w-5" />;
-      case 'pdf':
-        return <FileText className="h-5 w-5 text-red-500" />;
-      case 'spreadsheet':
-      case 'excel':
-      case 'csv':
-        return <FileSpreadsheet className="h-5 w-5" />;
-      case 'text':
-      case 'doc':
-        return <FileText className="h-5 w-5" />;
-      default:
-        return <FileIcon className="h-5 w-5" />;
-    }
-  };
-
   // Format file size
   const formatFileSize = (sizeString: string) => {
     // If it's already formatted (e.g., "1.2MB"), return as is
@@ -713,6 +811,35 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     } catch (err) {
       return 'Unknown date';
     }
+  };
+
+  // Determine asset icon based on file type
+  const getAssetIcon = (type: string) => {
+    // Convert the type to lowercase for consistent matching
+    const lowerType = type.toLowerCase();
+    
+    // Handle image type
+    if (lowerType === 'image' || lowerType.startsWith('image/')) {
+      return <ImageIcon className="h-5 w-5" />;
+    }
+    
+    // Handle document types
+    if (lowerType === 'pdf' || lowerType.includes('pdf')) {
+      return <FileText className="h-5 w-5 text-red-500" />;
+    }
+    
+    // Handle spreadsheet types
+    if (['spreadsheet', 'excel', 'csv'].some(t => lowerType.includes(t))) {
+      return <FileSpreadsheet className="h-5 w-5 text-green-500" />;
+    }
+    
+    // Handle text document types
+    if (['text', 'doc', 'docx', 'document'].some(t => lowerType.includes(t))) {
+      return <FileText className="h-5 w-5 text-blue-500" />;
+    }
+    
+    // Default file icon for other types
+    return <FileIcon className="h-5 w-5 text-slate-500" />;
   };
 
   // Render loading UI
@@ -909,25 +1036,29 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
               .map(asset => (
                 <Card key={asset.id} className={cn(
                   "overflow-hidden group",
-                  asset.is_primary && "ring-2 ring-primary" // Add a subtle border for primary image
+                  asset.is_primary && isImageAsset(asset) && "ring-2 ring-primary" // Only add primary ring for images
                 )}>
                   <div className="relative">
                     {/* Asset preview */}
                     <div className="aspect-square bg-muted flex items-center justify-center">
-                      {asset.type.toLowerCase() === 'image' ? (
+                      {isImageAsset(asset) ? (
                         <img 
                           src={asset.url} 
                           alt={asset.name}
                           className="w-full h-full object-cover"
                           onError={(e) => {
+                            console.error(`Image load error for ${asset.url}`);
                             (e.target as HTMLImageElement).src = 'https://placehold.co/600x600?text=Error';
                           }}
                         />
                       ) : (
-                        <div className="text-center p-4">
+                        <div className="text-center p-4 flex flex-col items-center justify-center h-full">
                           {getAssetIcon(asset.type)}
-                          <p className="text-xs text-muted-foreground mt-2">
-                            {asset.type.toUpperCase()}
+                          <p className="text-xs text-muted-foreground mt-2 font-medium">
+                            {getFileType(asset).toUpperCase()}
+                          </p>
+                          <p className="text-sm mt-1 max-w-full truncate px-2">
+                            {asset.name}
                           </p>
                         </div>
                       )}
@@ -955,13 +1086,13 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
                           <div className="flex items-center justify-between">
                             <span>{formatDate(asset.uploaded_at)}</span>
                             
-                            {/* Add the primary button */}
-                            {asset.is_primary ? (
+                            {/* Add the primary button - only for images */}
+                            {asset.is_primary && isImageAsset(asset) ? (
                               <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
                                 <CheckCircle2 className="h-3 w-3 mr-1" />
                                 Primary
                               </Badge>
-                            ) : (
+                            ) : isImageAsset(asset) ? (
                               <Button 
                                 variant="ghost" 
                                 size="sm" 
@@ -970,7 +1101,7 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
                               >
                                 Set as Primary
                               </Button>
-                            )}
+                            ) : null}
                           </div>
                         </div>
                       </div>
@@ -988,7 +1119,8 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
                             Download
                           </DropdownMenuItem>
                           
-                          {!asset.is_primary && (
+                          {/* Only show Set as Primary for images that aren't already primary */}
+                          {!asset.is_primary && isImageAsset(asset) && (
                             <DropdownMenuItem onClick={() => makeAssetPrimary(asset)}>
                               <CheckCircle2 className="h-4 w-4 mr-2" />
                               Set as Primary

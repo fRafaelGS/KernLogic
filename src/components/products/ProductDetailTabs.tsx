@@ -1724,7 +1724,7 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
           <CardHeader>
             <CardTitle>Media</CardTitle>
             <CardDescription>
-              Primary images and videos for this product
+              Product images and photos
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1739,7 +1739,22 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
               // Display first 4 assets (or fewer if less available)
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {assets
-                  .filter(asset => asset.type.toLowerCase() === 'image')
+                  // Better image filtering to ensure we only show actual images
+                  .filter(asset => {
+                    // Check file extensions for images
+                    const name = (asset.name || '').toLowerCase();
+                    const url = (asset.url || '').toLowerCase();
+                    const type = (asset.type || '').toLowerCase();
+                    
+                    // Strict image file extension check
+                    const isImageByExt = /\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i.test(name) || 
+                                        /\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i.test(url);
+                    
+                    // Check MIME type
+                    const isImageByType = type.includes('image/') && !type.includes('pdf');
+                    
+                    return isImageByExt || isImageByType;
+                  })
                   // Primary images first, then by upload date (newest first)
                   .sort((a, b) => {
                     if (a.is_primary && !b.is_primary) return -1;
@@ -1760,7 +1775,7 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
                         alt={asset.name} 
                         className="w-full h-full object-cover"
                         onError={(e) => {
-                          console.warn('Error loading image asset:', asset.id);
+                          console.warn('Error loading image asset:', asset.url);
                           (e.target as HTMLImageElement).src = 'https://placehold.co/600x600?text=Image+Error';
                         }}
                       />
@@ -1790,7 +1805,7 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
                   <ImageIcon className="h-10 w-10 mx-auto mb-2 text-muted-foreground/60" />
-                  <p>No media available yet</p>
+                  <p>No images available yet</p>
                   {hasEditPermission && (
                     <Button 
                       variant="outline" 
@@ -1799,21 +1814,35 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
                       onClick={() => setActiveTab('assets')}
                     >
                       <PlusIcon className="h-4 w-4 mr-2" />
-                      Add Media
+                      Add Images
                     </Button>
                   )}
                 </div>
               )
             )}
             
-            {assets.length > 0 && (
+            {assets.filter(asset => {
+              // Check file extensions for images using the same filter as above
+              const name = (asset.name || '').toLowerCase();
+              const url = (asset.url || '').toLowerCase();
+              const type = (asset.type || '').toLowerCase();
+              
+              // Strict image file extension check
+              const isImageByExt = /\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i.test(name) || 
+                                  /\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i.test(url);
+              
+              // Check MIME type
+              const isImageByType = type.includes('image/') && !type.includes('pdf');
+              
+              return isImageByExt || isImageByType;
+            }).length > 0 && (
               <div className="mt-4 flex justify-end">
                 <Button 
                   variant="outline" 
                   size="sm"
                   onClick={() => setActiveTab('assets')}
                 >
-                  View All Assets
+                  View All Images
                 </Button>
               </div>
             )}

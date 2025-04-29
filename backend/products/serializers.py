@@ -229,7 +229,37 @@ class IncompleteProductSerializer(serializers.ModelSerializer):
         return obj.get_field_completeness() if hasattr(obj, 'get_field_completeness') else []
 
 class ProductAssetSerializer(serializers.ModelSerializer):
+    file_url = serializers.SerializerMethodField()
+    uploaded_by_name = serializers.SerializerMethodField()
+    file_size_formatted = serializers.SerializerMethodField()
+    
     class Meta:
         model = ProductAsset
-        fields = "__all__"
-        read_only_fields = ['product']  # Make product read-only so it's not required in input 
+        fields = [
+            'id', 'file', 'file_url', 'asset_type', 'name', 'order', 
+            'is_primary', 'content_type', 'file_size', 'file_size_formatted',
+            'uploaded_by', 'uploaded_by_name', 'uploaded_at', 'product'
+        ]
+        read_only_fields = ['product', 'uploaded_at', 'file_url', 'uploaded_by_name', 'file_size_formatted']
+    
+    def get_file_url(self, obj):
+        """Return absolute URL for the file"""
+        if obj.file:
+            return self.context['request'].build_absolute_uri(obj.file.url) if 'request' in self.context else obj.file.url
+        return None
+    
+    def get_uploaded_by_name(self, obj):
+        """Return user name who uploaded the asset"""
+        if obj.uploaded_by:
+            return obj.uploaded_by.get_full_name() or obj.uploaded_by.email
+        return None
+    
+    def get_file_size_formatted(self, obj):
+        """Return formatted file size (KB, MB, etc.)"""
+        size = obj.file_size
+        if size < 1024:
+            return f"{size} B"
+        elif size < 1024 * 1024:
+            return f"{size/1024:.1f} KB"
+        else:
+            return f"{size/(1024*1024):.1f} MB" 

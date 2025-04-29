@@ -813,16 +813,20 @@ export function ProductsTable() {
       },
       cell: ({ row }) => {
         const images = row.original.images as ProductImage[] || [];
-        const primaryImage = images.length > 0 ? images[0] : null;
+        // First check for primary image URLs directly on the product
+        const primaryImageUrl = row.original.primary_image_thumb || row.original.primary_image_large;
+        
+        // Then find a primary image in the images array as a fallback
+        const primaryImageFromArray = images.find(img => img.is_primary) || (images.length > 0 ? images[0] : null);
         
         return (
           <div className="flex items-center space-x-2">
-            {primaryImage ? (
+            {primaryImageUrl ? (
               <HoverCard>
                 <HoverCardTrigger>
                   <div className="h-16 w-16 rounded-md border overflow-hidden">
                     <img 
-                      src={primaryImage.url} 
+                      src={primaryImageUrl} 
                       alt={row.original.name} 
                       className="h-full w-full object-cover hover:scale-110 transition duration-300"
                       loading="lazy"
@@ -831,7 +835,28 @@ export function ProductsTable() {
                 </HoverCardTrigger>
                 <HoverCardContent className="p-2 w-80">
                   <img 
-                    src={primaryImage.url} 
+                    src={primaryImageUrl} 
+                    alt={row.original.name} 
+                    className="w-full h-auto max-h-64 rounded-md object-contain"
+                  />
+                  <p className="mt-2 text-sm font-medium text-center">{row.original.name}</p>
+                </HoverCardContent>
+              </HoverCard>
+            ) : primaryImageFromArray ? (
+              <HoverCard>
+                <HoverCardTrigger>
+                  <div className="h-16 w-16 rounded-md border overflow-hidden">
+                    <img 
+                      src={primaryImageFromArray.url} 
+                      alt={row.original.name} 
+                      className="h-full w-full object-cover hover:scale-110 transition duration-300"
+                      loading="lazy"
+                    />
+                  </div>
+                </HoverCardTrigger>
+                <HoverCardContent className="p-2 w-80">
+                  <img 
+                    src={primaryImageFromArray.url} 
                     alt={row.original.name} 
                     className="w-full h-auto max-h-64 rounded-md object-contain"
                   />

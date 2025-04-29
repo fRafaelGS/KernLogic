@@ -973,8 +973,42 @@ class AssetViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def set_primary(self, request, pk=None, product_pk=None):
+        # First update the is_primary status in all assets
         ProductAsset.objects.filter(product_id=product_pk).update(is_primary=False)
-        (ProductAsset.objects
-                     .filter(pk=pk, product_id=product_pk)
-                     .update(is_primary=True))
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        
+        # Get the asset that's being set as primary
+        try:
+            asset = ProductAsset.objects.get(pk=pk, product_id=product_pk)
+            
+            # Update this asset as primary
+            asset.is_primary = True
+            asset.save()
+            
+            # Now update the parent Product model with this asset's file
+            if asset.file:
+                product = Product.objects.get(pk=product_pk)
+                
+                # Update just the primary_image field
+                product.primary_image = asset.file
+                product.save()
+                
+                # Log success message
+                print(f"Updated product {product_pk} primary image to: {asset.file.url if hasattr(asset.file, 'url') else str(asset.file)}")
+            
+            return Response(status=status.HTTP_204_NO_CONTENT)
+            
+        except ProductAsset.DoesNotExist:
+            return Response(
+                {"error": f"Asset with ID {pk} does not exist for product {product_pk}"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Product.DoesNotExist:
+            return Response(
+                {"error": f"Product with ID {product_pk} does not exist"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to set primary asset: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

@@ -40,8 +40,16 @@ INSTALLED_APPS = [
     # Third party apps
     "rest_framework",
     "corsheaders",
+    "simple_history",
+    "django_filters",
+    "rest_framework_simplejwt",
+    "colorfield",
+    "drf_spectacular",
+    "drf_spectacular_sidecar",
     # Local apps
     "products",
+    "users",
+    "accounts",
 ]
 
 MIDDLEWARE = [
@@ -73,6 +81,19 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+# drf-spectacular settings
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Data Alchemy Suite API',
+    'DESCRIPTION': 'Product Management API for small manufacturers',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'SWAGGER_UI_DIST': 'SIDECAR',
+    'SWAGGER_UI_FAVICON_HREF': 'SIDECAR',
+    'REDOC_DIST': 'SIDECAR',
 }
 
 ROOT_URLCONF = "core.urls"

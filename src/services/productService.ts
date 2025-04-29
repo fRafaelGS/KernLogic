@@ -614,11 +614,23 @@
                 
                 console.log('[getProductAssets] Raw response data:', data);
                 
+                // Helper function to ensure URL is absolute
+                const ensureAbsoluteUrl = (fileUrl: string) => {
+                    if (!fileUrl) return '';
+                    // If URL is already absolute, return as is
+                    if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
+                        return fileUrl;
+                    }
+                    // Otherwise prepend backend server URL
+                    // For development, use http://localhost:8000
+                    return `http://localhost:8000${fileUrl}`;
+                };
+                
                 return data.map((asset: any) => ({
                     id: asset.id,
                     name: asset.name || (asset.file ? asset.file.split('/').pop() : 'Unknown'),
                     type: asset.asset_type || 'image',
-                    url: asset.file || '',
+                    url: ensureAbsoluteUrl(asset.file),
                     size: asset.file_size || 0,
                     uploaded_by: asset.uploaded_by_name || 'System',
                     uploaded_at: asset.uploaded_at || new Date().toISOString(),
@@ -857,17 +869,24 @@
             }
             
             const data = response.data;
+            console.log('[uploadAsset] Response data:', data);
+            
+            // Ensure URL is absolute
+            let fileUrl = data.file || '';
+            if (fileUrl && !fileUrl.startsWith('http://') && !fileUrl.startsWith('https://')) {
+                fileUrl = `http://localhost:8000${fileUrl}`;
+            }
+            
             return {
                 id: data.id,
                 name: data.name || file.name,
                 type: data.asset_type || 'image',
-                url: data.file || '',
-                size: data.file_size || file.size,
-                uploaded_by: data.uploaded_by_name || 'System',
+                url: fileUrl,
+                size: data.file_size || `${Math.round(file.size / 1024)} KB`,
+                uploaded_by: data.uploaded_by || 'You',
                 uploaded_at: data.uploaded_at || new Date().toISOString(),
                 is_primary: data.is_primary || false,
-                order: data.order || 0,
-                archived: data.archived || false
+                order: data.order || 0
             };
         },
 
@@ -884,14 +903,16 @@
             }
         },
 
-        // Set an asset as primary (POST method instead of PATCH)
-        setAssetPrimary: async (productId: number, assetId: number | string): Promise<boolean> => {
-            const url = `${PRODUCTS_API_URL}/${productId}/assets/${assetId}/set-primary/`;
-            console.log('[setAssetPrimary] Setting asset as primary at:', url);
-            
+        // Set an asset as primary
+        setAssetPrimary: async (productId: number, assetId: number): Promise<boolean> => {
             try {
-                await axiosInstance.post(url);
-                return true;
+                const url = `${PRODUCTS_API_URL}/${productId}/assets/${assetId}/set_primary/`;
+                console.log(`[setAssetPrimary] Setting asset ${assetId} as primary at ${url}`);
+                
+                const response = await axiosInstance.post(url);
+                
+                // Backend returns 204 No Content for success (per OpenAPI schema)
+                return response.status === 200 || response.status === 204;
             } catch (error) {
                 console.error('Error setting asset as primary:', error);
                 return false;

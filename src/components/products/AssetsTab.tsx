@@ -328,153 +328,48 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     ));
     
     try {
-      // Use the assets endpoint instead of images
-      let response;
-      try {
-        response = await axiosInstance.post(
-          `${PRODUCTS_API_URL}/${productId}/assets/`,
-          formData,
-          {
-            headers: {
-              'Content-Type': 'multipart/form-data'
-            },
-            onUploadProgress: (progressEvent) => {
-              if (progressEvent.total) {
-                const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-                updateUploadProgress(upload.id, progress);
-              }
-            }
+      // Update progress to indicate we're starting
+      updateUploadProgress(upload.id, 10);
+      
+      // Upload the file to the assets endpoint
+      const response = await productService.uploadAsset(
+        productId,
+        upload.file,
+        (progressEvent) => {
+          if (progressEvent.total) {
+            const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            updateUploadProgress(upload.id, progress);
           }
-        );
-      } catch (error: any) {
-        // Enhanced error logging
-        if (error.response) {
-          console.error('Upload error response:', {
-            status: error.response.status,
-            data: error.response.data,
-            headers: error.response.headers
-          });
         }
-        
-        // If we get a 405 Method Not Allowed, the endpoint might exist but not support POST
-        if (error?.response?.status === 405) {
-          console.warn('POST method not allowed on assets endpoint, adding file as mock data');
-          
-          // Convert file to base64 data URL instead of blob URL for persistence across page reloads
-          updateUploadProgress(upload.id, 50); // Update to 50% while converting
-          
-          // Create a FileReader to convert the file to a data URL
-          const reader = new FileReader();
-          
-          // Set up the onload handler that will run when FileReader completes
-          reader.onload = (e) => {
-            const dataUrl = e.target?.result as string;
-            
-            // Check if we have existing assets to determine if this should be primary
-            const shouldBePrimary = assets.length === 0;
-            console.log(`Setting new asset primary status: ${shouldBePrimary} (${assets.length} existing assets)`);
-            
-            // Create a mock successful response with the data URL
-            const mockAsset: ProductAsset = {
-              id: Date.now() + Math.floor(Math.random() * 10000), // More unique ID to avoid collisions
-              name: upload.file.name,
-              type: upload.file.type.split('/')[0],
-              url: dataUrl, // Use the data URL instead of blob URL
-              size: `${Math.round(upload.file.size / 1024)} KB`,
-              uploaded_by: 'You',
-              uploaded_at: new Date().toISOString(),
-              is_primary: shouldBePrimary // Only primary if no other assets exist
-            };
-            
-            // Simulate a successful upload
-            updateUploadProgress(upload.id, 100);
-            updateUploadStatus(upload.id, 'success');
-            
-            // Add the mock asset to the list
-            setAssets(prev => {
-              // If this is the first asset (primary), make sure any existing assets are not primary
-              const updatedAssets = shouldBePrimary 
-                ? prev.map(asset => ({...asset, is_primary: false}))
-                : prev;
-              
-              const newAssets = [mockAsset, ...updatedAssets];
-              
-              // Also update localStorage immediately
-              if (product?.id) {
-                try {
-                  localStorage.setItem(`product_assets_${productId}`, JSON.stringify(newAssets));
-                  console.log('Saved asset with data URL to localStorage');
-                } catch (err) {
-                  console.error('Failed to save assets to localStorage:', err);
-                }
-              }
-              
-              return newAssets;
-            });
-            
-            // Notify parent component if callback exists
-            if (onAssetUpdate) {
-              // Use a callback to ensure we're using the latest assets state
-              setAssets(latestAssets => {
-                const shouldBePrimary = latestAssets.length === 0;
-                // Create the array with the new asset and update existing ones if needed
-                const updatedAssets = shouldBePrimary 
-                  ? [...latestAssets].map(asset => ({...asset, is_primary: false}))
-                  : [...latestAssets];
-                
-                const finalAssets = [mockAsset, ...updatedAssets];
-                onAssetUpdate(finalAssets);
-                return latestAssets; // Don't change state in this callback
-              });
-            }
-            
-            toast.success('File uploaded successfully (mock data)');
-            
-            // Remove upload item after a delay
-            setTimeout(() => {
-              setUploading(prev => prev.filter(item => item.id !== upload.id));
-            }, 2000);
-          };
-          
-          // Handle errors in the FileReader
-          reader.onerror = () => {
-            console.error('Error reading file as data URL');
-            updateUploadStatus(upload.id, 'error', 'Error processing file');
-            toast.error('Failed to process file');
-          };
-          
-          // Start reading the file as data URL
-          reader.readAsDataURL(upload.file);
-          
-          // Return early - the rest will happen in the onload callback
-          return;
-        }
-        
-        // Re-throw the error if it's not a 405
-        throw error;
-      }
+      );
       
       // Handle successful upload
       updateUploadStatus(upload.id, 'success');
       
-      // Convert the response to ProductAsset format
-      const newAsset: ProductAsset = {
-        id: response.data.id,
-        name: upload.file.name,
-        type: 'image',
-        url: response.data.url,
-        size: `${Math.round(upload.file.size / 1024)} KB`,
-        uploaded_by: 'You',
-        uploaded_at: new Date().toISOString(),
-        is_primary: response.data.is_primary
-      };
-      
       // Add the new asset to the list
-      setAssets(prev => [newAsset, ...prev]);
+      setAssets(prev => {
+        // If this is primary, make sure other assets are not primary
+        const updatedAssets = response.is_primary 
+          ? prev.map(asset => ({...asset, is_primary: false}))
+          : prev;
+          
+        const newAssets = [response, ...updatedAssets];
+        
+        // Update localStorage with new assets
+        if (product?.id) {
+          try {
+            localStorage.setItem(`product_assets_${productId}`, JSON.stringify(newAssets));
+          } catch (err) {
+            console.error('Failed to save assets to localStorage:', err);
+          }
+        }
+        
+        return newAssets;
+      });
       
       // Notify parent component if callback exists
       if (onAssetUpdate) {
-        onAssetUpdate([newAsset, ...assets]);
+        onAssetUpdate([response, ...assets]);
       }
       
       toast.success('File uploaded successfully');
@@ -484,10 +379,31 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
         setUploading(prev => prev.filter(item => item.id !== upload.id));
       }, 2000);
       
-    } catch (err) {
-      console.error('Error uploading file:', err);
-      updateUploadStatus(upload.id, 'error', 'Upload failed');
-      toast.error('Failed to upload file');
+    } catch (error: any) {
+      console.error('Error uploading file:', error);
+      
+      // Enhanced error logging
+      if (error.response) {
+        console.error('Upload error response:', {
+          status: error.response.status,
+          data: error.response.data,
+          headers: error.response.headers
+        });
+      }
+      
+      // Handle different error cases
+      if (error?.response?.status === 413) {
+        updateUploadStatus(upload.id, 'error', 'File too large');
+        toast.error('This file is too large to upload');
+      } 
+      else if (error?.response?.status === 415) {
+        updateUploadStatus(upload.id, 'error', 'File type not supported');
+        toast.error('This file type is not supported');
+      }
+      else {
+        updateUploadStatus(upload.id, 'error', 'Upload failed');
+        toast.error('Failed to upload file');
+      }
     }
   };
 

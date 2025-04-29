@@ -6,6 +6,8 @@ alwaysApply: true
 
 # Your rule content
 
+0. ALWAYS REFER TO KernLogic API.yaml file inside the Backend. It is OpenAPI so you know how the backend works.
+
 1 Vision & Problem
 “Give small manufacturers the power of an ERP’s product module without the cost or complexity.”
 

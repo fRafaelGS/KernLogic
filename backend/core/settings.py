@@ -53,6 +53,8 @@ INSTALLED_APPS = [
     "accounts",
     "products",
     "django_extensions",
+    "drf_spectacular",
+    "drf_spectacular_sidecar",
 ]
 
 # Custom middleware to exempt API routes from CSRF
@@ -165,6 +167,7 @@ REST_FRAMEWORK = {
     ],
     'UNAUTHENTICATED_USER': None,
     'EXCEPTION_HANDLER': 'rest_framework.views.exception_handler',
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 # CORS settings
@@ -291,4 +294,20 @@ LOGGING = {
             'propagate': False,
         },
     },
+}
+
+# DRF Spectacular settings
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'KernLogic API',
+    'DESCRIPTION': 'Inventory and product management API',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'SWAGGER_UI_DIST': 'SIDECAR',  # shorthand to use the sidecar instead
+    'SWAGGER_UI_FAVICON_HREF': 'SIDECAR',
+    'REDOC_DIST': 'SIDECAR',
+    # Other settings
+    'COMPONENT_SPLIT_REQUEST': True,
+    'SORT_OPERATIONS': False,
+    'SCHEMA_PATH_PREFIX': r'/api/',
+    'SCHEMA_PATH_PREFIX_TRIM': True,
 }

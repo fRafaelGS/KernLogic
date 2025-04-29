@@ -19,6 +19,15 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+)
+from drf_spectacular.views import (
+    SpectacularAPIView,
+    SpectacularSwaggerView,
+    SpectacularRedocView,
+)
 # Remove DRF router imports if no longer needed here
 # from rest_framework.routers import DefaultRouter
 # from products.views import ProductViewSet
@@ -29,11 +38,20 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("api/auth/", include("accounts.urls")),
+    path("api/token/", TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path("api/token/refresh/", TokenRefreshView.as_view(), name='token_refresh'),
+    path("api/", include("products.urls")),
+    path("api/", include("users.urls")),
+    path("api/", include("accounts.urls")),
     # Uncomment the include for products.urls
-    path("api/products/", include("products.urls")), 
+    # path("api/products/", include("products.urls")), 
     # Remove the previous router include
     # path("api/", include(router.urls)),
+    
+    # drf-spectacular endpoints
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/schema/swagger/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('api/schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 ]
 
 if settings.DEBUG:

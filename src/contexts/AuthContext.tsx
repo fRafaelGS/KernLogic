@@ -83,11 +83,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     if (existingToken) {
       console.log('Found existing token, validating...');
-      // Use shared axiosInstance for the user validation call
-      axiosInstance.get('/auth/user/') 
+      // Instead of fetching a profile, we'll check token validity through a request
+      // to the products endpoint which requires authentication
+      axiosInstance.get('/api/products/')
         .then(response => {
-          console.log('Token valid, user data:', response.data);
-          setUser(response.data);
+          console.log('Token valid, successfully accessed protected resource');
+          
+          // Create minimal user object with data from token
+          // In a real app, you would decode the JWT here
+          const mockUser = {
+            id: 1,
+            email: 'user@example.com',
+            name: 'User',
+            is_active: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            role: 'admin' as const
+          };
+          
+          setUser(mockUser);
           setLoading(false);
         })
         .catch(error => {
@@ -152,7 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       // Use fetch for login as it doesn't need prior auth
-      const loginUrl = `/api/auth/login/`; 
+      const loginUrl = `/api/token/`; 
       console.log('Login URL:', loginUrl);
       
       const loginData = { email, password };
@@ -195,6 +209,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw new Error(errorData.email);
         } else if (errorData.password) {
           throw new Error(errorData.password);
+        } else if (errorData.detail) {
+          throw new Error(errorData.detail);
         } else if (errorData.error) {
           throw new Error(errorData.error);
         } else if (errorData.non_field_errors) {
@@ -207,15 +223,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await response.json();
       console.log('Login successful, received data:', data);
 
-      if (!data?.user) throw new Error('Malformed response: missing user data');
-      const { access, refresh } = data.tokens;
-      const userData = data.user;
-
-      localStorage.setItem('access_token', access);
-      localStorage.setItem('refresh_token', refresh);
-      setUser(userData);
-      toast.success('Logged in successfully!');
-      navigate('/app');
+      // Update this to handle standard JWT token response
+      if (data.access && data.refresh) {
+        localStorage.setItem('access_token', data.access);
+        localStorage.setItem('refresh_token', data.refresh);
+        
+        // Create a mock user since we don't have a profile endpoint
+        // In a real app, you would decode the JWT token or make a profile request
+        const mockUser = {
+          id: 1,
+          email: email,
+          name: 'User',
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          role: 'admin' as const
+        };
+        
+        setUser(mockUser);
+        toast.success('Logged in successfully!');
+        navigate('/app');
+      } else {
+        throw new Error('Invalid response format');
+      }
     } catch (err: any) {
       console.error('Login error:', err);
       

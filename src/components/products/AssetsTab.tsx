@@ -4,7 +4,7 @@ import {
   FileIcon, FileSpreadsheet, FileText, ImageIcon, 
   Upload, X, CheckCircle2, AlertCircle, RefreshCw, 
   ChevronDown, ChevronRight, MoreHorizontal, Download, 
-  Archive, Trash2
+  Archive, Trash2, Edit2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -27,6 +27,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 
 // Feature flag for the asset gallery
 const ENABLE_ASSET_GALLERY = true;
@@ -70,6 +79,10 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
   const [uploading, setUploading] = useState<UploadingAsset[]>([]);
   const [allSelected, setAllSelected] = useState(false);
   const [isMakingPrimary, setIsMakingPrimary] = useState<number | string | null>(null);
+  
+  // State for renaming assets
+  const [assetToRename, setAssetToRename] = useState<ProductAsset | null>(null);
+  const [newAssetName, setNewAssetName] = useState<string>('');
 
   // Save assets to localStorage whenever they change
   useEffect(() => {
@@ -688,6 +701,43 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     }
   };
 
+  // Rename an asset
+  const renameAsset = async (asset: ProductAsset, newName: string) => {
+    if (!product?.id || !asset?.id) return;
+    
+    // Validate the new name
+    if (!newName.trim()) {
+      toast.error('Asset name cannot be empty');
+      return;
+    }
+    
+    try {
+      // Update the asset on the server
+      await axiosInstance.patch(
+        `${PRODUCTS_API_URL}/${product.id}/assets/${asset.id}/`, 
+        { name: newName }
+      );
+      
+      // Update local state
+      setAssets(prev => 
+        prev.map(a => 
+          a.id === asset.id
+            ? { ...a, name: newName }
+            : a
+        )
+      );
+      
+      // Close rename dialog
+      setAssetToRename(null);
+      setNewAssetName('');
+      
+      toast.success('Asset renamed successfully');
+    } catch (err) {
+      console.error('Error renaming asset:', err);
+      toast.error('Failed to rename asset');
+    }
+  };
+
   // Download an asset
   const downloadAsset = (asset: ProductAsset) => {
     if (!asset.url) {
@@ -783,25 +833,38 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
   };
 
   // Format file size
-  const formatFileSize = (sizeString: string) => {
+  const formatFileSize = (sizeString: string | number | null | undefined): string => {
     // If it's already formatted (e.g., "1.2MB"), return as is
     if (typeof sizeString === 'string' && sizeString.match(/^[\d.]+\s*[KMGT]?B$/i)) {
       return sizeString;
     }
     
-    // Try to parse as number (bytes)
-    try {
-      const bytes = typeof sizeString === 'string' ? parseInt(sizeString, 10) : sizeString;
-      
-      if (isNaN(bytes)) return 'Unknown size';
-      
-      if (bytes < 1024) return bytes + ' B';
-      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-      if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-      return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
-    } catch (err) {
+    // Handle null/undefined/empty cases
+    if (sizeString === null || sizeString === undefined || sizeString === '') {
       return 'Unknown size';
     }
+    
+    // Convert string to number if it's a string
+    let bytes: number;
+    
+    if (typeof sizeString === 'string') {
+      // Try to parse the string as a number
+      bytes = parseInt(sizeString, 10);
+    } else {
+      bytes = sizeString as number;
+    }
+    
+    // Check if bytes is a valid number
+    if (isNaN(bytes) || bytes === 0) {
+      console.warn(`Invalid file size value: ${sizeString}`);
+      return 'Unknown size';
+    }
+    
+    // Format bytes to appropriate units
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
   };
 
   // Format date
@@ -1127,6 +1190,17 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
                             </DropdownMenuItem>
                           )}
                           
+                          {/* Add Rename option */}
+                          <DropdownMenuItem 
+                            onClick={() => {
+                              setAssetToRename(asset);
+                              setNewAssetName(asset.name);
+                            }}
+                          >
+                            <Edit2 className="h-4 w-4 mr-2" />
+                            Rename
+                          </DropdownMenuItem>
+                          
                           <DropdownMenuItem onClick={() => archiveAsset(asset.id)}>
                             <Archive className="h-4 w-4 mr-2" />
                             Archive
@@ -1148,6 +1222,61 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
           </div>
         </div>
       )}
+      
+      {/* Rename Asset Dialog */}
+      <Dialog 
+        open={!!assetToRename} 
+        onOpenChange={(open) => {
+          if (!open) {
+            setAssetToRename(null);
+            setNewAssetName('');
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rename Asset</DialogTitle>
+            <DialogDescription>
+              Change the name of this asset.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex items-center gap-4 py-4">
+            {assetToRename && (
+              <div className="flex-shrink-0 w-12 h-12 bg-slate-100 rounded flex items-center justify-center">
+                {getAssetIcon(assetToRename.type)}
+              </div>
+            )}
+            <div className="flex-grow">
+              <Input
+                value={newAssetName}
+                onChange={(e) => setNewAssetName(e.target.value)}
+                placeholder="Enter new name"
+                className="w-full"
+                autoFocus
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setAssetToRename(null);
+                setNewAssetName('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => assetToRename && renameAsset(assetToRename, newAssetName)}
+              disabled={!newAssetName.trim() || (assetToRename && newAssetName === assetToRename.name)}
+            >
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

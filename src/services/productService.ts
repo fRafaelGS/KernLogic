@@ -631,7 +631,7 @@
                     name: asset.name || (asset.file ? asset.file.split('/').pop() : 'Unknown'),
                     type: asset.asset_type || 'image',
                     url: ensureAbsoluteUrl(asset.file),
-                    size: asset.file_size || 0,
+                    size: asset.file_size || '0',  // Ensure size is always a string for consistent handling
                     uploaded_by: asset.uploaded_by_name || 'System',
                     uploaded_at: asset.uploaded_at || new Date().toISOString(),
                     is_primary: asset.is_primary || false,
@@ -856,6 +856,7 @@
             const formData = new FormData();
             formData.append('file', file);
             formData.append('name', file.name);  // Add name explicitly to match backend expectation
+            formData.append('file_size', file.size.toString());  // Explicitly add file size
             
             const response = await axiosInstance.post(url, formData, {
                 headers: {
@@ -882,7 +883,7 @@
                 name: data.name || file.name,
                 type: data.asset_type || 'image',
                 url: fileUrl,
-                size: data.file_size || `${Math.round(file.size / 1024)} KB`,
+                size: data.file_size || file.size.toString(),
                 uploaded_by: data.uploaded_by || 'You',
                 uploaded_at: data.uploaded_at || new Date().toISOString(),
                 is_primary: data.is_primary || false,

@@ -345,8 +345,9 @@ export function ProductsTable() {
       let fetchedCategories: Category[] = [];
       
       try {
-        fetchedProducts = await productService.getProducts();
-        console.log('[ProductsTable] Fetched products:', fetchedProducts);
+        // Explicitly set fetchAll to true to get all products across all pages
+        fetchedProducts = await productService.getProducts({}, true);
+        console.log('[ProductsTable] Fetched products:', fetchedProducts.length);
         // Guard against non-array responses
         if (!Array.isArray(fetchedProducts)) {
           console.error('[ProductsTable] Products response is not an array:', fetchedProducts);

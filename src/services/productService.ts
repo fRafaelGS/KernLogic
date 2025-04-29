@@ -249,9 +249,11 @@
     }
 
     export const productService = {
-        // Get all products
-        getProducts: async (filters?: Record<string, any>): Promise<Product[]> => {
+        // Get all products with optional pagination support
+        getProducts: async (filters?: Record<string, any>, fetchAll: boolean = true): Promise<Product[]> => {
             let url = `${PRODUCTS_PATH}/`;
+            let allProducts: Product[] = [];
+            let nextPageUrl: string | null = url;
             
             console.log('Fetching products from:', url);
             
@@ -259,52 +261,60 @@
                 const token = localStorage.getItem('access_token');
                 console.log('Current access token (from productService):', token ? `${token.substring(0, 15)}...` : 'none');
                 
-                const response = await axiosInstance.get(url); 
-                // --- DEBUG LOGS --- 
-                console.log('[productService.getProducts] Raw API response data:', response.data); 
-                console.log('[productService.getProducts] Is response.data an array?:', Array.isArray(response.data)); 
-                // --- END DEBUG LOGS ---
-                console.log('Products API response:', response.data); // Original log
-                
-                // Check for HTML response
-                if (isHtmlResponse(response.data)) {
-                    return [];
-                }
-                
-                // Handle DRF browsable API response format (which returns object with URLs instead of data)
-                if (response.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
-                    // If it contains a "products" URL property instead of actual data
-                    if (response.data.products) {
-                        console.log('[productService.getProducts] Detected API root, fetching actual products list...');
-                        // Make a second request to get the actual products list
-                        const productsResponse = await axiosInstance.get(response.data.products);
+                // If fetchAll is true, keep fetching pages until there's no next page
+                while (nextPageUrl && (fetchAll || allProducts.length === 0)) {
+                    console.log(`Fetching products page: ${nextPageUrl}`);
+                    const response = await axiosInstance.get(nextPageUrl);
+                    console.log(`[productService.getProducts] Response from: ${nextPageUrl}`, response.data);
+                    
+                    // Check for HTML response
+                    if (isHtmlResponse(response.data)) {
+                        console.error('[productService.getProducts] Received HTML response instead of JSON');
+                        return allProducts;
+                    }
+                    
+                    // Handle DRF browsable API response format
+                    if (response.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
+                        // If it contains a "products" URL property instead of actual data
+                        if (response.data.products && allProducts.length === 0) {
+                            console.log('[productService.getProducts] Detected API root, fetching actual products list...');
+                            // Make a second request to get the actual products list
+                            const productsResponse = await axiosInstance.get(response.data.products);
+                            
+                            // Handle paginated response from second request
+                            if (productsResponse.data && 'results' in productsResponse.data) {
+                                allProducts = [...allProducts, ...productsResponse.data.results];
+                                nextPageUrl = productsResponse.data.next;
+                                continue;
+                            } else if (Array.isArray(productsResponse.data)) {
+                                // If it's an array, we have all products
+                                return productsResponse.data;
+                            } else {
+                                console.error('[productService.getProducts] Unexpected response format from products URL');
+                                return allProducts;
+                            }
+                        }
                         
-                        // Check if the response from the second request is an array or paginated
-                        if (Array.isArray(productsResponse.data)) {
-                            return productsResponse.data;
-                        } else if (productsResponse.data && 'results' in productsResponse.data) {
-                            return productsResponse.data.results;
-                        } else {
-                            console.error('[productService.getProducts] Unexpected response format from products URL');
-                            return [];
+                        // Handle paginated response format
+                        if ('results' in response.data) {
+                            console.log('[productService.getProducts] Detected paginated response, processing results');
+                            allProducts = [...allProducts, ...response.data.results];
+                            nextPageUrl = response.data.next;
+                            continue;
                         }
                     }
+                    
+                    // If we get an array directly, return it
+                    if (Array.isArray(response.data)) {
+                        return response.data;
+                    }
+                    
+                    // Break the loop if we've processed this page but couldn't determine the next page
+                    break;
                 }
                 
-                // Handle paginated response format
-                if (response.data && typeof response.data === 'object' && 'results' in response.data) {
-                    console.log('[productService.getProducts] Detected paginated response, returning results array');
-                    return response.data.results;
-                }
-                
-                // If we get an array directly, return it
-                if (Array.isArray(response.data)) {
-                    return response.data;
-                }
-                
-                // Fallback to empty array if we can't determine the format
-                console.error('[productService.getProducts] Unexpected response format', response.data);
-                return [];
+                console.log(`[productService.getProducts] Total products fetched: ${allProducts.length}`);
+                return allProducts;
             } catch (error) {
                 console.error('Error fetching products:', error);
                 // Type checking for AxiosError can still be useful
@@ -312,7 +322,7 @@
                     console.error('Response status:', error.response?.status);
                     console.error('Response data:', error.response?.data);
                 }
-                return []; // Return empty array instead of throwing
+                return allProducts; // Return what we have so far instead of an empty array
             }
         },
 

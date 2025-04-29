@@ -17,8 +17,9 @@ export const Products: React.FC = () => {
     const fetchProducts = async () => {
         try {
             console.log('Fetching products...');
-            const data = await productService.getProducts();
-            console.log('Products fetched:', data);
+            // Use fetchAll=true to get all products across all pages
+            const data = await productService.getProducts({}, true);
+            console.log('Products fetched:', data.length);
             setProducts(data);
         } catch (error) {
             toast.error('Failed to fetch products');

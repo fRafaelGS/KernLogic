@@ -33,6 +33,9 @@ const PRODUCTS_BASE_URL = `${API_URL}/api/products`;
 // Expected headers in CSV file
 const EXPECTED_HEADERS = ['name', 'sku', 'description', 'price', 'category'];
 
+// Required fields that must be mapped
+const REQUIRED_FIELDS = ['sku'];
+
 // Display names for expected headers
 const HEADER_DISPLAY_NAMES: Record<string, string> = {
   'name': 'Product Name',
@@ -40,7 +43,6 @@ const HEADER_DISPLAY_NAMES: Record<string, string> = {
   'description': 'Description',
   'price': 'Price',
   'category': 'Category',
-  'stock': 'Stock / Quantity',
   'barcode': 'Barcode / UPC',
   'brand': 'Brand',
   'tags': 'Tags'
@@ -195,8 +197,41 @@ const UploadPage: React.FC = () => {
     const formData = new FormData();
     formData.append('csv_file', file);
     
-    // Add the column mapping
-    formData.append('mapping', JSON.stringify(columnMapping));
+    // Prepare proper mapping format
+    // According to the backend model: mapping = models.JSONField() # {"SKU": "sku", "Name": "name", ...}
+    // This means the CSV column should be the key, and the field name should be the value
+    
+    const correctMapping: Record<string, string> = {};
+    
+    // First pass: Get direct mapping from CSV headers to field names
+    Object.entries(columnMapping).forEach(([header, field]) => {
+      if (field !== 'ignore') {
+        // CSV header -> field name (lowercase for consistency)
+        correctMapping[header] = field.toLowerCase().trim();
+      }
+    });
+    
+    console.log("Direct column -> field mapping:", correctMapping);
+    
+    // Verify all required fields are targeted by at least one column
+    const targetedFields = Object.values(correctMapping);
+    const missingFields = REQUIRED_FIELDS.filter(field => !targetedFields.includes(field));
+    
+    if (missingFields.length > 0) {
+      toast.error(`Missing required SKU field mapping. SKU is the only required field.`);
+      console.error("Missing required field:", missingFields);
+      console.error("Current mapping:", correctMapping);
+      setIsProcessing(false);
+      return;
+    }
+    
+    console.log("Sending mapping to backend:", correctMapping);
+    
+    // Add continue_on_error to the FormData to tell backend to skip invalid rows
+    formData.append('continue_on_error', 'true');
+    
+    // Add the column mapping - format {"CSV Header": "field_name", ...}
+    formData.append('mapping', JSON.stringify(correctMapping));
 
     const token = localStorage.getItem('access_token');
     if (!token) {
@@ -225,36 +260,43 @@ const UploadPage: React.FC = () => {
         setUploadProgress(100);
 
         const responseData = await response.json();
+        console.log('Import API response:', responseData); // Log the response for debugging
 
         if (response.ok) {
-            const count = responseData.success_count || previewData.length;
-            setSuccessCount(count);
-            toast.success(`Successfully imported ${count} product(s).`);
-            setRowErrors(responseData.errors || []);
-            
-            // Add In-App Notification
-            addNotification({
-                type: 'success',
-                message: `Import Successful`,
-                description: `${count} product(s) imported.`
-            });
-
-            if (responseData.errors?.length > 0) {
-              const errorCount = responseData.errors.length;
-              toast('Some rows had issues', { description: 'See details below.'});
-              // Add separate notification for errors
-              addNotification({
-                type: 'warning', // Use warning type
-                message: 'Import Issues',
-                description: `${errorCount} row(s) had errors during import.`
-              });
+            // Check import task status
+            if (responseData.id) {
+                console.log('Import task created with ID:', responseData.id);
+                await pollImportStatus(responseData.id);
             } else {
-              // If import was completely successful with no errors, navigate to products page
-              // Add a slight delay to allow the user to see the success message
-              setTimeout(() => {
-                navigate('/app/products');
-                toast.info('Redirecting to products list...');
-              }, 1500);
+                const count = responseData.success_count || previewData.length;
+                setSuccessCount(count);
+                toast.success(`Successfully imported ${count} product(s).`);
+                setRowErrors(responseData.errors || []);
+                
+                // Add In-App Notification
+                addNotification({
+                    type: 'success',
+                    message: `Import Successful`,
+                    description: `${count} product(s) imported.`
+                });
+
+                if (responseData.errors?.length > 0) {
+                  const errorCount = responseData.errors.length;
+                  toast('Some rows had issues', { description: 'See details below.'});
+                  // Add separate notification for errors
+                  addNotification({
+                    type: 'warning', // Use warning type
+                    message: 'Import Issues',
+                    description: `${errorCount} row(s) had errors during import.`
+                  });
+                } else {
+                  // If import was completely successful with no errors, navigate to products page
+                  // Add a slight delay to allow the user to see the success message
+                  setTimeout(() => {
+                    navigate('/app/products');
+                    toast.info('Redirecting to products list...');
+                  }, 1500);
+                }
             }
         } else if (response.status === 400 || response.status === 422 || response.status === 207) {
             const successCount = responseData.success_count || 0;
@@ -304,6 +346,155 @@ const UploadPage: React.FC = () => {
     } finally {
         setIsProcessing(false);
     }
+};
+
+// Add a new function to poll the import task status
+const pollImportStatus = async (taskId: number) => {
+    const token = localStorage.getItem('access_token');
+    if (!token) return;
+    
+    let retries = 0;
+    const maxRetries = 20; // Max 30 seconds of polling (20 * 1.5s)
+    
+    const checkStatus = async () => {
+        try {
+            const response = await fetch(`${API_URL}/api/imports/${taskId}/`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                
+                // Update progress based on task status
+                if (data.total_rows) {
+                    const progress = Math.floor((data.processed / data.total_rows) * 100);
+                    setUploadProgress(Math.min(progress, 99)); // Cap at 99% until complete
+                }
+                
+                // Check task status
+                if (data.status === 'completed' || data.status === 'partial_success') {
+                    setUploadProgress(100);
+                    setSuccessCount(data.processed);
+                    
+                    // Create a more user-friendly message for partial success
+                    if (data.status === 'partial_success' && data.error_file) {
+                        toast.success(`Successfully imported ${data.processed} product(s) with some skipped rows.`, {
+                            description: "Some rows were skipped due to missing required fields."
+                        });
+                    } else {
+                        toast.success(`Successfully imported ${data.processed} product(s).`);
+                    }
+                    
+                    addNotification({
+                        type: 'success',
+                        message: 'Import Successful',
+                        description: `${data.processed} product(s) imported. ${data.error_file ? 'Some rows were skipped.' : ''}`
+                    });
+                    
+                    // Navigate to products page
+                    setTimeout(() => {
+                        navigate('/app/products');
+                        toast.info('Redirecting to products list...');
+                    }, 1500);
+                    
+                    return true; // Polling complete
+                }
+                else if (data.status === 'error') {
+                    setUploadProgress(0);
+                    
+                    // Format the error display better - count error types
+                    let errorSummary = "";
+                    if (data.error_file) {
+                        // Fetch and display a summary of errors
+                        try {
+                            const errorResponse = await fetch(data.error_file, {
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            if (errorResponse.ok) {
+                                const errorText = await errorResponse.text();
+                                const errorLines = errorText.split('\n').filter(line => line.trim());
+                                
+                                // Count common error types - focus on duplicate SKUs now that only SKU is required
+                                const duplicateSkuCount = errorLines.filter(line => line.includes('Duplicate SKU:')).length;
+                                const missingSkuCount = errorLines.filter(line => line.includes('sku: This field')).length;
+                                
+                                errorSummary = `${errorLines.length} rows had issues: `;
+                                if (duplicateSkuCount > 0) errorSummary += `${duplicateSkuCount} duplicate SKUs, `;
+                                if (missingSkuCount > 0) errorSummary += `${missingSkuCount} missing SKUs, `;
+                                errorSummary = errorSummary.replace(/, $/, '');
+                            }
+                        } catch (e) {
+                            console.error("Failed to fetch error details", e);
+                        }
+                    }
+                    
+                    // Extract more detailed error information if available
+                    console.error('Import process failed:', data);
+                    
+                    // Display more informative error message
+                    toast.error('Import failed during processing', {
+                      description: errorSummary || `Please check the format of your file. Some rows had missing required fields. (ID: ${taskId})`
+                    });
+                    
+                    // Add more detailed notification
+                    addNotification({
+                        type: 'error',
+                        message: 'Import Failed',
+                        description: `The import encountered errors. Rows with missing required fields were skipped.`
+                    });
+                    
+                    // If error_file is available, provide download link
+                    if (data.error_file) {
+                      toast('Error details available', {
+                        description: 'Click to view the detailed error report with all affected rows.',
+                        action: {
+                          label: 'View',
+                          onClick: () => window.open(data.error_file, '_blank')
+                        }
+                      });
+                    }
+                    
+                    return true; // Polling complete due to error
+                }
+                else if (data.status === 'processing' && retries < maxRetries) {
+                    // Continue polling
+                    retries++;
+                    return false;
+                }
+                else {
+                    // Timeout or unknown status
+                    toast.warning('Import process taking longer than expected');
+                    
+                    addNotification({
+                        type: 'warning',
+                        message: 'Import Pending',
+                        description: 'The import is still being processed in the background.'
+                    });
+                    
+                    return true; // Stop polling due to timeout
+                }
+            } else {
+                // Error checking status
+                toast.error('Error checking import status');
+                return true; // Stop polling due to error
+            }
+        } catch (error) {
+            console.error('Error polling import status:', error);
+            return true; // Stop polling due to error
+        }
+    };
+    
+    // Start polling loop
+    const poll = async () => {
+        const isDone = await checkStatus();
+        if (!isDone) {
+            setTimeout(poll, 1500); // Check every 1.5 seconds
+        }
+    };
+    
+    await poll();
 };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({

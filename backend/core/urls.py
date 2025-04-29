@@ -39,6 +39,9 @@ urlpatterns = [
     # Product API
     path('api/', include('products.urls')),
     
+    # Imports API
+    path('api/', include('apps.imports.urls')),
+    
     # API Schema documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),

@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     "django_extensions",
     "drf_spectacular",
     "drf_spectacular_sidecar",
+    "apps.imports",
 ]
 
 # Custom middleware to exempt API routes from CSRF
@@ -311,3 +312,19 @@ SPECTACULAR_SETTINGS = {
     'SCHEMA_PATH_PREFIX': r'/api/',
     'SCHEMA_PATH_PREFIX_TRIM': True,
 }
+
+# Celery Configuration Settings
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+
+# In development, you can run tasks synchronously if Redis is not available
+if DEBUG:
+    CELERY_TASK_ALWAYS_EAGER = True
+    CELERY_TASK_EAGER_PROPAGATES = True
+
+# Allow the following attribute to be used in signals
+DJANGORESIZED_DEFAULT_FORMAT_EXTENSIONS = {'JPEG': ".jpg", 'PNG': '.png', 'GIF': '.gif'}

@@ -996,6 +996,41 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedProductEventList'
+  /imports/:
+    post:
+      operationId: imports_create
+      tags: [imports]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                csv_file: { type: string, format: binary }
+                mapping:  { type: string, description: JSON mapping object }
+      security: [{ jwtAuth: [] }]
+      responses:
+        "201":
+          description: Created
+          content: { application/json: { schema: { $ref: '#/components/schemas/ImportTask' } } }
+  /imports/{id}/:
+    get:
+      operationId: imports_retrieve
+      tags: [imports]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      security: [{ jwtAuth: [] }]
+      responses:
+        "200":
+          description: Task detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportTask'
 
 components:
   schemas:
@@ -1428,6 +1463,15 @@ components:
         - event_type
         - summary
         - created_at
+    ImportTask:  # keep in sync with serializer
+      type: object
+      properties:
+        id: { type: integer }
+        status: { type: string }
+        processed: { type: integer }
+        total_rows: { type: integer, nullable: true }
+        error_file: { type: string, nullable: true, format: uri }
+        created_at: { type: string, format: date-time }
   securitySchemes:
     jwtAuth:
       type: http

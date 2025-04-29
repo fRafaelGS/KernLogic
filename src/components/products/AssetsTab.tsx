@@ -467,9 +467,46 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
       
       if (success) {
         toast.success('Primary asset updated');
+        
+        // Create updated product with new primary image
+        const updatedProduct = {
+          ...product,
+          primary_image_thumb: asset.url,
+          primary_image_large: asset.url,
+          images: newAssets.filter(a => a.type.toLowerCase() === 'image').map(a => ({
+            id: typeof a.id === 'string' ? parseInt(a.id, 10) : Number(a.id),
+            url: a.url,
+            is_primary: a.is_primary,
+            order: a.order || 0
+          }))
+        };
+        
         // Ensure parent components know about the change
         if (onAssetUpdate) {
           onAssetUpdate(newAssets);
+        }
+        
+        // Instead of reloading, update the parent component with the new product details
+        if (product?.id) {
+          try {
+            // Update the product in the backend to make sure changes persist
+            await productService.updateProduct(product.id, {
+              primary_image_thumb: asset.url,
+              primary_image_large: asset.url
+            });
+            console.log('Product updated with new primary image:', asset.url);
+            
+            // Fetch the product data again to ensure we have the latest version
+            const refreshedProduct = await productService.getProduct(product.id);
+            console.log('Product refreshed:', refreshedProduct);
+            
+            // Update the product in the parent component if a callback is provided
+            if (window.parent && window.parent.onProductUpdated) {
+              window.parent.onProductUpdated(refreshedProduct);
+            }
+          } catch (err) {
+            console.error('Error updating product:', err);
+          }
         }
       } else {
         // Revert if API call failed

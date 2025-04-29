@@ -909,10 +909,33 @@
                 const url = `${PRODUCTS_API_URL}/${productId}/assets/${assetId}/set_primary/`;
                 console.log(`[setAssetPrimary] Setting asset ${assetId} as primary at ${url}`);
                 
+                // First set the asset as primary
                 const response = await axiosInstance.post(url);
+                const success = response.status === 200 || response.status === 204;
                 
-                // Backend returns 204 No Content for success (per OpenAPI schema)
-                return response.status === 200 || response.status === 204;
+                if (success) {
+                    // Now we need to get the asset URL to update product's primary image fields
+                    try {
+                        // Fetch the asset details
+                        const assetUrl = `${PRODUCTS_API_URL}/${productId}/assets/${assetId}/`;
+                        const assetResponse = await axiosInstance.get(assetUrl);
+                        const asset = assetResponse.data;
+                        
+                        if (asset && asset.file) {
+                            // Update the product with the new primary image
+                            await axiosInstance.patch(`${PRODUCTS_API_URL}/${productId}/`, {
+                                primary_image_thumb: asset.file,
+                                primary_image_large: asset.file
+                            });
+                            console.log(`[setAssetPrimary] Updated product ${productId} with primary image: ${asset.file}`);
+                        }
+                    } catch (updateError) {
+                        console.error('Error updating product with primary image:', updateError);
+                        // We still return true since the primary asset was set successfully
+                    }
+                }
+                
+                return success;
             } catch (error) {
                 console.error('Error setting asset as primary:', error);
                 return false;

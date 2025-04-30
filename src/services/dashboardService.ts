@@ -1,5 +1,5 @@
 import axiosInstance from '@/lib/axiosInstance';
-import { API_ENDPOINTS, API_URL } from '@/config';
+import { getApiUrl } from '@/config';
 
 // Define types for dashboard data
 export interface DashboardSummary {
@@ -36,8 +36,8 @@ export interface IncompleteProduct {
   missing_fields: string[];
 }
 
-// Define path to dashboard endpoints
-const DASHBOARD_URL = `/api/dashboard`;
+// Constants
+export const DASHBOARD_URL = getApiUrl('dashboard');
 
 // This is the correct URL construction - the proxy in vite.config.ts will add /api
 console.log('Dashboard API endpoints configured at:', DASHBOARD_URL);

@@ -44,8 +44,9 @@ import { FileUpload } from "@/components/ui/file-upload";
 import { productService, Product } from '@/services/productService';
 import { API_URL } from '@/config';
 import { getCategories, createCategory } from "@/services/categoryService";
+import { APP_VERSION } from '@/constants';
 
-const PRODUCTS_BASE_URL = `${API_URL}/products`;
+const PRODUCTS_BASE_URL = `${API_URL}${APP_VERSION.API_VERSION}/products`;
 
 // Validation for GTIN (EAN-8, EAN-13, UPC-A, GTIN-14)
 const isValidGTIN = (code: string): boolean => {
@@ -296,7 +297,7 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
       toast({ title: `Product ${isEditMode ? 'updated' : 'created'} successfully`, variant: "default" });
-      navigate('/app/products');
+      navigate('/app/v1/products');
     },
     onError: (error) => {
       if (axios.isAxiosError(error) && error.response?.data) {
@@ -726,7 +727,7 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
             <Button
               type="button"
               variant="outline"
-              onClick={() => navigate('/app/products')}
+              onClick={() => navigate('/app/v1/products')}
               disabled={isLoading}
             >
               Cancel

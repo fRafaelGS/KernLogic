@@ -18,6 +18,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
+import { APP_VERSION } from '@/constants';
 
 export const ProductDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -64,7 +65,7 @@ export const ProductDetail = () => {
 
   const handleEdit = () => {
     if (id) {
-      navigate(`/app/products/${id}/edit`);
+      navigate(`${APP_VERSION.ROUTES.PRODUCTS}/${id}/edit`);
     }
   };
 
@@ -83,7 +84,7 @@ export const ProductDetail = () => {
       toast.success('Product duplicated successfully');
       
       // Navigate to the new product
-      navigate(`/app/products/${newProduct.id}`);
+      navigate(`${APP_VERSION.ROUTES.PRODUCTS}/${newProduct.id}`);
     } catch (err) {
       console.error('Error duplicating product:', err);
       toast.error('Failed to duplicate product');
@@ -91,15 +92,15 @@ export const ProductDetail = () => {
   };
 
   const handleDelete = async () => {
-    if (!id || !window.confirm('Are you sure you want to delete this product?')) return;
-    
-    try {
-      await productService.deleteProduct(Number(id));
-      toast.success('Product deleted successfully');
-      navigate('/app/products');
-    } catch (err) {
-      console.error('Error deleting product:', err);
-      toast.error('Failed to delete product');
+    if (id && window.confirm('Are you sure you want to delete this product?')) {
+      try {
+        await productService.deleteProduct(parseInt(id));
+        toast.success('Product deleted successfully');
+        navigate(APP_VERSION.ROUTES.PRODUCTS);
+      } catch (error) {
+        toast.error('Failed to delete product');
+        console.error(error);
+      }
     }
   };
 
@@ -145,7 +146,7 @@ export const ProductDetail = () => {
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={() => navigate('/app/products')}
+              onClick={() => navigate(APP_VERSION.ROUTES.PRODUCTS)}
               className="mr-4"
             >
               <ChevronLeft className="h-4 w-4 mr-2" />
@@ -174,16 +175,22 @@ export const ProductDetail = () => {
       <div className="container py-6">
         {/* Breadcrumb & Header */}
         <div className="mb-6">
-          <Breadcrumb className="mb-2">
+          <Breadcrumb className="mb-6">
             <BreadcrumbList>
               <BreadcrumbItem>
                 <BreadcrumbLink asChild>
-                  <Link to="/app/products">Products</Link>
+                  <Link to={APP_VERSION.ROUTES.DASHBOARD}>Home</Link>
                 </BreadcrumbLink>
               </BreadcrumbItem>
               <BreadcrumbSeparator />
               <BreadcrumbItem>
-                <span>{product.name || 'Unnamed Product'}</span>
+                <BreadcrumbLink asChild>
+                  <Link to={APP_VERSION.ROUTES.PRODUCTS}>Products</Link>
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbLink>{product ? product.name : 'Loading...'}</BreadcrumbLink>
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>

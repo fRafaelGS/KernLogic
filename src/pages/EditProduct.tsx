@@ -66,13 +66,11 @@ export const EditProduct: React.FC = () => {
 
     return (
         <div className="space-y-4">
-            <nav className="flex items-center text-sm text-enterprise-600 mb-2">
-                 <Link to="/app/products" className="hover:underline hover:text-primary-600">Products</Link>
-                 <ChevronRight className="h-4 w-4 mx-1" />
-                 <span className="font-medium text-enterprise-800">
-                    {isLoading ? 'Loading...' : product ? `Edit: ${product.name}` : 'Edit Product'}
-                 </span>
-            </nav>
+            <div className="flex items-center text-sm text-muted-foreground mb-4">
+                <Link to="/app/v1/products" className="hover:underline hover:text-primary-600">Products</Link>
+                <span className="mx-2">/</span>
+                <span>Edit {product?.name || 'Product'}</span>
+            </div>
 
             <div className="sticky top-16 z-10 bg-white border rounded-lg shadow-sm p-4 mb-4 -mx-4 md:-mx-6 px-4 md:px-6">
                  <div className="flex flex-col md:flex-row justify-between md:items-center gap-2 max-w-7xl mx-auto">

@@ -69,17 +69,19 @@ class CsrfExemptForAPI:
             request._dont_enforce_csrf_checks = True
         return self.get_response(request)
 
+# Middleware configuration
 MIDDLEWARE = [
-    "corsheaders.middleware.CorsMiddleware",  # Must be as high as possible
-    "core.settings.CsrfExemptForAPI",  # Add custom middleware before CsrfViewMiddleware
-    "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
-    "django.middleware.common.CommonMiddleware",
-    "django.middleware.csrf.CsrfViewMiddleware",
-    "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "django.contrib.messages.middleware.MessageMiddleware",
-    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
+    'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'core.middleware.LegacyAPIWarningMiddleware',
+    'core.middleware.IdempotencyKeyMiddleware',
 ]
 
 ROOT_URLCONF = "core.urls"
@@ -167,7 +169,7 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.AllowAny',  # Allow access without authentication
     ],
     'UNAUTHENTICATED_USER': None,
-    'EXCEPTION_HANDLER': 'rest_framework.views.exception_handler',
+    'EXCEPTION_HANDLER': 'core.exceptions.custom_exception_handler',
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
@@ -222,6 +224,7 @@ CORS_ALLOW_HEADERS = [
     'user-agent',
     'x-csrftoken',
     'x-requested-with',
+    'idempotency-key',
 ]
 
 # Disable CSRF for API endpoints in development

@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import LegacyRouteBanner from '@/components/layout/LegacyRouteBanner';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { NewProduct } from '@/pages/NewProduct';
 import { EditProduct } from '@/pages/EditProduct';
@@ -86,6 +87,8 @@ export const App: React.FC = () => {
                             },
                           }}
                         />
+                        {/* Legacy API Route Warning Banner */}
+                        <LegacyRouteBanner />
                         <Routes>
                             {/* Marketing Routes */}
                             <Route path="/" element={<LandingPage />} />
@@ -109,7 +112,7 @@ export const App: React.FC = () => {
                                 }
                             />
                             <Route
-                                path="/app/products"
+                                path="/app/v1/products"
                                 element={
                                     <ProtectedRoute>
                                         <DashboardLayout>
@@ -119,7 +122,7 @@ export const App: React.FC = () => {
                                 }
                             />
                             <Route
-                                path="/app/products/new"
+                                path="/app/v1/products/new"
                                 element={
                                     <ProtectedRoute>
                                         <DashboardLayout>
@@ -129,7 +132,7 @@ export const App: React.FC = () => {
                                 }
                             />
                             <Route
-                                path="/app/products/:id"
+                                path="/app/v1/products/:id"
                                 element={
                                     <ProtectedRoute>
                                         <ProductDetail />
@@ -137,7 +140,7 @@ export const App: React.FC = () => {
                                 }
                             />
                             <Route
-                                path="/app/products/:id/edit"
+                                path="/app/v1/products/:id/edit"
                                 element={
                                     <ProtectedRoute>
                                         <DashboardLayout>
@@ -146,6 +149,13 @@ export const App: React.FC = () => {
                                     </ProtectedRoute>
                                 }
                             />
+                            
+                            {/* Legacy routes that redirect to v1 */}
+                            <Route path="/app/products" element={<Navigate to="/app/v1/products" replace />} />
+                            <Route path="/app/products/new" element={<Navigate to="/app/v1/products/new" replace />} />
+                            <Route path="/app/products/:id" element={<Navigate to={location => `/app/v1/products/${location.pathname.split('/').pop()}`} replace />} />
+                            <Route path="/app/products/:id/edit" element={<Navigate to={location => `/app/v1/products/${location.pathname.split('/')[3]}/edit`} replace />} />
+                            
                             <Route
                                 path="/app/reports"
                                 element={

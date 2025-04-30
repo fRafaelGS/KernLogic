@@ -23,6 +23,7 @@ import { UploadCloud, FileText, AlertCircle, CheckCircle, ArrowRight, HelpCircle
 import { toast } from "sonner";
 import { productService, Product } from '@/services/productService';
 import { API_URL } from "@/config";
+import { APP_VERSION } from "@/constants";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
@@ -30,7 +31,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // Define a consistent base URL for products API
-const PRODUCTS_BASE_URL = `${API_URL}/api/products`;
+const PRODUCTS_BASE_URL = `${API_URL}${APP_VERSION.API_VERSION}/products`;
 
 // Expected headers in CSV file
 const EXPECTED_HEADERS = ['name', 'sku', 'description', 'price', 'category', 'brand', 'barcode', 'tags'];

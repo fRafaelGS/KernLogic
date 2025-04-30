@@ -4,7 +4,7 @@ import { StatCard } from "@/components/dashboard/StatCard";
 import { ProgressCard } from "@/components/dashboard/ProgressCard";
 import { FileUpload } from "@/components/upload/FileUpload";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { DatabaseIcon, PackageIcon, TagIcon, FileTextIcon } from "lucide-react";
+import { DatabaseIcon, PackageIcon, TagIcon, FileTextIcon, Package, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { productService } from "@/services/productService";
 import { useNavigate } from "react-router-dom";
@@ -61,19 +61,16 @@ const Index = () => {
             <CardContent className="grid gap-4 sm:grid-cols-2">
               <Button 
                 variant="outline" 
-                className="h-auto flex-col items-center justify-center gap-1 p-6"
-                onClick={() => navigate('/app/products')}
+                className="w-full justify-start text-left font-normal mb-2"
+                onClick={() => navigate('/app/v1/products')}
               >
-                <DatabaseIcon className="h-6 w-6" />
-                <span>View Products</span>
+                <Package className="mr-2 h-4 w-4" /> View Products
               </Button>
               <Button 
-                variant="outline" 
-                className="h-auto flex-col items-center justify-center gap-1 p-6"
-                onClick={() => navigate('/app/products/new')}
+                className="w-full justify-start text-left font-normal" 
+                onClick={() => navigate('/app/v1/products/new')}
               >
-                <PackageIcon className="h-6 w-6" />
-                <span>Add Product</span>
+                <Plus className="mr-2 h-4 w-4" /> Create New Product
               </Button>
             </CardContent>
           </Card>

@@ -1,19 +1,22 @@
+import { AxiosResponse } from 'axios';
 import axiosInstance from '@/lib/axiosInstance';
+import { getApiUrl } from '@/config';
+
+// Constants
+export const IMPORTS_API_URL = getApiUrl('imports');
 
 export interface ImportTask {
   id: number;
-  status: string;
-  processed: number;
-  total_rows: number | null;
-  error_file?: string;
+  status: 'pending' | 'processing' | 'completed' | 'error' | 'partial_success' | 'success';
+  file_name: string;
   created_at: string;
+  processed: number;
+  total_rows: number;
+  errors?: Array<{ row: number; message: string }>;
 }
 
-export const createImport = (file: File, mapping: Record<string, string>) => {
-  const fd = new FormData();
-  fd.append("csv_file", file);
-  fd.append("mapping", JSON.stringify(mapping));
-  return axiosInstance.post<ImportTask>("/api/imports/", fd);
+export const createImport = (formData: FormData) => {
+  return axiosInstance.post<ImportTask>(IMPORTS_API_URL, formData);
 };
 
-export const getImport = (id: number) => axiosInstance.get<ImportTask>(`/api/imports/${id}/`); 
+export const getImport = (id: number) => axiosInstance.get<ImportTask>(`${IMPORTS_API_URL}/${id}/`); 

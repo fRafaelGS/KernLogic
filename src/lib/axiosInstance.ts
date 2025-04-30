@@ -1,11 +1,14 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
-import { API_URL } from '@/config';
+import { API_URL, API_PREFIX } from '@/config';
+import { v4 as uuidv4 } from 'uuid';
+import { APP_VERSION } from '@/constants';
 
 // Create the single Axios instance
 const axiosInstance = axios.create({
-    baseURL: API_URL, // Base for all API calls (/api)
+    baseURL: API_URL + API_PREFIX, // Base for all API calls with versioning
     headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json'
     },
     withCredentials: true,
 });
@@ -29,6 +32,29 @@ axiosInstance.interceptors.request.use(
         } else {
             console.log('[Request Interceptor] No token found for request:', config.url);
         }
+        
+        // Add idempotency key for all mutating requests
+        const method = config.method?.toUpperCase();
+        if (method && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+            // Check if we should reuse an existing idempotency key (for retries)
+            const storedKey = config.headers['Idempotency-Key'] || 
+                              localStorage.getItem(`idempotency:${config.url}:${method}`);
+            
+            // Set a new key or reuse the existing one
+            const idempotencyKey = storedKey || uuidv4();
+            config.headers['Idempotency-Key'] = idempotencyKey;
+            
+            // Store the key for potential retries (expire after 5 minutes)
+            if (!storedKey) {
+                localStorage.setItem(`idempotency:${config.url}:${method}`, idempotencyKey);
+                setTimeout(() => {
+                    localStorage.removeItem(`idempotency:${config.url}:${method}`);
+                }, 5 * 60 * 1000);
+            }
+            
+            console.log('[Request Interceptor] Added idempotency key:', idempotencyKey.substring(0, 8) + '...');
+        }
+        
         return config;
     },
     (error) => {
@@ -47,6 +73,46 @@ const isHtmlResponse = (data: any): boolean => {
         console.error('[Response Interceptor] HTML response detected instead of JSON data');
         return true;
     }
+    return false;
+};
+
+// Helper to check if a response is in Problem-JSON format
+const isProblemJson = (data: any): boolean => {
+    return (
+        data && 
+        typeof data === 'object' && 
+        'type' in data && 
+        'title' in data && 
+        'status' in data
+    );
+};
+
+// Helper to show toast messages for different error types
+const showErrorToast = (error: AxiosError) => {
+    const data = error.response?.data as any;
+    
+    // Check if the response is in Problem-JSON format
+    if (data && isProblemJson(data)) {
+        // Extract error details from Problem-JSON
+        const { title, detail, status } = data;
+        
+        // Show toast message
+        console.error(`[API Error] ${title}: ${detail}`);
+        // Here you can call your toast notification system
+        // toast.error(`${title}: ${detail}`);
+        
+        return true;
+    }
+    
+    // For legacy error format
+    if (data && (data.detail || data.error || data.message)) {
+        const errorMessage = data.detail || data.error || data.message;
+        console.error(`[API Error] ${errorMessage}`);
+        // toast.error(errorMessage);
+        
+        return true;
+    }
+    
     return false;
 };
 
@@ -71,6 +137,26 @@ axiosInstance.interceptors.response.use(
                 }
             }
         }
+        
+        // Check for X-Legacy-Route header and show warning if present
+        if (response.headers['x-legacy-route'] === 'true') {
+            console.warn('[Legacy API] Request used a legacy API path:', response.config.url);
+            
+            // Show the legacy route warning banner
+            if (window.showLegacyRouteWarning) {
+                window.showLegacyRouteWarning();
+            } else {
+                // If the function isn't available, dispatch an event as a fallback
+                window.dispatchEvent(new CustomEvent('legacy-route-detected'));
+            }
+        }
+        
+        // Clean up idempotency key from localStorage on successful mutating requests
+        const method = response.config.method?.toUpperCase();
+        if (method && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+            localStorage.removeItem(`idempotency:${response.config.url}:${method}`);
+        }
+        
         return response;
     }, 
     async (error: AxiosError) => {
@@ -85,6 +171,9 @@ axiosInstance.interceptors.response.use(
             errorMessage: error.message,
             responseData: error.response?.data,
         });
+
+        // Show toast notification for error response
+        showErrorToast(error);
 
         // Check if there's an HTML response in the error (DRF browsable API)
         if (error.response && typeof error.response.data === 'string' && 
@@ -118,13 +207,15 @@ axiosInstance.interceptors.response.use(
 
             try {
                 // Use fetch for refresh to bypass this interceptor
-                const refreshUrl = `${API_URL}/auth/token/refresh/`; 
+                // Note: token refresh uses unversioned API path - this is correct
+                const refreshUrl = `${API_URL}/api/token/refresh/`; 
                 console.log('[Refresh] Calling refresh URL:', refreshUrl);
 
                 const refreshResponse = await fetch(refreshUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'Accept': 'application/json'
                     },
                     body: JSON.stringify({ refresh: refreshToken }),
                 });

@@ -2,6 +2,17 @@
 
 This document serves as a central reference for all data fields used across the Data Alchemy Suite application. It outlines how fields are used in different contexts (Products Table, Product Detail, Import Page) and the relationships between them.
 
+## API and Route Versioning
+
+The Data Alchemy Suite uses a consistent versioning scheme for both API endpoints and frontend routes:
+
+| Type | Pattern | Example | Notes |
+|------|---------|---------|-------|
+| API Endpoints | `/v{version}/{resource}` | `/v1/products` | Auth endpoints like `/token` remain unversioned |
+| Frontend Routes | `/app/v{version}/{resource}` | `/app/v1/products` | Dashboard is accessible at `/app/dashboard` |
+
+The current application version is tracked in `src/constants.ts` and used throughout the application to ensure consistency.
+
 ## Product Fields Overview
 
 | Field Name | Data Type | Required | Description | Used In |
@@ -199,6 +210,26 @@ During CSV/Excel import, columns are mapped as follows:
 | Bulk Category Change | `category` | Updates `updated_at` for all affected products |
 | Bulk Tag Addition | `tags` array | Appends to existing tags, updates `updated_at` |
 | Bulk Status Change | `is_active` | Updates `updated_at` for all affected products |
+
+## API Endpoint Reference
+
+All API endpoints follow the pattern `/v{version}/{resource}` except for authentication endpoints which remain unversioned.
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/token/` | POST | Obtain JWT tokens with username/password |
+| `/token/refresh/` | POST | Refresh access token using refresh token |
+| `/v1/products/` | GET | List all products (with pagination/filtering) |
+| `/v1/products/` | POST | Create a new product |
+| `/v1/products/{id}/` | GET | Retrieve a specific product |
+| `/v1/products/{id}/` | PATCH | Update a specific product |
+| `/v1/products/{id}/` | DELETE | Delete a specific product (soft delete) |
+| `/v1/products/bulk-assign-category/` | POST | Assign category to multiple products |
+| `/v1/products/bulk-status-update/` | POST | Update status for multiple products |
+| `/v1/products/bulk-delete/` | POST | Delete multiple products |
+| `/v1/categories/` | GET | List all product categories |
+| `/v1/brands/` | GET | List all product brands |
+| `/v1/dashboard/stats/` | GET | Get dashboard statistics |
 
 ---
 

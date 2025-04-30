@@ -1,10 +1,12 @@
     import axios, { AxiosError, AxiosProgressEvent } from 'axios';
     import { API_URL } from '@/config';
     import axiosInstance from '@/lib/axiosInstance';
+    import { getApiUrl } from '@/config';
+    import { APP_VERSION } from '@/constants';
 
-    // PRODUCTS_PATH should be empty string to work with the backend URL structure
-    // The backend routes 'api/' to products.urls which registers the viewset at ''
-    const PRODUCTS_PATH = '/api/products'; // Add /api prefix since API_URL is now empty
+    // Constants
+    export const PRODUCTS_PATH = 'products';
+    export const PRODUCTS_API_URL = getApiUrl('products');
 
     // Define core fields that should trigger activity logging when changed
     const CORE_FIELDS = [
@@ -83,8 +85,6 @@
         // Technical Specifications (Optional)
         attributes?: Record<string, string>;
     }
-
-    export const PRODUCTS_API_URL = `/api/products`;
 
     export interface ProductAttribute {
         id: number;
@@ -704,7 +704,7 @@
         // Get product versions
         getProductVersions: async (productId: number): Promise<ProductVersion[]> => {
             try {
-                const url = `/api/products/${productId}/versions/`;
+                const url = `${APP_VERSION.API_VERSION}/products/${productId}/versions/`;
                 console.log('[getProductVersions] Requesting versions from URL:', url);
                 
                 const response = await axiosInstance.get(url);

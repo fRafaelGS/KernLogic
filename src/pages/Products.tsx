@@ -7,6 +7,7 @@ import { Table } from '@/components/ui/table';
 import { Product, productService } from '@/services/productService';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
+import { APP_VERSION } from '@/constants';
 
 export const Products: React.FC = () => {
     const [products, setProducts] = useState<Product[]>([]);
@@ -56,7 +57,7 @@ export const Products: React.FC = () => {
             <div className="p-6">
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-2xl font-semibold text-gray-900">Products</h1>
-                    <Button onClick={() => navigate('/app/products/new')}>
+                    <Button onClick={() => navigate(`${APP_VERSION.ROUTES.PRODUCTS}/new`)}>
                         Add New Product
                     </Button>
                 </div>
@@ -97,7 +98,7 @@ export const Products: React.FC = () => {
                                                 const target = e.target as HTMLElement;
                                                 const isButtonClick = !!target.closest('button');
                                                 if (!isButtonClick && product.id) {
-                                                    navigate(`/app/products/${product.id}`);
+                                                    navigate(`${APP_VERSION.ROUTES.PRODUCTS}/${product.id}`);
                                                 }
                                             }}
                                         >
@@ -119,7 +120,7 @@ export const Products: React.FC = () => {
                                                         size="sm"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            navigate(`/app/products/${product.id}/edit`);
+                                                            navigate(`${APP_VERSION.ROUTES.PRODUCTS}/${product.id}/edit`);
                                                         }}
                                                     >
                                                         Edit

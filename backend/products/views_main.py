@@ -61,9 +61,10 @@ class ProductViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """
         Filter products to return only those created by the current user.
+        Also filter out archived products by default.
         Allow additional filtering by query parameters.
         """
-        qs = Product.objects.all()
+        qs = Product.objects.filter(is_archived=False)
         
         # Apply user filter if not staff/admin
         if not self.request.user.is_staff:
@@ -73,6 +74,11 @@ class ProductViewSet(viewsets.ModelViewSet):
         category = self.request.query_params.get('category')
         brand = self.request.query_params.get('brand')
         is_active = self.request.query_params.get('is_active')
+        show_archived = self.request.query_params.get('show_archived', '').lower() == 'true'
+        
+        # Override the default is_archived filter if explicitly requested
+        if show_archived and self.request.user.is_staff:
+            qs = Product.objects.all()  # Include archived products for staff users
         
         if category:
             qs = qs.filter(category=category)
@@ -145,19 +151,37 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     def perform_destroy(self, instance):
         """
-        Permanently delete the product instead of soft deleting it
+        Soft delete the product by default (setting is_archived=True).
+        Only staff users can perform hard delete with the ?hard=true parameter.
         """
-        # Record product deletion event before deleting
-        record(
-            product=instance,
-            user=self.request.user,
-            event_type="deleted",
-            summary=f"Product '{instance.name}' was deleted",
-            payload={"product_id": instance.id, "sku": instance.sku, "name": instance.name}
-        )
+        # Check if this is a hard delete request (requires staff privileges)
+        hard_delete = self.request.query_params.get('hard', '').lower() == 'true'
         
-        # Actually delete the product from the database
-        instance.delete()
+        if hard_delete and self.request.user.is_staff:
+            # Record product deletion event before deleting
+            record(
+                product=instance,
+                user=self.request.user,
+                event_type="deleted",
+                summary=f"Product '{instance.name}' was permanently deleted",
+                payload={"product_id": instance.id, "sku": instance.sku, "name": instance.name, "hard_delete": True}
+            )
+            
+            # Actually delete the product from the database
+            instance.delete()
+        else:
+            # Soft delete - set the archived flag
+            instance.is_archived = True
+            instance.save(update_fields=['is_archived'])
+            
+            # Record soft deletion event
+            record(
+                product=instance,
+                user=self.request.user,
+                event_type="archived",
+                summary=f"Product '{instance.name}' was archived",
+                payload={"product_id": instance.id, "sku": instance.sku, "name": instance.name}
+            )
 
     @action(detail=False, methods=['get'])
     def stats(self, request):

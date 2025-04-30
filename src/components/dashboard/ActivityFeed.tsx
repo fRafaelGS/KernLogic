@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, RefreshCcw, AlertTriangle, Package, CalendarClock, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { APP_VERSION } from '@/constants';
 
 interface ActivityFeedProps {
   activities: Activity[] | null;
@@ -107,6 +108,38 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
   // Check if activities is an array before using array methods
   const isValidActivities = Array.isArray(activities);
   
+  const renderActivity = (item: Activity) => {
+    const handleClick = () => {
+      if (item.entity_type === 'product' && item.entity_id) {
+        navigate(`${APP_VERSION.ROUTES.PRODUCTS}/${item.entity_id}`);
+      }
+    };
+
+    return (
+      <div 
+        key={item?.id || Math.random()} 
+        className="flex items-center gap-3 px-6 py-3 hover:bg-enterprise-50 cursor-pointer transition-colors"
+        onClick={handleClick}
+      >
+        <div className="h-9 w-9 rounded-full bg-primary-50 flex items-center justify-center">
+          {getActivityIcon(item?.action || 'default')}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-enterprise-800 truncate">
+            {item ? getProductName(item) : "Unknown product"}
+          </p>
+          <p className="text-xs text-enterprise-500 truncate">
+            {item ? formatActivityMessage(item) : "Activity details not available"}
+          </p>
+        </div>
+        <div className="flex items-center text-xs text-enterprise-500 whitespace-nowrap">
+          <CalendarClock className="h-3.5 w-3.5 mr-1" />
+          {item?.created_at ? getTimeAgo(item.created_at) : "Unknown time"}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <Card className="bg-white border-enterprise-200 shadow-sm">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -145,29 +178,7 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
           </div>
         ) : isValidActivities && activities.length > 0 ? (
           <div className="divide-y divide-enterprise-100">
-            {activities.slice(0, maxItems).map((item) => (
-              <div 
-                key={item?.id || Math.random()} 
-                className="flex items-center gap-3 px-6 py-3 hover:bg-enterprise-50 cursor-pointer transition-colors"
-                onClick={() => item?.entity_id ? navigate(`/app/products/${item.entity_id}`) : null}
-              >
-                <div className="h-9 w-9 rounded-full bg-primary-50 flex items-center justify-center">
-                  {getActivityIcon(item?.action || 'default')}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-enterprise-800 truncate">
-                    {item ? getProductName(item) : "Unknown product"}
-                  </p>
-                  <p className="text-xs text-enterprise-500 truncate">
-                    {item ? formatActivityMessage(item) : "Activity details not available"}
-                  </p>
-                </div>
-                <div className="flex items-center text-xs text-enterprise-500 whitespace-nowrap">
-                  <CalendarClock className="h-3.5 w-3.5 mr-1" />
-                  {item?.created_at ? getTimeAgo(item.created_at) : "Unknown time"}
-                </div>
-              </div>
-            ))}
+            {activities.slice(0, maxItems).map(renderActivity)}
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-12 px-6 text-center">

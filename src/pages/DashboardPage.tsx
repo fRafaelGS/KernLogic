@@ -39,8 +39,10 @@ import {
   MessageSquare,
   Activity as ActivityIcon,
   Info,
-  X
+  X,
+  PlusCircle
 } from 'lucide-react';
+import { APP_VERSION } from '@/constants';
 
 /**
  * Format currency in USD
@@ -127,7 +129,7 @@ export const DashboardPage: React.FC = () => {
 
   // Handle KPI card click (navigate to filtered products)
   const handleKpiClick = (filter: string) => {
-    navigate(`/app/products?${filter}`);
+    navigate(`${APP_VERSION.ROUTES.PRODUCTS}?${filter}`);
   };
 
   // Refresh dashboard data
@@ -156,12 +158,14 @@ export const DashboardPage: React.FC = () => {
             <RefreshCcw className={`mr-2 h-4 w-4 ${Object.values(loading).some(Boolean) ? 'animate-spin' : ''}`} />
             Refresh Data
           </Button>
-          <Button 
-            onClick={() => navigate('/app/products/new')}
-            className="bg-primary-600 hover:bg-primary-700 text-white"
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full justify-start gap-2"
+            onClick={() => navigate(`${APP_VERSION.ROUTES.PRODUCTS}/new`)}
           >
-            <Plus className="mr-2 h-4 w-4" />
-            New Product
+            <PlusCircle className="h-4 w-4" />
+            Create Product
           </Button>
         </div>
       </div>

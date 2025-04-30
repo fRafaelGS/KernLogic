@@ -10,7 +10,13 @@ import {
   LogOut,
   ChevronRight,
   HelpCircle,
-  FileText
+  FileText,
+  HomeIcon,
+  ShoppingCartIcon,
+  BarChart4Icon,
+  BookOpenIcon,
+  UploadIcon,
+  UsersIcon
 } from "lucide-react";
 import { NavLink, useLocation, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -64,6 +70,15 @@ export function Sidebar({ className }: SidebarProps) {
   const { user, logout } = useAuth();
   const location = useLocation();
 
+  const navigationItems = [
+    { name: 'Dashboard', href: '/app', icon: HomeIcon },
+    { name: 'Products', href: '/app/v1/products', icon: ShoppingCartIcon, badge: '24' },
+    { name: 'Reports', href: '/app/reports', icon: BarChart4Icon },
+    { name: 'Import', href: '/app/upload', icon: UploadIcon },
+    { name: 'Docs', href: '/app/documentation', icon: BookOpenIcon },
+    { name: 'Team', href: '/app/team', icon: UsersIcon },
+  ];
+
   return (
     <div className={cn("flex h-screen w-64 flex-col bg-white border-r border-enterprise-200 shadow-sm", className)}>
       {/* Logo area */}
@@ -83,8 +98,8 @@ export function Sidebar({ className }: SidebarProps) {
             <NavItem 
               icon={Package} 
               label="Products" 
-              href="/app/products" 
-              badge={location.pathname.includes('/app/products') ? '' : '24'} 
+              href="/app/v1/products" 
+              badge={location.pathname.includes('/app/v1/products') ? '' : '24'} 
             />
             <NavItem icon={BarChart2} label="Reports" href="/app/reports" />
           </nav>

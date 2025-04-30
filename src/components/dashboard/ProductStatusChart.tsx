@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DonutChart } from '@tremor/react';
 import { useNavigate } from 'react-router-dom';
+import { APP_VERSION } from '@/constants';
 
 interface ProductStatusChartProps {
   activeProducts: number;
@@ -63,22 +64,24 @@ export const ProductStatusChart: React.FC<ProductStatusChartProps> = ({
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4 mt-4 w-full">
-              <Button 
-                variant="outline" 
-                className="flex items-center justify-center text-xs h-auto py-2"
-                onClick={() => navigate('/app/products?status=active')}
-              >
-                <div className="h-2 w-2 bg-success-500 rounded-full mr-2"></div>
-                Active: {activeProducts}
-              </Button>
-              <Button 
-                variant="outline" 
-                className="flex items-center justify-center text-xs h-auto py-2"
-                onClick={() => navigate('/app/products?status=inactive')}
-              >
-                <div className="h-2 w-2 bg-enterprise-200 rounded-full mr-2"></div>
-                Inactive: {inactiveProducts}
-              </Button>
+              <div className="mt-2 text-sm">
+                <Button
+                  variant="link"
+                  className="p-0 h-auto text-sm font-medium text-enterprise-600 hover:text-enterprise-700"
+                  onClick={() => navigate(`${APP_VERSION.ROUTES.PRODUCTS}?status=active`)}
+                >
+                  View active products
+                </Button>
+              </div>
+              <div className="mt-2 text-sm">
+                <Button
+                  variant="link"
+                  className="p-0 h-auto text-sm font-medium text-enterprise-600 hover:text-enterprise-700"
+                  onClick={() => navigate(`${APP_VERSION.ROUTES.PRODUCTS}?status=inactive`)}
+                >
+                  View inactive products
+                </Button>
+              </div>
             </div>
           </div>
         )}

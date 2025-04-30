@@ -21,6 +21,7 @@ import {
   type ColumnFiltersState,
   type PaginationState,
   Header,
+  Cell,
 } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -93,6 +94,7 @@ import { ActionMeta, OnChangeValue } from 'react-select';
 import { ProductsSearchBox } from './ProductsSearchBox';
 import { BulkCategoryModal } from './BulkCategoryModal';
 import { BulkTagModal } from './BulkTagModal';
+import { APP_VERSION } from "@/constants";
 
 // Define filter state type
 interface FilterState {
@@ -223,7 +225,7 @@ const TableFallback = ({
                   className="bg-primary-600 hover:bg-primary-700 text-white"
                   asChild
                 >
-                  <Link to="/app/products/new">
+                  <Link to="/app/v1/products/new">
                     <span className="flex items-center">
                       <span className="h-4 w-4 mr-2">+</span>
                       Add Your First Product
@@ -483,9 +485,13 @@ export function ProductsTable() {
     setEditingCell(null);
   }, []);
 
-  const handleEdit = useCallback((productId: number) => {
-    navigate(`/app/products/${productId}/edit`);
-  }, [navigate]);
+  const handleProductClick = (productId: number) => {
+    navigate(`${APP_VERSION.ROUTES.PRODUCTS}/${productId}`);
+  };
+
+  const handleEdit = (productId: number) => {
+    navigate(`${APP_VERSION.ROUTES.PRODUCTS}/${productId}/edit`);
+  };
 
   const handleDelete = useCallback(async (productId: number) => {
     if (window.confirm('Are you sure you want to delete this product?')) {
@@ -718,7 +724,7 @@ export function ProductsTable() {
 
   // Handle row click for navigation to product detail - MOVED HERE BEFORE COLUMNS DEFINITION
   const handleRowClick = useCallback((productId: number) => {
-    navigate(`/app/products/${productId}`);
+    navigate(`${APP_VERSION.ROUTES.PRODUCTS}/${productId}`);
   }, [navigate]);
 
   // Add state for tag options
@@ -1808,6 +1814,21 @@ export function ProductsTable() {
       .filter((id): id is number => typeof id === 'number');
   }, [rowSelection, productRowMap]);
 
+  // Update handleCellClick to use our new handleProductClick function
+  const handleCellClick = useCallback((e: React.MouseEvent, cell: Cell<Product, unknown>) => {
+    const productId = cell.row.original.id;
+
+    // Avoid triggering navigation on action cells or when selecting text
+    const isActionCell = (cell.column.id === 'actions');
+    const isSelectingText = window.getSelection()?.toString();
+    const isClickingButton = (e.target as HTMLElement).closest('button');
+    
+    if (productId && !isActionCell && !isSelectingText && !isClickingButton) {
+      e.preventDefault();
+      handleProductClick(productId);
+    }
+  }, []);
+
   return (
     <React.Fragment>
       <div className="w-full h-full flex flex-col mx-auto max-w-screen-2xl px-2 lg:px-4">
@@ -1913,7 +1934,7 @@ export function ProductsTable() {
             </DropdownMenu>
 
             <Button className="h-9" asChild>
-              <Link to="/app/products/new">
+              <Link to="/app/v1/products/new">
                 <PlusIcon className="mr-2 h-4 w-4" />
                 New Product
               </Link>

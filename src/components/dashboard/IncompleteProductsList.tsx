@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CheckCircle2, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { APP_VERSION } from '@/constants';
 
 interface IncompleteProductsListProps {
   products: IncompleteProduct[] | null;
@@ -62,7 +63,7 @@ export const IncompleteProductsList: React.FC<IncompleteProductsListProps> = ({
               <div 
                 key={product?.id || Math.random()} 
                 className="px-6 py-4 hover:bg-enterprise-50 cursor-pointer"
-                onClick={() => product?.id ? navigate(`/app/products/${product.id}/edit`) : null}
+                onClick={() => product?.id ? navigate(`${APP_VERSION.ROUTES.PRODUCTS}/${product.id}/edit`) : null}
               >
                 <div className="flex justify-between items-center mb-2">
                   <h4 className="font-medium text-enterprise-800">{product?.name || "Unnamed product"}</h4>

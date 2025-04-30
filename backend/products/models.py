@@ -14,9 +14,11 @@ class Product(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2)
     category = models.CharField(max_length=100, blank=True, null=True)
     is_active = models.BooleanField(default=True)
+    is_archived = models.BooleanField(default=False, db_index=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    organization = models.ForeignKey('accounts.Organization', on_delete=models.CASCADE, null=True, blank=True, related_name='products')
     
     # Additional Product Information (Optional)
     brand = models.CharField(max_length=100, blank=True, null=True)
@@ -33,6 +35,8 @@ class Product(models.Model):
             models.Index(fields=['sku']),
             models.Index(fields=['brand']),
             models.Index(fields=['category']),
+            models.Index(fields=['is_archived']),
+            models.Index(fields=['organization']),
         ]
 
     def __str__(self):
@@ -342,6 +346,17 @@ class ProductAsset(models.Model):
     is_primary = models.BooleanField(
         default=False,
         help_text="Is this the main asset for the product?"
+    )
+    is_archived = models.BooleanField(
+        default=False,
+        db_index=True
+    )
+    organization = models.ForeignKey(
+        'accounts.Organization',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='product_assets'
     )
     content_type = models.CharField(
         max_length=100,

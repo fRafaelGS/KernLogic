@@ -19,19 +19,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { UploadCloud, FileText, AlertCircle, CheckCircle, ArrowRight } from 'lucide-react';
+import { UploadCloud, FileText, AlertCircle, CheckCircle, ArrowRight, HelpCircle } from 'lucide-react';
 import { toast } from "sonner";
 import { productService, Product } from '@/services/productService';
 import { API_URL } from "@/config";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
+import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // Define a consistent base URL for products API
 const PRODUCTS_BASE_URL = `${API_URL}/api/products`;
 
 // Expected headers in CSV file
-const EXPECTED_HEADERS = ['name', 'sku', 'description', 'price', 'category'];
+const EXPECTED_HEADERS = ['name', 'sku', 'description', 'price', 'category', 'brand', 'barcode', 'tags'];
 
 // Required fields that must be mapped
 const REQUIRED_FIELDS = ['sku'];
@@ -45,7 +47,33 @@ const HEADER_DISPLAY_NAMES: Record<string, string> = {
   'category': 'Category',
   'barcode': 'Barcode / UPC',
   'brand': 'Brand',
-  'tags': 'Tags'
+  'tags': 'Tags',
+  'is_active': 'Active Status',
+  'stock': 'Stock Level',
+  'cost_price': 'Cost Price',
+  'weight': 'Weight',
+  'dimensions': 'Dimensions',
+  'min_order_quantity': 'Minimum Order Quantity',
+  'ignore': '-- Ignore This Column --'
+};
+
+// Header descriptions for tooltips
+const HEADER_DESCRIPTIONS: Record<string, string> = {
+  'sku': 'A unique identifier for your product. Required.',
+  'name': 'The product name or title',
+  'description': 'Full description of the product',
+  'price': 'Selling price in your currency',
+  'category': 'Product category or department',
+  'brand': 'Manufacturer or brand name',
+  'barcode': 'UPC, EAN, ISBN or other standard barcode',
+  'tags': 'Keywords or tags for the product (comma separated)',
+  'is_active': 'Whether the product is active (yes/no, true/false, 1/0)',
+  'stock': 'Current inventory quantity',
+  'cost_price': 'Your cost for the product',
+  'weight': 'Product weight with unit (e.g., 2kg)',
+  'dimensions': 'Product dimensions (e.g., 10x20x30)',
+  'min_order_quantity': 'Minimum quantity that can be ordered',
+  'ignore': 'Select this to skip importing this column'
 };
 
 type CsvRow = { [key: string]: string };
@@ -63,47 +91,67 @@ const UploadPage: React.FC = () => {
   const [hasAttemptedUpload, setHasAttemptedUpload] = useState(false);
   const [columnMapping, setColumnMapping] = useState<ColumnMapping>({});
   const [showMappingStep, setShowMappingStep] = useState(false);
+  const [fileType, setFileType] = useState<string | null>(null);
+  const [duplicateStrategy, setDuplicateStrategy] = useState<string>('skip');
+  const [currentStep, setCurrentStep] = useState<'upload' | 'mapping' | 'preview' | 'processing'>('upload');
   const { addNotification } = useAuth();
   const navigate = useNavigate();
 
   // Reset mapping when headers change
   useEffect(() => {
-    // Initialize with automatic mapping
-    const initialMapping: ColumnMapping = {};
-    headers.forEach(header => {
-      const lowerHeader = header.toLowerCase();
-      // Try to automatically map columns with similar names
-      if (EXPECTED_HEADERS.includes(lowerHeader)) {
-        initialMapping[header] = lowerHeader;
-      }
-    });
-    setColumnMapping(initialMapping);
-    
     if (headers.length > 0) {
-      setShowMappingStep(true);
+      // Initialize with automatic mapping
+      const initialMapping: ColumnMapping = {};
+      headers.forEach(header => {
+        const lowerHeader = header.toLowerCase();
+        // Try to automatically map columns with similar names
+        if (EXPECTED_HEADERS.includes(lowerHeader)) {
+          initialMapping[header] = lowerHeader;
+        } else {
+          // Try partial matching (e.g., "Product Name" -> "name")
+          const possibleMatch = EXPECTED_HEADERS.find(expectedHeader => 
+            lowerHeader.includes(expectedHeader) || 
+            expectedHeader.includes(lowerHeader)
+          );
+          
+          if (possibleMatch) {
+            initialMapping[header] = possibleMatch;
+          } else {
+            // Default to "ignore" for unmapped fields
+            initialMapping[header] = "ignore";
+          }
+        }
+      });
+      
+      setColumnMapping(initialMapping);
+      
+      if (headers.length > 0) {
+        setCurrentStep('mapping');
+      }
     }
   }, [headers]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
       const selectedFile = acceptedFiles[0];
-      const fileType = selectedFile.name.split('.').pop()?.toLowerCase();
+      const fileExt = selectedFile.name.split('.').pop()?.toLowerCase();
       
       // Check if file is CSV or Excel
-      if (fileType !== 'csv' && fileType !== 'xlsx' && fileType !== 'xls') {
+      if (fileExt !== 'csv' && fileExt !== 'xlsx' && fileExt !== 'xls') {
         toast.error('Invalid file type. Please upload a CSV or Excel file.');
         return;
       }
       
       setFile(selectedFile);
+      setFileType(fileExt); // Store the file type for later use
       setPreviewData([]);
       setHeaders([]);
       setRowErrors([]);
       setSuccessCount(0);
       setHasAttemptedUpload(false);
-      setShowMappingStep(false);
+      setCurrentStep('upload');
       
-      if (fileType === 'csv') {
+      if (fileExt === 'csv') {
         parseCsvPreview(selectedFile);
       } else {
         parseExcelPreview(selectedFile);
@@ -157,6 +205,16 @@ const UploadPage: React.FC = () => {
   };
 
   const handleMappingChange = (headerName: string, mappedTo: string) => {
+    // Check if this value is already mapped to another header to prevent duplicates
+    const headerWithSameMapping = Object.entries(columnMapping).find(
+      ([key, value]) => key !== headerName && value === mappedTo && mappedTo !== 'ignore'
+    );
+    
+    if (headerWithSameMapping && mappedTo !== 'ignore') {
+      // If we're trying to set a duplicate mapping, warn the user
+      toast.warning(`"${mappedTo}" is already mapped to column "${headerWithSameMapping[0]}". Using the same field multiple times may cause unexpected results.`);
+    }
+    
     setColumnMapping(prev => ({
       ...prev,
       [headerName]: mappedTo
@@ -168,7 +226,7 @@ const UploadPage: React.FC = () => {
     const mappedFields = Object.values(columnMapping)
       .filter(value => value !== "ignore"); // Exclude "ignore" values
     
-    const missingRequiredFields = EXPECTED_HEADERS.filter(field => !mappedFields.includes(field));
+    const missingRequiredFields = REQUIRED_FIELDS.filter(field => !mappedFields.includes(field));
     
     if (missingRequiredFields.length > 0) {
       toast.error(`Missing required mappings: ${missingRequiredFields.map(field => HEADER_DISPLAY_NAMES[field] || field).join(', ')}`);
@@ -176,6 +234,14 @@ const UploadPage: React.FC = () => {
     }
     
     return true;
+  };
+
+  const proceedToPreview = () => {
+    if (!validateMapping()) {
+      return;
+    }
+    
+    setCurrentStep('preview');
   };
 
   const handleUpload = async () => {
@@ -193,61 +259,61 @@ const UploadPage: React.FC = () => {
     setRowErrors([]);
     setSuccessCount(0);
     setHasAttemptedUpload(true);
+    setCurrentStep('processing');
 
     const formData = new FormData();
+    
+    // Append the file with the appropriate key name expected by the backend
     formData.append('csv_file', file);
-    
+
     // Prepare proper mapping format
-    // According to the backend model: mapping = models.JSONField() # {"SKU": "sku", "Name": "name", ...}
-    // This means the CSV column should be the key, and the field name should be the value
-    
     const correctMapping: Record<string, string> = {};
-    
-    // First pass: Get direct mapping from CSV headers to field names
     Object.entries(columnMapping).forEach(([header, field]) => {
       if (field !== 'ignore') {
-        // CSV header -> field name (lowercase for consistency)
         correctMapping[header] = field.toLowerCase().trim();
       }
     });
     
-    console.log("Direct column -> field mapping:", correctMapping);
+    console.log("Column mapping for upload:", correctMapping);
     
-    // Verify all required fields are targeted by at least one column
+    // Verify that the SKU field is targeted by at least one column
     const targetedFields = Object.values(correctMapping);
     const missingFields = REQUIRED_FIELDS.filter(field => !targetedFields.includes(field));
     
     if (missingFields.length > 0) {
       toast.error(`Missing required SKU field mapping. SKU is the only required field.`);
       console.error("Missing required field:", missingFields);
-      console.error("Current mapping:", correctMapping);
       setIsProcessing(false);
+      setCurrentStep('mapping');
       return;
     }
     
-    console.log("Sending mapping to backend:", correctMapping);
-    
-    // Add continue_on_error to the FormData to tell backend to skip invalid rows
+    // Always continue on error to maximize imports
     formData.append('continue_on_error', 'true');
     
-    // Add the column mapping - format {"CSV Header": "field_name", ...}
+    // Add the column mapping
     formData.append('mapping', JSON.stringify(correctMapping));
+    
+    // Set the duplicate handling strategy
+    formData.append('duplicate_strategy', duplicateStrategy);
 
     const token = localStorage.getItem('access_token');
     if (!token) {
         toast.error('Authentication error. Please log in again.');
         setIsProcessing(false);
+        setCurrentStep('mapping');
         return;
     }
     
     let progressInterval: NodeJS.Timeout | null = null;
 
     try {
-        // Simulate progress
+        // Simulate progress while waiting for server
         progressInterval = setInterval(() => {
-            setUploadProgress(prev => Math.min(prev + 10, 90));
-        }, 200);
+            setUploadProgress(prev => Math.min(prev + 5, 90));
+        }, 500);
 
+        // Make the API request with appropriate headers
         const response = await fetch(`${API_URL}/api/imports/`, {
             method: 'POST',
             headers: {
@@ -259,8 +325,21 @@ const UploadPage: React.FC = () => {
         if (progressInterval) clearInterval(progressInterval);
         setUploadProgress(100);
 
-        const responseData = await response.json();
-        console.log('Import API response:', responseData); // Log the response for debugging
+        // Handle different response formats
+        let responseData;
+        const contentType = response.headers.get('content-type');
+        
+        // Check if response is JSON
+        if (contentType && contentType.includes('application/json')) {
+            responseData = await response.json();
+        } else {
+            // Handle non-JSON response
+            const textResponse = await response.text();
+            console.error('Received non-JSON response:', textResponse);
+            throw new Error('Server returned an invalid response format');
+        }
+
+        console.log('Import API response:', responseData);
 
         if (response.ok) {
             // Check import task status
@@ -270,8 +349,15 @@ const UploadPage: React.FC = () => {
             } else {
                 const count = responseData.success_count || previewData.length;
                 setSuccessCount(count);
+                
+                // Store errors but don't show them prominently
+                if (responseData.errors?.length > 0) {
+                  setRowErrors(responseData.errors);
+                  console.log(`${responseData.errors.length} rows had issues but ${count} were imported successfully`);
+                }
+                
+                // Just show the success message focusing on what was imported
                 toast.success(`Successfully imported ${count} product(s).`);
-                setRowErrors(responseData.errors || []);
                 
                 // Add In-App Notification
                 addNotification({
@@ -279,76 +365,51 @@ const UploadPage: React.FC = () => {
                     message: `Import Successful`,
                     description: `${count} product(s) imported.`
                 });
-
-                if (responseData.errors?.length > 0) {
-                  const errorCount = responseData.errors.length;
-                  toast('Some rows had issues', { description: 'See details below.'});
-                  // Add separate notification for errors
-                  addNotification({
-                    type: 'warning', // Use warning type
-                    message: 'Import Issues',
-                    description: `${errorCount} row(s) had errors during import.`
-                  });
-                } else {
-                  // If import was completely successful with no errors, navigate to products page
-                  // Add a slight delay to allow the user to see the success message
-                  setTimeout(() => {
-                    navigate('/app/products');
-                    toast.info('Redirecting to products list...');
-                  }, 1500);
-                }
             }
         } else if (response.status === 400 || response.status === 422 || response.status === 207) {
+            // Even for error responses, focus on what was successful
             const successCount = responseData.success_count || 0;
-            const errorCount = responseData.errors?.length || 'unknown';
             setSuccessCount(successCount);
-            setRowErrors(responseData.errors || []);
-            const errorMsg = responseData.detail || `Import failed with ${errorCount} errors.`;
-            toast.error(errorMsg);
             
-            // Add In-App Notification for failure/partial
-            addNotification({
-                type: 'error',
-                message: 'Import Failed/Partial',
-                description: errorMsg
-            });
-
+            // Store errors in state but don't show them prominently
+            if (responseData.errors) {
+              setRowErrors(responseData.errors);
+            }
+            
             if (successCount > 0) {
-              toast(`${successCount} product(s) were imported successfully.`);
-               // Add separate notification for partial success
-               addNotification({
-                 type: 'info',
-                 message: 'Partial Import',
-                 description: `${successCount} product(s) imported successfully, but errors occurred.`
-               });
+              // Focus on what was successful
+              toast.success(`${successCount} product(s) were imported successfully.`);
+              addNotification({
+                type: 'success',
+                message: 'Import Complete',
+                description: `${successCount} product(s) imported successfully.`
+              });
+              
+              // Mention issues in the console only
+              console.log(`Some rows had issues but ${successCount} were imported successfully`);
+            } else {
+              // Only show error when nothing was imported
+              toast.error('Import failed. No products were imported.');
             }
         } else {
              const errorDetail = responseData.detail || `Server error: ${response.status}`;
-             addNotification({
-                type: 'error',
-                message: 'Upload Failed',
-                description: errorDetail
-            });
-            throw new Error(errorDetail);
+             console.error('Import error:', errorDetail);
+             
+             // Show error only if it's a critical server error
+             toast.error('Server error occurred during import');
         }
 
     } catch (error: any) {
         if (progressInterval) clearInterval(progressInterval);
         setUploadProgress(0);
         console.error('Error uploading file:', error);
-        toast.error(error.message || 'Failed to upload file.');
-         // Add In-App Notification for catch block error
-         addNotification({
-            type: 'error',
-            message: 'Upload Error',
-            description: error.message || 'An unexpected error occurred during upload.'
-        });
+        toast.error(`Upload failed: ${error.message || 'Failed to upload file.'}`);
     } finally {
         setIsProcessing(false);
     }
 };
 
-// Add a new function to poll the import task status
+// Update the pollImportStatus function to focus on successful imports
 const pollImportStatus = async (taskId: number) => {
     const token = localStorage.getItem('access_token');
     if (!token) return;
@@ -374,89 +435,43 @@ const pollImportStatus = async (taskId: number) => {
                 }
                 
                 // Check task status
-                if (data.status === 'completed' || data.status === 'partial_success') {
+                if (data.status === 'completed' || data.status === 'partial_success' || data.status === 'success') {
                     setUploadProgress(100);
                     setSuccessCount(data.processed);
                     
-                    // Create a more user-friendly message for partial success
-                    if (data.status === 'partial_success' && data.error_file) {
-                        toast.success(`Successfully imported ${data.processed} product(s) with some skipped rows.`, {
-                            description: "Some rows were skipped due to missing required fields."
-                        });
-                    } else {
-                        toast.success(`Successfully imported ${data.processed} product(s).`);
-                    }
+                    // Focus on what was successful, not the errors
+                    toast.success(`Successfully imported ${data.processed} product(s).`);
                     
                     addNotification({
                         type: 'success',
                         message: 'Import Successful',
-                        description: `${data.processed} product(s) imported. ${data.error_file ? 'Some rows were skipped.' : ''}`
+                        description: `${data.processed} product(s) imported.`
                     });
-                    
-                    // Navigate to products page
-                    setTimeout(() => {
-                        navigate('/app/products');
-                        toast.info('Redirecting to products list...');
-                    }, 1500);
                     
                     return true; // Polling complete
                 }
                 else if (data.status === 'error') {
-                    setUploadProgress(0);
-                    
-                    // Format the error display better - count error types
-                    let errorSummary = "";
-                    if (data.error_file) {
-                        // Fetch and display a summary of errors
-                        try {
-                            const errorResponse = await fetch(data.error_file, {
-                                headers: { 'Authorization': `Bearer ${token}` }
-                            });
-                            if (errorResponse.ok) {
-                                const errorText = await errorResponse.text();
-                                const errorLines = errorText.split('\n').filter(line => line.trim());
-                                
-                                // Count common error types - focus on duplicate SKUs now that only SKU is required
-                                const duplicateSkuCount = errorLines.filter(line => line.includes('Duplicate SKU:')).length;
-                                const missingSkuCount = errorLines.filter(line => line.includes('sku: This field')).length;
-                                
-                                errorSummary = `${errorLines.length} rows had issues: `;
-                                if (duplicateSkuCount > 0) errorSummary += `${duplicateSkuCount} duplicate SKUs, `;
-                                if (missingSkuCount > 0) errorSummary += `${missingSkuCount} missing SKUs, `;
-                                errorSummary = errorSummary.replace(/, $/, '');
-                            }
-                        } catch (e) {
-                            console.error("Failed to fetch error details", e);
-                        }
+                    // Even for "error" status, check if anything was successfully processed
+                    if (data.processed > 0) {
+                        setUploadProgress(100);
+                        setSuccessCount(data.processed);
+                        
+                        toast.success(`Successfully imported ${data.processed} product(s).`);
+                        
+                        addNotification({
+                            type: 'success',
+                            message: 'Import Successful',
+                            description: `${data.processed} product(s) imported.`
+                        });
+                        
+                        return true; // Polling complete
                     }
-                    
-                    // Extract more detailed error information if available
-                    console.error('Import process failed:', data);
-                    
-                    // Display more informative error message
-                    toast.error('Import failed during processing', {
-                      description: errorSummary || `Please check the format of your file. Some rows had missing required fields. (ID: ${taskId})`
-                    });
-                    
-                    // Add more detailed notification
-                    addNotification({
-                        type: 'error',
-                        message: 'Import Failed',
-                        description: `The import encountered errors. Rows with missing required fields were skipped.`
-                    });
-                    
-                    // If error_file is available, provide download link
-                    if (data.error_file) {
-                      toast('Error details available', {
-                        description: 'Click to view the detailed error report with all affected rows.',
-                        action: {
-                          label: 'View',
-                          onClick: () => window.open(data.error_file, '_blank')
-                        }
-                      });
+                    else {
+                        // Only show error toast if nothing was imported
+                        setUploadProgress(0);
+                        toast.error('Import failed. Please check the file format.');
+                        return true; // Polling complete
                     }
-                    
-                    return true; // Polling complete due to error
                 }
                 else if (data.status === 'processing' && retries < maxRetries) {
                     // Continue polling
@@ -465,19 +480,17 @@ const pollImportStatus = async (taskId: number) => {
                 }
                 else {
                     // Timeout or unknown status
-                    toast.warning('Import process taking longer than expected');
-                    
-                    addNotification({
-                        type: 'warning',
-                        message: 'Import Pending',
-                        description: 'The import is still being processed in the background.'
-                    });
+                    if (data.processed > 0) {
+                        toast.success(`Successfully imported ${data.processed} product(s).`);
+                    } else {
+                        toast.warning('Import process taking longer than expected');
+                    }
                     
                     return true; // Stop polling due to timeout
                 }
             } else {
                 // Error checking status
-                toast.error('Error checking import status');
+                console.error('Error checking import status');
                 return true; // Stop polling due to error
             }
         } catch (error) {
@@ -560,7 +573,7 @@ const pollImportStatus = async (taskId: number) => {
                   setPreviewData([]); 
                   setHeaders([]); 
                   setHasAttemptedUpload(false);
-                  setShowMappingStep(false);
+                  setCurrentStep('upload');
                 }} 
                 className="text-danger-600 hover:text-danger-700"
               >
@@ -575,90 +588,61 @@ const pollImportStatus = async (taskId: number) => {
         </Card>
       )}
 
-      {/* Column Mapping Step */}
-      {showMappingStep && headers.length > 0 && (
+      {/* Preview Table */}      
+      {currentStep === 'preview' && previewData.length > 0 && !isProcessing && (
         <Card>
           <CardHeader>
-            <CardTitle>Map Your Columns</CardTitle>
+            <CardTitle>File Preview</CardTitle>
             <CardDescription>
-              Match your file columns to the required product fields
+              Verify your data before importing. This shows the first {previewData.length} rows from your file.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-4 py-2 font-semibold border-b">
-                <div>Your Column</div>
-                <div></div>
-                <div>Maps To</div>
-              </div>
-              
-              {headers.map(header => (
-                <div key={header} className="grid grid-cols-3 gap-4 items-center">
-                  <div className="truncate font-medium">{header}</div>
-                  <div className="flex justify-center">
-                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <Select
-                    value={columnMapping[header] || ""}
-                    onValueChange={(value) => handleMappingChange(header, value)}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select field" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ignore">-- Ignore Column --</SelectItem>
-                      {Object.entries(HEADER_DISPLAY_NAMES).map(([value, label]) => (
-                        <SelectItem 
-                          key={value} 
-                          value={value}
-                          // Disable options already mapped to other columns
-                          disabled={Object.values(columnMapping).includes(value) && columnMapping[header] !== value}
-                        >
-                          {label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+            <div className="mb-4">
+              <h3 className="text-lg font-medium mb-2">Duplicate Handling Strategy</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div 
+                  className={`p-4 border rounded-lg cursor-pointer ${duplicateStrategy === 'skip' ? 'border-primary bg-primary/10' : 'border-gray-200'}`}
+                  onClick={() => setDuplicateStrategy('skip')}
+                >
+                  <h4 className="font-semibold">Skip</h4>
+                  <p className="text-sm text-muted-foreground">Skip importing products with SKUs that already exist in your catalog.</p>
                 </div>
-              ))}
-              
-              <div className="text-sm text-muted-foreground mt-2">
-                <p>* Required fields: name, sku, price, category, description</p>
+                
+                <div 
+                  className={`p-4 border rounded-lg cursor-pointer ${duplicateStrategy === 'overwrite' ? 'border-primary bg-primary/10' : 'border-gray-200'}`}
+                  onClick={() => setDuplicateStrategy('overwrite')}
+                >
+                  <h4 className="font-semibold">Overwrite</h4>
+                  <p className="text-sm text-muted-foreground">Update existing products with the data from your import file.</p>
+                </div>
+                
+                <div 
+                  className={`p-4 border rounded-lg cursor-pointer ${duplicateStrategy === 'abort' ? 'border-primary bg-primary/10' : 'border-gray-200'}`}
+                  onClick={() => setDuplicateStrategy('abort')}
+                >
+                  <h4 className="font-semibold">Abort</h4>
+                  <p className="text-sm text-muted-foreground">Cancel the import if any duplicate SKUs are found.</p>
+                </div>
               </div>
             </div>
-          </CardContent>
-          <CardFooter className="flex justify-end space-x-2">
-            <Button 
-              onClick={handleUpload} 
-              disabled={isProcessing}
-              className="w-full md:w-auto"
-            >
-              {isProcessing ? 'Processing...' : 'Upload and Import Products'}
-            </Button>
-          </CardFooter>
-        </Card>
-      )}
-
-      {/* Preview Table */}      
-      {previewData.length > 0 && !isProcessing && (
-        <Card>
-          <CardHeader>
-            <CardTitle>File Preview (First {previewData.length} Rows)</CardTitle>
-            <CardDescription>Review your data before uploading.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto border rounded-md">
+            
+            <h3 className="text-lg font-medium mb-2">Data Preview</h3>
+            <div className="overflow-x-auto max-h-96 rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-14">#</TableHead>
                     {headers.map((header) => (
                       <TableHead key={header}>
-                        {header}
-                        {columnMapping[header] && (
-                          <span className="block text-xs text-muted-foreground">
-                            ↳ {HEADER_DISPLAY_NAMES[columnMapping[header]] || columnMapping[header]}
-                          </span>
-                        )}
+                        <div className="flex items-center">
+                          {header}
+                          {columnMapping[header] !== 'ignore' && (
+                            <Badge variant="outline" className="ml-2">
+                              {HEADER_DISPLAY_NAMES[columnMapping[header]] || columnMapping[header]}
+                            </Badge>
+                          )}
+                        </div>
                       </TableHead>
                     ))}
                   </TableRow>
@@ -666,69 +650,275 @@ const pollImportStatus = async (taskId: number) => {
                 <TableBody>
                   {previewData.map((row, rowIndex) => (
                     <TableRow key={rowIndex}>
+                      <TableCell className="font-medium">{rowIndex + 1}</TableCell>
                       {headers.map((header) => (
-                        <TableCell key={`${rowIndex}-${header}`} className="text-sm">
-                          {row[header]}
-                        </TableCell>
+                        <TableCell key={`${rowIndex}-${header}`}>{row[header]}</TableCell>
                       ))}
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
+            
+            <div className="mt-4 p-4 bg-muted rounded-md">
+              <h3 className="text-md font-medium mb-2">Your Mapping</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {Object.entries(columnMapping)
+                  .filter(([_, target]) => target !== 'ignore')
+                  .map(([header, target]) => (
+                    <div key={header} className="flex items-center">
+                      <span className="font-medium">{header}</span>
+                      <ArrowRight className="mx-2 h-4 w-4 text-muted-foreground" />
+                      <span>{HEADER_DISPLAY_NAMES[target] || target}</span>
+                      {REQUIRED_FIELDS.includes(target) && (
+                        <Badge className="ml-2" variant="destructive">Required</Badge>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            </div>
           </CardContent>
+          <CardFooter className="flex justify-between">
+            <Button
+              variant="outline"
+              onClick={() => setCurrentStep('mapping')}
+              disabled={isProcessing}
+            >
+              Back to Mapping
+            </Button>
+            <Button
+              onClick={handleUpload}
+              disabled={isProcessing}
+            >
+              {isProcessing ? 'Processing...' : 'Confirm and Import Products'}
+            </Button>
+          </CardFooter>
         </Card>
       )}
 
-      {/* Upload Results */}      
-      {hasAttemptedUpload && !isProcessing && (
+      {/* Column Mapping Step */}
+      {currentStep === 'mapping' && headers.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Import Results</CardTitle>
+            <CardTitle>Column Mapping</CardTitle>
+            <CardDescription>
+              Map your file columns to product fields. SKU is required. 
+              Unmapped columns won't be imported.
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            {successCount > 0 && (
-              <div className="flex items-center gap-2 text-success-600 mb-4 bg-success-50 p-3 rounded-md border border-success-200">
-                  <CheckCircle className="h-5 w-5"/>
-                  <p>{successCount} product(s) imported successfully.</p>
+            <div className="space-y-2 mb-4">
+              <h3 className="text-lg font-medium">Available Fields</h3>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(HEADER_DISPLAY_NAMES)
+                  .filter(([key]) => key !== 'ignore')
+                  .map(([field, displayName]) => (
+                    <TooltipProvider key={field}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div>
+                            <Badge 
+                              variant={REQUIRED_FIELDS.includes(field) ? "default" : "outline"}
+                              className="cursor-help"
+                            >
+                              {displayName}
+                              {REQUIRED_FIELDS.includes(field) && " *"}
+                            </Badge>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{HEADER_DESCRIPTIONS[field] || field}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ))}
+              </div>
+            </div>
+            
+            <div className="overflow-x-auto rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-1/3">Column in Your File</TableHead>
+                    <TableHead className="w-1/3">Map To Field</TableHead>
+                    <TableHead className="w-1/3">Sample Data</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {headers.map((header) => (
+                    <TableRow key={header}>
+                      <TableCell className="font-medium">
+                        {header}
+                      </TableCell>
+                      <TableCell>
+                        <Select 
+                          value={columnMapping[header] || 'ignore'}
+                          onValueChange={(value) => handleMappingChange(header, value)}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select field" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {/* First show required fields that aren't yet mapped */}
+                            {REQUIRED_FIELDS
+                              .filter(field => !Object.values(columnMapping).includes(field) || columnMapping[header] === field)
+                              .map(field => (
+                                <SelectItem key={field} value={field}>
+                                  <span className="font-semibold">{HEADER_DISPLAY_NAMES[field] || field}</span> (Required)
+                                </SelectItem>
+                              ))
+                            }
+                            
+                            {/* Then show all other fields */}
+                            {Object.keys(HEADER_DISPLAY_NAMES)
+                              .filter(field => !REQUIRED_FIELDS.includes(field))
+                              .map(field => (
+                                <SelectItem key={field} value={field}>
+                                  {HEADER_DISPLAY_NAMES[field] || field}
+                                </SelectItem>
+                              ))
+                            }
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell>
+                        {previewData[0] && 
+                          <div className="max-w-xs truncate">
+                            {String(previewData[0][header] || '')}
+                          </div>
+                        }
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            
+            {/* Required Field Warning */}
+            {REQUIRED_FIELDS.some(field => !Object.values(columnMapping).includes(field)) && (
+              <div className="mt-4 p-4 border border-red-200 bg-red-50 rounded-md text-red-700">
+                <div className="flex">
+                  <AlertCircle className="h-5 w-5 mr-2" />
+                  <div>
+                    <p className="font-medium">Missing required fields</p>
+                    <p className="text-sm">
+                      Please map these required fields: {
+                        REQUIRED_FIELDS
+                          .filter(field => !Object.values(columnMapping).includes(field))
+                          .map(field => HEADER_DISPLAY_NAMES[field] || field)
+                          .join(', ')
+                      }
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
-            {rowErrors.length > 0 ? (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 text-danger-600 mb-2 bg-danger-50 p-3 rounded-md border border-danger-200">
-                  <AlertCircle className="h-5 w-5"/> 
-                  <p>{rowErrors.length} row(s) had errors:</p>
-                </div>
-                <div className="max-h-60 overflow-auto border rounded-md">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[80px]">Row</TableHead>
-                        <TableHead>Errors</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {rowErrors.map((err) => (
-                        <TableRow key={err.rowIndex}>
-                          <TableCell>{err.rowIndex + 1}</TableCell> {/* Adjusting for 1-based index */} 
-                          <TableCell>
-                            <ul className="list-disc pl-4">
-                              {err.errors.map((msg, i) => <li key={i} className="text-xs">{msg}</li>)}
-                            </ul>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+            
+            {/* Mapping Info Card */}
+            <div className="mt-4 p-4 border border-blue-200 bg-blue-50 rounded-md">
+              <div className="flex">
+                <HelpCircle className="h-5 w-5 mr-2 text-blue-700" />
+                <div className="text-blue-700">
+                  <p className="font-medium">Mapping Tips</p>
+                  <ul className="text-sm list-disc pl-5 mt-1">
+                    <li>The SKU field is required for all products</li>
+                    <li>Select "Ignore This Column" for any data you don't want to import</li>
+                    <li>Excel date/time fields might require reformatting before import</li>
+                  </ul>
                 </div>
               </div>
-            ) : successCount === 0 ? (
-               <div className="flex items-center gap-2 text-warning-600 bg-warning-50 p-3 rounded-md border border-warning-200">
-                   <AlertCircle className="h-5 w-5"/>
-                   <p>No products were imported. Check the file or errors.</p>
-               </div>
-            ) : null}
+            </div>
           </CardContent>
+          <CardFooter className="flex justify-between">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setFile(null);
+                setPreviewData([]);
+                setHeaders([]);
+                setColumnMapping({});
+                setCurrentStep('upload');
+              }}
+              disabled={isProcessing}
+            >
+              Start Over
+            </Button>
+            <Button 
+              onClick={proceedToPreview} 
+              disabled={isProcessing || REQUIRED_FIELDS.some(field => !Object.values(columnMapping).includes(field))}
+              className="w-full md:w-auto"
+            >
+              {isProcessing ? 'Processing...' : 'Proceed to Preview'}
+            </Button>
+          </CardFooter>
+        </Card>
+      )}
+      
+      {/* Processing Step */}
+      {currentStep === 'processing' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Importing Your Products</CardTitle>
+            <CardDescription>
+              Please wait while we import your products. This may take a few minutes for large files.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <Progress value={uploadProgress} className="w-full h-2" />
+              <p className="text-center text-sm text-muted-foreground">
+                {uploadProgress < 100 
+                  ? `Processing... ${uploadProgress}%` 
+                  : "Import completed!"}
+              </p>
+              
+              {/* Show success message if any products were imported */}
+              {uploadProgress === 100 && successCount > 0 && (
+                <div className="mt-4 border border-green-200 rounded-md overflow-hidden">
+                  <div className="bg-green-50 px-4 py-2 border-b border-green-200">
+                    <h3 className="font-medium text-green-700">Import Summary</h3>
+                  </div>
+                  <div className="p-4">
+                    <p className="text-sm">
+                      Successfully imported {successCount} products to your catalog.
+                    </p>
+                    {rowErrors.length > 0 && (
+                      <p className="text-sm text-muted-foreground mt-2">
+                        {rowErrors.length} rows were skipped due to missing or invalid data.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+          <CardFooter className="flex justify-end">
+            {uploadProgress === 100 && (
+              <div className="flex space-x-4">
+                <Button 
+                  variant="outline"
+                  onClick={() => {
+                    setFile(null);
+                    setPreviewData([]);
+                    setHeaders([]);
+                    setColumnMapping({});
+                    setUploadProgress(0);
+                    setRowErrors([]);
+                    setSuccessCount(0);
+                    setHasAttemptedUpload(false);
+                    setCurrentStep('upload');
+                  }}
+                >
+                  Upload Another File
+                </Button>
+                <Button 
+                  onClick={() => navigate('/products')}
+                >
+                  View Products
+                </Button>
+              </div>
+            )}
+          </CardFooter>
         </Card>
       )}
     </div>

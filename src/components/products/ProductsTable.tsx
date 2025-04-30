@@ -63,6 +63,10 @@ import {
   Cloud,
   CheckCircle,
   XCircle,
+  EyeIcon,
+  PencilIcon,
+  TagIcon,
+  FolderIcon,
 } from "lucide-react";
 import { Product, productService, ProductImage } from "@/services/productService";
 import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
@@ -125,7 +129,7 @@ const SortableTableHeader = ({ id, header }: SortableTableHeaderProps) => {
   // Skip sort UI for select column
   if (id === 'select') {
     return (
-      <TableHead key={header.id} className="p-2 w-10">
+      <TableHead key={header.id} className="p-2 w-10 bg-gray-100 font-semibold">
         {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
       </TableHead>
     );
@@ -143,7 +147,7 @@ const SortableTableHeader = ({ id, header }: SortableTableHeaderProps) => {
   return (
     <TableHead
       key={header.id}
-      className={`p-2 ${hideOnMobileClass}`}
+      className={`p-2 ${hideOnMobileClass} bg-gray-100 text-gray-700 font-semibold text-sm tracking-wide border-b border-gray-200 px-4 py-3 text-left`}
       onClick={column.getCanSort() ? column.getToggleSortingHandler() : undefined}
     >
       <div className="flex items-center">
@@ -496,7 +500,9 @@ export function ProductsTable() {
   // Update the handleFilterToggle function to toggle filtersVisible
   const handleFilterToggle = useCallback(() => {
     setFiltersVisible(prev => !prev);
-  }, []);
+    // Add more visibility logic if needed for specific filter sections
+    console.log("Filter visibility toggled:", !filtersVisible);
+  }, [filtersVisible]);
 
   const handleFilterChange = useCallback(<K extends keyof FilterState>(
     key: K,
@@ -706,6 +712,11 @@ export function ProductsTable() {
     }
   }, [handleSaveCellEdit, handleCancelEdit]);
 
+  // Handle row click for navigation to product detail - MOVED HERE BEFORE COLUMNS DEFINITION
+  const handleRowClick = useCallback((productId: number) => {
+    navigate(`/app/products/${productId}`);
+  }, [navigate]);
+
   // Add state for tag options
   const [tagOptions, setTagOptions] = useState<{ label: string; value: string }[]>([]);
 
@@ -865,8 +876,11 @@ export function ProductsTable() {
                 </HoverCardContent>
               </HoverCard>
             ) : (
-              <div className="h-16 w-16 rounded-md border flex items-center justify-center bg-slate-100">
-                <ImageIcon className="h-6 w-6 text-slate-400" />
+              <div className="h-16 w-16 rounded-md border flex items-center justify-center bg-gray-100 backdrop-blur-sm">
+                <div className="flex flex-col items-center justify-center">
+                  <ImageIcon className="h-6 w-6 text-slate-400" />
+                  <span className="text-xs text-slate-400 mt-1">No Image</span>
+                </div>
               </div>
             )}
           </div>
@@ -1498,9 +1512,74 @@ export function ProductsTable() {
     handleCancelEdit, 
     handleCellEdit,
     navigate,
-    categoryOptions, // Add dependency
-    handleCreateTagOption // Add dependency
+    categoryOptions,
+    handleCreateTagOption,
+    handleRowClick, // Add dependency for the action handling
+    handleDelete // Add dependency for delete action
   ]);
+
+  // Action column definition
+  const actionColumn: ColumnDef<Product> = {
+    id: "actions",
+    enableHiding: false,
+    enableSorting: false,
+    size: 120,
+    meta: {
+      className: "sticky right-0 bg-white shadow-md z-10", // Make the column sticky
+    },
+    header: () => (
+      <div className="text-right px-4 sticky right-0 bg-white shadow-md z-10">Actions</div>
+    ),
+    cell: ({ row }) => {
+      const productId = row.original.id;
+      
+      if (!productId) return null;
+      
+      return (
+        <div className="flex justify-end gap-2 pr-2 sticky right-0 bg-white shadow-md z-10">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (productId) handleRowClick(productId);
+            }}
+            title="View"
+          >
+            <EyeIcon className="h-4 w-4 text-gray-500 hover:text-blue-600" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (productId) navigate(`/app/products/${productId}/edit`);
+            }}
+            title="Edit"
+          >
+            <PencilIcon className="h-4 w-4 text-gray-500 hover:text-green-600" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (productId) handleDelete(productId);
+            }}
+            title="Delete"
+          >
+            <TrashIcon className="h-4 w-4 text-gray-500 hover:text-red-600" />
+          </Button>
+        </div>
+      );
+    },
+  };
+
+  // Combine the columns with the action column - MOVED HERE RIGHT AFTER BOTH DEPENDENCIES ARE DEFINED
+  const allColumns = useMemo(() => [...columns, actionColumn], [columns, actionColumn]);
 
   // Initialize column order from saved state or create default order
   useEffect(() => {
@@ -1568,7 +1647,7 @@ export function ProductsTable() {
   // Configure the table with useReactTable
   const table = useReactTable({
     data: filteredData,
-    columns,
+    columns: allColumns, // Use allColumns instead of columns
     state: {
       sorting,
       columnVisibility,
@@ -1597,11 +1676,6 @@ export function ProductsTable() {
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
   }, []);
-
-  // Add missing handleRowClick function
-  const handleRowClick = useCallback((productId: number) => {
-    navigate(`/app/products/${productId}`);
-  }, [navigate]);
 
   // Update toast calls to match the correct API
   const handleStatusChange = useCallback(async (productId: number) => {
@@ -1694,189 +1768,147 @@ export function ProductsTable() {
     localStorage.setItem('productTablePageSize', JSON.stringify(pagination.pageSize));
   }, [pagination.pageSize]);
 
+  // This useEffect will log when row selection changes
+  useEffect(() => {
+    console.log("Row selection changed:", Object.keys(rowSelection).length, "rows selected");
+  }, [rowSelection]);
+
   return (
-    <div className="space-y-6 px-4 sm:px-6 lg:px-8 w-full">
-      {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between">
-        <div className="flex flex-col sm:flex-row gap-3 items-center">
-          <div className="relative w-full sm:w-64">
-            <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-enterprise-400" />
-            <Input
-              type="search"
-              placeholder="Search products..."
-              className="pl-9 border-enterprise-200 bg-white focus-visible:ring-primary-500 focus-visible:border-primary-500"
-              value={searchTerm}
-              onChange={handleSearchChange}
-            />
+    <React.Fragment>
+      <div className="w-full h-full flex flex-col">
+        {/* Table Toolbar */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-4 px-2 border-b space-y-2 sm:space-y-0">
+          <div className="flex items-center space-x-2 w-full sm:w-auto">
+            <div className="relative flex-1 sm:max-w-xs">
+              <SearchIcon className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+              <Input
+                placeholder="Search products..."
+                value={searchTerm}
+                onChange={handleSearchChange}
+                className="pl-8 h-9"
+              />
+            </div>
+            <Button 
+              variant={filtersVisible ? "primary" : "outline"} 
+              size="sm" 
+              onClick={handleFilterToggle}
+              className={filtersVisible ? "text-white" : ""}
+            >
+              <FilterIcon className="mr-2 h-4 w-4" />
+              Filter {filtersVisible ? "(on)" : ""}
+            </Button>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleFilterToggle}
-            className={cn(
-              "border-enterprise-200 text-enterprise-700 hover:bg-enterprise-50",
-              filtersVisible && "bg-enterprise-100 border-primary-300 text-primary-700"
-            )}
-          >
-            <FilterIcon className="h-4 w-4 mr-2" />
-            Filter
-            <ChevronDown className={cn("h-4 w-4 ml-2 transition-transform", filtersVisible && "rotate-180")} />
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="border-enterprise-200 text-enterprise-700 hover:bg-enterprise-50">
-                <ColumnsIcon className="mr-2 h-4 w-4" />
-                Columns
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {table
-                .getAllColumns()
-                .filter((column) => column.getCanHide())
-                .map((column) => {
-                  // Custom display names for specific columns
-                  let displayName = column.id.replace('_', ' ');
-                  if (column.id === 'barcode') {
-                    displayName = 'GTIN';
-                  }
-                  
-                  return (
-                    <DropdownMenuCheckboxItem
-                      key={column.id}
-                      className="capitalize cursor-pointer"
-                      checked={column.getIsVisible()}
-                      onCheckedChange={(value) =>
-                        column.toggleVisibility(!!value)
-                      }
-                    >
-                      {displayName}
-                    </DropdownMenuCheckboxItem>
-                  );
-                })}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-enterprise-200 text-enterprise-700 hover:bg-enterprise-50 data-[state=open]:bg-enterprise-100 disabled:opacity-50 disabled:pointer-events-none"
-                disabled={Object.keys(table.getState().rowSelection).length === 0} // Disable if no rows selected
-               >
-                Bulk Actions <ChevronDown className="ml-2 h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-                <DropdownMenuLabel>Actions ({Object.keys(table.getState().rowSelection).length} selected)</DropdownMenuLabel>
+          
+          <div className="flex items-center space-x-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleRefresh}
+              disabled={loading}
+              className="h-9"
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+
+            {/* Always show Bulk Actions but disable if no selection */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="h-9"
+                  disabled={Object.keys(rowSelection).length === 0}
+                >
+                  <span>Bulk Actions {Object.keys(rowSelection).length > 0 ? `(${Object.keys(rowSelection).length})` : ""}</span>
+                  <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={() => handleBulkSetStatus(true)}>
+                  <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                  <span>Mark as Active</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleBulkSetStatus(false)}>
+                  <XCircle className="mr-2 h-4 w-4 text-slate-600" />
+                  <span>Mark as Inactive</span>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
-              <DropdownMenuGroup>
-                 <DropdownMenuItem
-                   className="cursor-pointer text-enterprise-700 focus:bg-enterprise-50"
-                   onClick={() => handleBulkSetStatus(true)}
-                 >
-                  Mark as Active
-                 </DropdownMenuItem>
-                 <DropdownMenuItem
-                   className="cursor-pointer text-enterprise-700 focus:bg-enterprise-50"
-                    onClick={() => handleBulkSetStatus(false)}
-                  >
-                   Mark as Inactive
-                 </DropdownMenuItem>
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="cursor-pointer text-danger-600 focus:text-danger-700 focus:bg-danger-50"
-                onClick={handleBulkDelete}
-              >
-                Delete Selected
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+                <DropdownMenuItem onClick={handleBulkDelete} className="text-red-600">
+                  <TrashIcon className="mr-2 h-4 w-4" />
+                  <span>Delete Selected</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-        <div className="flex flex-wrap gap-3 items-center justify-start sm:justify-end">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={loading}
-            className="border-enterprise-200 text-enterprise-700 hover:bg-enterprise-50"
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-          <Button
-            size="sm"
-            className="bg-primary-600 hover:bg-primary-700 text-white"
-            asChild
-          >
-            <Link to="/app/products/new">
-              <span className="flex items-center">
-                <span className="h-4 w-4 mr-2">+</span>
-                Add Product
-              </span>
-            </Link>
-          </Button>
-        </div>
-      </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-9">
+                  <ColumnsIcon className="mr-2 h-4 w-4" />
+                  <span>Columns</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {table.getAllColumns()
+                  .filter(column => column.id !== 'select' && column.id !== 'actions')
+                  .map(column => {
+                    return (
+                      <DropdownMenuCheckboxItem
+                        key={column.id}
+                        checked={column.getIsVisible()}
+                        onCheckedChange={(value) => column.toggleVisibility(!!value)}
+                      >
+                        {column.id.charAt(0).toUpperCase() + column.id.slice(1).replace('_', ' ')}
+                      </DropdownMenuCheckboxItem>
+                    );
+                  })}
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-      {/* Display Error Banner */}
-      {error && (
-        <div className="bg-danger-50 text-danger-700 p-4 rounded-lg border border-danger-200 mb-4">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5" />
-            <div className="font-medium">{error}</div>
+            <Button className="h-9" asChild>
+              <Link to="/app/products/new">
+                <PlusIcon className="mr-2 h-4 w-4" />
+                New Product
+              </Link>
+            </Button>
           </div>
         </div>
-      )}
 
-      {/* Filter Panel (Animated) */}
-      <div
-        className={cn(
-          "overflow-hidden transition-all duration-300 ease-in-out",
-          filtersVisible ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0"
-        )}
-      >
-        <div className="bg-enterprise-50 border border-enterprise-200 rounded-lg p-4 mb-6">
-          <div className="space-y-4 py-4">
+        {/* Additional Filter Panel that toggles based on filtersVisible state */}
+        {filtersVisible && (
+          <div className="border-b border-slate-200 bg-slate-50 p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="category">Category</Label>
+              <Label htmlFor="category-filter">Category</Label>
               <Select
                 value={filters.category}
-                onValueChange={(value) => handleFilterChange('category', value as 'all' | 'active' | 'inactive')}
+                onValueChange={(value) => handleFilterChange('category', value)}
               >
-                <SelectTrigger id="category">
-                  <SelectValue placeholder="Select category" />
+                <SelectTrigger id="category-filter">
+                  <SelectValue placeholder="All Categories" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Categories</SelectItem>
                   <SelectItem value="uncategorized">Uncategorized</SelectItem>
-                  {uniqueCategories
-                    .filter(category => category !== null && category !== '') // Filter out null/empty from the dropdown
-                    .map((category) => (
-                      <SelectItem key={category} value={category || ""}>
-                        {category}
-                      </SelectItem>
-                    ))}
+                  {uniqueCategories.map((category) => (
+                    <SelectItem key={category} value={category}>
+                      {category}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="status">Status</Label>
+              <Label htmlFor="status-filter">Status</Label>
               <Select
                 value={filters.status}
-                onValueChange={(value) => 
-                  handleFilterChange('status', value as 'all' | 'active' | 'inactive')
-                }
+                onValueChange={(value) => handleFilterChange('status', value as any)}
               >
-                <SelectTrigger id="status">
-                  <SelectValue placeholder="Select status" />
+                <SelectTrigger id="status-filter">
+                  <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="active">Active</SelectItem>
                   <SelectItem value="inactive">Inactive</SelectItem>
                 </SelectContent>
@@ -1884,399 +1916,476 @@ export function ProductsTable() {
             </div>
             
             <div className="space-y-2">
-              <Label>Price Range</Label>
-              <div className="flex space-x-2">
-                <div className="flex-1">
-                  <Input
-                    type="number"
-                    min="0"
-                    placeholder="Min"
-                    value={filters.minPrice}
-                    onChange={(e) => handleFilterChange('minPrice', e.target.value)}
-                  />
-                </div>
-                <div className="flex-1">
-                  <Input
-                    type="number"
-                    min="0"
-                    placeholder="Max"
-                    value={filters.maxPrice}
-                    onChange={(e) => handleFilterChange('maxPrice', e.target.value)}
-                  />
-                </div>
-              </div>
+              <Label htmlFor="min-price">Min Price</Label>
+              <Input
+                id="min-price"
+                type="number"
+                min={0}
+                placeholder="Min Price"
+                value={filters.minPrice}
+                onChange={(e) => handleFilterChange('minPrice', e.target.value)}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="max-price">Max Price</Label>
+              <Input
+                id="max-price"
+                type="number"
+                min={0}
+                placeholder="Max Price"
+                value={filters.maxPrice}
+                onChange={(e) => handleFilterChange('maxPrice', e.target.value)}
+              />
+            </div>
+            
+            <div className="col-span-full flex justify-end space-x-2">
+              <Button variant="outline" size="sm" onClick={handleClearFilters}>
+                Clear Filters
+              </Button>
+              <Button size="sm" onClick={handleFilterToggle}>
+                Apply Filters
+              </Button>
             </div>
           </div>
-          {/* Filter Actions */}
-          <div className="flex justify-end mt-4 pt-4 border-t border-enterprise-200">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={handleClearFilters}
-              className="text-enterprise-700 hover:bg-enterprise-100"
+        )}
+
+        <div className="w-full h-full flex flex-col relative">
+          <Table className="w-full">
+            <TableHeader className="shadow-header">
+              {table.getHeaderGroups().map(headerGroup => (
+                <React.Fragment key={headerGroup.id}>
+                  {/* 1) Column titles */}
+                  <TableRow className="sticky top-0 z-20 bg-slate-100 border-b border-slate-200">
+                    {headerGroup.headers.map(header =>
+                      <SortableTableHeader key={header.id} id={header.column.id} header={header}/>
+                    )}
+                  </TableRow>
+
+                  {/* 2) Filter inputs - Always visible now */}
+                  <TableRow className="sticky top-12 z-10 bg-slate-50 border-b border-slate-200">
+                    {headerGroup.headers.map((header) => {
+                      const column = header.column;
+                      const columnId = column.id;
+                      
+                      // Skip filter UI for select column
+                      if (columnId === 'select') {
+                        return <TableHead key={`filter-${columnId}`} className="px-2 py-2" />;
+                      }
+                      
+                      // Skip filter UI for thumbnail column
+                      if (columnId === 'thumbnail') {
+                        return <TableHead key={`filter-${columnId}`} className="px-2 py-2" />;
+                      }
+                      
+                      // Use tailwind classes for mobile responsiveness
+                      const hideOnMobileClass = ['brand', 'barcode', 'created_at', 'tags'].includes(columnId) ? 'hidden md:table-cell' : '';
+                      
+                      return (
+                        <TableHead key={`filter-${columnId}`} className={`px-2 py-2 ${hideOnMobileClass}`}>
+                          {(() => {
+                            // Text input filter for text columns
+                            if (['name', 'sku', 'brand', 'barcode'].includes(columnId)) {
+                              return (
+                                <Input
+                                  placeholder={`Filter...`}
+                                  value={(table.getColumn(columnId)?.getFilterValue() as string) ?? ''}
+                                  onChange={(e) => {
+                                    column.setFilterValue(e.target.value);
+                                    handleColumnFilterChange(columnId, e.target.value);
+                                  }}
+                                  className="h-8 text-xs"
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                              );
+                            }
+                            
+                            // Dropdown filter for category
+                            if (columnId === 'category') {
+                              return (
+                                <Select
+                                  value={(table.getColumn(columnId)?.getFilterValue() as string) ?? ''}
+                                  onValueChange={(value) => {
+                                    // Handle special values:
+                                    // 1. "all" - clears the filter completely (undefined)
+                                    // 2. "uncategorized" - sets filter to empty string to find products with no category
+                                    let filterValue;
+                                    if (value === "all") {
+                                      filterValue = undefined;
+                                    } else if (value === "uncategorized") {
+                                      filterValue = "";
+                                    } else {
+                                      filterValue = value;
+                                    }
+                                    column.setFilterValue(filterValue);
+                                    handleColumnFilterChange(columnId, filterValue);
+                                  }}
+                                >
+                                  <SelectTrigger className="h-8 text-xs" onClick={(e) => e.stopPropagation()}>
+                                    <SelectValue placeholder="Filter..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="all">All Categories</SelectItem>
+                                    <SelectItem value="uncategorized">Uncategorized</SelectItem>
+                                    {uniqueCategories.map((category) => (
+                                      <SelectItem key={category} value={category || "uncategorized"}>
+                                        {category || "Uncategorized"}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              );
+                            }
+                            
+                            // Dropdown filter for status
+                            if (columnId === 'is_active') {
+                              return (
+                                <Select
+                                  value={(table.getColumn(columnId)?.getFilterValue() as string) ?? ''}
+                                  onValueChange={(value) => {
+                                    // Convert "all" to undefined to clear the filter
+                                    const filterValue = value === "all" ? undefined : value;
+                                    column.setFilterValue(filterValue);
+                                    handleColumnFilterChange(columnId, filterValue);
+                                  }}
+                                >
+                                  <SelectTrigger className="h-8 text-xs" onClick={(e) => e.stopPropagation()}>
+                                    <SelectValue placeholder="Filter..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="all">All</SelectItem>
+                                    <SelectItem value="true">Active</SelectItem>
+                                    <SelectItem value="false">Inactive</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              );
+                            }
+                            
+                            // Price range filter
+                            if (columnId === 'price') {
+                              const priceRange = table.getColumn(columnId)?.getFilterValue() as [number, number] | undefined;
+                              
+                              return (
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm" 
+                                      className="h-8 text-xs w-full justify-between"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      {priceRange ? `$${priceRange[0]} - $${priceRange[1]}` : 'Filter price'}
+                                      <ChevronDown className="h-3 w-3 opacity-50" />
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-80" onClick={(e) => e.stopPropagation()}>
+                                    <div className="space-y-2">
+                                      <div className="grid grid-cols-2 gap-2">
+                                        <div className="space-y-1">
+                                          <Label htmlFor="min-price">Min Price</Label>
+                                          <Input
+                                            id="min-price"
+                                            type="number"
+                                            min={0}
+                                            placeholder="Min"
+                                            value={priceRange?.[0] ?? ''}
+                                            onChange={(e) => {
+                                              const min = e.target.value ? Number(e.target.value) : 0;
+                                              const max = priceRange?.[1] ?? Infinity;
+                                              column.setFilterValue([min, max]);
+                                              handleColumnFilterChange(columnId, [min, max]);
+                                            }}
+                                          />
+                                        </div>
+                                        <div className="space-y-1">
+                                          <Label htmlFor="max-price">Max Price</Label>
+                                          <Input
+                                            id="max-price"
+                                            type="number"
+                                            min={0}
+                                            placeholder="Max"
+                                            value={priceRange?.[1] ?? ''}
+                                            onChange={(e) => {
+                                              const min = priceRange?.[0] ?? 0;
+                                              const max = e.target.value ? Number(e.target.value) : Infinity;
+                                              column.setFilterValue([min, max]);
+                                              handleColumnFilterChange(columnId, [min, max]);
+                                            }}
+                                          />
+                                        </div>
+                                      </div>
+                                      <div className="flex justify-end">
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => {
+                                            column.setFilterValue(undefined);
+                                            handleColumnFilterChange(columnId, undefined);
+                                          }}
+                                        >
+                                          Reset
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </PopoverContent>
+                                </Popover>
+                              );
+                            }
+                            
+                            // Date range filter for created_at and updated_at
+                            if (['created_at', 'updated_at'].includes(columnId)) {
+                              return (
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm" 
+                                      className="h-8 text-xs w-full justify-between"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      {column.getFilterValue() ? 'Date filtered' : 'Filter date'}
+                                      <ChevronDown className="h-3 w-3 opacity-50" />
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-80" onClick={(e) => e.stopPropagation()}>
+                                    <div className="space-y-2">
+                                      <div className="grid grid-cols-2 gap-2">
+                                        <div className="space-y-1">
+                                          <Label htmlFor={`${columnId}-from`}>From</Label>
+                                          <Input
+                                            id={`${columnId}-from`}
+                                            type="date"
+                                            onChange={(e) => {
+                                              const dateRange = column.getFilterValue() as [string, string] || ['', ''];
+                                              column.setFilterValue([e.target.value, dateRange[1]]);
+                                              handleColumnFilterChange(columnId, [e.target.value, dateRange[1]]);
+                                            }}
+                                          />
+                                        </div>
+                                        <div className="space-y-1">
+                                          <Label htmlFor={`${columnId}-to`}>To</Label>
+                                          <Input
+                                            id={`${columnId}-to`}
+                                            type="date"
+                                            onChange={(e) => {
+                                              const dateRange = column.getFilterValue() as [string, string] || ['', ''];
+                                              column.setFilterValue([dateRange[0], e.target.value]);
+                                              handleColumnFilterChange(columnId, [dateRange[0], e.target.value]);
+                                            }}
+                                          />
+                                        </div>
+                                      </div>
+                                      <div className="flex justify-end">
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => {
+                                            column.setFilterValue(undefined);
+                                            handleColumnFilterChange(columnId, undefined);
+                                          }}
+                                        >
+                                          Reset
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </PopoverContent>
+                                </Popover>
+                              );
+                            }
+
+                            return null;
+                          })()}
+                        </TableHead>
+                      );
+                    })}
+                  </TableRow>
+                </React.Fragment>
+              ))}
+            </TableHeader>
+          </Table>
+          
+          <div className="overflow-auto h-[calc(100%-128px)]">
+            <DndContext
+              sensors={sensors}
+              onDragEnd={handleDragEnd}
             >
-              Clear Filters
-            </Button>
-            {/* No Apply button needed as filtering is live */}
+              <SortableContext
+                items={columnOrder.filter(Boolean)} // Extra safety to filter out null/undefined
+                strategy={horizontalListSortingStrategy}
+              >
+                <Table className="w-full">
+                  <TableBody>
+                    <TableFallback 
+                      columns={columns}
+                      loading={loading}
+                      filteredData={filteredData}
+                      debouncedSearchTerm={debouncedSearchTerm}
+                      filters={filters}
+                      handleClearFilters={handleClearFilters}
+                      handleRefresh={handleRefresh}
+                    />
+                    
+                    {!loading && filteredData.length > 0 && table.getRowModel().rows.map((row, index) => {
+                      // Access the id once outside JSX to avoid potential issues
+                      const productId = row.original.id;
+                      
+                      return (
+                        <TableRow 
+                          key={row.id} 
+                          data-state={row.getIsSelected() && "selected"}
+                          className={cn(
+                            "border-b border-gray-200 transition-colors hover:bg-gray-50",
+                            row.getIsSelected() ? "bg-slate-50" : index % 2 === 0 ? "bg-white" : "bg-gray-50",
+                            "cursor-pointer"
+                          )}
+                          onClick={(e) => {
+                            // Only navigate if the click wasn't on an interactive element
+                            const target = e.target as HTMLElement;
+                            const isActionClick = !!target.closest('button, input, [role="combobox"], [data-editable="true"]');
+                            if (!isActionClick && productId) {
+                              handleRowClick(productId);
+                            }
+                          }}
+                        >
+                          {row.getVisibleCells().map((cell) => {
+                            // Add mobile responsiveness to table cells
+                            const columnId = cell.column.id;
+                            const hideOnMobileClass = ['brand', 'barcode', 'created_at', 'tags'].includes(columnId) ? 'hidden md:table-cell' : '';
+                            
+                            // Add background color for the actions column
+                            const isActionsColumn = columnId === 'actions';
+                            const actionsClass = isActionsColumn ? 'sticky right-0 z-20 shadow-sm border-l border-gray-200' : '';
+                            const cellBgClass = isActionsColumn ? (row.getIsSelected() ? 'bg-slate-50' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50') : '';
+                            
+                            // Add icon to specific columns
+                            if (columnId === 'brand' && row.getValue('brand')) {
+                              return (
+                                <TableCell 
+                                  key={cell.id} 
+                                  className={`px-2 py-2 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
+                                  data-column-id={columnId}
+                                >
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-gray-500"><TagIcon className="h-3.5 w-3.5" /></span>
+                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                  </div>
+                                </TableCell>
+                              );
+                            }
+                            
+                            if (columnId === 'category' && row.getValue('category')) {
+                              return (
+                                <TableCell 
+                                  key={cell.id} 
+                                  className={`px-2 py-2 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
+                                  data-column-id={columnId}
+                                >
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-gray-500"><FolderIcon className="h-3.5 w-3.5" /></span>
+                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                  </div>
+                                </TableCell>
+                              );
+                            }
+                            
+                            if (columnId === 'is_active') {
+                              const isActive = row.getValue('is_active') as boolean;
+                              return (
+                                <TableCell 
+                                  key={cell.id} 
+                                  className={`px-2 py-2 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
+                                  data-column-id={columnId}
+                                >
+                                  <div className="flex items-center gap-1">
+                                    {isActive ? <CheckCircle className="h-4 w-4 text-green-600" /> : <XCircle className="h-4 w-4 text-red-600" />}
+                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                  </div>
+                                </TableCell>
+                              );
+                            }
+                            
+                            return (
+                              <TableCell 
+                                key={cell.id} 
+                                className={`px-2 py-2 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
+                                data-column-id={columnId}
+                              >
+                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                              </TableCell>
+                            );
+                          })}
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+                
+                {/* PAGINATION */}
+                <div className="flex items-center justify-between p-3 border-t bg-white">
+                  <div className="flex space-x-2">
+                    <Button size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+                      <ChevronLeft />
+                    </Button>
+                    <Button size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+                      <ChevronRight />
+                    </Button>
+                  </div>
+
+                  <span className="text-sm">
+                    Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
+                  </span>
+
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm">Show</span>
+                    <Select
+                      value={String(table.getState().pagination.pageSize)}
+                      onValueChange={v => table.setPageSize(Number(v))}
+                    >
+                      <SelectTrigger className="h-8 w-[70px]"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {[10, 20, 50].map((n) => (
+                          <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </SortableContext>
+            </DndContext>
           </div>
         </div>
       </div>
-
-      {/* Table Section */}
-      <div className="bg-slate-50 border border-slate-200 rounded-lg relative h-[calc(100vh-200px)] shadow-sm">
-        {/* Selected Row Count Info */}         
-        {Object.keys(table.getState().rowSelection).length > 0 && (
-           <div className="px-4 py-2 text-sm text-slate-600 border-b bg-slate-100 font-medium">
-               {table.getFilteredSelectedRowModel().rows.length} of{" "}
-               {table.getFilteredRowModel().rows.length} row(s) selected.
-           </div>
-        )}
-        <Table className="w-full">
-          <TableHeader className="w-full">
-            {table.getHeaderGroups().map(headerGroup => (
-              <React.Fragment key={headerGroup.id}>
-                {/* 1) Column titles */}
-                <TableRow className="sticky top-0 z-20 bg-slate-100 border-b border-slate-200">
-                  {headerGroup.headers.map(header =>
-                    <SortableTableHeader key={header.id} id={header.column.id} header={header}/>
-                  )}
-                </TableRow>
-
-                {/* 2) Filter inputs - Always visible now */}
-                <TableRow className="sticky top-12 z-10 bg-slate-50 border-b border-slate-200">
-                  {headerGroup.headers.map((header) => {
-                    const column = header.column;
-                    const columnId = column.id;
-                    
-                    // Skip filter UI for select column
-                    if (columnId === 'select') {
-                      return <TableHead key={`filter-${columnId}`} className="px-2 py-2" />;
-                    }
-                    
-                    // Skip filter UI for thumbnail column
-                    if (columnId === 'thumbnail') {
-                      return <TableHead key={`filter-${columnId}`} className="px-2 py-2" />;
-                    }
-                    
-                    // Use tailwind classes for mobile responsiveness
-                    const hideOnMobileClass = ['brand', 'barcode', 'created_at', 'tags'].includes(columnId) ? 'hidden md:table-cell' : '';
-                    
-                    return (
-                      <TableHead key={`filter-${columnId}`} className={`px-2 py-2 ${hideOnMobileClass}`}>
-                        {(() => {
-                          // Text input filter for text columns
-                          if (['name', 'sku', 'brand', 'barcode'].includes(columnId)) {
-                            return (
-                              <Input
-                                placeholder={`Filter...`}
-                                value={(table.getColumn(columnId)?.getFilterValue() as string) ?? ''}
-                                onChange={(e) => {
-                                  column.setFilterValue(e.target.value);
-                                  handleColumnFilterChange(columnId, e.target.value);
-                                }}
-                                className="h-8 text-xs"
-                                onClick={(e) => e.stopPropagation()}
-                              />
-                            );
-                          }
-                          
-                          // Dropdown filter for category
-                          if (columnId === 'category') {
-                            return (
-                              <Select
-                                value={(table.getColumn(columnId)?.getFilterValue() as string) ?? ''}
-                                onValueChange={(value) => {
-                                  // Handle special values:
-                                  // 1. "all" - clears the filter completely (undefined)
-                                  // 2. "uncategorized" - sets filter to empty string to find products with no category
-                                  let filterValue;
-                                  if (value === "all") {
-                                    filterValue = undefined;
-                                  } else if (value === "uncategorized") {
-                                    filterValue = "";
-                                  } else {
-                                    filterValue = value;
-                                  }
-                                  column.setFilterValue(filterValue);
-                                  handleColumnFilterChange(columnId, filterValue);
-                                }}
-                              >
-                                <SelectTrigger className="h-8 text-xs" onClick={(e) => e.stopPropagation()}>
-                                  <SelectValue placeholder="Filter..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="all">All Categories</SelectItem>
-                                  <SelectItem value="uncategorized">Uncategorized</SelectItem>
-                                  {uniqueCategories.map((category) => (
-                                    <SelectItem key={category} value={category || "uncategorized"}>
-                                      {category || "Uncategorized"}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            );
-                          }
-                          
-                          // Dropdown filter for status
-                          if (columnId === 'is_active') {
-                            return (
-                              <Select
-                                value={(table.getColumn(columnId)?.getFilterValue() as string) ?? ''}
-                                onValueChange={(value) => {
-                                  // Convert "all" to undefined to clear the filter
-                                  const filterValue = value === "all" ? undefined : value;
-                                  column.setFilterValue(filterValue);
-                                  handleColumnFilterChange(columnId, filterValue);
-                                }}
-                              >
-                                <SelectTrigger className="h-8 text-xs" onClick={(e) => e.stopPropagation()}>
-                                  <SelectValue placeholder="Filter..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="all">All</SelectItem>
-                                  <SelectItem value="true">Active</SelectItem>
-                                  <SelectItem value="false">Inactive</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            );
-                          }
-                          
-                          // Price range filter
-                          if (columnId === 'price') {
-                            const priceRange = table.getColumn(columnId)?.getFilterValue() as [number, number] | undefined;
-                            
-                            return (
-                              <Popover>
-                                <PopoverTrigger asChild>
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm" 
-                                    className="h-8 text-xs w-full justify-between"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    {priceRange ? `$${priceRange[0]} - $${priceRange[1]}` : 'Filter price'}
-                                    <ChevronDown className="h-3 w-3 opacity-50" />
-                                  </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-80" onClick={(e) => e.stopPropagation()}>
-                                  <div className="space-y-2">
-                                    <div className="grid grid-cols-2 gap-2">
-                                      <div className="space-y-1">
-                                        <Label htmlFor="min-price">Min Price</Label>
-                                        <Input
-                                          id="min-price"
-                                          type="number"
-                                          min={0}
-                                          placeholder="Min"
-                                          value={priceRange?.[0] ?? ''}
-                                          onChange={(e) => {
-                                            const min = e.target.value ? Number(e.target.value) : 0;
-                                            const max = priceRange?.[1] ?? Infinity;
-                                            column.setFilterValue([min, max]);
-                                            handleColumnFilterChange(columnId, [min, max]);
-                                          }}
-                                        />
-                                      </div>
-                                      <div className="space-y-1">
-                                        <Label htmlFor="max-price">Max Price</Label>
-                                        <Input
-                                          id="max-price"
-                                          type="number"
-                                          min={0}
-                                          placeholder="Max"
-                                          value={priceRange?.[1] ?? ''}
-                                          onChange={(e) => {
-                                            const min = priceRange?.[0] ?? 0;
-                                            const max = e.target.value ? Number(e.target.value) : Infinity;
-                                            column.setFilterValue([min, max]);
-                                            handleColumnFilterChange(columnId, [min, max]);
-                                          }}
-                                        />
-                                      </div>
-                                    </div>
-                                    <div className="flex justify-end">
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => {
-                                          column.setFilterValue(undefined);
-                                          handleColumnFilterChange(columnId, undefined);
-                                        }}
-                                      >
-                                        Reset
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </PopoverContent>
-                              </Popover>
-                            );
-                          }
-                          
-                          // Date range filter for created_at and updated_at
-                          if (['created_at', 'updated_at'].includes(columnId)) {
-                            return (
-                              <Popover>
-                                <PopoverTrigger asChild>
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm" 
-                                    className="h-8 text-xs w-full justify-between"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    {column.getFilterValue() ? 'Date filtered' : 'Filter date'}
-                                    <ChevronDown className="h-3 w-3 opacity-50" />
-                                  </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-80" onClick={(e) => e.stopPropagation()}>
-                                  <div className="space-y-2">
-                                    <div className="grid grid-cols-2 gap-2">
-                                      <div className="space-y-1">
-                                        <Label htmlFor={`${columnId}-from`}>From</Label>
-                                        <Input
-                                          id={`${columnId}-from`}
-                                          type="date"
-                                          onChange={(e) => {
-                                            const dateRange = column.getFilterValue() as [string, string] || ['', ''];
-                                            column.setFilterValue([e.target.value, dateRange[1]]);
-                                            handleColumnFilterChange(columnId, [e.target.value, dateRange[1]]);
-                                          }}
-                                        />
-                                      </div>
-                                      <div className="space-y-1">
-                                        <Label htmlFor={`${columnId}-to`}>To</Label>
-                                        <Input
-                                          id={`${columnId}-to`}
-                                          type="date"
-                                          onChange={(e) => {
-                                            const dateRange = column.getFilterValue() as [string, string] || ['', ''];
-                                            column.setFilterValue([dateRange[0], e.target.value]);
-                                            handleColumnFilterChange(columnId, [dateRange[0], e.target.value]);
-                                          }}
-                                        />
-                                      </div>
-                                    </div>
-                                    <div className="flex justify-end">
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => {
-                                          column.setFilterValue(undefined);
-                                          handleColumnFilterChange(columnId, undefined);
-                                        }}
-                                      >
-                                        Reset
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </PopoverContent>
-                              </Popover>
-                            );
-                          }
-
-                          return null;
-                        })()}
-                      </TableHead>
-                    );
-                  })}
-                </TableRow>
-              </React.Fragment>
-            ))}
-          </TableHeader>
-        </Table>
-        
-        <div className="overflow-auto h-[calc(100%-128px)]">
-          <DndContext
-            sensors={sensors}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext
-              items={columnOrder.filter(Boolean)} // Extra safety to filter out null/undefined
-              strategy={horizontalListSortingStrategy}
-            >
-              <Table className="w-full">
-                <TableBody>
-                  <TableFallback 
-                    columns={columns}
-                    loading={loading}
-                    filteredData={filteredData}
-                    debouncedSearchTerm={debouncedSearchTerm}
-                    filters={filters}
-                    handleClearFilters={handleClearFilters}
-                    handleRefresh={handleRefresh}
-                  />
-                  
-                  {!loading && filteredData.length > 0 && table.getRowModel().rows.map((row) => {
-                    // Access the id once outside JSX to avoid potential issues
-                    const productId = row.original.id;
-                    
-                    return (
-                      <TableRow 
-                        key={row.id} 
-                        data-state={row.getIsSelected() && "selected"}
-                        className={cn(
-                          "border-b border-slate-100 transition-colors min-h-[72px] cursor-pointer",
-                          row.getIsSelected() ? "bg-slate-50" : "bg-white hover:bg-slate-50"
-                        )}
-                        onClick={(e) => {
-                          // Only navigate if the click wasn't on an interactive element
-                          const target = e.target as HTMLElement;
-                          const isActionClick = !!target.closest('button, input, [role="combobox"], [data-editable="true"]');
-                          if (!isActionClick && productId) {
-                            handleRowClick(productId);
-                          }
-                        }}
-                      >
-                        {row.getVisibleCells().map((cell) => {
-                          // Add mobile responsiveness to table cells
-                          const columnId = cell.column.id;
-                          const hideOnMobileClass = ['brand', 'barcode', 'created_at', 'tags'].includes(columnId) ? 'hidden md:table-cell' : '';
-                          
-                          return (
-                            <TableCell key={cell.id} className={`px-2 py-2 ${hideOnMobileClass}`}>
-                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                            </TableCell>
-                          );
-                        })}
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-              
-              {/* PAGINATION */}
-              <div className="flex items-center justify-between p-3 border-t bg-white">
-                <div className="flex space-x-2">
-                  <Button size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
-                    <ChevronLeft />
-                  </Button>
-                  <Button size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
-                    <ChevronRight />
-                  </Button>
-                </div>
-
-                <span className="text-sm">
-                  Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
-                </span>
-
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm">Show</span>
-                  <Select
-                    value={String(table.getState().pagination.pageSize)}
-                    onValueChange={v => table.setPageSize(Number(v))}
-                  >
-                    <SelectTrigger className="h-8 w-[70px]"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {[10, 20, 50].map((n) => (
-                        <SelectItem key={n} value={String(n)}>{n}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </SortableContext>
-          </DndContext>
-        </div>
-      </div>
-    </div>
+    </React.Fragment>
   );
+}
+
+// Add CSS for header shadow
+// @ts-ignore - Ignore CSS properties in string literal
+const headerShadowStyle: string = `
+.shadow-header {
+  // @ts-ignore
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+th[data-column-id="actions"],
+td[data-column-id="actions"] {
+  // @ts-ignore
+  position: sticky;
+  right: 0;
+  z-index: 20;
+  background-color: inherit;
+  // @ts-ignore
+  box-shadow: -2px 0 4px rgba(0,0,0,0.05);
+}
+`;
+
+// Inject the CSS style into the document head if it doesn't already exist
+if (typeof document !== 'undefined') {
+  const styleId = 'products-table-styles';
+  if (!document.getElementById(styleId)) {
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.innerHTML = headerShadowStyle;
+    document.head.appendChild(style);
+  }
 }

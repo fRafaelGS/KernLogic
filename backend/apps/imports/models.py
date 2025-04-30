@@ -11,8 +11,20 @@ class ImportTask(models.Model):
         ('error', 'Error'),
     ]
     
+    DUPLICATE_STRATEGY_CHOICES = [
+        ('skip', 'Skip'),
+        ('overwrite', 'Overwrite'),
+        ('abort', 'Abort'),
+    ]
+    
     csv_file     = models.FileField(upload_to="imports/")
     mapping      = models.JSONField()      # {"SKU": "sku", "Name": "name", ...}
+    duplicate_strategy = models.CharField(
+        max_length=10,
+        default="skip",
+        choices=DUPLICATE_STRATEGY_CHOICES,
+        help_text="Strategy for handling duplicate SKUs"
+    )
     status       = models.CharField(
         max_length=15, 
         default="queued",

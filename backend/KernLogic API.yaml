@@ -59,32 +59,6 @@ paths:
                 $ref: '#/components/schemas/TokenRefresh'
           description: ''
   /products/:
-    post:
-      operationId: products_create
-      description: Create a new product
-      tags:
-      - products
-      requestBody:
-        content:
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/ProductRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/ProductRequest'
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ProductRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Product'
-          description: ''
     get:
       operationId: products_list
       description: API endpoint for managing product data.
@@ -123,6 +97,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedProductList'
+          description: ''
+    post:
+      operationId: products_create
+      description: Create a new product
+      tags:
+      - products
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
           description: ''
   /products/brands/:
     get:
@@ -167,6 +167,22 @@ paths:
                 $ref: '#/components/schemas/Product'
           description: ''
   /products/categories/:
+    get:
+      operationId: products_categories_retrieve
+      description: |-
+        GET: Return a list of unique categories for dropdown menus.
+        POST: Create a new category by adding a product with that category.
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
     post:
       operationId: products_categories_create
       description: |-
@@ -186,22 +202,6 @@ paths:
             schema:
               $ref: '#/components/schemas/ProductRequest'
         required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Product'
-          description: ''
-    get:
-      operationId: products_categories_retrieve
-      description: |-
-        GET: Return a list of unique categories for dropdown menus.
-        POST: Create a new category by adding a product with that category.
-      tags:
-      - products
       security:
       - jwtAuth: []
       responses:
@@ -254,6 +254,22 @@ paths:
                 $ref: '#/components/schemas/Product'
           description: ''
   /products/tags/:
+    get:
+      operationId: products_tags_retrieve
+      description: |-
+        GET: Return a list of unique tags from all products.
+        POST: Create a new tag by adding it to a "tag repository" product or returning an existing tag.
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
     post:
       operationId: products_tags_create
       description: |-
@@ -273,22 +289,6 @@ paths:
             schema:
               $ref: '#/components/schemas/ProductRequest'
         required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Product'
-          description: ''
-    get:
-      operationId: products_tags_retrieve
-      description: |-
-        GET: Return a list of unique tags from all products.
-        POST: Create a new tag by adding it to a "tag repository" product or returning an existing tag.
-      tags:
-      - products
       security:
       - jwtAuth: []
       responses:
@@ -705,7 +705,58 @@ paths:
       responses:
         '200':
           description: No response body
+  /products/{product_pk}/history/:
+    get:
+      operationId: products_history_list
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - in: path
+        name: product_pk
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProductEventList'
+          description: ''
   /products/{product_pk}/assets/:
+    get:
+      operationId: products_assets_list
+      description: |-
+        Nested under /products/<product_pk>/assets/.
+        Handles upload, delete, reorder and set-primary.
+      parameters:
+      - in: path
+        name: product_pk
+        schema:
+          type: string
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProductAsset'
+          description: ''
     post:
       operationId: products_assets_create
       description: |-
@@ -739,30 +790,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProductAsset'
-          description: ''
-    get:
-      operationId: products_assets_list
-      description: |-
-        Nested under /products/<product_pk>/assets/.
-        Handles upload, delete, reorder and set-primary.
-      parameters:
-      - in: path
-        name: product_pk
-        schema:
-          type: string
-        required: true
-      tags:
-      - products
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ProductAsset'
           description: ''
   /products/{product_pk}/assets/reorder/:
     post:
@@ -836,6 +863,29 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProductAsset'
           description: ''
+    delete:
+      operationId: products_assets_destroy
+      description: |-
+        Nested under /products/<product_pk>/assets/.
+        Handles upload, delete, reorder and set-primary.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: product_pk
+        schema:
+          type: string
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
     get:
       operationId: products_assets_retrieve
       description: |-
@@ -863,29 +913,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProductAsset'
           description: ''
-    delete:
-      operationId: products_assets_destroy
-      description: |-
-        Nested under /products/<product_pk>/assets/.
-        Handles upload, delete, reorder and set-primary.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      - in: path
-        name: product_pk
-        schema:
-          type: string
-        required: true
-      tags:
-      - products
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
     put:
       operationId: products_assets_update
       description: |-
@@ -965,75 +992,291 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProductAsset'
           description: ''
-  /products/{product_pk}/history/:
-    get:
-      operationId: products_history_list
-      summary: Retrieve product-specific history events
-      parameters:
-      - name: product_pk
-        in: path
-        required: true
-        schema: { type: integer }
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
-      - name: page_size
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      tags: [products]
+  /products/sku-check/:
+    post:
+      operationId: products_sku_check_create
+      tags:
+      - products
       security:
       - jwtAuth: []
       responses:
-        "200":
-          description: Paginated list of events
+        '200':
+          description: No response body
+  /imports/:
+    get:
+      operationId: imports_list
+      description: |-
+        ViewSet for managing product import tasks.
+
+        Supports creating new import tasks, retrieving status, listing all tasks,
+        canceling tasks, and generating reports of imported data.
+      tags:
+      - imports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedProductEventList'
-  /imports/:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ImportTask'
+          description: ''
     post:
       operationId: imports_create
-      tags: [imports]
+      description: |-
+        ViewSet for managing product import tasks.
+
+        Supports creating new import tasks, retrieving status, listing all tasks,
+        canceling tasks, and generating reports of imported data.
+      tags:
+      - imports
       requestBody:
-        required: true
         content:
           multipart/form-data:
             schema:
-              type: object
-              properties:
-                csv_file: { type: string, format: binary }
-                mapping:  { type: string, description: JSON mapping object }
-      security: [{ jwtAuth: [] }]
+              $ref: '#/components/schemas/ImportTaskRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportTaskRequest'
+        required: true
+      security:
+      - jwtAuth: []
       responses:
-        "201":
-          description: Created
-          content: { application/json: { schema: { $ref: '#/components/schemas/ImportTask' } } }
-  /imports/{id}/:
-    get:
-      operationId: imports_retrieve
-      tags: [imports]
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: integer }
-      security: [{ jwtAuth: [] }]
-      responses:
-        "200":
-          description: Task detail
+        '201':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ImportTask'
+          description: ''
+  /imports/{id}/:
+    get:
+      operationId: imports_retrieve
+      description: |-
+        ViewSet for managing product import tasks.
 
+        Supports creating new import tasks, retrieving status, listing all tasks,
+        canceling tasks, and generating reports of imported data.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this import task.
+        required: true
+      tags:
+      - imports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportTask'
+          description: ''
+  /imports/{id}/cancel/:
+    post:
+      operationId: imports_cancel_create
+      description: |-
+        Cancel an in-progress import task.
+        Only tasks in 'queued' or 'running' state can be canceled.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this import task.
+        required: true
+      tags:
+      - imports
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ImportTaskRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportTaskRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportTask'
+          description: ''
+  /imports/{id}/get_report/:
+    get:
+      operationId: imports_get_report_retrieve
+      description: Download the error report for an import task.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this import task.
+        required: true
+      tags:
+      - imports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportTask'
+          description: ''
+  /imports/{id}/preview/:
+    get:
+      operationId: imports_preview_retrieve
+      description: Preview the first 10 rows of the CSV file.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this import task.
+        required: true
+      tags:
+      - imports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportTask'
+          description: ''
 components:
   schemas:
+    DuplicateStrategyEnum:
+      enum:
+      - skip
+      - overwrite
+      - abort
+      type: string
+      description: |-
+        * `skip` - Skip
+        * `overwrite` - Overwrite
+        * `abort` - Abort
+    ImportTask:
+      type: object
+      description: |-
+        Serializer for the ImportTask model.
+        Includes calculated fields for progress percentage and status display.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        csv_file:
+          type: string
+          format: uri
+        mapping: {}
+        duplicate_strategy:
+          allOf:
+          - $ref: '#/components/schemas/DuplicateStrategyEnum'
+          description: |-
+            Strategy for handling duplicate SKUs
+
+            * `skip` - Skip
+            * `overwrite` - Overwrite
+            * `abort` - Abort
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusEnum'
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        processed:
+          type: integer
+          readOnly: true
+        total_rows:
+          type: integer
+          readOnly: true
+          nullable: true
+        progress_percentage:
+          type: integer
+          readOnly: true
+        error_file:
+          type: string
+          format: uri
+          readOnly: true
+          nullable: true
+        error_file_url:
+          type: string
+          readOnly: true
+        execution_time:
+          type: number
+          format: double
+          readOnly: true
+          nullable: true
+          description: Execution time in seconds
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - csv_file
+      - error_file
+      - error_file_url
+      - execution_time
+      - id
+      - mapping
+      - processed
+      - progress_percentage
+      - status
+      - status_display
+      - total_rows
+    ImportTaskRequest:
+      type: object
+      description: |-
+        Serializer for the ImportTask model.
+        Includes calculated fields for progress percentage and status display.
+      properties:
+        csv_file:
+          type: string
+          format: binary
+        mapping: {}
+        duplicate_strategy:
+          allOf:
+          - $ref: '#/components/schemas/DuplicateStrategyEnum'
+          description: |-
+            Strategy for handling duplicate SKUs
+
+            * `skip` - Skip
+            * `overwrite` - Overwrite
+            * `abort` - Abort
+      required:
+      - csv_file
+      - mapping
+    PaginatedProductEventList:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductEvent'
     PaginatedProductList:
       type: object
       properties:
@@ -1296,6 +1539,33 @@ components:
           nullable: true
       required:
       - file
+    ProductEvent:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        event_type:
+          type: string
+          maxLength: 50
+        summary:
+          type: string
+          maxLength: 255
+        payload:
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        created_by_name:
+          type: string
+          readOnly: true
+      required:
+      - created_at
+      - created_by_name
+      - event_type
+      - id
+      - summary
     ProductImage:
       type: object
       description: Serializer for product images
@@ -1371,6 +1641,20 @@ components:
       - name
       - price
       - sku
+    StatusEnum:
+      enum:
+      - queued
+      - running
+      - success
+      - partial_success
+      - error
+      type: string
+      description: |-
+        * `queued` - Queued
+        * `running` - Running
+        * `success` - Success
+        * `partial_success` - Partial Success
+        * `error` - Error
     TokenObtainPair:
       type: object
       properties:
@@ -1416,62 +1700,6 @@ components:
           minLength: 1
       required:
       - refresh
-    PaginatedProductEventList:
-      type: object
-      properties:
-        count:
-          type: integer
-          example: 123
-        next:
-          type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/products/1/history/?page=4
-        previous:
-          type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/products/1/history/?page=2
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/ProductEvent'
-    ProductEvent:
-      type: object
-      properties:
-        id:
-          type: integer
-          readOnly: true
-        event_type:
-          type: string
-          description: Type of the event (e.g. created, price_changed)
-        summary:
-          type: string
-          description: Human-readable summary of the event
-        payload:
-          type: object
-          description: Additional data or diff for power users
-        created_at:
-          type: string
-          format: date-time
-          description: When the event occurred
-        created_by_name:
-          type: string
-          description: Name of the user who performed the action
-      required:
-        - id
-        - event_type
-        - summary
-        - created_at
-    ImportTask:  # keep in sync with serializer
-      type: object
-      properties:
-        id: { type: integer }
-        status: { type: string }
-        processed: { type: integer }
-        total_rows: { type: integer, nullable: true }
-        error_file: { type: string, nullable: true, format: uri }
-        created_at: { type: string, format: date-time }
   securitySchemes:
     jwtAuth:
       type: http

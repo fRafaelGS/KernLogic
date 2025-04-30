@@ -17,6 +17,7 @@ class ImportTaskSerializer(serializers.ModelSerializer):
             "id", 
             "csv_file", 
             "mapping", 
+            "duplicate_strategy",
             "status", 
             "status_display",
             "processed", 

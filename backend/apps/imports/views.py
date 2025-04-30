@@ -9,7 +9,10 @@ import pandas as pd
 import io
 from django.http import HttpResponse
 from django.core.exceptions import PermissionDenied
+import os
+import logging
 
+logger = logging.getLogger(__name__)
 
 class ImportTaskViewSet(mixins.CreateModelMixin,
                         mixins.RetrieveModelMixin,
@@ -22,7 +25,7 @@ class ImportTaskViewSet(mixins.CreateModelMixin,
     canceling tasks, and generating reports of imported data.
     """
     serializer_class = ImportTaskSerializer
-    parser_classes = [parsers.MultiPartParser, parsers.JSONParser]
+    parser_classes = [parsers.MultiPartParser, parsers.JSONParser, parsers.FormParser]
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
@@ -31,9 +34,29 @@ class ImportTaskViewSet(mixins.CreateModelMixin,
 
     def perform_create(self, serializer):
         """Create a new import task and enqueue it for processing."""
-        task = serializer.save(created_by=self.request.user)
-        # Enqueue task for async processing
-        import_csv_task.delay(task_id=task.id)
+        try:
+            # Get the file extension to validate file type
+            file = serializer.validated_data.get('csv_file')
+            if file:
+                _, file_ext = os.path.splitext(file.name)
+                file_ext = file_ext.lower()
+                
+                # Validate file extension
+                if file_ext not in ['.csv', '.xlsx', '.xls']:
+                    raise ValueError(f"Unsupported file type: {file_ext}. Only CSV and Excel files are supported.")
+                
+                # Save task and enqueue for processing
+                task = serializer.save(created_by=self.request.user)
+                logger.info(f"Created import task {task.id} for file {file.name} ({file_ext})")
+                
+                # Enqueue task for async processing
+                import_csv_task.delay(task_id=task.id)
+                return task
+            else:
+                raise ValueError("No file was provided")
+        except Exception as e:
+            logger.error(f"Error creating import task: {str(e)}")
+            raise
     
     @action(detail=True, methods=['post'])
     def cancel(self, request, pk=None):
@@ -59,18 +82,21 @@ class ImportTaskViewSet(mixins.CreateModelMixin,
     @action(detail=True, methods=['get'])
     def preview(self, request, pk=None):
         """
-        Preview the first 10 rows of the CSV file.
+        Preview the first 10 rows of the CSV or Excel file.
         """
         task = self.get_object()
         
         try:
-            if task.csv_file.name.endswith('.csv'):
-                df = pd.read_csv(task.csv_file.path, nrows=10)
-            elif task.csv_file.name.endswith(('.xls', '.xlsx')):
-                df = pd.read_excel(task.csv_file.path, nrows=10)
+            file_path = task.csv_file.path
+            file_ext = os.path.splitext(file_path)[1].lower()
+            
+            if file_ext == '.csv':
+                df = pd.read_csv(file_path, nrows=10)
+            elif file_ext in ['.xls', '.xlsx']:
+                df = pd.read_excel(file_path, nrows=10)
             else:
                 return Response(
-                    {"detail": "Unsupported file format"}, 
+                    {"detail": f"Unsupported file format: {file_ext}"}, 
                     status=status.HTTP_400_BAD_REQUEST
                 )
                 
@@ -81,8 +107,10 @@ class ImportTaskViewSet(mixins.CreateModelMixin,
             return Response({
                 'columns': columns,
                 'rows': rows,
+                'file_type': file_ext[1:]  # Remove the dot from the extension
             })
         except Exception as e:
+            logger.error(f"Error generating preview for task {pk}: {str(e)}")
             return Response(
                 {"detail": f"Error previewing file: {str(e)}"}, 
                 status=status.HTTP_400_BAD_REQUEST
@@ -108,6 +136,7 @@ class ImportTaskViewSet(mixins.CreateModelMixin,
                 response['Content-Disposition'] = f'attachment; filename="import_errors_{task.id}.txt"'
                 return response
         except Exception as e:
+            logger.error(f"Error serving error report for task {pk}: {str(e)}")
             return Response(
                 {"detail": f"Error serving error report: {str(e)}"}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

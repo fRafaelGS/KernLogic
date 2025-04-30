@@ -34,6 +34,9 @@ from .models import Activity
 from rest_framework import mixins
 from rest_framework.pagination import PageNumberPagination
 from .events import record
+from rest_framework.views import APIView
+from rest_framework import serializers
+from rest_framework.permissions import IsAuthenticated
 
 User = get_user_model()
 
@@ -666,8 +669,6 @@ class ProductViewSet(viewsets.ModelViewSet):
         ).select_related('related_product')
         
         # Serialize the relations
-        from rest_framework import serializers
-        
         class RelationSerializer(serializers.ModelSerializer):
             class Meta:
                 model = ProductRelation
@@ -1121,3 +1122,25 @@ class ProductEventViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
 
     def get_queryset(self):
         return ProductEvent.objects.filter(product_id=self.kwargs["product_pk"])
+
+# SKU Check API View - Added to solve the duplicate SKU issue
+class SkuCheckAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    class _Input(serializers.Serializer):
+        skus = serializers.ListField(
+            child=serializers.CharField(max_length=50), allow_empty=False
+        )
+
+    def post(self, request, *args, **kwargs):
+        data = self._Input(data=request.data)
+        data.is_valid(raise_exception=True)
+        # Use created_by (user) as a substitute for tenant
+        user = request.user
+        uploaded_skus = list(set(data.validated_data["skus"]))
+        existing = (
+            Product.objects
+            .filter(created_by=user, sku__in=uploaded_skus)
+            .values_list("sku", flat=True)
+        )
+        return Response({"duplicates": list(existing)})

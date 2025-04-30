@@ -3,7 +3,8 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_nested.routers import NestedSimpleRouter
-from .views import ProductViewSet, DashboardViewSet, AssetViewSet, ProductEventViewSet
+# Import from the views package, where we've properly set up the imports
+from products.views import ProductViewSet, DashboardViewSet, AssetViewSet, ProductEventViewSet, SkuCheckAPIView
 
 # /api/products/…
 router = DefaultRouter()
@@ -18,4 +19,5 @@ assets_router.register(r"assets", AssetViewSet, basename="product-assets")
 urlpatterns = [
     path("", include(router.urls)),
     path("", include(assets_router.urls)),
+    path("products/sku-check/", SkuCheckAPIView.as_view(), name="products-sku-check"),
 ] 

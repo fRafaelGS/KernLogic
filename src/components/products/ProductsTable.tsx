@@ -90,6 +90,9 @@ import {
 } from "@/components/ui/popover";
 import AsyncCreatableSelect from 'react-select/async-creatable';
 import { ActionMeta, OnChangeValue } from 'react-select';
+import { ProductsSearchBox } from './ProductsSearchBox';
+import { BulkCategoryModal } from './BulkCategoryModal';
+import { BulkTagModal } from './BulkTagModal';
 
 // Define filter state type
 interface FilterState {
@@ -530,57 +533,58 @@ export function ProductsTable() {
 
   // --- ADD Bulk Action Handlers (Placeholder/Assumed API) ---
   const handleBulkDelete = async () => {
-    const selectedIds = table
-      .getSelectedRowModel()
-      .rows
-      .map(r => r.original.id)
+    const selectedIds = Object.keys(rowSelection)
+      .map(index => productRowMap[parseInt(index)])
       .filter((id): id is number => typeof id === 'number');
       
     if (selectedIds.length === 0) {
-        toast({ title: "No products selected for deletion.", variant: 'destructive' });
-        return;
+      toast({ title: "No products selected for deletion.", variant: 'destructive' });
+      return;
     }
 
     if (window.confirm(`Are you sure you want to delete ${selectedIds.length} product(s)? This action might be irreversible.`)) {
-      console.log("Attempting bulk delete for IDs:", selectedIds);
       try {
-        // Placeholder: Replace with actual API call
-        // await productService.deleteBulkProducts(selectedIds);
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
-        toast({ title: `${selectedIds.length} product(s) deleted successfully (simulated).`, variant: 'default' });
+        await productService.bulkDelete(selectedIds);
+        toast({ title: `${selectedIds.length} product(s) deleted successfully.`, variant: 'default' });
         setRowSelection({}); // Clear selection
         fetchData(); // Refresh data
       } catch (error: any) {
         console.error("Bulk delete error:", error);
-        toast({ title: error.message || "Failed to delete selected products.", variant: 'destructive' });
+        toast({ 
+          title: "Failed to delete selected products.", 
+          description: error.message || "An unexpected error occurred.",
+          variant: 'destructive' 
+        });
       }
     }
   };
 
   const handleBulkSetStatus = async (isActive: boolean) => {
-    const selectedIds = table
-      .getSelectedRowModel()
-      .rows
-      .map(r => r.original.id)
+    const selectedIds = Object.keys(rowSelection)
+      .map(index => productRowMap[parseInt(index)])
       .filter((id): id is number => typeof id === 'number');
 
     if (selectedIds.length === 0) {
-        toast({ title: `No products selected to mark as ${isActive ? 'active' : 'inactive'}.`, variant: 'destructive' });
-        return;
+      toast({ 
+        title: `No products selected to mark as ${isActive ? 'active' : 'inactive'}.`, 
+        variant: 'destructive' 
+      });
+      return;
     }
     
     const actionText = isActive ? 'active' : 'inactive';
-    console.log(`Attempting to set status (${actionText}) for IDs:`, selectedIds);
     try {
-      // Placeholder: Replace with actual API call
-      // await productService.updateBulkProductStatus(selectedIds, isActive);
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
-      toast({ title: `${selectedIds.length} product(s) marked as ${actionText} (simulated).`, variant: 'default' });
+      await productService.bulkSetStatus(selectedIds, isActive);
+      toast({ title: `${selectedIds.length} product(s) marked as ${actionText}.`, variant: 'default' });
       setRowSelection({}); // Clear selection
       fetchData(); // Refresh data
     } catch (error: any) {
       console.error("Bulk status update error:", error);
-      toast({ title: error.message || `Failed to update status for selected products.`, variant: 'destructive' });
+      toast({ 
+        title: `Failed to update status for selected products.`,
+        description: error.message || "An unexpected error occurred.",
+        variant: 'destructive' 
+      });
     }
   };
   // --- End Bulk Action Handlers ---
@@ -1773,6 +1777,26 @@ export function ProductsTable() {
     console.log("Row selection changed:", Object.keys(rowSelection).length, "rows selected");
   }, [rowSelection]);
 
+  // Add these new state variables for modals
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showTagModal, setShowTagModal] = useState(false);
+  
+  // Modal handlers
+  const openBulkCategoryModal = useCallback(() => {
+    setShowCategoryModal(true);
+  }, []);
+  
+  const openBulkTagModal = useCallback(() => {
+    setShowTagModal(true);
+  }, []);
+  
+  // Get selected product IDs helper
+  const getSelectedProductIds = useCallback(() => {
+    return Object.keys(rowSelection)
+      .map(index => productRowMap[parseInt(index)])
+      .filter((id): id is number => typeof id === 'number');
+  }, [rowSelection, productRowMap]);
+
   return (
     <React.Fragment>
       <div className="w-full h-full flex flex-col">
@@ -1780,12 +1804,10 @@ export function ProductsTable() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-4 px-2 border-b space-y-2 sm:space-y-0">
           <div className="flex items-center space-x-2 w-full sm:w-auto">
             <div className="relative flex-1 sm:max-w-xs">
-              <SearchIcon className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
-              <Input
-                placeholder="Search products..."
+              <ProductsSearchBox
                 value={searchTerm}
                 onChange={handleSearchChange}
-                className="pl-8 h-9"
+                className="w-full"
               />
             </div>
             <Button 
@@ -1827,16 +1849,30 @@ export function ProductsTable() {
               <DropdownMenuContent>
                 <DropdownMenuItem onClick={() => handleBulkSetStatus(true)}>
                   <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
-                  <span>Mark as Active</span>
+                  Activate
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleBulkSetStatus(false)}>
                   <XCircle className="mr-2 h-4 w-4 text-slate-600" />
-                  <span>Mark as Inactive</span>
+                  Deactivate
                 </DropdownMenuItem>
+
                 <DropdownMenuSeparator />
+
+                <DropdownMenuItem onClick={openBulkCategoryModal}>
+                  <FolderIcon className="mr-2 h-4 w-4 text-blue-600" />
+                  Assign Category
+                </DropdownMenuItem>
+
+                <DropdownMenuItem onClick={openBulkTagModal}>
+                  <TagIcon className="mr-2 h-4 w-4 text-purple-600" />
+                  Tag in bulk
+                </DropdownMenuItem>
+
+                <DropdownMenuSeparator />
+
                 <DropdownMenuItem onClick={handleBulkDelete} className="text-red-600">
                   <TrashIcon className="mr-2 h-4 w-4" />
-                  <span>Delete Selected</span>
+                  Delete Selected
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -2355,6 +2391,27 @@ export function ProductsTable() {
           </div>
         </div>
       </div>
+      
+      {/* Add modals at the end */}
+      <BulkCategoryModal
+        open={showCategoryModal}
+        onOpenChange={setShowCategoryModal}
+        selectedIds={getSelectedProductIds()}
+        onSuccess={() => {
+          setRowSelection({});
+          fetchData();
+        }}
+      />
+      
+      <BulkTagModal
+        open={showTagModal}
+        onOpenChange={setShowTagModal}
+        selectedIds={getSelectedProductIds()}
+        onSuccess={() => {
+          setRowSelection({});
+          fetchData();
+        }}
+      />
     </React.Fragment>
   );
 }

@@ -1039,4 +1039,87 @@
                 };
             }
         },
+
+        // Bulk operation: Update status for multiple products
+        bulkSetStatus: async (ids: number[], isActive: boolean): Promise<void> => {
+            try {
+                const url = `${PRODUCTS_API_URL}/bulk_update/`;
+                await axiosInstance.post(url, { ids, field: 'is_active', value: isActive });
+            } catch (error) {
+                console.error('Error in bulk status update:', error);
+                throw error;
+            }
+        },
+        
+        // Bulk operation: Delete multiple products
+        bulkDelete: async (ids: number[]): Promise<void> => {
+            try {
+                const url = `${PRODUCTS_API_URL}/bulk_delete/`;
+                await axiosInstance.post(url, { ids });
+            } catch (error) {
+                console.error('Error in bulk delete:', error);
+                throw error;
+            }
+        },
+        
+        // Bulk operation: Assign category to multiple products
+        bulkAssignCategory: async (ids: number[], category: string): Promise<void> => {
+            try {
+                const url = `${PRODUCTS_API_URL}/bulk_update/`;
+                await axiosInstance.post(url, { ids, field: 'category', category });
+            } catch (error) {
+                console.error('Error in bulk category assignment:', error);
+                throw error;
+            }
+        },
+        
+        // Alias for bulkAssignCategory for backward compatibility
+        bulkUpdateCategory: async (ids: number[], category: string): Promise<void> => {
+            return productService.bulkAssignCategory(ids, category);
+        },
+        
+        // Bulk operation: Add tags to multiple products
+        bulkAddTags: async (ids: number[], tags: string[]): Promise<void> => {
+            try {
+                const url = `${PRODUCTS_API_URL}/bulk_update/`;
+                await axiosInstance.post(url, { ids, field: 'tags', tags });
+            } catch (error) {
+                console.error('Error in bulk tag addition:', error);
+                throw error;
+            }
+        },
+        
+        // Get product suggestions for autocomplete
+        suggestProducts: async (q: string): Promise<{ sku?: string; brand?: string; id?: number }[]> => {
+            if (!q || q.length < 2) return [];
+            
+            try {
+                const url = `${PRODUCTS_API_URL}/suggestions/`;
+                const response = await axiosInstance.get(url, { params: { q } });
+                
+                // If backend not ready, provide a placeholder response
+                // Replace with actual response parsing once backend is ready
+                if (!response.data || !Array.isArray(response.data)) {
+                    console.warn('Backend not ready or unexpected response format for suggestions');
+                    
+                    // Temporary placeholder with 1s delay for testing UI
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
+                    // Return mock data for now
+                    if (q.toLowerCase().includes('eax')) {
+                        return [
+                            { sku: 'D15332439', id: 1 },
+                            { sku: 'D14691291', id: 2 },
+                            { brand: 'Ecco' }
+                        ];
+                    }
+                    return [];
+                }
+                
+                return response.data;
+            } catch (error) {
+                console.error('Error getting product suggestions:', error);
+                return [];
+            }
+        },
     }; 

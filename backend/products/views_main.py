@@ -282,6 +282,219 @@ class ProductViewSet(viewsets.ModelViewSet):
             
         return Response(result, status=status.HTTP_201_CREATED)
 
+    @action(detail=False, methods=['post'])
+    def bulk_delete(self, request):
+        """
+        Permanently delete multiple products at once.
+        Expects: ids (list of product IDs)
+        """
+        # Get the IDs from the request
+        ids = request.data.get('ids', [])
+        
+        if not ids:
+            return Response(
+                {"error": "No product IDs provided for deletion"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # Ensure we only delete products the user has permission for
+        products = self.get_queryset().filter(pk__in=ids)
+        
+        if not products.exists():
+            return Response(
+                {"error": "No valid products found with the provided IDs"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+            
+        # Get product details for logging before deletion
+        products_to_delete = []
+        for product in products:
+            products_to_delete.append({
+                'id': product.id,
+                'name': product.name,
+                'sku': product.sku
+            })
+        
+        # Perform the permanent deletion
+        deleted_count, _ = products.delete()
+        
+        # Log the deletion event (we can't use the product model as it's deleted)
+        for product_data in products_to_delete:
+            try:
+                # Create an event record manually since the product is gone
+                ProductEvent.objects.create(
+                    event_type="bulk_deleted",
+                    summary=f"Product '{product_data['name']}' was permanently deleted in bulk",
+                    payload={
+                        "product_id": product_data['id'],
+                        "name": product_data['name'],
+                        "sku": product_data['sku'],
+                        "bulk_operation": True
+                    },
+                    created_by=request.user
+                )
+            except Exception as e:
+                print(f"Error recording deletion event for product {product_data['id']}: {str(e)}")
+        
+        return Response({
+            "success": True,
+            "deleted_count": deleted_count,
+            "message": f"Permanently deleted {deleted_count} products"
+        })
+
+    @action(detail=False, methods=['post'])
+    def bulk_update(self, request):
+        """
+        Update a field for multiple products at once.
+        Expects: ids (list of product IDs), field (string), and the value to set.
+        For tags, expects 'tags' array instead of a single value.
+        """
+        # Get the IDs, field from the request
+        ids = request.data.get('ids', [])
+        field = request.data.get('field')
+        
+        if not ids or not field:
+            return Response(
+                {"error": "Missing required fields: ids and field"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # Ensure we only update products the user has permission for
+        products = self.get_queryset().filter(pk__in=ids)
+        
+        if not products.exists():
+            return Response(
+                {"error": "No valid products found with the provided IDs"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Special handling for different fields
+        if field == 'tags':
+            # For tags field, expect an array of tags
+            tags = request.data.get('tags', [])
+            
+            if not tags:
+                return Response(
+                    {"error": "No tags provided for update"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+            updated_count = 0
+            
+            # Update each product's tags individually to handle JSON properly
+            for product in products:
+                try:
+                    # Get existing tags
+                    existing_tags = []
+                    if product.tags:
+                        try:
+                            existing_tags = json.loads(product.tags)
+                            if not isinstance(existing_tags, list):
+                                existing_tags = []
+                        except json.JSONDecodeError:
+                            existing_tags = []
+                    
+                    # Add new tags (avoid duplicates)
+                    for tag in tags:
+                        if tag not in existing_tags:
+                            existing_tags.append(tag)
+                    
+                    # Update the product
+                    product.tags = json.dumps(existing_tags)
+                    product.save(update_fields=['tags'])
+                    updated_count += 1
+                    
+                    # Record the update event
+                    record(
+                        product=product,
+                        user=request.user,
+                        event_type="bulk_updated",
+                        summary=f"Tags were added to product '{product.name}' in bulk",
+                        payload={
+                            "field": field,
+                            "added_tags": tags,
+                            "bulk_operation": True
+                        }
+                    )
+                except Exception as e:
+                    print(f"Error updating tags for product {product.id}: {str(e)}")
+            
+            return Response({
+                "success": True,
+                "updated_count": updated_count,
+                "message": f"Added tags to {updated_count} products"
+            })
+        elif field == 'is_active':
+            value = request.data.get('value')
+            
+            if value is None:
+                return Response(
+                    {"error": f"Missing value for field '{field}'"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+            # Perform the update
+            update_data = {field: value}
+            updated_count = products.update(**update_data)
+            
+            # Record event based on value
+            event_type = "bulk_deleted" if value is False else "bulk_updated"
+            summary_text = "soft deleted" if value is False else "updated"
+            
+            # Record a bulk update event for each product
+            for product in products:
+                record(
+                    product=product,
+                    user=request.user,
+                    event_type=event_type,
+                    summary=f"Product '{product.name}' was {summary_text} in bulk",
+                    payload={
+                        "field": field,
+                        "value": value,
+                        "bulk_operation": True
+                    }
+                )
+                
+            action_text = "Deleted" if value is False else "Updated is_active to"
+            return Response({
+                "success": True,
+                "updated_count": updated_count,
+                "message": f"{action_text} {updated_count} products"
+            })
+        else:
+            # For other fields like category, use the simple approach
+            value = request.data.get('category')  # Initially support category, can be extended
+            
+            if value is None:
+                return Response(
+                    {"error": f"Missing value for field '{field}'"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+            # Perform the update
+            update_data = {field: value}
+            updated_count = products.update(**update_data)
+            
+            # Record a bulk update event for each product
+            for product in products:
+                record(
+                    product=product,
+                    user=request.user,
+                    event_type="bulk_updated",
+                    summary=f"Product '{product.name}' was updated in bulk",
+                    payload={
+                        "field": field,
+                        "value": value,
+                        "bulk_operation": True
+                    }
+                )
+                
+            return Response({
+                "success": True,
+                "updated_count": updated_count,
+                "message": f"Updated {field} to '{value}' for {updated_count} products"
+            })
+
     def create(self, request, *args, **kwargs):
         """
         Create a new product

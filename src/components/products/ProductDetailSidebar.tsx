@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Product } from '@/services/productService';
+import React, { useState, useRef } from 'react';
+import { Product, productService, ProductAsset } from '@/services/productService';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Copy, ImageIcon, AlertCircle, UploadCloud } from 'lucide-react';
@@ -60,6 +60,7 @@ const priceHistory = [
 
 export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const createdDate = formatDate(product.created_at);
   const modifiedDate = formatDate(product.updated_at);
@@ -80,6 +81,44 @@ export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
     navigator.clipboard.writeText(text)
       .then(() => toast.success(`${label} copied to clipboard`, { duration: 1000 }))
       .catch(() => toast.error('Failed to copy to clipboard'));
+  };
+  
+  // Add a function to handle image upload
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !product.id) return;
+    
+    try {
+      toast.info('Uploading image...', { duration: 3000 });
+      
+      // Upload the image using the product service
+      const assetResponse = await productService.uploadAsset(
+        product.id, 
+        file,
+        (progressEvent) => {
+          // Optional: You could add progress tracking here if desired
+          const progress = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 100));
+          console.log(`Upload progress: ${progress}%`);
+        }
+      );
+      
+      // Set the uploaded image as primary
+      if (assetResponse?.id) {
+        await productService.setAssetPrimary(product.id, assetResponse.id);
+        toast.success('Image uploaded and set as primary');
+        
+        // Refresh the page to show the new image
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      toast.error('Failed to upload image. Please try again.');
+    }
+    
+    // Clear the file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
   
   return (
@@ -104,10 +143,24 @@ export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
           <div className="w-full h-48 bg-slate-100 flex flex-col items-center justify-center">
             <ImageIcon className="h-12 w-12 text-slate-300 mb-2" />
             {hasEditPermission && (
-              <Button variant="outline" size="sm" className="mt-2">
-                <UploadCloud className="h-4 w-4 mr-2" />
-                Upload image
-              </Button>
+              <>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="mt-2"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <UploadCloud className="h-4 w-4 mr-2" />
+                  Upload image
+                </Button>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="hidden"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                />
+              </>
             )}
           </div>
         )}

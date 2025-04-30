@@ -50,10 +50,6 @@ const HEADER_DISPLAY_NAMES: Record<string, string> = {
   'tags': 'Tags',
   'is_active': 'Active Status',
   'stock': 'Stock Level',
-  'cost_price': 'Cost Price',
-  'weight': 'Weight',
-  'dimensions': 'Dimensions',
-  'min_order_quantity': 'Minimum Order Quantity',
   'ignore': '-- Ignore This Column --'
 };
 
@@ -69,10 +65,6 @@ const HEADER_DESCRIPTIONS: Record<string, string> = {
   'tags': 'Keywords or tags for the product (comma separated)',
   'is_active': 'Whether the product is active (yes/no, true/false, 1/0)',
   'stock': 'Current inventory quantity',
-  'cost_price': 'Your cost for the product',
-  'weight': 'Product weight with unit (e.g., 2kg)',
-  'dimensions': 'Product dimensions (e.g., 10x20x30)',
-  'min_order_quantity': 'Minimum quantity that can be ordered',
   'ignore': 'Select this to skip importing this column'
 };
 

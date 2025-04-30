@@ -150,7 +150,7 @@ const SortableTableHeader = ({ id, header }: SortableTableHeaderProps) => {
   return (
     <TableHead
       key={header.id}
-      className={`p-2 ${hideOnMobileClass} bg-gray-100 text-gray-700 font-semibold text-sm tracking-wide border-b border-gray-200 px-4 py-3 text-left`}
+      className={`px-2 py-2 ${hideOnMobileClass} bg-gray-100 text-gray-700 font-semibold text-sm tracking-wide border-b border-gray-200 text-left whitespace-nowrap`}
       onClick={column.getCanSort() ? column.getToggleSortingHandler() : undefined}
     >
       <div className="flex items-center">
@@ -189,7 +189,7 @@ const TableFallback = ({
       <>
         {/* Skeleton Loading Rows with reduced padding */}
         {Array.from({ length: 5 }).map((_, index) => (
-          <TableRow key={`skeleton-${index}`} className="border-b border-slate-100 bg-white">
+          <TableRow key={`skeleton-${index}`} className="border-b border-slate-100 bg-white h-8">
             {columns.map((column, colIndex) => {
               // Add mobile responsiveness to table cells
               const columnId = column.id || 
@@ -198,7 +198,7 @@ const TableFallback = ({
               const hideOnMobileClass = ['brand', 'barcode', 'created_at', 'tags'].includes(columnId) ? 'hidden md:table-cell' : '';
               
               return (
-                <TableCell key={`skeleton-${index}-${columnId || colIndex}`} className={`px-2 py-2 ${hideOnMobileClass}`}>
+                <TableCell key={`skeleton-${index}-${columnId || colIndex}`} className={`px-2 py-1 ${hideOnMobileClass}`}>
                   <Skeleton className="h-4 w-4/5" /> 
                 </TableCell>
               );
@@ -781,6 +781,7 @@ export function ProductsTable() {
   const columns = useMemo<ColumnDef<Product>[]>(() => [
     {
       id: "select",
+      size: 36,            // 36 px  (just fits the checkbox)
       header: ({ table }) => (
         <div className="px-1">
           <Checkbox
@@ -794,7 +795,7 @@ export function ProductsTable() {
         </div>
       ),
       cell: ({ row }) => (
-        <div className="px-1" onClick={(e) => e.stopPropagation()}>
+        <div className="px-0 text-center" onClick={(e) => e.stopPropagation()}>
           <Checkbox
             checked={row.getIsSelected()}
             onCheckedChange={(value) => row.toggleSelected(!!value)}
@@ -807,6 +808,7 @@ export function ProductsTable() {
     },
     {
       accessorKey: "thumbnail",
+      size: 88,            // cut gap; image is 64 px + 12 px padding
       header: ({column}) => {
         return (
           <div className="flex items-center space-x-1">
@@ -840,7 +842,7 @@ export function ProductsTable() {
             {primaryImageUrl ? (
               <HoverCard>
                 <HoverCardTrigger>
-                  <div className="h-16 w-16 rounded-md border overflow-hidden">
+                  <div className="h-14 w-14 rounded-md border overflow-hidden">
                     <img 
                       src={primaryImageUrl} 
                       alt={row.original.name} 
@@ -861,7 +863,7 @@ export function ProductsTable() {
             ) : primaryImageFromArray ? (
               <HoverCard>
                 <HoverCardTrigger>
-                  <div className="h-16 w-16 rounded-md border overflow-hidden">
+                  <div className="h-14 w-14 rounded-md border overflow-hidden">
                     <img 
                       src={primaryImageFromArray.url} 
                       alt={row.original.name} 
@@ -890,7 +892,6 @@ export function ProductsTable() {
           </div>
         );
       },
-      size: 120,
       enableSorting: true,
     },
     {
@@ -952,6 +953,7 @@ export function ProductsTable() {
     },
     {
       accessorKey: 'name',
+      size: 260,          // plenty for most names
       header: ({column}) => {
         return (
           <Button
@@ -994,7 +996,7 @@ export function ProductsTable() {
           </div>
         ) : (
           <div
-            className="truncate cursor-pointer hover:text-primary transition-colors font-medium p-1"
+            className="truncate lg:whitespace-normal cursor-pointer hover:text-primary transition-colors font-medium p-1"
             onClick={(e) => {
               e.stopPropagation();
               handleCellEdit(rowIndex, 'name', value);
@@ -1009,6 +1011,7 @@ export function ProductsTable() {
     },
     {
       accessorKey: "category",
+      size: 160,
       header: ({column}) => {
         return (
           <Button
@@ -1071,7 +1074,7 @@ export function ProductsTable() {
         
         return (
           <div 
-            className="truncate cursor-pointer hover:text-primary transition-colors p-1"
+            className="truncate lg:whitespace-normal cursor-pointer hover:text-primary transition-colors p-1"
             onClick={(e) => {
               e.stopPropagation();
               handleCellEdit(rowIndex, 'category', categoryValue || '');
@@ -1086,6 +1089,7 @@ export function ProductsTable() {
     },
     {
       accessorKey: "brand",
+      size: 140,
       header: ({column}) => {
         return (
           <Button
@@ -1132,7 +1136,7 @@ export function ProductsTable() {
         
         return (
           <div 
-            className="truncate cursor-pointer hover:text-primary transition-colors p-1"
+            className="truncate lg:whitespace-normal cursor-pointer hover:text-primary transition-colors p-1"
             onClick={(e) => {
               e.stopPropagation();
               handleCellEdit(rowIndex, 'brand', value);
@@ -1527,12 +1531,14 @@ export function ProductsTable() {
     id: "actions",
     enableHiding: false,
     enableSorting: false,
-    size: 120,
+    size: 110,           // keeps icons + shadow but a bit tighter
     meta: {
       className: "sticky right-0 bg-white shadow-md z-10", // Make the column sticky
     },
     header: () => (
-      <div className="text-right px-4 sticky right-0 bg-white shadow-md z-10">Actions</div>
+      <div className="text-right px-2 sticky right-0 bg-white shadow-md border-l border-gray-200 z-20">
+        Actions
+      </div>
     ),
     cell: ({ row }) => {
       const productId = row.original.id;
@@ -1652,6 +1658,11 @@ export function ProductsTable() {
   const table = useReactTable({
     data: filteredData,
     columns: allColumns, // Use allColumns instead of columns
+    defaultColumn: {            // 👈 add this block
+      minSize: 80,              // every column can shrink to 80 px
+      size: 150,                // …but starts at 150 px
+      maxSize: 500,
+    },
     state: {
       sorting,
       columnVisibility,
@@ -1799,9 +1810,9 @@ export function ProductsTable() {
 
   return (
     <React.Fragment>
-      <div className="w-full h-full flex flex-col">
+      <div className="w-full h-full flex flex-col mx-auto max-w-screen-2xl px-2 lg:px-4">
         {/* Table Toolbar */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-4 px-2 border-b space-y-2 sm:space-y-0">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-1 px-1 border-b gap-1 sm:gap-1">
           <div className="flex items-center space-x-2 w-full sm:w-auto">
             <div className="relative flex-1 sm:max-w-xs">
               <ProductsSearchBox
@@ -1827,9 +1838,9 @@ export function ProductsTable() {
               variant="outline"
               onClick={handleRefresh}
               disabled={loading}
-              className="h-9"
+              className="h-8"
             >
-              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`mr-1 h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
 
@@ -1912,7 +1923,7 @@ export function ProductsTable() {
 
         {/* Additional Filter Panel that toggles based on filtersVisible state */}
         {filtersVisible && (
-          <div className="border-b border-slate-200 bg-slate-50 p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="border-b border-slate-200 bg-slate-50 p-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
             <div className="space-y-2">
               <Label htmlFor="category-filter">Category</Label>
               <Select
@@ -1986,20 +1997,20 @@ export function ProductsTable() {
           </div>
         )}
 
-        <div className="w-full h-full flex flex-col relative">
+        <div className="w-full h-full flex flex-col relative overflow-x-auto">
           <Table className="w-full">
             <TableHeader className="shadow-header">
               {table.getHeaderGroups().map(headerGroup => (
                 <React.Fragment key={headerGroup.id}>
                   {/* 1) Column titles */}
-                  <TableRow className="sticky top-0 z-20 bg-slate-100 border-b border-slate-200">
+                  <TableRow className="sticky top-0 z-20 bg-slate-100 border-b border-slate-200 h-8">
                     {headerGroup.headers.map(header =>
                       <SortableTableHeader key={header.id} id={header.column.id} header={header}/>
                     )}
                   </TableRow>
 
                   {/* 2) Filter inputs - Always visible now */}
-                  <TableRow className="sticky top-12 z-10 bg-slate-50 border-b border-slate-200">
+                  <TableRow className="sticky top-8 z-10 bg-slate-50 border-b border-slate-200 h-8">
                     {headerGroup.headers.map((header) => {
                       const column = header.column;
                       const columnId = column.id;
@@ -2030,7 +2041,7 @@ export function ProductsTable() {
                                     column.setFilterValue(e.target.value);
                                     handleColumnFilterChange(columnId, e.target.value);
                                   }}
-                                  className="h-8 text-xs"
+                                  className="h-7 text-xs"
                                   onClick={(e) => e.stopPropagation()}
                                 />
                               );
@@ -2240,7 +2251,7 @@ export function ProductsTable() {
             </TableHeader>
           </Table>
           
-          <div className="overflow-auto h-[calc(100%-128px)]">
+          <div className="overflow-auto h-[calc(100%-100px)]">
             <DndContext
               sensors={sensors}
               onDragEnd={handleDragEnd}
@@ -2298,7 +2309,7 @@ export function ProductsTable() {
                               return (
                                 <TableCell 
                                   key={cell.id} 
-                                  className={`px-2 py-2 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
+                                  className={`px-2 py-1 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
                                   data-column-id={columnId}
                                 >
                                   <div className="flex items-center gap-1">
@@ -2313,7 +2324,7 @@ export function ProductsTable() {
                               return (
                                 <TableCell 
                                   key={cell.id} 
-                                  className={`px-2 py-2 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
+                                  className={`px-2 py-1 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
                                   data-column-id={columnId}
                                 >
                                   <div className="flex items-center gap-1">
@@ -2329,7 +2340,7 @@ export function ProductsTable() {
                               return (
                                 <TableCell 
                                   key={cell.id} 
-                                  className={`px-2 py-2 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
+                                  className={`px-2 py-1 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
                                   data-column-id={columnId}
                                 >
                                   <div className="flex items-center gap-1">
@@ -2343,7 +2354,7 @@ export function ProductsTable() {
                             return (
                               <TableCell 
                                 key={cell.id} 
-                                className={`px-2 py-2 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
+                                className={`px-2 py-1 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
                                 data-column-id={columnId}
                               >
                                 {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -2357,7 +2368,7 @@ export function ProductsTable() {
                 </Table>
                 
                 {/* PAGINATION */}
-                <div className="flex items-center justify-between p-3 border-t bg-white">
+                <div className="flex items-center justify-between p-2 border-t bg-white">
                   <div className="flex space-x-2">
                     <Button size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
                       <ChevronLeft />

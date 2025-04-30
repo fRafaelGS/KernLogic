@@ -1,0 +1,1247 @@
+openapi: 3.0.3
+info:
+  title: KernLogic API
+  version: 1.0.0
+  description: Inventory and product management API
+  license:
+    name: Proprietary
+    url: https://kernlogic.com
+servers:
+  - url: https://api.kernlogic.com/api
+    description: production
+  - url: http://127.0.0.1:8000/api
+    description: local development
+paths:
+  /token:
+    post:
+      operationId: token_create
+      summary: Authenticate user and get access token
+      description: Takes a set of user credentials and returns an access and refresh JSON web token pair to prove the authentication of those credentials.
+      tags:
+      - token
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPairRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPairRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPairRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenObtainPair'
+          description: Authentication successful
+        '400':
+          content:
+            application/problem+json:
+              schema: 
+                $ref: '#/components/schemas/Problem'
+          description: Invalid credentials
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Authentication failed
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Server error
+  /token/refresh:
+    post:
+      operationId: token_refresh
+      summary: Refresh access token
+      description: Takes a refresh type JSON web token and returns an access type JSON web token if the refresh token is valid.
+      tags:
+      - token
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
+          description: Token refreshed successfully
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Invalid token
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Authentication failed
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Server error
+  /v1/products:
+    get:
+      operationId: products_list
+      summary: List all products
+      description: API endpoint for listing and filtering products.
+      parameters:
+      - name: search
+        required: false
+        in: query
+        description: Search term for product name, description, or SKU
+        schema:
+          type: string
+      - name: category_id
+        required: false
+        in: query
+        description: Filter products by category ID
+        schema:
+          type: integer
+      - name: price_min
+        required: false
+        in: query
+        description: Filter products with price greater than or equal to this value
+        schema:
+          type: number
+          format: float
+      - name: price_max
+        required: false
+        in: query
+        description: Filter products with price less than or equal to this value
+        schema:
+          type: number
+          format: float
+      - name: ordering
+        required: false
+        in: query
+        description: Field to use when ordering the results (prefix with - for descending)
+        schema:
+          type: string
+          example: -created_at
+      - name: page
+        required: false
+        in: query
+        description: Page number within the paginated result set
+        schema:
+          type: integer
+          default: 1
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page
+        schema:
+          type: integer
+          default: 10
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProductList'
+          description: List of products successfully retrieved
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Invalid request parameters
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Authentication required
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Server error
+    post:
+      operationId: products_create
+      summary: Create a new product
+      description: Create a new product with all required fields
+      tags:
+      - products
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: Product created successfully
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Invalid product data
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Authentication required
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation error
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Server error
+  /v1/products/{id}:
+    get:
+      operationId: products_retrieve
+      summary: Get product by ID
+      description: Retrieve a specific product by ID
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: Product ID
+        schema:
+          type: integer
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: Product retrieved successfully
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Authentication required
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Product not found
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Server error
+    patch:
+      operationId: products_update
+      summary: Update product
+      description: Update a specific product
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: Product ID
+        schema:
+          type: integer
+      tags:
+      - products
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: Product updated successfully
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Invalid product data
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Authentication required
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Product not found
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Server error
+    delete:
+      operationId: products_delete
+      summary: Delete product
+      description: Delete a specific product
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: Product ID
+        schema:
+          type: integer
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: Product deleted successfully
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Authentication required
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Product not found
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Server error
+  /v1/products/brands:
+    get:
+      operationId: products_brands_list
+      summary: List all brands
+      description: Return a list of unique brands for dropdown menus
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+          description: List of brands retrieved successfully
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Authentication required
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Server error
+  /v1/products/bulk_create:
+    post:
+      operationId: products_bulk_create
+      summary: Bulk create products
+      description: Create multiple products at once from a CSV upload or bulk input
+      tags:
+      - products
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: CSV file with product data
+          application/json:
+            schema:
+              type: object
+              properties:
+                products:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ProductRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: integer
+                    description: Number of successfully created products
+                  errors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        row:
+                          type: integer
+                        error:
+                          type: string
+          description: Bulk creation result
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Invalid data format
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Authentication required
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Server error
+  /v1/products/bulk_delete:
+    post:
+      operationId: products_bulk_delete
+      summary: Bulk delete products
+      description: Permanently delete multiple products at once
+      tags:
+      - products
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: integer
+                  description: List of product IDs to delete
+              required:
+                - ids
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  deleted:
+                    type: integer
+                    description: Number of deleted products
+          description: Bulk deletion result
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Invalid request data
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Authentication required
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Server error
+  /v1/products/bulk_update:
+    post:
+      operationId: products_bulk_update
+      summary: Bulk update products
+      description: Update a field for multiple products at once
+      tags:
+      - products
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: integer
+                  description: List of product IDs to update
+                field:
+                  type: string
+                  description: Field to update
+                value:
+                  type: string
+                  description: New value for the field
+                tags:
+                  type: array
+                  items:
+                    type: string
+                  description: Array of tags (only used when field is 'tags')
+              required:
+                - ids
+                - field
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  updated:
+                    type: integer
+                    description: Number of updated products
+          description: Bulk update result
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Invalid request data
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Authentication required
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Server error
+  /v1/products/categories:
+    get:
+      operationId: products_categories_list
+      summary: List all categories
+      description: Return a list of unique categories for dropdown menus
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+          description: List of categories retrieved successfully
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Authentication required
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Server error
+    post:
+      operationId: products_categories_create
+      summary: Create category
+      description: Create a new category
+      tags:
+      - products
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Category name
+              required:
+                - name
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+          description: Category created successfully
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Invalid category data
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Authentication required
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Server error
+  /v1/products/stats:
+    get:
+      operationId: products_stats_retrieve
+      summary: Get product statistics
+      description: Get product statistics for dashboard
+      tags:
+      - dashboard
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_products:
+                    type: integer
+                  active_products:
+                    type: integer
+                  inventory_value:
+                    type: number
+                    format: float
+                  low_stock_count:
+                    type: integer
+                  categories:
+                    type: object
+                    additionalProperties:
+                      type: integer
+          description: Product statistics retrieved successfully
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Authentication required
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Server error
+  /v1/products/tags:
+    get:
+      operationId: products_tags_list
+      summary: List all tags
+      description: Return a list of unique tags used across products
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+          description: List of tags retrieved successfully
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Authentication required
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Server error
+  /v1/dashboard/activity:
+    get:
+      operationId: dashboard_activity_list
+      summary: Get activity log
+      description: Get recent activity for the dashboard
+      tags:
+      - dashboard
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    action:
+                      type: string
+                    timestamp:
+                      type: string
+                      format: date-time
+                    user:
+                      type: string
+                    details:
+                      type: object
+          description: Activity log retrieved successfully
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Authentication required
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Server error
+  /v1/imports/upload:
+    post:
+      operationId: imports_upload_create
+      summary: Upload import file
+      description: Upload a CSV file for import
+      tags:
+      - imports
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: CSV file to import
+                import_type:
+                  type: string
+                  description: Type of import (products, categories, etc.)
+                column_mapping:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: Mapping of CSV columns to database fields
+              required:
+                - file
+                - import_type
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id:
+                    type: string
+                  status:
+                    type: string
+                  message:
+                    type: string
+          description: Import job started successfully
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Invalid request data
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Authentication required
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Server error
+  /v1/imports/status/{job_id}:
+    get:
+      operationId: imports_status_retrieve
+      summary: Get import job status
+      description: Check the status of an import job
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        description: Import job ID
+        schema:
+          type: string
+      tags:
+      - imports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id:
+                    type: string
+                  status:
+                    type: string
+                    enum: [pending, processing, completed, failed]
+                  progress:
+                    type: integer
+                  message:
+                    type: string
+                  results:
+                    type: object
+          description: Import job status retrieved successfully
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Authentication required
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Import job not found
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Server error
+  # Legacy (unversioned) endpoints - all deprecated
+  /products:
+    get:
+      operationId: legacy_products_list
+      summary: List all products (deprecated)
+      deprecated: true
+      description: API endpoint for managing product data (DEPRECATED - use /v1/products).
+      parameters:
+      - name: search
+        required: false
+        in: query
+        description: Search term for product name, description, or SKU
+        schema:
+          type: string
+      - name: category_id
+        required: false
+        in: query
+        description: Filter products by category ID
+        schema:
+          type: integer
+      - name: price_min
+        required: false
+        in: query
+        description: Filter products with price greater than or equal to this value
+        schema:
+          type: number
+          format: float
+      - name: price_max
+        required: false
+        in: query
+        description: Filter products with price less than or equal to this value
+        schema:
+          type: number
+          format: float
+      - name: ordering
+        required: false
+        in: query
+        description: Field to use when ordering the results (prefix with - for descending)
+        schema:
+          type: string
+          example: -created_at
+      - name: page
+        required: false
+        in: query
+        description: Page number within the paginated result set
+        schema:
+          type: integer
+          default: 1
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page
+        schema:
+          type: integer
+          default: 10
+      tags:
+      - legacy
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProductList'
+          description: List of products successfully retrieved
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Invalid request parameters
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Authentication required
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Server error
+    post:
+      operationId: legacy_products_create
+      summary: Create a new product (deprecated)
+      deprecated: true
+      description: Create a new product (DEPRECATED - use /v1/products)
+      tags:
+      - legacy
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: Product created successfully
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Invalid product data
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Authentication required
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation error
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Server error
+  /dashboard:
+    get:
+      operationId: legacy_dashboard_retrieve
+      summary: Get dashboard data (deprecated)
+      deprecated: true
+      description: Get dashboard data (DEPRECATED - use /v1/dashboard)
+      tags:
+      - legacy
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: Dashboard data retrieved successfully
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Authentication required
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Server error
+components:
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        detail:
+          type: string
+        status:
+          type: integer
+        instance:
+          type: string
+    TokenObtainPair:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+          readOnly: true
+      required:
+      - access
+      - refresh
+    TokenObtainPairRequest:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          writeOnly: true
+      required:
+      - username
+      - password
+    TokenRefresh:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+      required:
+      - access
+    TokenRefreshRequest:
+      type: object
+      properties:
+        refresh:
+          type: string
+      required:
+      - refresh
+    Product:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        sku:
+          type: string
+          maxLength: 64
+        price:
+          type: number
+          format: float
+        stock:
+          type: integer
+        category:
+          type: string
+        brand:
+          type: string
+          nullable: true
+        barcode:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        created_by:
+          type: string
+          readOnly: true
+        is_active:
+          type: boolean
+        primary_image:
+          type: string
+          format: uri
+          nullable: true
+        images:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              url:
+                type: string
+                format: uri
+              is_primary:
+                type: boolean
+          nullable: true
+      required:
+      - name
+      - sku
+      - price
+      - category
+    ProductRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        sku:
+          type: string
+          maxLength: 64
+        price:
+          type: number
+          format: float
+        stock:
+          type: integer
+        category:
+          type: string
+        brand:
+          type: string
+          nullable: true
+        barcode:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+          nullable: true
+        is_active:
+          type: boolean
+          default: true
+        primary_image:
+          type: string
+          format: binary
+          nullable: true
+      required:
+      - name
+      - sku
+      - price
+      - category
+    PaginatedProductList:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/api/v1/products/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/api/v1/products/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Product'
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT 

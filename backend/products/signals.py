@@ -1,52 +1,64 @@
-from django.db.models.signals import post_save, post_delete
-from django.dispatch import receiver
-from .models import Product, Activity
+import sys
+from django.db.models.signals import post_save, post_delete, pre_save
 
-@receiver(post_save, sender=Product)
-def log_product_save(sender, instance, created, **kwargs):
-    """
-    Log when a product is created or updated
-    """
-    # Determine the action type
-    action = 'create' if created else 'update'
-    
-    # Create an appropriate message
-    if created:
-        message = f"Created product: {instance.name} (SKU: {instance.sku})"
-    else:
-        message = f"Updated product: {instance.name} (SKU: {instance.sku})"
-    
-    # Get user and company info
-    user = instance.created_by
-    # In a real app, you'd get the company ID from the user
-    company_id = user.id if user else 1
-    
-    # Create activity log
-    Activity.objects.create(
-        company_id=company_id,
-        user=user,
-        entity='product',
-        entity_id=instance.id,
-        action=action,
-        message=message
-    )
+# Create placeholder classes for migrations
+if 'makemigrations' in sys.argv or 'migrate' in sys.argv:
+    class Product:
+        pass
+    class Activity:
+        objects = None
+    # No need to connect signals during migrations
+else:
+    from .models import Product, Activity
+    from django.dispatch import receiver
+    from .events import record
 
-@receiver(post_delete, sender=Product)
-def log_product_delete(sender, instance, **kwargs):
+    @receiver(post_save, sender=Product)
+    def product_saved(sender, instance, created, **kwargs):
+        """Log when a product is created or updated"""
+        if created:
+            # Create an Activity record for product creation
+            Activity.objects.create(
+                organization=instance.organization,
+                user=instance.created_by,
+                entity='product',
+                entity_id=instance.id,
+                action='create',
+                message=f"Created product '{instance.name}'"
+            )
+            
+            # Record product creation event
+            record(
+                product=instance,
+                user=instance.created_by,
+                event_type="created",
+                summary=f"Product '{instance.name}' was created",
+                payload=None
+            )
+
+    # Uncomment for additional signal handlers
     """
-    Log when a product is deleted
-    """
-    # Get user and company info
-    user = instance.created_by
-    # In a real app, you'd get the company ID from the user
-    company_id = user.id if user else 1
-    
-    # Create activity log
-    Activity.objects.create(
-        company_id=company_id,
-        user=user,
-        entity='product',
-        entity_id=instance.id,
-        action='delete',
-        message=f"Deleted product: {instance.name} (SKU: {instance.sku})"
-    ) 
+    @receiver(pre_save, sender=Product)
+    def product_about_to_save(sender, instance, **kwargs):
+        # Get the database instance if this is an update
+        if instance.pk:
+            try:
+                old_instance = sender.objects.get(pk=instance.pk)
+                # Store data for comparison after save if needed
+                instance._old_price = old_instance.price
+            except sender.DoesNotExist:
+                pass
+                
+    @receiver(post_delete, sender=Product)
+    def product_deleted(sender, instance, **kwargs):
+        # Log when a product is deleted
+        Activity.objects.create(
+            company_id=1,  # Default company ID
+            organization=instance.organization,
+            user=None,  # We don't know who deleted it through this signal
+            entity='product',
+            entity_id=instance.id,
+            action='delete',
+            message=f"Deleted product '{instance.name}'"
+        )
+    """ 

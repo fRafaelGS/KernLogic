@@ -1,15 +1,28 @@
-import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosError, InternalAxiosRequestConfig, AxiosRequestHeaders } from 'axios';
 import { API_URL } from '@/config';
 
 // Create the single Axios instance
 const axiosInstance = axios.create({
     baseURL: API_URL, // Base for all API calls (/api)
     withCredentials: true,
+    headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+    }
 });
 
 // Interceptor to add the Authorization token to requests
 axiosInstance.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
+        // Ensure headers object exists
+        if (!config.headers) {
+            config.headers = {} as AxiosRequestHeaders;
+        }
+        
+        // Always set Accept header
+        config.headers['Accept'] = 'application/json';
+        
+        // Set auth token if available
         const token = localStorage.getItem('access_token');
         if (token) {
             // Ensure proper format: "Bearer " + token
@@ -50,22 +63,30 @@ const isHtmlResponse = (data: any): boolean => {
 // Interceptor to handle token refresh on 401 errors
 axiosInstance.interceptors.response.use(
     (response) => {
-        // Check if response is HTML when expecting JSON
+        // Debug information to see the response content type
         const contentType = response.headers['content-type'] || '';
+        console.log(`[Response Debug] Content-Type: ${contentType} for URL: ${response.config.url}`);
+        
+        // Check if response is HTML when expecting JSON
         if (contentType.includes('text/html') || isHtmlResponse(response.data)) {
             console.error('[Response Interceptor] Received HTML instead of JSON:', {
                 url: response.config.url,
                 status: response.status,
+                contentType: contentType,
             });
             
             // For GET requests, we'll return empty data instead of failing
             if (response.config.method?.toLowerCase() === 'get') {
-                // Return empty array or object based on expected response type
-                if (Array.isArray(response.data)) {
-                    return { ...response, data: [] };
-                } else {
-                    return { ...response, data: {} };
-                }
+                console.log('[Response Interceptor] Converting HTML response to empty JSON for GET request');
+                
+                // Try to determine if this is a collection endpoint or a single object endpoint
+                const isCollectionEndpoint = response.config.url?.endsWith('/');
+                
+                // Return empty array or object based on URL pattern and expected response type
+                const emptyData = isCollectionEndpoint ? [] : {};
+                console.log(`[Response Interceptor] Returning ${isCollectionEndpoint ? 'empty array' : 'empty object'}`);
+                
+                return { ...response, data: emptyData };
             }
         }
         return response;

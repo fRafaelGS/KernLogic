@@ -1,6 +1,6 @@
 from rest_framework import serializers
 import json
-from .models import Product, ProductImage, Activity, ProductRelation, ProductAsset, ProductEvent
+from .models import Product, ProductImage, Activity, ProductRelation, ProductAsset, ProductEvent, Attribute, AttributeValue
 from django.db.models import Sum, F, Count, Case, When, Value, FloatField
 from decimal import Decimal
 from django.conf import settings
@@ -337,4 +337,86 @@ class ProductEventSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ProductEvent
-        fields = ["id", "event_type", "summary", "payload", "created_at", "created_by_name"] 
+        fields = ["id", "event_type", "summary", "payload", "created_at", "created_by_name"]
+
+# Add the Attribute serializers
+class AttributeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Attribute
+        fields = '__all__'
+        read_only_fields = ('id', 'organization', 'created_by')
+
+class AttributeValueSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AttributeValue
+        fields = '__all__'
+        read_only_fields = ('id', 'organization', 'product', 'attribute')
+
+    def validate(self, data):
+        # Get the attribute from the context set in the view
+        attr = getattr(self.instance, 'attribute', None)
+        if not attr and 'attribute' in self.context:
+            attr = self.context.get('attribute')
+            
+        # If we still don't have an attribute, skip validation
+        if not attr:
+            return data
+            
+        org = self.context['request'].user.profile.organization
+        
+        # Check organization matches
+        if attr.organization_id != org.id:
+            raise serializers.ValidationError("Attribute belongs to a different organization")
+        
+        # Validate and coerce value based on attribute data_type
+        try:
+            value = data.get('value')
+            if attr.data_type == 'number':
+                # Ensure value is numeric
+                try:
+                    float(value)
+                except (ValueError, TypeError):
+                    raise serializers.ValidationError({"value": f"Value must be a number for attribute '{attr.label}'"})
+            
+            elif attr.data_type == 'boolean':
+                # Convert string representations to boolean
+                if isinstance(value, str):
+                    if value.lower() in ('true', 't', 'yes', 'y', '1'):
+                        data['value'] = True
+                    elif value.lower() in ('false', 'f', 'no', 'n', '0'):
+                        data['value'] = False
+                    else:
+                        raise serializers.ValidationError({"value": f"Invalid boolean value for attribute '{attr.label}'"})
+            
+            elif attr.data_type == 'date':
+                # Validate date format - strictly enforce ISO-8601 (YYYY-MM-DD)
+                from datetime import datetime
+                import re
+                
+                # ISO-8601 date format regex (YYYY-MM-DD)
+                iso_date_pattern = re.compile(r'^\d{4}-\d{2}-\d{2}$')
+                
+                if not isinstance(value, str):
+                    raise serializers.ValidationError(
+                        {"value": f"Date must be a string in ISO-8601 format (YYYY-MM-DD) for attribute '{attr.label}'"}
+                    )
+                
+                if not iso_date_pattern.match(value):
+                    raise serializers.ValidationError(
+                        {"value": f"Date must be in ISO-8601 format (YYYY-MM-DD) for attribute '{attr.label}'. Got: '{value}'"}
+                    )
+                
+                # Try parsing the date to validate it's a proper date
+                try:
+                    datetime.strptime(value, '%Y-%m-%d')
+                except ValueError:
+                    raise serializers.ValidationError(
+                        {"value": f"Invalid date value for attribute '{attr.label}'. Must be a valid date in ISO-8601 format (YYYY-MM-DD)"}
+                    )
+            
+        except Exception as e:
+            if not isinstance(e, serializers.ValidationError):
+                raise serializers.ValidationError({"value": f"Error validating value: {str(e)}"})
+            raise
+            
+        return data 

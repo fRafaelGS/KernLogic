@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { Link } from 'react-router-dom';
 import {
   Card,
   CardContent,
@@ -18,9 +19,11 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle, ExternalLink } from 'lucide-react';
 import axios from 'axios';
 import { API_URL } from '@/config';
+import { paths } from '@/lib/apiPaths';
+import { ENABLE_CUSTOM_ATTRIBUTES } from '@/config/featureFlags';
 
 // --- Zod Schemas ---
 const profileSchema = z.object({
@@ -44,6 +47,8 @@ const SettingsPage: React.FC = () => {
   const { user, updateUserContext } = useAuth();
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isSavingPassword, setIsSavingPassword] = useState(false);
+  const [attributes, setAttributes] = useState<any[]>([]);
+  const [loadingAttributes, setLoadingAttributes] = useState(false);
   
   // Notification settings state
   const [emailNotifications, setEmailNotifications] = useState(true);
@@ -140,6 +145,25 @@ const SettingsPage: React.FC = () => {
     setIsSavingNotifications(false);
   };
 
+  // Function to fetch attributes (for testing API paths)
+  const fetchAttributes = async () => {
+    setLoadingAttributes(true);
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await axios.get(paths.attributes.root(), {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setAttributes(response.data);
+      console.log('Attributes fetched successfully:', response.data);
+      toast.success(`${response.data.length} attributes loaded`);
+    } catch (error) {
+      console.error('Error fetching attributes:', error);
+      toast.error('Failed to load attributes');
+    } finally {
+      setLoadingAttributes(false);
+    }
+  };
+
   // --- Render ---
   return (
     <div className="space-y-6">
@@ -151,11 +175,12 @@ const SettingsPage: React.FC = () => {
       </div>
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4 max-w-md">
+        <TabsList className="grid w-full grid-cols-5 max-w-md">
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="api">API Keys</TabsTrigger>
+          <TabsTrigger value="attributes">Attributes</TabsTrigger>
         </TabsList>
 
         {/* Profile Tab */}
@@ -314,6 +339,82 @@ const SettingsPage: React.FC = () => {
             <CardFooter className="border-t px-6 py-4">
                <Button variant="outline" disabled className="mt-4">Generate New Key</Button>
             </CardFooter>
+          </Card>
+        </TabsContent>
+
+        {/* Attributes Tab */}
+        <TabsContent value="attributes">
+          <Card>
+            <CardHeader>
+              <CardTitle>Product Attributes</CardTitle>
+              <CardDescription>Manage product attributes (Admin only)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {ENABLE_CUSTOM_ATTRIBUTES ? (
+                <>
+                  <p className="text-sm text-enterprise-600 mb-4">
+                    View and manage product attributes that can be assigned to your products.
+                  </p>
+                  
+                  <div className="flex flex-col space-y-4">
+                    <Button asChild className="w-full md:w-auto">
+                      <Link to="/app/settings/attributes" className="flex items-center">
+                        Manage Attributes
+                        <ExternalLink className="ml-2 h-4 w-4" />
+                      </Link>
+                    </Button>
+                    
+                    <div className="text-sm text-enterprise-500">
+                      Define custom attributes like colors, sizes, materials, and more for your products.
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="mb-4">
+                  <Button 
+                    onClick={fetchAttributes}
+                    disabled={loadingAttributes}
+                  >
+                    {loadingAttributes ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading...
+                      </>
+                    ) : (
+                      'Load Attributes'
+                    )}
+                  </Button>
+                </div>
+              )}
+              
+              {!ENABLE_CUSTOM_ATTRIBUTES && attributes.length > 0 && (
+                <div className="border rounded-md overflow-hidden">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Code</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Label</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {attributes.map((attr) => (
+                        <tr key={attr.id}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{attr.code}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{attr.label}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{attr.data_type}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              
+              {!ENABLE_CUSTOM_ATTRIBUTES && attributes.length === 0 && !loadingAttributes && (
+                <div className="p-4 border rounded-md bg-enterprise-50 text-center text-enterprise-500">
+                  No attributes loaded yet. Click the button above to load them.
+                </div>
+              )}
+            </CardContent>
           </Card>
         </TabsContent>
       </Tabs>

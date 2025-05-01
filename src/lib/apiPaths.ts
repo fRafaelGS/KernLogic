@@ -17,20 +17,26 @@ export const paths = {
     refresh: () => join(API_BASE, 'token/refresh') + '/',   // /api/token/refresh/
   },
   products: {
-    root:    () => join(API_BASE, 'products/'),
-    byId:    (id: number)          => join(API_BASE, 'products', id + '/'),
+    root:    () => join(API_BASE, 'products') + '/',
+    byId:    (id: number)          => join(API_BASE, 'products', id) + '/',
     nested:  (id: number, child: string) =>
                                   join(API_BASE, 'products', id, child) + 
                                     (child.endsWith('/') ? '' : '/'),
-    assets:  (id: number)          => join(API_BASE, 'products', id, 'assets/'),
+    assets:  (id: number)          => join(API_BASE, 'products', id, 'assets') + '/',
     asset:   (id: number, aid: number) => {
-      const url = join(API_BASE, 'products', id, 'assets', aid + '/');
+      const url = join(API_BASE, 'products', id, 'assets', aid) + '/';
       console.log(`Creating asset URL for product ${id}, asset ${aid}: ${url}`);
       return url;
     },
+    attributes: (id: number) => join(API_BASE, 'products', id, 'attributes') + '/',
+    attributeValue: (id: number, avId: number) => join(API_BASE, 'products', id, 'attributes', avId) + '/',
+  },
+  attributes: {
+    root: () => join(API_BASE, 'attributes') + '/',
+    byId: (id: number) => join(API_BASE, 'attributes', id) + '/',
   },
   attributeSets: {
-    byId:    (id: number)          => join(API_BASE, 'attribute-sets', id + '/'),
+    byId:    (id: number)          => join(API_BASE, 'attribute-sets', id) + '/',
   },
   dashboard: () => join(API_BASE, 'dashboard') + '/',
 } as const; 

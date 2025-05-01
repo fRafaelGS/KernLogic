@@ -396,3 +396,51 @@ class ProductEvent(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+# Attribute models for product attributes
+class Attribute(models.Model):
+    """
+    Model representing product attribute definitions.
+    """
+    DATA_TYPE_CHOICES = [
+        ('text', 'Text'),
+        ('number', 'Number'),
+        ('boolean', 'Boolean'),
+        ('date', 'Date'),
+        ('select', 'Select'),
+    ]
+
+    id = models.AutoField(primary_key=True)
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.CASCADE)
+    code = models.CharField(max_length=64, help_text="Slug-like unique identifier per organization")
+    label = models.CharField(max_length=255)
+    data_type = models.CharField(max_length=16, choices=DATA_TYPE_CHOICES)
+    is_localisable = models.BooleanField(default=False)
+    is_scopable = models.BooleanField(default=False)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    
+    class Meta:
+        unique_together = [('organization', 'code')]
+        index_together = [('organization', 'data_type')]
+        
+    def __str__(self):
+        return f"{self.label} ({self.code})"
+
+class AttributeValue(models.Model):
+    """
+    Model representing product attribute values.
+    """
+    id = models.AutoField(primary_key=True)
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.CASCADE)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='attribute_values')
+    attribute = models.ForeignKey(Attribute, on_delete=models.CASCADE)
+    locale = models.CharField(max_length=10, null=True, blank=True)
+    channel = models.CharField(max_length=32, null=True, blank=True)
+    value = models.JSONField()
+    
+    class Meta:
+        unique_together = [('organization', 'product', 'attribute', 'locale', 'channel')]
+        
+    def __str__(self):
+        attr_code = self.attribute.code if self.attribute else 'unknown'
+        return f"{attr_code}: {self.value} (Product: {self.product_id})"

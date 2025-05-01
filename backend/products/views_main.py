@@ -3,7 +3,31 @@ from rest_framework import viewsets, permissions, status, filters
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Product, ProductImage, ProductRelation, ProductAsset, ProductEvent
+import sys
+
+# Import the models, but don't import them during migration
+# Create placeholders if we're in a migration
+if 'makemigrations' in sys.argv or 'migrate' in sys.argv:
+    class MockManager:
+        def all(self):
+            return []
+        def filter(self, *args, **kwargs):
+            return self.all()
+    
+    # Create placeholder classes for migrations
+    class Product:
+        objects = MockManager()
+    class ProductImage:
+        pass
+    class ProductRelation:
+        pass
+    class ProductAsset:
+        objects = MockManager()
+    class ProductEvent:
+        objects = MockManager()
+else:
+    # Normal imports for runtime
+    from .models import Product, ProductImage, ProductRelation, ProductAsset, ProductEvent
 from .serializers import (
     ProductSerializer, 
     ProductImageSerializer, 

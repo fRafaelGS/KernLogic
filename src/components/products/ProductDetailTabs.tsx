@@ -9,7 +9,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { 
   ImageIcon, FileIcon, FileTypeIcon, FileTextIcon, Clipboard, CalendarIcon, 
   History, AlertTriangle, PlusIcon, PencilIcon, AlertCircle, RefreshCcw,
-  Check, ChevronDown, ChevronRight, Save, X, Edit2, Calendar, Flag, Pin, InfoIcon
+  Check, ChevronDown, ChevronRight, Save, X, Edit2, Calendar, Flag, Pin, InfoIcon,
+  List, Settings, Layers
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -65,6 +66,8 @@ import { AssetsTab } from './AssetsTab';
 import { Skeleton } from "@/components/ui/skeleton";
 import ProductHistoryTab from './ProductHistoryTab';
 import { Suspense } from 'react';
+import AttributesTab from './AttributesTab';
+import { ENABLE_CUSTOM_ATTRIBUTES } from '@/config/featureFlags';
 
 // ====== ATTRIBUTES INTERFACES (EXACT MATCH TO SPEC) ======
 // (Following exactly the backend shape specified in the requirements)
@@ -1640,11 +1643,36 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
       className="w-full"
       defaultValue="overview"
     >
-      <TabsList className="mb-6">
-        <TabsTrigger value="overview">Overview</TabsTrigger>
-        <TabsTrigger value="attributes">Attributes</TabsTrigger>
-        <TabsTrigger value="assets">Assets</TabsTrigger>
-        <TabsTrigger value="history">History</TabsTrigger>
+      <TabsList className="w-full border-b bg-transparent p-0">
+        <TabsTrigger
+          value="overview"
+          className="relative rounded-none border-b-2 border-transparent px-4 pb-3 pt-2 font-medium text-muted-foreground shadow-none transition-none data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:shadow-none"
+        >
+          Overview
+        </TabsTrigger>
+        {ENABLE_CUSTOM_ATTRIBUTES && (
+          <TabsTrigger
+            value="attributes"
+            className="relative rounded-none border-b-2 border-transparent px-4 pb-3 pt-2 font-medium text-muted-foreground shadow-none transition-none data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:shadow-none"
+          >
+            <Layers className="h-4 w-4 mr-2" />
+            Attributes
+          </TabsTrigger>
+        )}
+        <TabsTrigger
+          value="assets"
+          className="relative rounded-none border-b-2 border-transparent px-4 pb-3 pt-2 font-medium text-muted-foreground shadow-none transition-none data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:shadow-none"
+        >
+          <FileIcon className="h-4 w-4 mr-2" />
+          Assets
+        </TabsTrigger>
+        <TabsTrigger
+          value="history"
+          className="relative rounded-none border-b-2 border-transparent px-4 pb-3 pt-2 font-medium text-muted-foreground shadow-none transition-none data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:shadow-none"
+        >
+          <History className="h-4 w-4 mr-2" />
+          History
+        </TabsTrigger>
       </TabsList>
       
       <TabsContent value="overview" className="space-y-6">
@@ -1866,7 +1894,9 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
       </TabsContent>
       
       <TabsContent value="attributes" className="space-y-6">
-        {/* existing attributes content */}
+        {ENABLE_CUSTOM_ATTRIBUTES && (
+          <AttributesTab productId={product.id} />
+        )}
       </TabsContent>
       
       <TabsContent value="assets">

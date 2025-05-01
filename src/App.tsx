@@ -13,6 +13,8 @@ import LoginPage from '@/pages/auth/LoginPage';
 import RegisterPage from '@/pages/auth/RegisterPage';
 import ProductsPage from "@/pages/ProductsPage";
 import ButtonDemo from "@/pages/ButtonDemo";
+import AttributesPage from '@/pages/AttributesPage';
+import { ENABLE_CUSTOM_ATTRIBUTES } from '@/config/featureFlags';
 
 // Marketing Pages
 import LandingPage from "./pages/marketing/LandingPage";
@@ -196,6 +198,19 @@ export const App: React.FC = () => {
                                     </ProtectedRoute>
                                 }
                             />
+                            {/* Attributes Page (with feature flag) */}
+                            {ENABLE_CUSTOM_ATTRIBUTES && (
+                              <Route
+                                  path="/app/settings/attributes"
+                                  element={
+                                      <ProtectedRoute>
+                                          <DashboardLayout>
+                                              <AttributesPage />
+                                          </DashboardLayout>
+                                      </ProtectedRoute>
+                                  }
+                              />
+                            )}
                             {/* UI Component Demo Routes */}
                             <Route
                                 path="/app/ui/buttons"

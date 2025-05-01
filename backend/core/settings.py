@@ -80,6 +80,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "products.middleware.AssetRequestMiddleware",  # Add our middleware for asset uploads
 ]
 
 ROOT_URLCONF = "core.urls"

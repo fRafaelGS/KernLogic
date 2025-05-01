@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { 
   FileIcon, FileSpreadsheet, FileText, ImageIcon, 
@@ -84,38 +84,15 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
   const [assetToRename, setAssetToRename] = useState<ProductAsset | null>(null);
   const [newAssetName, setNewAssetName] = useState<string>('');
 
-  // Save assets to localStorage whenever they change
-  useEffect(() => {
-    if (product?.id && assets.length > 0) {
-      try {
-        localStorage.setItem(`product_assets_${product.id}`, JSON.stringify(assets));
-        console.log(`Saved ${assets.length} assets to localStorage for product ${product.id}`);
-      } catch (err) {
-        console.error('Failed to save assets to localStorage:', err);
-      }
-    }
-  }, [assets, product?.id]);
+  /* ------------------------------------------------------------------ *
+   * fetchAssets() is wrapped in useCallback so the identity is stable; *
+   * isFetchingRef stops accidental re-entry.                           *
+   * ------------------------------------------------------------------ */
+  const isFetchingRef = useRef(false);
 
-  // Fetch assets on component mount
-  useEffect(() => {
-    if (product?.id) {
-      fetchAssets();
-    }
-  }, [product?.id]);
-
-  // Process assets into groups whenever they change
-  useEffect(() => {
-    console.log('[AssetsTab] assets state changed:', assets);
-    console.log('[AssetsTab] Is assets an array?', Array.isArray(assets));
-    
-    if (Array.isArray(assets) && assets.length) {
-      groupAssetsByBaseName();
-    }
-  }, [assets]);
-
-  // Fetch assets from API
-  const fetchAssets = async () => {
-    if (!product?.id) return;
+  const fetchAssets = useCallback(async () => {
+    if (!product?.id || isFetchingRef.current) return;
+    isFetchingRef.current = true;
     
     setLoading(true);
     setError(null);
@@ -134,6 +111,7 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
         // Update cache with fresh server data
         localStorage.setItem(`product_assets_${product.id}`, JSON.stringify(fetchedAssets));
         setLoading(false);
+        isFetchingRef.current = false;
         return;
       } else {
         console.warn('API returned empty asset array, will try cache');
@@ -170,6 +148,7 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
           }
           
           setLoading(false);
+          isFetchingRef.current = false;
           return; // Exit with cached data
         }
       }
@@ -216,7 +195,34 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     }
     
     setLoading(false);
-  };
+    isFetchingRef.current = false;
+  }, [product?.id]);
+
+  useEffect(() => { 
+    fetchAssets();
+  }, [fetchAssets]);
+
+  // Save assets to localStorage whenever they change
+  useEffect(() => {
+    if (product?.id && assets.length > 0) {
+      try {
+        localStorage.setItem(`product_assets_${product.id}`, JSON.stringify(assets));
+        console.log(`Saved ${assets.length} assets to localStorage for product ${product.id}`);
+      } catch (err) {
+        console.error('Failed to save assets to localStorage:', err);
+      }
+    }
+  }, [assets, product?.id]);
+
+  // Process assets into groups whenever they change
+  useEffect(() => {
+    console.log('[AssetsTab] assets state changed:', assets);
+    console.log('[AssetsTab] Is assets an array?', Array.isArray(assets));
+    
+    if (Array.isArray(assets) && assets.length) {
+      groupAssetsByBaseName();
+    }
+  }, [assets]);
 
   // Group assets by base name (for versioning)
   const groupAssetsByBaseName = () => {
@@ -330,46 +336,6 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
 
   // Upload file to API
   const uploadFile = async (upload: UploadingAsset, productId: number) => {
-    const formData = new FormData();
-    formData.append('file', upload.file);
-    formData.append('name', upload.file.name);
-    
-    // Add asset type based on file MIME type
-    let assetType = 'other';
-    const mimeType = upload.file.type.toLowerCase();
-    
-    if (mimeType.startsWith('image/')) {
-      assetType = 'image';
-    } else if (mimeType.includes('pdf')) {
-      assetType = 'pdf';
-    } else if (mimeType.includes('spreadsheet') || mimeType.includes('excel') || mimeType.includes('csv')) {
-      assetType = 'spreadsheet';
-    } else if (mimeType.includes('document') || mimeType.includes('word') || mimeType.includes('text')) {
-      assetType = 'document';
-    }
-    
-    // Also check filename extension as a fallback
-    const fileExtension = upload.file.name.split('.').pop()?.toLowerCase() || '';
-    if (assetType === 'other') {
-      if (['pdf'].includes(fileExtension)) {
-        assetType = 'pdf';
-      } else if (['xls', 'xlsx', 'csv'].includes(fileExtension)) {
-        assetType = 'spreadsheet';
-      } else if (['doc', 'docx', 'txt'].includes(fileExtension)) {
-        assetType = 'document';
-      }
-    }
-    
-    // Add the asset type to the form data
-    formData.append('asset_type', assetType);
-    
-    // Log all FormData entries for debugging
-    console.log(`Attempting to upload file to ${PRODUCTS_API_URL}/${productId}/assets/`);
-    console.log('FormData contents:', [...formData.entries()].map(entry => 
-      entry[0] === 'file' ? `${entry[0]}: [File ${upload.file.name}, ${upload.file.size} bytes, ${upload.file.type}]` : `${entry[0]}: ${entry[1]}`
-    ));
-    console.log('Determined asset type:', assetType);
-    
     try {
       // Update progress to indicate we're starting
       updateUploadProgress(upload.id, 10);

@@ -360,6 +360,7 @@ class ProductAsset(models.Model):
         related_name='uploaded_assets'
     )
     uploaded_at = models.DateTimeField(auto_now_add=True)
+    is_archived = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['order']

@@ -4,9 +4,6 @@ import { API_URL } from '@/config';
 // Create the single Axios instance
 const axiosInstance = axios.create({
     baseURL: API_URL, // Base for all API calls (/api)
-    headers: {
-        'Content-Type': 'application/json',
-    },
     withCredentials: true,
 });
 

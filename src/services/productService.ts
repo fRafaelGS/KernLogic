@@ -629,7 +629,7 @@
             try {
                 const response = await axiosInstance.get(url);
                 
-                if (isHtmlResponse(response)) {
+                if (isHtmlResponse(response.data)) {
                     console.error('Received HTML response instead of JSON');
                     return [];
                 }
@@ -882,14 +882,20 @@
             const formData = new FormData();
             formData.append('file', file);
             formData.append('name', file.name);  // Add name explicitly to match backend expectation
-            formData.append('file_size', file.size.toString());  // Explicitly add file size
+
+            /* ------------------------------------------------------------------ *
+             * infer a short asset_type label; keep it ≤20 chars (serializer limit)
+             * ------------------------------------------------------------------ */
+            const mime = file.type.toLowerCase();
+            let assetType: string = 'other';
+            if (mime.startsWith('image/'))                assetType = 'image';
+            else if (mime.includes('pdf'))                assetType = 'pdf';
+            else if (mime.match(/(xlsx|xls|csv|spreadsheet|excel)/)) assetType = 'spreadsheet';
+            else if (mime.match(/(doc|docx|text|word)/))  assetType = 'document';
+
+            formData.append('asset_type', assetType);
             
-            const response = await axiosInstance.post(url, formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                },
-                onUploadProgress,
-            });
+            const response = await axiosInstance.post(url, formData, { onUploadProgress });
             
             if (response.status !== 201 && response.status !== 200) {
                 throw new Error(`Unexpected response status: ${response.status}`);

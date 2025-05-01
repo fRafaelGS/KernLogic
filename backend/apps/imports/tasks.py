@@ -123,7 +123,8 @@ def import_csv_task(task_id: int):
         # Check for existing SKUs in the database
         existing_skus = set(
             Product.objects.filter(
-                created_by=task.created_by, 
+                created_by=task.created_by,
+                organization=task.organization,
                 sku__in=unique_skus
             ).values_list("sku", flat=True)
         )
@@ -279,63 +280,61 @@ def import_csv_task(task_id: int):
 
 def save_batch(serializers, user, errors):
     """
-    Save a batch of validated serializers using a transaction.
-    
-    Args:
-        serializers: List of validated serializers
-        user: User creating the products
-        errors: List to append any errors that occur
+    Save a batch of validated serializers with appropriate error handling.
     """
-    with transaction.atomic():
-        for serializer in serializers:
-            try:
-                serializer.save(created_by=user)
-            except IntegrityError as e:
-                if "UNIQUE constraint" in str(e) and "sku" in str(e).lower():
-                    # Handle duplicate SKU more gracefully
-                    data = serializer.validated_data
-                    errors.append(f"Duplicate SKU: '{data.get('sku')}' already exists in the database")
-                else:
-                    # Other database errors
-                    errors.append(f"Database error: {str(e)}")
-            except Exception as e:
-                # Catch and log any other unexpected errors
-                errors.append(f"Error saving product: {str(e)}")
+    try:
+        with transaction.atomic():
+            for serializer in serializers:
+                try:
+                    # Set created_by and organization before saving
+                    serializer.save(
+                        created_by=user,
+                        organization=user.profile.organization
+                    )
+                except IntegrityError as e:
+                    # Handle possible race condition with unique constraint
+                    if "duplicate key" in str(e) and "sku" in str(e):
+                        errors.append(f"SKU '{serializer.validated_data.get('sku')}' already exists")
+                    else:
+                        errors.append(f"Database error: {str(e)}")
+                except Exception as e:
+                    errors.append(f"Error saving product '{serializer.validated_data.get('sku', 'Unknown')}': {str(e)}")
+    except Exception as e:
+        errors.append(f"Transaction error: {str(e)}")
+        logger.error(f"Failed to save batch: {str(e)}")
+        logger.error(traceback.format_exc())
 
 def save_overwrite_batch(data_list, user, errors):
     """
-    Update existing products with new data.
-    
-    Args:
-        data_list: List of product data dictionaries
-        user: User updating the products
-        errors: List to append any errors that occur
+    Update existing products with new data from import.
     """
-    with transaction.atomic():
-        for data in data_list:
+    for data in data_list:
+        try:
+            # Get existing product by SKU
+            sku = data.get('sku')
             try:
-                sku = data.get('sku')
-                if not sku:
-                    errors.append(f"Missing SKU in update data: {data}")
-                    continue
-                    
-                # Find the existing product
-                try:
-                    product = Product.objects.get(sku=sku, created_by=user)
-                    
-                    # Update the product
-                    serializer = ProductSerializer(product, data=data, partial=True)
-                    if serializer.is_valid():
-                        serializer.save()
-                    else:
-                        error_msgs = []
-                        for field, field_errors in serializer.errors.items():
-                            error_msgs.append(f"{field}: {', '.join(field_errors)}")
-                        
-                        errors.append(f"Update failed for SKU {sku}: {'; '.join(error_msgs)}")
-                        
-                except Product.DoesNotExist:
-                    errors.append(f"Attempted to update non-existent product with SKU {sku}")
+                product = Product.objects.get(
+                    sku=sku, 
+                    created_by=user,
+                    organization=user.profile.organization
+                )
                 
-            except Exception as e:
-                errors.append(f"Error updating product with SKU {data.get('sku', 'Unknown')}: {str(e)}") 
+                # Update product with new data
+                serializer = ProductSerializer(product, data=data, partial=True)
+                if serializer.is_valid():
+                    serializer.save()
+                else:
+                    # Format error messages
+                    error_msgs = []
+                    for field, field_errors in serializer.errors.items():
+                        error_msgs.append(f"{field}: {', '.join(field_errors)}")
+                    
+                    errors.append(f"Could not update SKU '{sku}': {'; '.join(error_msgs)}")
+            except Product.DoesNotExist:
+                errors.append(f"Product with SKU '{sku}' no longer exists")
+            except Product.MultipleObjectsReturned:
+                errors.append(f"Multiple products found with SKU '{sku}'")
+        except Exception as e:
+            errors.append(f"Error updating product SKU '{data.get('sku', 'Unknown')}': {str(e)}")
+            logger.error(f"Error in overwrite: {str(e)}")
+            logger.error(traceback.format_exc()) 

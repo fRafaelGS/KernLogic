@@ -19,6 +19,9 @@ class Product(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    # Multi-tenant support
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, db_index=True, null=True)
+    
     # Additional Product Information (Optional)
     brand = models.CharField(max_length=100, blank=True, null=True)
     barcode = models.CharField(max_length=100, blank=True, null=True)
@@ -29,11 +32,19 @@ class Product(models.Model):
     attributes = models.TextField(blank=True, null=True)
     
     class Meta:
+        """Meta options for Product"""
+        verbose_name = "Product"
+        verbose_name_plural = "Products"
         ordering = ['-created_at']
+        # Add a unique_together constraint for organization and sku
+        unique_together = [('organization', 'sku')]
         indexes = [
             models.Index(fields=['sku']),
-            models.Index(fields=['brand']),
             models.Index(fields=['category']),
+            models.Index(fields=['price']),
+            models.Index(fields=['brand']),
+            models.Index(fields=['organization']),
+            models.Index(fields=['organization', 'sku']),
         ]
 
     def __str__(self):
@@ -222,6 +233,7 @@ class ProductImage(models.Model):
         on_delete=models.CASCADE,
         related_name='images'
     )
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, db_index=True, null=True)
     image = models.ImageField(
         upload_to='product_images/'
     )
@@ -250,6 +262,7 @@ class ProductRelation(models.Model):
         on_delete=models.CASCADE,
         related_name='relations'
     )
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, db_index=True, null=True)
     related_product = models.ForeignKey(
         Product,
         on_delete=models.CASCADE,
@@ -291,6 +304,7 @@ class Activity(models.Model):
     )
     
     company_id = models.IntegerField(db_index=True)  # Foreign key to company
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, db_index=True, null=True)
     user = models.ForeignKey(
         User, 
         on_delete=models.SET_NULL, 
@@ -323,6 +337,7 @@ class ProductAsset(models.Model):
         on_delete=models.CASCADE,
         related_name='assets'
     )
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, db_index=True, null=True)
     file = models.FileField(
         upload_to='product_assets/'
     )
@@ -372,6 +387,7 @@ class ProductAsset(models.Model):
 
 class ProductEvent(models.Model):
     product      = models.ForeignKey("products.Product", on_delete=models.CASCADE, related_name="events")
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, db_index=True, null=True)
     event_type   = models.CharField(max_length=50)               # e.g. "created", "price_changed"
     summary      = models.CharField(max_length=255)              # short sentence for cards
     payload      = models.JSONField(null=True, blank=True)       # diff or extra data for power-users

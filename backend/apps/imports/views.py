@@ -11,10 +11,12 @@ from django.http import HttpResponse
 from django.core.exceptions import PermissionDenied
 import os
 import logging
+from kernlogic.org_queryset import OrganizationQuerySetMixin
 
 logger = logging.getLogger(__name__)
 
-class ImportTaskViewSet(mixins.CreateModelMixin,
+class ImportTaskViewSet(OrganizationQuerySetMixin,
+                        mixins.CreateModelMixin,
                         mixins.RetrieveModelMixin,
                         mixins.ListModelMixin,
                         viewsets.GenericViewSet):
@@ -27,10 +29,12 @@ class ImportTaskViewSet(mixins.CreateModelMixin,
     serializer_class = ImportTaskSerializer
     parser_classes = [parsers.MultiPartParser, parsers.JSONParser, parsers.FormParser]
     permission_classes = [permissions.IsAuthenticated]
+    queryset = ImportTask.objects.all()
     
     def get_queryset(self):
-        """Return only tasks created by the current user."""
-        return ImportTask.objects.filter(created_by=self.request.user)
+        """Return only tasks created by the current user and in the same organization."""
+        qs = super().get_queryset()
+        return qs.filter(created_by=self.request.user)
 
     def perform_create(self, serializer):
         """Create a new import task and enqueue it for processing."""
@@ -45,8 +49,14 @@ class ImportTaskViewSet(mixins.CreateModelMixin,
                 if file_ext not in ['.csv', '.xlsx', '.xls']:
                     raise ValueError(f"Unsupported file type: {file_ext}. Only CSV and Excel files are supported.")
                 
+                # Get organization from user profile
+                organization = self.request.user.profile.organization
+                
                 # Save task and enqueue for processing
-                task = serializer.save(created_by=self.request.user)
+                task = serializer.save(
+                    created_by=self.request.user,
+                    organization=organization
+                )
                 logger.info(f"Created import task {task.id} for file {file.name} ({file_ext})")
                 
                 # Enqueue task for async processing

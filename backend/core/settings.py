@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     "drf_spectacular_sidecar",
     "apps.imports",
     "kernlogic",
+    "organizations",
 ]
 
 # Custom middleware to exempt API routes from CSRF

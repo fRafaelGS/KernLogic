@@ -24,7 +24,9 @@ class ProductImageSerializer(serializers.ModelSerializer):
 # --- End ProductImage Serializer ---
 
 class ProductSerializer(serializers.ModelSerializer):
-    """Serializer for products with JSON fields handling"""
+    """
+    Serializer for Product model
+    """
     created_by = serializers.ReadOnlyField(source='created_by.email')
     price = serializers.FloatField()  # Explicitly use FloatField to ensure numeric values
     images = ProductImageSerializer(many=True, read_only=True)
@@ -33,16 +35,26 @@ class ProductSerializer(serializers.ModelSerializer):
     primary_image = serializers.ImageField(required=False, allow_null=True)
     primary_image_thumb = serializers.SerializerMethodField()
     primary_image_large = serializers.SerializerMethodField()
-
+    completeness_percent = serializers.SerializerMethodField(read_only=True)
+    missing_fields = serializers.SerializerMethodField(read_only=True)
+    assets = serializers.SerializerMethodField(read_only=True)
+    has_primary_image = serializers.SerializerMethodField(read_only=True)
+    primary_image_url = serializers.SerializerMethodField(read_only=True)
+    primary_asset = serializers.SerializerMethodField(read_only=True)
+    
     class Meta:
         model = Product
         fields = [
-            'id', 'name', 'description', 'sku', 'price', 'category',
-            'is_active', 'created_at', 'updated_at', 'brand',
-            'barcode', 'tags', 'attributes', 'primary_image', 'primary_image_thumb', 'primary_image_large',
-            'created_by', 'images'
+            'id', 'name', 'sku', 'description', 'price', 'category', 'brand',
+            'barcode', 'tags', 'attributes', 'is_active', 'is_archived', 'created_at',
+            'updated_at', 'primary_image', 'completeness_percent', 'missing_fields',
+            'assets', 'has_primary_image', 'primary_image_url', 'primary_asset', 'organization',
+            'created_by', 'images', 'primary_image_thumb', 'primary_image_large'
         ]
-        read_only_fields = ['created_by', 'created_at', 'updated_at', 'images']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'completeness_percent', 
+                           'missing_fields', 'assets', 'has_primary_image', 'primary_image_url',
+                           'primary_asset', 'organization', 'created_by', 'images',
+                           'primary_image_thumb', 'primary_image_large']
 
     def get_primary_image_thumb(self, obj):
         """
@@ -119,7 +131,7 @@ class ProductSerializer(serializers.ModelSerializer):
 
     def validate_sku(self, value):
         """
-        Ensure SKU is unique, but allow the same SKU on update
+        Ensure SKU is unique within the organization, but allow the same SKU on update
         if it's the current instance.
         """
         request = self.context.get('request')
@@ -129,15 +141,35 @@ class ProductSerializer(serializers.ModelSerializer):
         instance = getattr(self, 'instance', None)
         if instance and instance.sku == value:
             return value
-        if Product.objects.filter(
-            created_by=request.user,
-            sku=value
-        ).exclude(
-            pk=instance.pk if instance else None
-        ).exists():
-            raise serializers.ValidationError(
-                "A product with this SKU already exists."
-            )
+            
+        # Get the organization from the user's profile
+        try:
+            organization = request.user.profile.organization
+            
+            # Check if a product with this SKU already exists in this organization
+            if Product.objects.filter(
+                created_by=request.user,
+                organization=organization,
+                sku=value
+            ).exclude(
+                pk=instance.pk if instance else None
+            ).exists():
+                raise serializers.ValidationError(
+                    "A product with this SKU already exists in your organization."
+                )
+        except Exception as e:
+            # If there's an error getting the organization, log it and use the old check
+            print(f"Error during SKU validation: {str(e)}")
+            if Product.objects.filter(
+                created_by=request.user,
+                sku=value
+            ).exclude(
+                pk=instance.pk if instance else None
+            ).exists():
+                raise serializers.ValidationError(
+                    "A product with this SKU already exists."
+                )
+                
         return value
 
     def validate_price(self, value):
@@ -147,6 +179,42 @@ class ProductSerializer(serializers.ModelSerializer):
         if value <= 0:
             raise serializers.ValidationError("Price must be greater than zero.")
         return value
+
+    def get_completeness_percent(self, obj):
+        """Return the completeness percentage of the product"""
+        # Implement the logic to calculate completeness percentage
+        # This is a placeholder and should be replaced with actual implementation
+        return 80  # Placeholder value, actual implementation needed
+
+    def get_missing_fields(self, obj):
+        """Return a list of missing fields for the product"""
+        # Implement the logic to identify missing fields
+        # This is a placeholder and should be replaced with actual implementation
+        return []  # Placeholder value, actual implementation needed
+
+    def get_assets(self, obj):
+        """Return a list of assets associated with the product"""
+        # Implement the logic to retrieve assets
+        # This is a placeholder and should be replaced with actual implementation
+        return []  # Placeholder value, actual implementation needed
+
+    def get_has_primary_image(self, obj):
+        """Return whether the product has a primary image"""
+        # Implement the logic to check if the product has a primary image
+        # This is a placeholder and should be replaced with actual implementation
+        return False  # Placeholder value, actual implementation needed
+
+    def get_primary_image_url(self, obj):
+        """Return the URL of the primary image"""
+        # Implement the logic to retrieve the URL of the primary image
+        # This is a placeholder and should be replaced with actual implementation
+        return None  # Placeholder value, actual implementation needed
+
+    def get_primary_asset(self, obj):
+        """Return the primary asset associated with the product"""
+        # Implement the logic to retrieve the primary asset
+        # This is a placeholder and should be replaced with actual implementation
+        return None  # Placeholder value, actual implementation needed
 
 class ProductRelationSerializer(serializers.ModelSerializer):
     """Serializer for product relations"""

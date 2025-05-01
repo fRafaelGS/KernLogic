@@ -19,6 +19,7 @@ class ImportTask(models.Model):
     
     csv_file     = models.FileField(upload_to="imports/")
     mapping      = models.JSONField()      # {"SKU": "sku", "Name": "name", ...}
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, db_index=True, null=True)
     duplicate_strategy = models.CharField(
         max_length=10,
         default="skip",

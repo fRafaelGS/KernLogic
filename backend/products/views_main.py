@@ -37,13 +37,14 @@ from .events import record
 from rest_framework.views import APIView
 from rest_framework import serializers
 from rest_framework.permissions import IsAuthenticated
+from kernlogic.org_queryset import OrganizationQuerySetMixin
 
 User = get_user_model()
 
 # Create your views here.
 
 @method_decorator(csrf_exempt, name='dispatch')
-class ProductViewSet(viewsets.ModelViewSet):
+class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     """
     API endpoint for managing product data.
     """
@@ -57,14 +58,15 @@ class ProductViewSet(viewsets.ModelViewSet):
     renderer_classes = [JSONRenderer]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options']
+    queryset = Product.objects.all()  # Add base queryset for OrganizationQuerySetMixin to use
 
     def get_queryset(self):
         """
         Filter products to return only those created by the current user.
         Allow additional filtering by query parameters.
         """
-        # Initialize with all products
-        qs = Product.objects.all()
+        # Start with the organization-filtered queryset from the mixin
+        qs = super().get_queryset()
         
         # Apply user filter if not staff/admin
         if not self.request.user.is_staff:
@@ -89,8 +91,13 @@ class ProductViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """
         Set the created_by field to the current user when creating a product.
+        Also set the organization from the user's profile.
         """
-        product = serializer.save(created_by=self.request.user)
+        organization = self.request.user.profile.organization
+        product = serializer.save(
+            created_by=self.request.user,
+            organization=organization
+        )
         
         # Record product creation event
         record(
@@ -103,7 +110,8 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         """
-        Record the update event when a product is updated
+        Record the update event when a product is updated.
+        Ensure organization is preserved.
         """
         # Get the old product before update
         old_product = self.get_object()
@@ -115,8 +123,8 @@ class ProductViewSet(viewsets.ModelViewSet):
             "is_active": old_product.is_active
         }
         
-        # Save the updated product
-        product = serializer.save()
+        # Save the updated product, ensuring organization is preserved
+        product = serializer.save(organization=old_product.organization)
         
         # Collect changes
         changes = {}
@@ -651,9 +659,11 @@ class ProductViewSet(viewsets.ModelViewSet):
         Remove all category placeholder products (created when adding categories)
         """
         # Find all products that are placeholders (name starts with "Category Placeholder:" and is_active=False)
+        organization = self.request.user.profile.organization
         placeholders = Product.objects.filter(
             name__startswith="Category Placeholder:",
-            is_active=False
+            is_active=False,
+            organization=organization
         )
         
         count = placeholders.count()
@@ -977,8 +987,9 @@ class DashboardViewSet(viewsets.ViewSet):
             print(f"DEBUG: No company_id found in summary()")
             return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
         
-        # Get queryset of products for this company
-        queryset = Product.objects.filter(created_by=request.user)
+        # Get queryset of products for this company, filtered by organization
+        organization = request.user.profile.organization
+        queryset = Product.objects.filter(created_by=request.user, organization=organization)
         
         # Calculate KPIs
         total_products = queryset.count()
@@ -1094,8 +1105,9 @@ class DashboardViewSet(viewsets.ViewSet):
         end_date = timezone.now().date()
         start_date = end_date - timedelta(days=range_days)
         
-        # Get products for this company
-        queryset = Product.objects.filter(created_by=request.user)
+        # Get products for this company, filtered by organization
+        organization = request.user.profile.organization
+        queryset = Product.objects.filter(created_by=request.user, organization=organization)
         
         # In a real app, we would use historical data for accurate trends
         # For now, we'll generate synthetic data based on current inventory value
@@ -1160,8 +1172,9 @@ class DashboardViewSet(viewsets.ViewSet):
         """
         company_id = self.get_company_id(request)
         
-        # Get products for this company
-        queryset = Product.objects.filter(created_by=request.user)
+        # Get products for this company, filtered by organization
+        organization = request.user.profile.organization
+        queryset = Product.objects.filter(created_by=request.user, organization=organization)
         
         # Calculate completeness for each product
         products_with_completeness = []
@@ -1213,7 +1226,7 @@ class DashboardViewSet(viewsets.ViewSet):
         
         return Response(serializer_data)
 
-class AssetViewSet(viewsets.ModelViewSet):
+class AssetViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     """
     Nested under /products/<product_pk>/assets/.
     Handles upload, delete, reorder and set-primary.
@@ -1221,10 +1234,11 @@ class AssetViewSet(viewsets.ModelViewSet):
     serializer_class = ProductAssetSerializer
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
+    queryset = ProductAsset.objects.all()
 
-    # Filter to the parent product
     def get_queryset(self):
-        return ProductAsset.objects.filter(product_id=self.kwargs["product_pk"])
+        qs = super().get_queryset()
+        return qs.filter(product_id=self.kwargs.get('product_pk'))
         
     def get_serializer_context(self):
         """
@@ -1236,10 +1250,10 @@ class AssetViewSet(viewsets.ModelViewSet):
         })
         return context
 
-    # Attach the FK on create
     def perform_create(self, serializer):
         try:
             product = Product.objects.get(pk=self.kwargs["product_pk"])
+            organization = self.request.user.profile.organization
             
             # Check if file field exists in request
             if 'file' not in self.request.data and 'file' not in self.request.FILES:
@@ -1249,9 +1263,13 @@ class AssetViewSet(viewsets.ModelViewSet):
             file_data = self.request.data.get('file') or self.request.FILES.get('file')
             if not file_data:
                 raise ValidationError({"file": "The submitted file is empty"})
-                
-            # Save the asset
-            asset = serializer.save(product=product)
+            
+            # Save the asset with organization
+            asset = serializer.save(
+                product=product,
+                uploaded_by=self.request.user,
+                organization=organization
+            )
             
             # Record asset creation event
             record(
@@ -1348,17 +1366,20 @@ class AssetViewSet(viewsets.ModelViewSet):
         except Exception as e:
             raise ValidationError({"detail": f"Error deleting asset: {str(e)}"})
 
-class ProductEventViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+class ProductEventViewSet(OrganizationQuerySetMixin, mixins.ListModelMixin, viewsets.GenericViewSet):
     serializer_class = ProductEventSerializer
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = PageNumberPagination
+    queryset = ProductEvent.objects.all()
 
     def get_queryset(self):
-        return ProductEvent.objects.filter(product_id=self.kwargs["product_pk"])
+        qs = super().get_queryset()
+        return qs.filter(product_id=self.kwargs.get('product_pk'))
 
 # SKU Check API View - Added to solve the duplicate SKU issue
 class SkuCheckAPIView(APIView):
     permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser]
 
     class _Input(serializers.Serializer):
         skus = serializers.ListField(
@@ -1368,12 +1389,44 @@ class SkuCheckAPIView(APIView):
     def post(self, request, *args, **kwargs):
         data = self._Input(data=request.data)
         data.is_valid(raise_exception=True)
-        # Use created_by (user) as a substitute for tenant
+        
+        # Get the user's organization
         user = request.user
+        organization = user.profile.organization
+        
         uploaded_skus = list(set(data.validated_data["skus"]))
+        
+        # Filter by both user and organization
         existing = (
             Product.objects
-            .filter(created_by=user, sku__in=uploaded_skus)
+            .filter(organization=organization, sku__in=uploaded_skus)
+            .values_list("sku", flat=True)
+        )
+        return Response({"duplicates": list(existing)})
+        
+    def get(self, request, *args, **kwargs):
+        # For testing purposes, support GET with query params
+        skus_param = request.query_params.get('skus', None)
+        if not skus_param:
+            return Response({"error": "Missing 'skus' parameter"}, status=status.HTTP_400_BAD_REQUEST)
+            
+        # Parse the skus parameter (could be comma-separated or a list)
+        if isinstance(skus_param, list):
+            uploaded_skus = skus_param
+        else:
+            uploaded_skus = [sku.strip() for sku in skus_param.split(',')]
+            
+        if not uploaded_skus:
+            return Response({"error": "Empty 'skus' parameter"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get the user's organization
+        user = request.user
+        organization = user.profile.organization
+        
+        # Filter by both user and organization
+        existing = (
+            Product.objects
+            .filter(organization=organization, sku__in=uploaded_skus)
             .values_list("sku", flat=True)
         )
         return Response({"duplicates": list(existing)})

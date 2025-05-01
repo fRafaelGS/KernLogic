@@ -87,7 +87,7 @@ REST_FRAMEWORK = {
 
 # drf-spectacular settings
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'Data Alchemy Suite API',
+    'TITLE': 'KernLogic API',
     'DESCRIPTION': 'Product Management API for small manufacturers',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,

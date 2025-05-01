@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "drf_spectacular_sidecar",
     "apps.imports",
+    "kernlogic",
 ]
 
 # Custom middleware to exempt API routes from CSRF
@@ -70,6 +71,7 @@ class CsrfExemptForAPI:
         return self.get_response(request)
 
 MIDDLEWARE = [
+    "kernlogic.middleware.IdempotencyMiddleware",
     "corsheaders.middleware.CorsMiddleware",  # Must be as high as possible
     "core.settings.CsrfExemptForAPI",  # Add custom middleware before CsrfViewMiddleware
     "django.middleware.security.SecurityMiddleware",
@@ -168,7 +170,7 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.AllowAny',  # Allow access without authentication
     ],
     'UNAUTHENTICATED_USER': None,
-    'EXCEPTION_HANDLER': 'rest_framework.views.exception_handler',
+    'EXCEPTION_HANDLER': 'kernlogic.exceptions.custom_exception_handler',
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
@@ -219,6 +221,7 @@ CORS_ALLOW_HEADERS = [
     'authorization',
     'content-type',
     'dnt',
+    'idempotency-key',
     'origin',
     'user-agent',
     'x-csrftoken',

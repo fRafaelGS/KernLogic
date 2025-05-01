@@ -488,14 +488,14 @@ export function ProductsTable() {
   }, [navigate]);
 
   const handleDelete = useCallback(async (productId: number) => {
-    if (window.confirm('Are you sure you want to delete this product?')) {
+    if (window.confirm('Are you sure you want to archive this product?')) {
       try {
         await productService.deleteProduct(productId);
         toast({ title: 'Product marked as inactive successfully', variant: 'default' });
         fetchData();
       } catch (error: any) {
         console.error('Error deleting product via service:', error);
-        toast({ title: error.message || 'Failed to delete product', variant: 'destructive' });
+        toast({ title: error.message || 'Failed to archive product', variant: 'destructive' });
       }
     }
   }, [fetchData]);
@@ -542,16 +542,16 @@ export function ProductsTable() {
       return;
     }
 
-    if (window.confirm(`Are you sure you want to delete ${selectedIds.length} product(s)? This action might be irreversible.`)) {
+    if (window.confirm(`Are you sure you want to archive ${selectedIds.length} product(s)? This action is reversible from the admin panel.`)) {
       try {
         await productService.bulkDelete(selectedIds);
-        toast({ title: `${selectedIds.length} product(s) deleted successfully.`, variant: 'default' });
+        toast({ title: `${selectedIds.length} product(s) archived successfully.`, variant: 'default' });
         setRowSelection({}); // Clear selection
         fetchData(); // Refresh data
       } catch (error: any) {
         console.error("Bulk delete error:", error);
         toast({ 
-          title: "Failed to delete selected products.", 
+          title: "Failed to archive selected products.", 
           description: error.message || "An unexpected error occurred.",
           variant: 'destructive' 
         });
@@ -1579,7 +1579,7 @@ export function ProductsTable() {
               e.stopPropagation();
               if (productId) handleDelete(productId);
             }}
-            title="Delete"
+            title="Archive"
           >
             <TrashIcon className="h-4 w-4 text-gray-500 hover:text-red-600" />
           </Button>
@@ -1883,7 +1883,7 @@ export function ProductsTable() {
 
                 <DropdownMenuItem onClick={handleBulkDelete} className="text-red-600">
                   <TrashIcon className="mr-2 h-4 w-4" />
-                  Delete Selected
+                  Archive Selected
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

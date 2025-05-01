@@ -1,6 +1,6 @@
-# Data Alchemy Suite - Field Reference
+# KernLogic - Field Reference
 
-This document serves as a central reference for all data fields used across the Data Alchemy Suite application. It outlines how fields are used in different contexts (Products Table, Product Detail, Import Page) and the relationships between them.
+This document serves as a central reference for all data fields used across the KernLogic application. It outlines how fields are used in different contexts (Products Table, Product Detail, Import Page) and the relationships between them.
 
 ## Product Fields Overview
 

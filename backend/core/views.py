@@ -5,5 +5,5 @@ from rest_framework.response import Response
 def health_check(request):
     return Response({
         'status': 'ok',
-        'message': 'Data Alchemy Suite API is running'
+        'message': 'KernLogic API is running'
     }) 

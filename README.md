@@ -417,7 +417,7 @@ npm test
 
 ## 👏 Contributors
 
-- Original Project by Lovable
+- Original Project by KernLogic Team
 - Documentation and fixes by Claude (Anthropic)
 
 ---

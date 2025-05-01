@@ -91,15 +91,15 @@ export const ProductDetail = () => {
   };
 
   const handleDelete = async () => {
-    if (!id || !window.confirm('Are you sure you want to delete this product?')) return;
+    if (!id || !window.confirm('Are you sure you want to archive this product?')) return;
     
     try {
       await productService.deleteProduct(Number(id));
-      toast.success('Product deleted successfully');
+      toast.success('Product archived successfully');
       navigate('/app/products');
-    } catch (err) {
-      console.error('Error deleting product:', err);
-      toast.error('Failed to delete product');
+    } catch (error) {
+      console.error('Failed to archive product:', error);
+      toast.error('Failed to archive product');
     }
   };
 

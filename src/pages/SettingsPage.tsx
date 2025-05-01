@@ -23,7 +23,7 @@ import { Loader2, AlertCircle, ExternalLink } from 'lucide-react';
 import axios from 'axios';
 import { API_URL } from '@/config';
 import { paths } from '@/lib/apiPaths';
-import { ENABLE_CUSTOM_ATTRIBUTES } from '@/config/featureFlags';
+import { ENABLE_CUSTOM_ATTRIBUTES, ENABLE_ATTRIBUTE_GROUPS } from '@/config/featureFlags';
 
 // --- Zod Schemas ---
 const profileSchema = z.object({
@@ -363,6 +363,15 @@ const SettingsPage: React.FC = () => {
                         <ExternalLink className="ml-2 h-4 w-4" />
                       </Link>
                     </Button>
+                    
+                    {ENABLE_ATTRIBUTE_GROUPS && (
+                      <Button asChild className="w-full md:w-auto">
+                        <Link to="/app/settings/attribute-groups" className="flex items-center">
+                          Manage Attribute Groups
+                          <ExternalLink className="ml-2 h-4 w-4" />
+                        </Link>
+                      </Button>
+                    )}
                     
                     <div className="text-sm text-enterprise-500">
                       Define custom attributes like colors, sizes, materials, and more for your products.

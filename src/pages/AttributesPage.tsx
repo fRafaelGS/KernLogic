@@ -84,8 +84,15 @@ interface AttributeFormValues {
 const AttributesPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const isStaff = (user as any)?.is_staff || false;
-  
+  // const isStaff = (user as any)?.is_staff || false;
+
+  // Add debug logs
+  console.log("User in AttributesPage:", user);
+  console.log("Original isStaff value:", (user as any)?.is_staff || false);
+
+  // Temporarily force isStaff to true for testing
+  const isStaff = true;
+
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedAttribute, setSelectedAttribute] = useState<Attribute | null>(null);

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 import json
-from .models import Product, ProductImage, Activity, ProductRelation, ProductAsset, ProductEvent, Attribute, AttributeValue
+from .models import Product, ProductImage, Activity, ProductRelation, ProductAsset, ProductEvent, Attribute, AttributeValue, AttributeGroupItem, AttributeGroup
 from django.db.models import Sum, F, Count, Case, When, Value, FloatField
 from decimal import Decimal
 from django.conf import settings
@@ -419,4 +419,92 @@ class AttributeValueSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({"value": f"Error validating value: {str(e)}"})
             raise
             
-        return data 
+        return data
+
+class AttributeGroupItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AttributeGroupItem
+        fields = ('id', 'attribute', 'order')
+
+class AttributeGroupSerializer(serializers.ModelSerializer):
+    items = AttributeGroupItemSerializer(source='attributegroupitem_set',
+                                         many=True, required=False)
+    class Meta:
+        model = AttributeGroup
+        fields = ('id', 'name', 'order', 'items')
+        read_only_fields = ('id',)
+
+    def create(self, validated_data):
+        items_data = validated_data.pop('attributegroupitem_set', [])
+        
+        # Create the group first without items
+        group = AttributeGroup.objects.create(**validated_data)
+        
+        # Add items if any
+        if items_data:
+            self._sync_items(group, items_data)
+            
+        return group
+
+    def update(self, instance, validated_data):
+        items_data = validated_data.pop('attributegroupitem_set', None)
+        
+        # Update basic fields
+        for k, v in validated_data.items():
+            setattr(instance, k, v)
+        instance.save()
+        
+        # Update items if provided
+        if items_data is not None:
+            self._sync_items(instance, items_data)
+            
+        return instance
+
+    def _sync_items(self, group, items_data):
+        """Synchronize the items for this group, preserving order."""
+        print(f"Syncing items for group {group.id}: {items_data}")
+        
+        # Get existing items
+        current_items = AttributeGroupItem.objects.filter(group=group)
+        
+        # Remember seen IDs to know which ones to keep
+        seen_ids = []
+        
+        # Process each item from the incoming data
+        for position, item_data in enumerate(items_data):
+            item_id = item_data.get('id')
+            attribute_id = item_data.get('attribute')
+            
+            print(f"Processing item at position {position}: id={item_id}, attribute={attribute_id}")
+            
+            # Update existing item's order if it exists
+            if item_id:
+                try:
+                    item = AttributeGroupItem.objects.get(id=item_id)
+                    item.order = position
+                    item.save()
+                    seen_ids.append(item.id)
+                    print(f"Updated existing item {item.id}")
+                except AttributeGroupItem.DoesNotExist:
+                    print(f"Item with id {item_id} not found")
+            
+            # Create new item if it's not an existing one
+            elif attribute_id:
+                print(f"Creating new item for attribute {attribute_id}")
+                try:
+                    # Create with direct integer ID (not attribute object)
+                    item = AttributeGroupItem.objects.create(
+                        group=group,
+                        attribute_id=attribute_id,
+                        order=position
+                    )
+                    seen_ids.append(item.id)
+                    print(f"Created new item {item.id}")
+                except Exception as e:
+                    print(f"Error creating item: {e}")
+        
+        # Delete items not in the incoming data
+        items_to_delete = current_items.exclude(id__in=seen_ids)
+        if items_to_delete.exists():
+            print(f"Deleting items: {list(items_to_delete.values_list('id', flat=True))}")
+            items_to_delete.delete() 

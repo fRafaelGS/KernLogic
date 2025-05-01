@@ -4,7 +4,7 @@ import axiosInstance from '@/lib/axiosInstance';
 import { paths } from '@/lib/apiPaths';
 import { useAuth } from '@/contexts/AuthContext';
 import { debounce } from 'lodash';
-import { ENABLE_CUSTOM_ATTRIBUTES } from '@/config/featureFlags';
+import { ENABLE_CUSTOM_ATTRIBUTES, ENABLE_ATTRIBUTE_GROUPS } from '@/config/featureFlags';
 
 // UI Components
 import {
@@ -57,6 +57,7 @@ import {
   Check,
   Edit,
   Save,
+  LayersIcon,
 } from 'lucide-react';
 import {
   Popover,
@@ -70,6 +71,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // Types
 interface Attribute {
@@ -91,6 +93,22 @@ interface AttributeValue {
   attribute: number;
   product: number;
   organization: number;
+}
+
+interface AttributeGroupItem {
+  id: number;
+  attribute: number;
+  order: number;
+  value?: any;
+  locale?: string;
+  channel?: string;
+}
+
+interface AttributeGroup {
+  id: number;
+  name: string;
+  order: number;
+  items: AttributeGroupItem[];
 }
 
 interface AttributesTabProps {
@@ -124,6 +142,7 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
   const [editableAttributeIds, setEditableAttributeIds] = useState<Record<number, boolean>>({});
   const [attributeValues, setAttributeValues] = useState<Record<number, any>>({});
   const [savingStates, setSavingStates] = useState<Record<number, 'idle' | 'saving' | 'saved' | 'error'>>({});
+  const [selectedGroupTab, setSelectedGroupTab] = useState<string | null>(null);
   
   // Load attributes
   const { 
@@ -142,6 +161,35 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
     },
     enabled: ENABLE_CUSTOM_ATTRIBUTES,
   });
+  
+  // Load attribute groups
+  const { 
+    data: attributeGroups, 
+    isLoading: isLoadingGroups,
+    error: groupsError
+  } = useQuery({
+    queryKey: ['attributeGroups', productId, selectedLocale, selectedChannel],
+    queryFn: async () => {
+      const response = await axiosInstance.get(paths.products.groups(productId), {
+        headers: {
+          'Accept': 'application/json'
+        },
+        params: {
+          locale: selectedLocale,
+          channel: selectedChannel
+        }
+      });
+      return response.data;
+    },
+    enabled: ENABLE_ATTRIBUTE_GROUPS && !!productId,
+  });
+  
+  // Once groups are loaded, set the first group as the selected tab
+  useEffect(() => {
+    if (attributeGroups && attributeGroups.length > 0 && selectedGroupTab === null) {
+      setSelectedGroupTab(attributeGroups[0].id.toString());
+    }
+  }, [attributeGroups, selectedGroupTab]);
   
   // Filter attributes that haven't been assigned yet
   const getUnassignedAttributes = () => {
@@ -179,7 +227,7 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
       });
       return response.data;
     },
-    enabled: ENABLE_CUSTOM_ATTRIBUTES && !!productId,
+    enabled: ENABLE_CUSTOM_ATTRIBUTES && !!productId && !ENABLE_ATTRIBUTE_GROUPS,
   });
   
   // Process values when they change
@@ -200,6 +248,30 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
     
     setAttributeValues(valueMap);
   }, [values, selectedLocale, selectedChannel]);
+  
+  // Process attribute groups into values when they change
+  useEffect(() => {
+    if (!attributeGroups || !ENABLE_ATTRIBUTE_GROUPS) return;
+    
+    // Create a map of attribute ID to value
+    const valueMap: Record<number, any> = {};
+    
+    attributeGroups.forEach((group: AttributeGroup) => {
+      group.items.forEach((item: AttributeGroupItem) => {
+        if (item.value !== undefined) {
+          valueMap[item.attribute] = {
+            id: item.id,
+            attribute: item.attribute,
+            value: item.value,
+            locale: item.locale || selectedLocale,
+            channel: item.channel || selectedChannel
+          };
+        }
+      });
+    });
+    
+    setAttributeValues(valueMap);
+  }, [attributeGroups, selectedLocale, selectedChannel]);
   
   // Create attribute value mutation
   const createAttributeValueMutation = useMutation({
@@ -240,7 +312,11 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
       return response.data;
     },
     onSuccess: (data) => {
+      // Invalidate both attribute values and attribute groups queries
       queryClient.invalidateQueries({ queryKey: ['attributeValues', productId] });
+      if (ENABLE_ATTRIBUTE_GROUPS) {
+        queryClient.invalidateQueries({ queryKey: ['attributeGroups', productId] });
+      }
       
       // Set saving state to 'saved' momentarily using functional updater
       setSavingStates(prev => ({
@@ -296,7 +372,11 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
       return response.data;
     },
     onSuccess: (data) => {
+      // Invalidate both attribute values and attribute groups queries
       queryClient.invalidateQueries({ queryKey: ['attributeValues', productId] });
+      if (ENABLE_ATTRIBUTE_GROUPS) {
+        queryClient.invalidateQueries({ queryKey: ['attributeGroups', productId] });
+      }
       
       // Set saving state to 'saved' momentarily using functional updater
       setSavingStates(prev => ({
@@ -469,6 +549,11 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
     }
   };
   
+  // Find attribute by ID
+  const findAttributeById = (id: number) => {
+    return attributes?.find(attr => attr.id === id);
+  };
+  
   // Render attribute value editor based on attribute type
   const renderAttributeEditor = (attribute: Attribute, value: any, isNew: boolean = false) => {
     const saveState = savingStates[attribute.id] || 'idle';
@@ -500,11 +585,7 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
           <Input
             type="number"
             value={currentValue || ''}
-            onChange={(e) => {
-              // Proper number handling - send null instead of NaN
-              const value = e.target.value === '' ? null : e.target.valueAsNumber;
-              handleInputChange(isNaN(value) ? null : value);
-            }}
+            onChange={(e) => handleInputChange(parseFloat(e.target.value))}
             disabled={isDisabled}
             placeholder={`Enter ${attribute.label}`}
           />
@@ -514,20 +595,47 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
         return (
           <div className="flex items-center space-x-2">
             <Switch
-              checked={!!currentValue}
+              checked={Boolean(currentValue)}
               onCheckedChange={handleInputChange}
               disabled={isDisabled}
             />
-            <span className="text-sm text-slate-500">
-              {!!currentValue ? 'Yes' : 'No'}
+            <span className="text-sm text-enterprise-600">
+              {Boolean(currentValue) ? 'Yes' : 'No'}
             </span>
           </div>
         );
         
+      case 'date':
+        return (
+          <div className="grid gap-2">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={`w-full justify-start text-left font-normal ${!currentValue ? 'text-muted-foreground' : ''}`}
+                  disabled={isDisabled}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {currentValue ? format(new Date(currentValue), 'PPP') : `Select ${attribute.label}`}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  mode="single"
+                  selected={currentValue ? new Date(currentValue) : undefined}
+                  onSelect={(date) => handleInputChange(date ? format(date, 'yyyy-MM-dd') : null)}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+        );
+        
       case 'select':
+        // This is a mock select for now, would be populated from attribute options in a real app
         return (
           <Select
-            value={String(currentValue || '')}
+            value={currentValue || ''}
             onValueChange={handleInputChange}
             disabled={isDisabled}
           >
@@ -540,33 +648,6 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
               <SelectItem value="option3">Option 3</SelectItem>
             </SelectContent>
           </Select>
-        );
-        
-      case 'date':
-        return (
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className="w-full justify-start text-left font-normal"
-                disabled={isDisabled}
-              >
-                <CalendarIcon2 className="mr-2 h-4 w-4" />
-                {currentValue ? 
-                  format(new Date(currentValue), 'yyyy-MM-dd') : 
-                  <span className="text-slate-500">Select date</span>
-                }
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <Calendar
-                mode="single"
-                selected={currentValue ? new Date(currentValue) : undefined}
-                onSelect={(date) => handleInputChange(date ? format(date, 'yyyy-MM-dd') : '')}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
         );
         
       default:
@@ -583,58 +664,194 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
   
   // Render attribute value display
   const renderAttributeValue = (attribute: Attribute, value: any) => {
-    if (!value) return <span className="text-slate-400">—</span>;
+    if (!value) return <span className="text-enterprise-400 italic">Not set</span>;
     
-    const currentValue = value.value;
+    const displayValue = value.value;
     
     switch (attribute.data_type) {
+      case 'text':
+        return <span>{displayValue || ''}</span>;
+        
+      case 'number':
+        return <span>{displayValue || ''}</span>;
+        
       case 'boolean':
-        return currentValue ? 
-          <Badge variant="outline" className="bg-success-50 text-success-700 border-success-200">Yes</Badge> : 
-          <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200">No</Badge>;
+        return (
+          <Badge variant={displayValue ? 'default' : 'outline'}>
+            {displayValue ? 'Yes' : 'No'}
+          </Badge>
+        );
         
       case 'date':
-        return currentValue ? 
-          format(new Date(currentValue), 'PP') : 
-          <span className="text-slate-400">—</span>;
+        return displayValue ? (
+          <span>{format(new Date(displayValue), 'PPP')}</span>
+        ) : (
+          <span className="text-enterprise-400 italic">Not set</span>
+        );
+        
+      case 'select':
+        return <Badge variant="outline">{displayValue || ''}</Badge>;
         
       default:
-        return currentValue || <span className="text-slate-400">—</span>;
+        return <span>{displayValue || ''}</span>;
     }
   };
   
   // Render saving state indicator
   const renderSavingState = (attributeId: number) => {
-    const state = savingStates[attributeId] || 'idle';
+    const saveState = savingStates[attributeId] || 'idle';
     
-    switch (state) {
+    switch (saveState) {
       case 'saving':
         return (
-          <div className="flex items-center text-slate-500">
+          <span className="ml-2 inline-flex items-center text-enterprise-500">
             <Loader2 className="h-3 w-3 animate-spin mr-1" />
             <span className="text-xs">Saving...</span>
-          </div>
+          </span>
         );
         
       case 'saved':
         return (
-          <div className="flex items-center text-success-500">
+          <span className="ml-2 inline-flex items-center text-success-500">
             <CheckCircle2 className="h-3 w-3 mr-1" />
             <span className="text-xs">Saved</span>
-          </div>
+          </span>
         );
         
       case 'error':
         return (
-          <div className="flex items-center text-danger-500">
+          <span className="ml-2 inline-flex items-center text-danger-500">
             <AlertCircle className="h-3 w-3 mr-1" />
-            <span className="text-xs">Error</span>
-          </div>
+            <span className="text-xs">Error saving</span>
+          </span>
         );
         
       default:
         return null;
     }
+  };
+
+  // Render the attribute groups as tabs
+  const renderAttributeGroupsTabs = () => {
+    if (!attributeGroups || attributeGroups.length === 0) {
+      return (
+        <div className="py-6 text-center text-enterprise-500">
+          <LayersIcon className="mx-auto h-8 w-8 text-enterprise-300 mb-2" />
+          <p>No attribute groups found.</p>
+          <p className="text-sm mt-1">Contact your administrator to set up attribute groups.</p>
+        </div>
+      );
+    }
+
+    return (
+      <Tabs 
+        value={selectedGroupTab || attributeGroups[0].id.toString()} 
+        onValueChange={setSelectedGroupTab}
+        className="space-y-4"
+      >
+        <TabsList className="w-full justify-start">
+          {attributeGroups.map((group) => (
+            <TabsTrigger 
+              key={group.id} 
+              value={group.id.toString()}
+              className="px-4 py-2"
+            >
+              {group.name}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+
+        {attributeGroups.map((group) => (
+          <TabsContent key={group.id} value={group.id.toString()} className="pt-4">
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium">{group.name}</h3>
+                {isStaff && (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setIsAddModalOpen(true)}
+                    className="h-8"
+                  >
+                    <PlusCircle className="h-3.5 w-3.5 mr-1" />
+                    Add Attribute
+                  </Button>
+                )}
+              </div>
+              
+              <div className="space-y-4">
+                {group.items.length === 0 ? (
+                  <div className="p-6 text-center text-enterprise-500 border rounded-md bg-slate-50">
+                    No attributes in this group yet.
+                  </div>
+                ) : (
+                  group.items.map((item) => {
+                    const attribute = findAttributeById(item.attribute);
+                    if (!attribute) return null;
+                    
+                    const value = attributeValues[attribute.id];
+                    const isEditable = editableAttributeIds[attribute.id];
+                    
+                    return (
+                      <div key={item.id} className="border rounded-md overflow-hidden">
+                        <div className="bg-slate-50 px-4 py-2 border-b flex items-center justify-between">
+                          <div>
+                            <span className="font-medium">{attribute.label}</span>
+                            <Badge variant="outline" className="ml-2 text-xs">
+                              {attribute.data_type}
+                            </Badge>
+                          </div>
+                          
+                          {isStaff && !isEditable && (
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => handleEditAttribute(attribute.id)}
+                              className="h-7 px-2"
+                            >
+                              <Edit className="h-3.5 w-3.5 mr-1" />
+                              Edit
+                            </Button>
+                          )}
+                        </div>
+                        
+                        <div className="p-4">
+                          {isEditable ? (
+                            <div className="space-y-4">
+                              {renderAttributeEditor(attribute, value, !value)}
+                              
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  {renderSavingState(attribute.id)}
+                                </div>
+                                
+                                <div className="flex space-x-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleCancelEdit(attribute.id)}
+                                  >
+                                    Cancel
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="py-1.5">
+                              {renderAttributeValue(attribute, value)}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </TabsContent>
+        ))}
+      </Tabs>
+    );
   };
   
   // Render add attribute modal
@@ -644,56 +861,62 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
     
     return (
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-        <DialogTrigger asChild>
-          <Button>
-            <PlusCircle className="h-4 w-4 mr-2" />
-            Add Attribute
-          </Button>
-        </DialogTrigger>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Add Product Attribute</DialogTitle>
+            <DialogTitle>Add Attribute</DialogTitle>
             <DialogDescription>
-              Select an attribute to add to this product
+              Add a new attribute to your product.
             </DialogDescription>
           </DialogHeader>
           
-          <Command className="rounded-lg border shadow-md">
-            <CommandInput 
-              placeholder="Search attributes..." 
-              value={searchQuery}
-              onValueChange={setSearchQuery}
-            />
-            <CommandList>
-              <CommandEmpty>No attributes found.</CommandEmpty>
-              {filteredAttributes.length === 0 && !searchQuery ? (
-                <div className="py-6 text-center text-sm text-slate-500">
-                  All available attributes have been added to this product.
-                </div>
-              ) : (
-                <CommandGroup>
-                  {filteredAttributes.map((attr) => (
-                    <CommandItem
-                      key={attr.id}
-                      onSelect={() => handleAddAttribute(attr.id)}
-                      className="cursor-pointer"
-                    >
-                      <div className="flex flex-col">
-                        <span className="font-medium">{attr.label}</span>
-                        <span className="text-xs text-slate-500">{attr.code} • {attr.data_type}</span>
-                      </div>
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              )}
-            </CommandList>
-          </Command>
+          <div className="mt-4 space-y-4">
+            <div className="flex items-center space-x-2">
+              <Input
+                type="text"
+                placeholder="Search attributes..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="flex-1"
+              />
+            </div>
+            
+            <div className="border rounded-md overflow-hidden">
+              <ScrollArea className="h-[300px]">
+                <Command>
+                  <CommandInput
+                    placeholder="Search attributes..."
+                    value={searchQuery}
+                    onValueChange={setSearchQuery}
+                    className="border-0"
+                  />
+                  <CommandList>
+                    {filteredAttributes.length === 0 ? (
+                      <CommandEmpty>No attributes found.</CommandEmpty>
+                    ) : (
+                      <CommandGroup>
+                        {filteredAttributes.map((attribute) => (
+                          <CommandItem
+                            key={attribute.id}
+                            onSelect={() => handleAddAttribute(attribute.id)}
+                            className="flex items-center justify-between px-4 py-2 cursor-pointer"
+                          >
+                            <div>
+                              <div className="font-medium">{attribute.label}</div>
+                              <div className="text-sm text-enterprise-500">{attribute.code}</div>
+                            </div>
+                            <Badge variant="outline">{attribute.data_type}</Badge>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    )}
+                  </CommandList>
+                </Command>
+              </ScrollArea>
+            </div>
+          </div>
           
-          <DialogFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => setIsAddModalOpen(false)}
-            >
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setIsAddModalOpen(false)}>
               Cancel
             </Button>
           </DialogFooter>
@@ -702,230 +925,148 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
     );
   };
   
-  // Group attributes by data type
-  const attributesByType = React.useMemo(() => {
-    if (!attributes || !Array.isArray(attributes)) return {};
-    
-    return attributes.reduce((acc: Record<string, Attribute[]>, attr: Attribute) => {
-      if (!acc[attr.data_type]) {
-        acc[attr.data_type] = [];
-      }
-      
-      // Check if this attribute has a value or is being edited
-      const hasValueOrEditable = attributeValues[attr.id] || editableAttributeIds[attr.id];
-      
-      if (hasValueOrEditable) {
-        acc[attr.data_type].push(attr);
-      }
-      
-      return acc;
-    }, {});
-  }, [attributes, attributeValues, editableAttributeIds]);
-  
-  // Determine if there are any attributes with values
-  const hasAttributeValues = React.useMemo(() => {
-    return Object.keys(attributesByType).length > 0;
-  }, [attributesByType]);
-  
-  // Add debounce cleanup with useEffect
-  useEffect(() => {
-    // Cleanup function for debounced handlers
-    return () => {
-      debouncedHandleChange.cancel();
-    };
-  }, [debouncedHandleChange]);
-  
-  // If feature flag is disabled, don't render the component
-  if (!ENABLE_CUSTOM_ATTRIBUTES) {
-    return null;
-  }
-  
+  // Main render
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
-        <div>
-          <CardTitle>Product Attributes</CardTitle>
-          <CardDescription>
-            View and manage attributes for this product
-          </CardDescription>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-1">
+          <Select value={selectedLocale} onValueChange={setSelectedLocale}>
+            <SelectTrigger className="w-[140px]">
+              <Globe className="w-3.5 h-3.5 mr-2" />
+              <SelectValue placeholder="Select locale" />
+            </SelectTrigger>
+            <SelectContent>
+              {availableLocales.map((locale) => (
+                <SelectItem key={locale.code} value={locale.code}>
+                  {locale.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          
+          <Select value={selectedChannel} onValueChange={setSelectedChannel}>
+            <SelectTrigger className="w-[160px]">
+              <Languages className="w-3.5 h-3.5 mr-2" />
+              <SelectValue placeholder="Select channel" />
+            </SelectTrigger>
+            <SelectContent>
+              {availableChannels.map((channel) => (
+                <SelectItem key={channel.code} value={channel.code}>
+                  {channel.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         
-        <div className="flex space-x-4">
-          {/* Context Selector */}
-          <div className="flex items-center space-x-2">
-            <Label htmlFor="locale" className="text-xs flex items-center">
-              <Languages className="h-3 w-3 mr-1" /> Locale:
-            </Label>
-            <Select
-              value={selectedLocale}
-              onValueChange={setSelectedLocale}
-            >
-              <SelectTrigger id="locale" className="h-8 w-[110px]">
-                <SelectValue placeholder="Select locale" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableLocales.map(locale => (
-                  <SelectItem key={locale.code} value={locale.code}>
-                    {locale.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          
-          <div className="flex items-center space-x-2">
-            <Label htmlFor="channel" className="text-xs flex items-center">
-              <Globe className="h-3 w-3 mr-1" /> Channel:
-            </Label>
-            <Select
-              value={selectedChannel}
-              onValueChange={setSelectedChannel}
-            >
-              <SelectTrigger id="channel" className="h-8 w-[130px]">
-                <SelectValue placeholder="Select channel" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableChannels.map(channel => (
-                  <SelectItem key={channel.code} value={channel.code}>
-                    {channel.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </CardHeader>
+        {isStaff && !ENABLE_ATTRIBUTE_GROUPS && (
+          <Button onClick={() => setIsAddModalOpen(true)}>
+            <PlusCircle className="h-4 w-4 mr-2" />
+            Add Attribute
+          </Button>
+        )}
+      </div>
       
-      <CardContent>
-        {(isLoadingAttributes || isLoadingValues) ? (
-          <div className="space-y-4 py-4">
-            <Skeleton className="h-8 w-1/3" />
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-          </div>
-        ) : attributesError || valuesError ? (
-          <div className="flex items-center justify-center text-danger-500 p-8">
-            <AlertCircle className="h-6 w-6 mr-2" />
-            <p>Failed to load attributes. Please try again.</p>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {/* Action buttons */}
-            <div className="flex justify-end">
-              {isStaff && renderAddAttributeModal()}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle>Product Attributes</CardTitle>
+          <CardDescription>
+            Manage the attributes and specifications of this product.
+          </CardDescription>
+        </CardHeader>
+        
+        <CardContent>
+          {(isLoadingAttributes || isLoadingGroups || isLoadingValues) ? (
+            <div className="space-y-4 py-4">
+              <Skeleton className="h-8 w-1/3" />
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
             </div>
-            
-            {/* No attributes message */}
-            {!hasAttributeValues && (
-              <div className="border rounded-md p-8 text-center text-slate-500">
-                <p className="mb-4">No attributes have been added to this product yet.</p>
-                {isStaff && (
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setIsAddModalOpen(true)}
-                  >
-                    <PlusCircle className="h-4 w-4 mr-2" />
-                    Add Your First Attribute
-                  </Button>
-                )}
-              </div>
-            )}
-            
-            {/* Attribute groups by data type */}
-            {Object.entries(attributesByType).map(([dataType, attrs]) => (
-              <div key={dataType} className="space-y-3">
-                <h3 className="font-medium capitalize flex items-center text-sm">
-                  {dataType} Attributes
-                  <Badge variant="outline" className="ml-2 text-xs">
-                    {(attrs as any[]).length}
-                  </Badge>
-                </h3>
+          ) : attributesError || groupsError || valuesError ? (
+            <div className="flex items-center justify-center text-danger-500 p-8">
+              <AlertCircle className="h-6 w-6 mr-2" />
+              <p>Failed to load attributes. Please try again later.</p>
+            </div>
+          ) : ENABLE_ATTRIBUTE_GROUPS ? (
+            // Show attribute groups as tabs when enabled
+            renderAttributeGroupsTabs()
+          ) : attributes?.length === 0 ? (
+            <div className="py-6 text-center text-enterprise-500">
+              <p>No attributes defined yet.</p>
+              {isStaff && (
+                <p className="text-sm mt-1">Click "Add Attribute" to get started.</p>
+              )}
+            </div>
+          ) : (
+            // Show flat attribute list when attribute groups are disabled
+            <div className="space-y-4">
+              {attributes.map((attribute) => {
+                const value = attributeValues[attribute.id];
+                const isEditable = editableAttributeIds[attribute.id];
                 
-                <div className="space-y-2">
-                  {(attrs as any[]).map(attr => {
-                    const isEditable = !!editableAttributeIds[attr.id];
-                    const currentValue = attributeValues[attr.id];
-                    const isNewValue = !currentValue?.id;
+                if (!isEditable && !value) return null;
+                
+                return (
+                  <div key={attribute.id} className="border rounded-md overflow-hidden">
+                    <div className="bg-slate-50 px-4 py-2 border-b flex items-center justify-between">
+                      <div>
+                        <span className="font-medium">{attribute.label}</span>
+                        <Badge variant="outline" className="ml-2 text-xs">
+                          {attribute.data_type}
+                        </Badge>
+                      </div>
+                      
+                      {isStaff && !isEditable && (
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => handleEditAttribute(attribute.id)}
+                          className="h-7 px-2"
+                        >
+                          <Edit className="h-3.5 w-3.5 mr-1" />
+                          Edit
+                        </Button>
+                      )}
+                    </div>
                     
-                    return (
-                      <div 
-                        key={attr.id} 
-                        className="border rounded-md p-3 hover:border-slate-300 transition-colors"
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="space-y-1">
-                            <h4 className="font-medium text-sm flex items-center">
-                              {attr.label}
-                              {attr.is_localisable && (
-                                <Badge variant="outline" className="ml-2 px-1 py-0 h-4 text-[10px]">
-                                  <Languages className="h-2.5 w-2.5 mr-1" />
-                                  Localisable
-                                </Badge>
-                              )}
-                              {attr.is_scopable && (
-                                <Badge variant="outline" className="ml-2 px-1 py-0 h-4 text-[10px]">
-                                  <Globe className="h-2.5 w-2.5 mr-1" />
-                                  Scopable
-                                </Badge>
-                              )}
-                            </h4>
-                            <p className="text-xs text-slate-500">
-                              {attr.code}
-                            </p>
-                          </div>
+                    <div className="p-4">
+                      {isEditable ? (
+                        <div className="space-y-4">
+                          {renderAttributeEditor(attribute, value, !value)}
                           
-                          {isStaff && !isEditable && (
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => handleEditAttribute(attr.id)}
-                              className="h-8 px-2"
-                            >
-                              <Edit className="h-3.5 w-3.5 mr-1" />
-                              <span className="text-xs">Edit</span>
-                            </Button>
-                          )}
-                          
-                          {isEditable && (
+                          <div className="flex items-center justify-between">
+                            <div>
+                              {renderSavingState(attribute.id)}
+                            </div>
+                            
                             <div className="flex space-x-2">
-                              <Button 
-                                variant="ghost" 
+                              <Button
+                                variant="outline"
                                 size="sm"
-                                onClick={() => handleCancelEdit(attr.id)}
-                                className="h-8 px-2 text-danger-500 hover:text-danger-600 hover:bg-danger-50"
+                                onClick={() => handleCancelEdit(attribute.id)}
                               >
-                                <X className="h-3.5 w-3.5 mr-1" />
-                                <span className="text-xs">Cancel</span>
+                                Cancel
                               </Button>
                             </div>
-                          )}
+                          </div>
                         </div>
-                        
-                        <div className="mt-2">
-                          {isEditable ? (
-                            <div className="space-y-1">
-                              {renderAttributeEditor(attr, currentValue, isNewValue)}
-                              <div className="h-5">
-                                {renderSavingState(attr.id)}
-                              </div>
-                            </div>
-                          ) : (
-                            <div>
-                              {renderAttributeValue(attr, currentValue)}
-                            </div>
-                          )}
+                      ) : (
+                        <div className="py-1.5">
+                          {renderAttributeValue(attribute, value)}
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      
+      {renderAddAttributeModal()}
+    </div>
   );
 };
 

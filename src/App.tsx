@@ -14,7 +14,8 @@ import RegisterPage from '@/pages/auth/RegisterPage';
 import ProductsPage from "@/pages/ProductsPage";
 import ButtonDemo from "@/pages/ButtonDemo";
 import AttributesPage from '@/pages/AttributesPage';
-import { ENABLE_CUSTOM_ATTRIBUTES } from '@/config/featureFlags';
+import AttributeGroupsPage from '@/pages/AttributeGroupsPage';
+import { ENABLE_CUSTOM_ATTRIBUTES, ENABLE_ATTRIBUTE_GROUPS } from '@/config/featureFlags';
 
 // Marketing Pages
 import LandingPage from "./pages/marketing/LandingPage";
@@ -206,6 +207,19 @@ export const App: React.FC = () => {
                                       <ProtectedRoute>
                                           <DashboardLayout>
                                               <AttributesPage />
+                                          </DashboardLayout>
+                                      </ProtectedRoute>
+                                  }
+                              />
+                            )}
+                            {/* Attribute Groups Page (with feature flag) */}
+                            {ENABLE_ATTRIBUTE_GROUPS && (
+                              <Route
+                                  path="/app/settings/attribute-groups"
+                                  element={
+                                      <ProtectedRoute>
+                                          <DashboardLayout>
+                                              <AttributeGroupsPage />
                                           </DashboardLayout>
                                       </ProtectedRoute>
                                   }

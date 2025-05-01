@@ -11,11 +11,13 @@ if backend_dir not in sys.path:
 
 # Now we can import from views.py
 from products.views_main import ProductViewSet, DashboardViewSet, AssetViewSet, ProductEventViewSet, SkuCheckAPIView
-from products.views.attribute import AttributeViewSet
-from products.views.attribute_value import AttributeValueViewSet
+from .attribute import AttributeViewSet
+from .attribute_value import AttributeValueViewSet
+from .sku_check import SkuCheckAPIView
+from .attribute_group import AttributeGroupViewSet, ProductAttributeGroupViewSet
 
 # Define what's available when importing from this package
 __all__ = [
     'ProductViewSet', 'DashboardViewSet', 'AssetViewSet', 'ProductEventViewSet', 'SkuCheckAPIView',
-    'AttributeViewSet', 'AttributeValueViewSet'
+    'AttributeViewSet', 'AttributeValueViewSet', 'AttributeGroupViewSet', 'ProductAttributeGroupViewSet',
 ] 

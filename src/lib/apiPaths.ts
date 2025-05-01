@@ -30,10 +30,15 @@ export const paths = {
     },
     attributes: (id: number) => join(API_BASE, 'products', id, 'attributes') + '/',
     attributeValue: (id: number, avId: number) => join(API_BASE, 'products', id, 'attributes', avId) + '/',
+    groups: (id: number) => join(API_BASE, 'products', id, 'attribute-groups') + '/',
   },
   attributes: {
     root: () => join(API_BASE, 'attributes') + '/',
     byId: (id: number) => join(API_BASE, 'attributes', id) + '/',
+  },
+  attributeGroups: {
+    root: () => join(API_BASE, 'attribute-groups') + '/',
+    byId: (id: number) => join(API_BASE, 'attribute-groups', id) + '/',
   },
   attributeSets: {
     byId:    (id: number)          => join(API_BASE, 'attribute-sets', id) + '/',

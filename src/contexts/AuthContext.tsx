@@ -22,6 +22,7 @@ interface User {
   created_at: string;
   updated_at: string;
   role: 'admin' | 'editor' | 'viewer';
+  is_staff: boolean;
 }
 
 interface AuthError {
@@ -98,7 +99,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             is_active: true,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-            role: 'admin' as const
+            role: 'admin' as const,
+            is_staff: true,
           };
           
           setUser(mockUser);
@@ -237,7 +239,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           is_active: true,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-          role: 'admin' as const
+          role: 'admin' as const,
+          is_staff: true,
         };
         
         setUser(mockUser);

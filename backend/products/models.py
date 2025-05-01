@@ -444,3 +444,36 @@ class AttributeValue(models.Model):
     def __str__(self):
         attr_code = self.attribute.code if self.attribute else 'unknown'
         return f"{attr_code}: {self.value} (Product: {self.product_id})"
+
+class AttributeGroup(models.Model):
+    """
+    Model representing groups of related attributes.
+    """
+    id = models.AutoField(primary_key=True)
+    organization = models.ForeignKey('organizations.Organization', on_delete=models.CASCADE)
+    name = models.CharField(max_length=80)
+    order = models.PositiveSmallIntegerField(default=0)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL,
+                                  on_delete=models.SET_NULL, null=True, blank=True)
+    
+    class Meta:
+        unique_together = ('organization', 'name')
+        ordering = ('order', 'id')
+        
+    def __str__(self):
+        return f"{self.name} (Organization: {self.organization_id})"
+
+class AttributeGroupItem(models.Model):
+    """
+    Through-table connecting attributes to groups with ordering.
+    """
+    group = models.ForeignKey(AttributeGroup, on_delete=models.CASCADE)
+    attribute = models.ForeignKey(Attribute, on_delete=models.CASCADE)
+    order = models.PositiveSmallIntegerField(default=0)
+    
+    class Meta:
+        unique_together = ('group', 'attribute')
+        ordering = ('order',)
+        
+    def __str__(self):
+        return f"{self.attribute.code} in {self.group.name} (Order: {self.order})"

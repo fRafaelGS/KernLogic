@@ -74,19 +74,41 @@ if 'makemigrations' not in sys.argv and 'migrate' not in sys.argv:
 
     @admin.register(Attribute)
     class AttributeAdmin(admin.ModelAdmin):
-        list_display = ('code', 'label', 'data_type', 'is_localisable', 'is_scopable', 'organization')
-        list_filter = ('data_type', 'is_localisable', 'is_scopable')
-        search_fields = ('code', 'label')
-        
+        list_display = ['id', 'code', 'label', 'data_type', 'is_localisable', 'is_scopable', 'organization', 'created_by']
+        list_filter = ['data_type', 'is_localisable', 'is_scopable', 'organization']
+        search_fields = ['code', 'label']
+        ordering = ['code']
         readonly_fields = ('organization',)
 
     @admin.register(AttributeValue)
     class AttributeValueAdmin(admin.ModelAdmin):
-        list_display = ('attribute', 'product', 'locale', 'channel', 'value', 'organization')
-        list_filter = ('attribute', 'locale', 'channel')
-        search_fields = ('product__name', 'product__sku', 'attribute__code')
-        
+        list_display = ['id', 'get_attribute_code', 'get_product_sku', 'locale', 'channel', 'display_value', 'organization']
+        list_filter = ['attribute__data_type', 'locale', 'channel', 'organization']
+        search_fields = ['attribute__code', 'attribute__label', 'product__sku']
         readonly_fields = ('organization',)
+        
+        def get_attribute_code(self, obj):
+            return obj.attribute.code
+        get_attribute_code.short_description = 'Attribute'
+        get_attribute_code.admin_order_field = 'attribute__code'
+        
+        def get_product_sku(self, obj):
+            return obj.product.sku
+        get_product_sku.short_description = 'Product'
+        get_product_sku.admin_order_field = 'product__sku'
+        
+        def display_value(self, obj):
+            """Format the value nicely based on the attribute type"""
+            if not obj.attribute:
+                return str(obj.value)
+            
+            if obj.attribute.data_type == 'boolean':
+                return 'Yes' if obj.value else 'No'
+            elif obj.attribute.data_type == 'date':
+                return obj.value
+            else:
+                return str(obj.value)
+        display_value.short_description = 'Value'
 
     class AttributeGroupItemInline(admin.TabularInline):
         model = AttributeGroupItem
@@ -94,10 +116,13 @@ if 'makemigrations' not in sys.argv and 'migrate' not in sys.argv:
 
     @admin.register(AttributeGroup)
     class AttributeGroupAdmin(admin.ModelAdmin):
-        list_display = ('name', 'order', 'organization')
-        list_filter = ('organization',)
-        search_fields = ('name',)
-        ordering = ('order', 'name')
+        list_display = ['id', 'name', 'order', 'organization', 'item_count']
+        list_filter = ['organization']
+        search_fields = ['name']
+        ordering = ['order', 'name']
+        readonly_fields = ('organization',)
         inlines = [AttributeGroupItemInline]
         
-        readonly_fields = ('organization',)
+        def item_count(self, obj):
+            return obj.attributegroupitem_set.count()
+        item_count.short_description = 'Attributes'

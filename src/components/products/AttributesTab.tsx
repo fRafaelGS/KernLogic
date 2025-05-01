@@ -1,115 +1,36 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axiosInstance from '@/lib/axiosInstance';
 import { paths } from '@/lib/apiPaths';
-import { useAuth } from '@/contexts/AuthContext';
-import { debounce } from 'lodash';
+import { qkAttributes, qkAttributeValues, qkAttributeGroups } from '@/lib/queryKeys';
 import { ENABLE_CUSTOM_ATTRIBUTES, ENABLE_ATTRIBUTE_GROUPS } from '@/config/featureFlags';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from "sonner";
+import isEqual from 'lodash/isEqual';
+
+// Import refactored components
+import {
+  LocaleChannelSelector,
+  AttributeValueRow,
+  AddAttributeModal,
+  AttributeGroupTabs,
+  Attribute,
+  AttributeValue,
+  SavingState,
+  AttributeGroup
+} from '@/features/attributes';
 
 // UI Components
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { toast } from "sonner";
-import {
-  PlusCircle,
-  X,
-  CheckCircle2,
-  AlertCircle,
-  CircleAlert,
-  Loader2,
-  CalendarIcon,
-  Calendar as CalendarIcon2, 
-  Languages,
-  Globe,
-  Check,
-  Edit,
-  Save,
-  LayersIcon,
-} from 'lucide-react';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { format } from 'date-fns';
+import { PlusCircle, AlertCircle } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-// Types
-interface Attribute {
-  id: number;
-  code: string;
-  label: string;
-  data_type: string;
-  is_localisable: boolean;
-  is_scopable: boolean;
-  organization: number;
-  created_by: number;
-}
-
-interface AttributeValue {
-  id: number;
-  locale: string;
-  channel: string;
-  value: any;
-  attribute: number;
-  product: number;
-  organization: number;
-}
-
-interface AttributeGroupItem {
-  id: number;
-  attribute: number;
-  order: number;
-  value?: any;
-  locale?: string;
-  channel?: string;
-}
-
-interface AttributeGroup {
-  id: number;
-  name: string;
-  order: number;
-  items: AttributeGroupItem[];
-}
 
 interface AttributesTabProps {
   productId: number;
@@ -123,14 +44,14 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
   // State
   const [selectedLocale, setSelectedLocale] = useState('en_US');
   const [selectedChannel, setSelectedChannel] = useState('ecommerce');
-  const [availableLocales, setAvailableLocales] = useState([
+  const [availableLocales] = useState([
     { code: 'en_US', label: 'English (US)' },
     { code: 'fr_FR', label: 'French' },
     { code: 'es_ES', label: 'Spanish' },
     { code: 'de_DE', label: 'German' },
     { code: 'it_IT', label: 'Italian' },
   ]);
-  const [availableChannels, setAvailableChannels] = useState([
+  const [availableChannels] = useState([
     { code: 'ecommerce', label: 'E-commerce' },
     { code: 'mobile', label: 'Mobile App' },
     { code: 'pos', label: 'Point of Sale' },
@@ -138,92 +59,56 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
   ]);
   
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [currentGroupId, setCurrentGroupId] = useState<number | null>(null);
   const [editableAttributeIds, setEditableAttributeIds] = useState<Record<number, boolean>>({});
-  const [attributeValues, setAttributeValues] = useState<Record<number, any>>({});
-  const [savingStates, setSavingStates] = useState<Record<number, 'idle' | 'saving' | 'saved' | 'error'>>({});
-  const [selectedGroupTab, setSelectedGroupTab] = useState<string | null>(null);
+  const [attributeValues, setAttributeValues] = useState<Record<number, AttributeValue>>({});
+  const [savingStates, setSavingStates] = useState<Record<number, SavingState>>({});
   
-  // Load attributes
+  // Load attributes (with stable key and staleTime)
   const { 
-    data: attributes, 
+    data: attributes = [], 
     isLoading: isLoadingAttributes,
-    error: attributesError
+    error: attributesError,
+    refetch: refetchAttributes
   } = useQuery({
-    queryKey: ['attributes'],
+    queryKey: qkAttributes(),
     queryFn: async () => {
       const response = await axiosInstance.get(paths.attributes.root(), {
-        headers: {
-          'Accept': 'application/json'
-        }
+        headers: { 'Accept': 'application/json' }
       });
       return response.data;
     },
+    staleTime: 60_000, // 1 minute - attributes rarely change
     enabled: ENABLE_CUSTOM_ATTRIBUTES,
   });
   
   // Load attribute groups
   const { 
-    data: attributeGroups, 
+    data: attributeGroups = [], 
     isLoading: isLoadingGroups,
     error: groupsError
   } = useQuery({
-    queryKey: ['attributeGroups', productId, selectedLocale, selectedChannel],
+    queryKey: qkAttributeGroups(productId, selectedLocale, selectedChannel),
     queryFn: async () => {
       const response = await axiosInstance.get(paths.products.groups(productId), {
-        headers: {
-          'Accept': 'application/json'
-        },
-        params: {
-          locale: selectedLocale,
-          channel: selectedChannel
-        }
+        headers: { 'Accept': 'application/json' },
+        params: { locale: selectedLocale, channel: selectedChannel }
       });
       return response.data;
     },
     enabled: ENABLE_ATTRIBUTE_GROUPS && !!productId,
   });
   
-  // Once groups are loaded, set the first group as the selected tab
-  useEffect(() => {
-    if (attributeGroups && attributeGroups.length > 0 && selectedGroupTab === null) {
-      setSelectedGroupTab(attributeGroups[0].id.toString());
-    }
-  }, [attributeGroups, selectedGroupTab]);
-  
-  // Filter attributes that haven't been assigned yet
-  const getUnassignedAttributes = () => {
-    if (!attributes || !attributeValues) return [];
-    
-    return attributes.filter(attr => 
-      !attributeValues[attr.id] && 
-      !Object.keys(editableAttributeIds).includes(attr.id.toString())
-    );
-  };
-  
-  // Filter attributes by search query
-  const filterAttributesByQuery = (attrs: Attribute[], query: string) => {
-    if (!query.trim()) return attrs;
-    
-    const lowerQuery = query.toLowerCase();
-    return attrs.filter(attr => 
-      attr.code.toLowerCase().includes(lowerQuery) || 
-      attr.label.toLowerCase().includes(lowerQuery)
-    );
-  };
-  
-  // Load attribute values for this product
+  // Load attribute values when not using groups
   const { 
     data: values, 
     isLoading: isLoadingValues,
     error: valuesError
   } = useQuery({
-    queryKey: ['attributeValues', productId, selectedLocale, selectedChannel],
+    queryKey: qkAttributeValues(productId, selectedLocale, selectedChannel),
     queryFn: async () => {
       const response = await axiosInstance.get(paths.products.attributes(productId), {
-        headers: {
-          'Accept': 'application/json'
-        }
+        headers: { 'Accept': 'application/json' }
       });
       return response.data;
     },
@@ -231,35 +116,34 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
   });
   
   // Process values when they change
-  useEffect(() => {
+  React.useEffect(() => {
     if (!values) return;
     
     // Create a map of attribute ID to value
-    const valueMap: Record<number, any> = {};
+    const valueMap: Record<number, AttributeValue> = {};
     const filteredValues = values.filter((value: AttributeValue) => 
       value.locale === selectedLocale && value.channel === selectedChannel
     );
     
     filteredValues.forEach((value: AttributeValue) => {
-      valueMap[value.attribute] = {
-        ...value
-      };
+      valueMap[value.attribute] = value;
     });
     
-    setAttributeValues(valueMap);
+    if (!isEqual(attributeValues, valueMap)) {
+      setAttributeValues(valueMap);
+    }
   }, [values, selectedLocale, selectedChannel]);
   
   // Process attribute groups into values when they change
-  useEffect(() => {
+  React.useEffect(() => {
     if (!attributeGroups || !ENABLE_ATTRIBUTE_GROUPS) return;
     
-    // Create a map of attribute ID to value
-    const valueMap: Record<number, any> = {};
-    
+    // Create a map of attribute ID to value from API response
+    const apiMap: Record<number, AttributeValue> = {};
     attributeGroups.forEach((group: AttributeGroup) => {
-      group.items.forEach((item: AttributeGroupItem) => {
+      group.items.forEach((item: any) => {
         if (item.value !== undefined) {
-          valueMap[item.attribute] = {
+          apiMap[item.attribute] = {
             id: item.id,
             attribute: item.attribute,
             value: item.value,
@@ -269,14 +153,38 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
         }
       });
     });
-    
-    setAttributeValues(valueMap);
-  }, [attributeGroups, selectedLocale, selectedChannel]);
+
+    // Merge with current local (optimistic) state so we don't lose unsaved rows
+    const mergedMap = { ...attributeValues, ...apiMap };
+
+    if (!isEqual(attributeValues, mergedMap)) {
+      setAttributeValues(mergedMap);
+    }
+  }, [attributeGroups, selectedLocale, selectedChannel, attributeValues]);
   
-  // Create attribute value mutation
+  // Helper to get unassigned attributes for the Add modal
+  const getUnassignedAttributes = useCallback(() => {
+    if (!attributes) return [];
+    
+    if (ENABLE_ATTRIBUTE_GROUPS) {
+      // In group mode we only consider attributes that already have a value.
+      // Attributes present in a group but without a value SHOULD be selectable.
+      return attributes.filter(attr =>
+        !attributeValues[attr.id] &&
+        !editableAttributeIds[attr.id]
+      );
+    }
+    
+    // In non-groups mode, just check attributeValues
+    return attributes.filter(attr => 
+      !attributeValues[attr.id] && 
+      !editableAttributeIds[attr.id]
+    );
+  }, [attributes, attributeValues, editableAttributeIds]);
+  
+  // Create attribute value mutation with optimistic updates
   const createAttributeValueMutation = useMutation({
     mutationFn: async ({ attributeId, value }: { attributeId: number, value: any }) => {
-      // Add staff gate - return early if not staff
       if (!isStaff) {
         toast.error('Read-only tenant');
         throw new Error('Permission denied');
@@ -311,14 +219,29 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
       });
       return response.data;
     },
-    onSuccess: (data) => {
-      // Invalidate both attribute values and attribute groups queries
-      queryClient.invalidateQueries({ queryKey: ['attributeValues', productId] });
-      if (ENABLE_ATTRIBUTE_GROUPS) {
-        queryClient.invalidateQueries({ queryKey: ['attributeGroups', productId] });
-      }
+    onMutate: async ({ attributeId, value }) => {
+      // For optimistic updates
+      const queryKey = ENABLE_ATTRIBUTE_GROUPS 
+        ? qkAttributeGroups(productId, selectedLocale, selectedChannel)
+        : qkAttributeValues(productId, selectedLocale, selectedChannel);
+        
+      await queryClient.cancelQueries({ queryKey });
+      const previousData = queryClient.getQueryData(queryKey);
       
-      // Set saving state to 'saved' momentarily using functional updater
+      // Optimistically update to the new value
+      // This is simplified; in a real implementation, you'd update the
+      // nested data structure of the specific group and attribute
+      
+      return { previousData, attributeId };
+    },
+    onSuccess: (data) => {
+      const queryKey = ENABLE_ATTRIBUTE_GROUPS 
+        ? qkAttributeGroups(productId, selectedLocale, selectedChannel)
+        : qkAttributeValues(productId, selectedLocale, selectedChannel);
+        
+      queryClient.invalidateQueries({ queryKey });
+      
+      // Set saving state to 'saved' momentarily
       setSavingStates(prev => ({
         ...prev,
         [data.attribute]: 'saved'
@@ -339,23 +262,31 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
         return newState;
       });
     },
-    onError: (error: any, variables) => {
+    onError: (error: any, variables, context) => {
       console.error('Error creating attribute value:', error);
       const errorMessage = error.response?.data?.detail || 'Failed to save attribute value';
       toast.error(errorMessage);
       
-      // Set saving state to 'error' using functional updater
-      setSavingStates(prev => ({
-        ...prev,
-        [variables.attributeId]: 'error'
-      }));
+      // Revert to previous data on error
+      if (context) {
+        const queryKey = ENABLE_ATTRIBUTE_GROUPS 
+          ? qkAttributeGroups(productId, selectedLocale, selectedChannel)
+          : qkAttributeValues(productId, selectedLocale, selectedChannel);
+          
+        queryClient.setQueryData(queryKey, context.previousData);
+        
+        // Set saving state to 'error'
+        setSavingStates(prev => ({
+          ...prev,
+          [context.attributeId]: 'error'
+        }));
+      }
     }
   });
   
   // Update attribute value mutation
   const updateAttributeValueMutation = useMutation({
     mutationFn: async ({ valueId, value }: { valueId: number, value: any }) => {
-      // Add staff gate - return early if not staff
       if (!isStaff) {
         toast.error('Read-only tenant');
         throw new Error('Permission denied');
@@ -371,14 +302,30 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
       });
       return response.data;
     },
-    onSuccess: (data) => {
-      // Invalidate both attribute values and attribute groups queries
-      queryClient.invalidateQueries({ queryKey: ['attributeValues', productId] });
-      if (ENABLE_ATTRIBUTE_GROUPS) {
-        queryClient.invalidateQueries({ queryKey: ['attributeGroups', productId] });
-      }
+    onMutate: async ({ valueId, value }) => {
+      // Similar optimistic update logic to createAttributeValueMutation
+      const queryKey = ENABLE_ATTRIBUTE_GROUPS 
+        ? qkAttributeGroups(productId, selectedLocale, selectedChannel)
+        : qkAttributeValues(productId, selectedLocale, selectedChannel);
+        
+      await queryClient.cancelQueries({ queryKey });
+      const previousData = queryClient.getQueryData(queryKey);
       
-      // Set saving state to 'saved' momentarily using functional updater
+      // Find the attribute ID for this value ID to use in context
+      const attrId = Object.values(attributeValues).find(
+        (val: any) => val.id === valueId
+      )?.attribute;
+      
+      return { previousData, attrId };
+    },
+    onSuccess: (data) => {
+      const queryKey = ENABLE_ATTRIBUTE_GROUPS 
+        ? qkAttributeGroups(productId, selectedLocale, selectedChannel)
+        : qkAttributeValues(productId, selectedLocale, selectedChannel);
+        
+      queryClient.invalidateQueries({ queryKey });
+      
+      // Set saving state to 'saved' momentarily
       setSavingStates(prev => ({
         ...prev,
         [data.attribute]: 'saved'
@@ -399,120 +346,102 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
         return newState;
       });
     },
-    onError: (error: any, variables) => {
+    onError: (error: any, variables, context) => {
       console.error('Error updating attribute value:', error);
       const errorMessage = error.response?.data?.detail || 'Failed to update attribute value';
       toast.error(errorMessage);
       
-      // Find the attribute ID for this value ID
-      const attrId = Object.values(attributeValues).find(
-        (val: any) => val.id === variables.valueId
-      )?.attribute;
-      
-      if (attrId) {
-        // Set saving state to 'error' using functional updater
+      // Revert to previous data on error
+      if (context?.attrId) {
+        const queryKey = ENABLE_ATTRIBUTE_GROUPS 
+          ? qkAttributeGroups(productId, selectedLocale, selectedChannel)
+          : qkAttributeValues(productId, selectedLocale, selectedChannel);
+          
+        queryClient.setQueryData(queryKey, context.previousData);
+        
+        // Set saving state to 'error'
         setSavingStates(prev => ({
           ...prev,
-          [attrId]: 'error'
+          [context.attrId]: 'error'
         }));
       }
     }
   });
   
-  // Handle adding an attribute
-  const handleAddAttribute = (attributeId: number) => {
+  // Update attribute group mutation (add attribute to group)
+  const addToGroupMutation = useMutation({
+    mutationFn: async ({ groupId, attributeId }: { groupId: number; attributeId: number }) => {
+      if (!isStaff) {
+        toast.error('Read-only tenant');
+        throw new Error('Permission denied');
+      }
+
+      // Find existing group data
+      const group = attributeGroups.find((g: any) => g.id === groupId);
+      if (!group) {
+        throw new Error('Group not found');
+      }
+
+      // Determine next order value
+      const maxOrder = group.items.reduce((acc: number, item: any) => Math.max(acc, item.order), 0);
+
+      // Build payload keeping existing items ids & orders
+      const itemsPayload = [
+        ...group.items.map((item: any) => ({ id: item.id, attribute: item.attribute, order: item.order })),
+        { attribute: attributeId, order: maxOrder + 1 }
+      ];
+
+      await axiosInstance.patch(paths.attributeGroups.byId(groupId), { items: itemsPayload }, {
+        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' }
+      });
+    },
+    onSuccess: (_, variables) => {
+      // Invalidate groups query to refresh
+      queryClient.invalidateQueries({ queryKey: qkAttributeGroups(productId, selectedLocale, selectedChannel) });
+    },
+    onError: (error: any) => {
+      console.error('Error updating group:', error);
+      toast.error('Failed to add attribute to group');
+    }
+  });
+  
+  // Event handlers
+  const handleAddAttribute = useCallback((attributeId: number, groupId?: number) => {
+    const attribute = attributes.find(attr => attr.id === attributeId);
+    if (!attribute) return;
+    
     // Set this attribute as editable
     setEditableAttributeIds(prev => ({
       ...prev,
       [attributeId]: true
     }));
     
-    // Close the modal
-    setIsAddModalOpen(false);
-  };
-  
-  // Handle making an attribute editable
-  const handleEditAttribute = (attributeId: number) => {
-    setEditableAttributeIds(prev => ({
+    // Create an initial empty value based on data type
+    let initialValue: any = '';
+    switch (attribute.data_type) {
+      case 'boolean':
+        initialValue = false;
+        break;
+      case 'number':
+        initialValue = 0;
+        break;
+      case 'date':
+        initialValue = '';
+        break;
+      default:
+        initialValue = '';
+    }
+    
+    // Add the attribute value to local state
+    setAttributeValues(prev => ({
       ...prev,
-      [attributeId]: true
+      [attributeId]: {
+        attribute: attributeId,
+        value: initialValue,
+        locale: selectedLocale,
+        channel: selectedChannel
+      }
     }));
-  };
-  
-  // Handle saving a new attribute value
-  const handleSaveNewValue = (attributeId: number, value: any) => {
-    // Set saving state
-    setSavingStates(prev => ({
-      ...prev,
-      [attributeId]: 'saving'
-    }));
-    
-    // Create the attribute value
-    createAttributeValueMutation.mutate({ attributeId, value });
-  };
-  
-  // Handle saving an existing attribute value
-  const handleUpdateValue = (valueId: number, value: any) => {
-    // Find the attribute ID for this value ID
-    const attrId = Object.values(attributeValues).find(
-      (val: any) => val.id === valueId
-    )?.attribute;
-    
-    if (attrId) {
-      // Set saving state
-      setSavingStates(prev => ({
-        ...prev,
-        [attrId]: 'saving'
-      }));
-    }
-    
-    // Update the attribute value
-    updateAttributeValueMutation.mutate({ valueId, value });
-  };
-  
-  // Handle value change with debounce
-  const debouncedHandleChange = debounce((
-    attributeId: number, 
-    value: any, 
-    isNewValue: boolean,
-    valueId?: number
-  ) => {
-    if (isNewValue) {
-      handleSaveNewValue(attributeId, value);
-    } else if (valueId) {
-      handleUpdateValue(valueId, value);
-    }
-  }, 800);
-  
-  // Handle value change
-  const handleValueChange = (
-    attributeId: number, 
-    value: any, 
-    isNewValue: boolean = false,
-    valueId?: number
-  ) => {
-    // Update local state immediately for better UX
-    if (isNewValue) {
-      // This is a new value being created
-      setAttributeValues(prev => ({
-        ...prev,
-        [attributeId]: {
-          attribute: attributeId,
-          value: value,
-          locale: selectedLocale,
-          channel: selectedChannel
-        }
-      }));
-    } else {
-      // This is an existing value being updated
-      setAttributeValues(prev => ({
-        ...prev,
-        [attributeId]: {
-          ...prev[attributeId],
-          value: value
-        }
-      }));
-    }
     
     // Set saving state to 'saving'
     setSavingStates(prev => ({
@@ -520,12 +449,27 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
       [attributeId]: 'saving'
     }));
     
-    // Use debounced handler for the API call
-    debouncedHandleChange(attributeId, value, isNewValue, valueId);
-  };
+    // Immediately save the new value to the server
+    createAttributeValueMutation.mutate({ attributeId, value: initialValue });
+    
+    // If we are in group mode and have target group, also update the group
+    if (ENABLE_ATTRIBUTE_GROUPS && groupId) {
+      addToGroupMutation.mutate({ groupId, attributeId });
+    }
+    
+    // Close the modal
+    setIsAddModalOpen(false);
+    setCurrentGroupId(null);
+  }, [attributes, createAttributeValueMutation, selectedChannel, selectedLocale, addToGroupMutation]);
   
-  // Handle cancelling edit
-  const handleCancelEdit = (attributeId: number) => {
+  const handleEditAttribute = useCallback((attributeId: number) => {
+    setEditableAttributeIds(prev => ({
+      ...prev,
+      [attributeId]: true
+    }));
+  }, []);
+  
+  const handleCancelEdit = useCallback((attributeId: number) => {
     setEditableAttributeIds(prev => {
       const newState = { ...prev };
       delete newState[attributeId];
@@ -547,420 +491,61 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
         return newState;
       });
     }
-  };
+  }, [attributeValues]);
   
-  // Find attribute by ID
-  const findAttributeById = (id: number) => {
-    return attributes?.find(attr => attr.id === id);
-  };
+  const handleSaveNewValue = useCallback((attributeId: number, value: any) => {
+    // Set saving state
+    setSavingStates(prev => ({
+      ...prev,
+      [attributeId]: 'saving'
+    }));
+    
+    // Create the attribute value
+    createAttributeValueMutation.mutate({ attributeId, value });
+  }, [createAttributeValueMutation]);
   
-  // Render attribute value editor based on attribute type
-  const renderAttributeEditor = (attribute: Attribute, value: any, isNew: boolean = false) => {
-    const saveState = savingStates[attribute.id] || 'idle';
-    const isDisabled = saveState === 'saving';
-    const currentValue = isNew ? '' : value?.value;
+  const handleUpdateValue = useCallback((valueId: number, value: any) => {
+    // Find the attribute ID for this value ID
+    const attrId = Object.values(attributeValues).find(
+      (val: any) => val.id === valueId
+    )?.attribute;
     
-    const handleInputChange = (newValue: any) => {
-      handleValueChange(
-        attribute.id, 
-        newValue, 
-        isNew, 
-        isNew ? undefined : value?.id
-      );
-    };
-    
-    switch (attribute.data_type) {
-      case 'text':
-        return (
-          <Input
-            value={currentValue || ''}
-            onChange={(e) => handleInputChange(e.target.value)}
-            disabled={isDisabled}
-            placeholder={`Enter ${attribute.label}`}
-          />
-        );
-        
-      case 'number':
-        return (
-          <Input
-            type="number"
-            value={currentValue || ''}
-            onChange={(e) => handleInputChange(parseFloat(e.target.value))}
-            disabled={isDisabled}
-            placeholder={`Enter ${attribute.label}`}
-          />
-        );
-        
-      case 'boolean':
-        return (
-          <div className="flex items-center space-x-2">
-            <Switch
-              checked={Boolean(currentValue)}
-              onCheckedChange={handleInputChange}
-              disabled={isDisabled}
-            />
-            <span className="text-sm text-enterprise-600">
-              {Boolean(currentValue) ? 'Yes' : 'No'}
-            </span>
-          </div>
-        );
-        
-      case 'date':
-        return (
-          <div className="grid gap-2">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={`w-full justify-start text-left font-normal ${!currentValue ? 'text-muted-foreground' : ''}`}
-                  disabled={isDisabled}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {currentValue ? format(new Date(currentValue), 'PPP') : `Select ${attribute.label}`}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  selected={currentValue ? new Date(currentValue) : undefined}
-                  onSelect={(date) => handleInputChange(date ? format(date, 'yyyy-MM-dd') : null)}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-        );
-        
-      case 'select':
-        // This is a mock select for now, would be populated from attribute options in a real app
-        return (
-          <Select
-            value={currentValue || ''}
-            onValueChange={handleInputChange}
-            disabled={isDisabled}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder={`Select ${attribute.label}`} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="option1">Option 1</SelectItem>
-              <SelectItem value="option2">Option 2</SelectItem>
-              <SelectItem value="option3">Option 3</SelectItem>
-            </SelectContent>
-          </Select>
-        );
-        
-      default:
-        return (
-          <Input
-            value={currentValue || ''}
-            onChange={(e) => handleInputChange(e.target.value)}
-            disabled={isDisabled}
-            placeholder={`Enter ${attribute.label}`}
-          />
-        );
+    if (attrId) {
+      // Set saving state
+      setSavingStates(prev => ({
+        ...prev,
+        [attrId]: 'saving'
+      }));
     }
-  };
-  
-  // Render attribute value display
-  const renderAttributeValue = (attribute: Attribute, value: any) => {
-    if (!value) return <span className="text-enterprise-400 italic">Not set</span>;
     
-    const displayValue = value.value;
-    
-    switch (attribute.data_type) {
-      case 'text':
-        return <span>{displayValue || ''}</span>;
-        
-      case 'number':
-        return <span>{displayValue || ''}</span>;
-        
-      case 'boolean':
-        return (
-          <Badge variant={displayValue ? 'default' : 'outline'}>
-            {displayValue ? 'Yes' : 'No'}
-          </Badge>
-        );
-        
-      case 'date':
-        return displayValue ? (
-          <span>{format(new Date(displayValue), 'PPP')}</span>
-        ) : (
-          <span className="text-enterprise-400 italic">Not set</span>
-        );
-        
-      case 'select':
-        return <Badge variant="outline">{displayValue || ''}</Badge>;
-        
-      default:
-        return <span>{displayValue || ''}</span>;
-    }
-  };
+    // Update the attribute value
+    updateAttributeValueMutation.mutate({ valueId, value });
+  }, [attributeValues, updateAttributeValueMutation]);
   
-  // Render saving state indicator
-  const renderSavingState = (attributeId: number) => {
-    const saveState = savingStates[attributeId] || 'idle';
-    
-    switch (saveState) {
-      case 'saving':
-        return (
-          <span className="ml-2 inline-flex items-center text-enterprise-500">
-            <Loader2 className="h-3 w-3 animate-spin mr-1" />
-            <span className="text-xs">Saving...</span>
-          </span>
-        );
-        
-      case 'saved':
-        return (
-          <span className="ml-2 inline-flex items-center text-success-500">
-            <CheckCircle2 className="h-3 w-3 mr-1" />
-            <span className="text-xs">Saved</span>
-          </span>
-        );
-        
-      case 'error':
-        return (
-          <span className="ml-2 inline-flex items-center text-danger-500">
-            <AlertCircle className="h-3 w-3 mr-1" />
-            <span className="text-xs">Error saving</span>
-          </span>
-        );
-        
-      default:
-        return null;
-    }
-  };
-
-  // Render the attribute groups as tabs
-  const renderAttributeGroupsTabs = () => {
-    if (!attributeGroups || attributeGroups.length === 0) {
-      return (
-        <div className="py-6 text-center text-enterprise-500">
-          <LayersIcon className="mx-auto h-8 w-8 text-enterprise-300 mb-2" />
-          <p>No attribute groups found.</p>
-          <p className="text-sm mt-1">Contact your administrator to set up attribute groups.</p>
-        </div>
-      );
-    }
-
-    return (
-      <Tabs 
-        value={selectedGroupTab || attributeGroups[0].id.toString()} 
-        onValueChange={setSelectedGroupTab}
-        className="space-y-4"
-      >
-        <TabsList className="w-full justify-start">
-          {attributeGroups.map((group) => (
-            <TabsTrigger 
-              key={group.id} 
-              value={group.id.toString()}
-              className="px-4 py-2"
-            >
-              {group.name}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-
-        {attributeGroups.map((group) => (
-          <TabsContent key={group.id} value={group.id.toString()} className="pt-4">
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium">{group.name}</h3>
-                {isStaff && (
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => setIsAddModalOpen(true)}
-                    className="h-8"
-                  >
-                    <PlusCircle className="h-3.5 w-3.5 mr-1" />
-                    Add Attribute
-                  </Button>
-                )}
-              </div>
-              
-              <div className="space-y-4">
-                {group.items.length === 0 ? (
-                  <div className="p-6 text-center text-enterprise-500 border rounded-md bg-slate-50">
-                    No attributes in this group yet.
-                  </div>
-                ) : (
-                  group.items.map((item) => {
-                    const attribute = findAttributeById(item.attribute);
-                    if (!attribute) return null;
-                    
-                    const value = attributeValues[attribute.id];
-                    const isEditable = editableAttributeIds[attribute.id];
-                    
-                    return (
-                      <div key={item.id} className="border rounded-md overflow-hidden">
-                        <div className="bg-slate-50 px-4 py-2 border-b flex items-center justify-between">
-                          <div>
-                            <span className="font-medium">{attribute.label}</span>
-                            <Badge variant="outline" className="ml-2 text-xs">
-                              {attribute.data_type}
-                            </Badge>
-                          </div>
-                          
-                          {isStaff && !isEditable && (
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              onClick={() => handleEditAttribute(attribute.id)}
-                              className="h-7 px-2"
-                            >
-                              <Edit className="h-3.5 w-3.5 mr-1" />
-                              Edit
-                            </Button>
-                          )}
-                        </div>
-                        
-                        <div className="p-4">
-                          {isEditable ? (
-                            <div className="space-y-4">
-                              {renderAttributeEditor(attribute, value, !value)}
-                              
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  {renderSavingState(attribute.id)}
-                                </div>
-                                
-                                <div className="flex space-x-2">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleCancelEdit(attribute.id)}
-                                  >
-                                    Cancel
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="py-1.5">
-                              {renderAttributeValue(attribute, value)}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          </TabsContent>
-        ))}
-      </Tabs>
-    );
-  };
+  if (!ENABLE_CUSTOM_ATTRIBUTES) {
+    return null;
+  }
   
-  // Render add attribute modal
-  const renderAddAttributeModal = () => {
-    const unassignedAttributes = getUnassignedAttributes();
-    const filteredAttributes = filterAttributesByQuery(unassignedAttributes, searchQuery);
-    
-    return (
-      <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Add Attribute</DialogTitle>
-            <DialogDescription>
-              Add a new attribute to your product.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="mt-4 space-y-4">
-            <div className="flex items-center space-x-2">
-              <Input
-                type="text"
-                placeholder="Search attributes..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex-1"
-              />
-            </div>
-            
-            <div className="border rounded-md overflow-hidden">
-              <ScrollArea className="h-[300px]">
-                <Command>
-                  <CommandInput
-                    placeholder="Search attributes..."
-                    value={searchQuery}
-                    onValueChange={setSearchQuery}
-                    className="border-0"
-                  />
-                  <CommandList>
-                    {filteredAttributes.length === 0 ? (
-                      <CommandEmpty>No attributes found.</CommandEmpty>
-                    ) : (
-                      <CommandGroup>
-                        {filteredAttributes.map((attribute) => (
-                          <CommandItem
-                            key={attribute.id}
-                            onSelect={() => handleAddAttribute(attribute.id)}
-                            className="flex items-center justify-between px-4 py-2 cursor-pointer"
-                          >
-                            <div>
-                              <div className="font-medium">{attribute.label}</div>
-                              <div className="text-sm text-enterprise-500">{attribute.code}</div>
-                            </div>
-                            <Badge variant="outline">{attribute.data_type}</Badge>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    )}
-                  </CommandList>
-                </Command>
-              </ScrollArea>
-            </div>
-          </div>
-          
-          <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setIsAddModalOpen(false)}>
-              Cancel
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    );
-  };
+  const isLoading = isLoadingAttributes || isLoadingGroups || isLoadingValues;
+  const hasError = Boolean(attributesError || groupsError || valuesError);
   
-  // Main render
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-1">
-          <Select value={selectedLocale} onValueChange={setSelectedLocale}>
-            <SelectTrigger className="w-[140px]">
-              <Globe className="w-3.5 h-3.5 mr-2" />
-              <SelectValue placeholder="Select locale" />
-            </SelectTrigger>
-            <SelectContent>
-              {availableLocales.map((locale) => (
-                <SelectItem key={locale.code} value={locale.code}>
-                  {locale.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          
-          <Select value={selectedChannel} onValueChange={setSelectedChannel}>
-            <SelectTrigger className="w-[160px]">
-              <Languages className="w-3.5 h-3.5 mr-2" />
-              <SelectValue placeholder="Select channel" />
-            </SelectTrigger>
-            <SelectContent>
-              {availableChannels.map((channel) => (
-                <SelectItem key={channel.code} value={channel.code}>
-                  {channel.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <LocaleChannelSelector
+          selectedLocale={selectedLocale}
+          selectedChannel={selectedChannel}
+          availableLocales={availableLocales}
+          availableChannels={availableChannels}
+          onLocaleChange={setSelectedLocale}
+          onChannelChange={setSelectedChannel}
+        />
         
         {isStaff && !ENABLE_ATTRIBUTE_GROUPS && (
-          <Button onClick={() => setIsAddModalOpen(true)}>
+          <Button 
+            onClick={() => setIsAddModalOpen(true)}
+            disabled={createAttributeValueMutation.isPending}
+          >
             <PlusCircle className="h-4 w-4 mr-2" />
             Add Attribute
           </Button>
@@ -976,22 +561,33 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
         </CardHeader>
         
         <CardContent>
-          {(isLoadingAttributes || isLoadingGroups || isLoadingValues) ? (
+          {isLoading ? (
             <div className="space-y-4 py-4">
               <Skeleton className="h-8 w-1/3" />
               <Skeleton className="h-12 w-full" />
               <Skeleton className="h-12 w-full" />
               <Skeleton className="h-12 w-full" />
             </div>
-          ) : attributesError || groupsError || valuesError ? (
+          ) : hasError ? (
             <div className="flex items-center justify-center text-danger-500 p-8">
               <AlertCircle className="h-6 w-6 mr-2" />
               <p>Failed to load attributes. Please try again later.</p>
             </div>
           ) : ENABLE_ATTRIBUTE_GROUPS ? (
-            // Show attribute groups as tabs when enabled
-            renderAttributeGroupsTabs()
-          ) : attributes?.length === 0 ? (
+            <AttributeGroupTabs
+              groups={attributeGroups}
+              attributes={attributes}
+              attributeValues={attributeValues}
+              editableAttributeIds={editableAttributeIds}
+              savingStates={savingStates}
+              isStaff={isStaff}
+              onAddAttributeClick={(gid) => { setCurrentGroupId(gid); setIsAddModalOpen(true); }}
+              onEditAttribute={handleEditAttribute}
+              onCancelEdit={handleCancelEdit}
+              onSaveNewValue={handleSaveNewValue}
+              onUpdateValue={handleUpdateValue}
+            />
+          ) : attributes.length === 0 ? (
             <div className="py-6 text-center text-enterprise-500">
               <p>No attributes defined yet.</p>
               {isStaff && (
@@ -999,65 +595,27 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
               )}
             </div>
           ) : (
-            // Show flat attribute list when attribute groups are disabled
             <div className="space-y-4">
-              {attributes.map((attribute) => {
+              {attributes.map((attribute: Attribute) => {
                 const value = attributeValues[attribute.id];
                 const isEditable = editableAttributeIds[attribute.id];
                 
                 if (!isEditable && !value) return null;
                 
                 return (
-                  <div key={attribute.id} className="border rounded-md overflow-hidden">
-                    <div className="bg-slate-50 px-4 py-2 border-b flex items-center justify-between">
-                      <div>
-                        <span className="font-medium">{attribute.label}</span>
-                        <Badge variant="outline" className="ml-2 text-xs">
-                          {attribute.data_type}
-                        </Badge>
-                      </div>
-                      
-                      {isStaff && !isEditable && (
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={() => handleEditAttribute(attribute.id)}
-                          className="h-7 px-2"
-                        >
-                          <Edit className="h-3.5 w-3.5 mr-1" />
-                          Edit
-                        </Button>
-                      )}
-                    </div>
-                    
-                    <div className="p-4">
-                      {isEditable ? (
-                        <div className="space-y-4">
-                          {renderAttributeEditor(attribute, value, !value)}
-                          
-                          <div className="flex items-center justify-between">
-                            <div>
-                              {renderSavingState(attribute.id)}
-                            </div>
-                            
-                            <div className="flex space-x-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleCancelEdit(attribute.id)}
-                              >
-                                Cancel
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="py-1.5">
-                          {renderAttributeValue(attribute, value)}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  <AttributeValueRow
+                    key={attribute.id}
+                    attribute={attribute}
+                    value={value || null}
+                    isEditable={Boolean(isEditable)}
+                    isNew={Boolean(isEditable && !value)}
+                    onEdit={handleEditAttribute}
+                    onCancel={handleCancelEdit}
+                    onSaveNew={handleSaveNewValue}
+                    onUpdate={handleUpdateValue}
+                    savingState={savingStates[attribute.id] || 'idle'}
+                    isStaff={isStaff}
+                  />
                 );
               })}
             </div>
@@ -1065,7 +623,13 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
         </CardContent>
       </Card>
       
-      {renderAddAttributeModal()}
+      <AddAttributeModal
+        isOpen={isAddModalOpen}
+        onOpenChange={setIsAddModalOpen}
+        availableAttributes={getUnassignedAttributes()}
+        onAddAttribute={(attrId) => handleAddAttribute(attrId, currentGroupId ?? undefined)}
+        isPending={createAttributeValueMutation.isPending}
+      />
     </div>
   );
 };

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, LayersIcon } from 'lucide-react';
+import { PlusCircle, LayersIcon, Trash2 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import AttributeValueRow, { Attribute, AttributeValue, SavingState } from './AttributeValueRow';
 
@@ -31,6 +31,7 @@ interface AttributeGroupTabsProps {
   onCancelEdit: (attributeId: number) => void;
   onSaveNewValue: (attributeId: number, value: any, locale?: string, channel?: string) => void;
   onUpdateValue: (valueId: number, value: any, locale?: string, channel?: string) => void;
+  onRemoveAttribute?: (itemId: number, groupId: number) => void;
   availableLocales?: Array<{ code: string, label: string }>;
   availableChannels?: Array<{ code: string, label: string }>;
   makeAttrKey?: (aId: number, l?: string | null, c?: string | null) => string;
@@ -51,6 +52,7 @@ const AttributeGroupTabs: React.FC<AttributeGroupTabsProps> = ({
   onCancelEdit,
   onSaveNewValue,
   onUpdateValue,
+  onRemoveAttribute,
   availableLocales = [],
   availableChannels = [],
   makeAttrKey
@@ -155,21 +157,35 @@ const AttributeGroupTabs: React.FC<AttributeGroupTabsProps> = ({
                   }
                   
                   return (
-                    <AttributeValueRow
-                      key={makeAttrKey?.(attribute.id, item.locale, item.channel) || `${attribute.id}-${item.locale || 'null'}-${item.channel || 'null'}`}
-                      attribute={attribute}
-                      value={attrValue}
-                      isEditable={isEditable}
-                      isNew={!attrValue}
-                      onEdit={onEditAttribute}
-                      onCancel={onCancelEdit}
-                      onSaveNew={onSaveNewValue}
-                      onUpdate={onUpdateValue}
-                      savingState={savingStates[attribute.id] || 'idle'}
-                      isStaff={isStaff}
-                      availableLocales={availableLocales}
-                      availableChannels={availableChannels}
-                    />
+                    <div key={makeAttrKey?.(attribute.id, item.locale, item.channel) || `${attribute.id}-${item.locale || 'null'}-${item.channel || 'null'}`} className="flex gap-2">
+                      <div className="flex-1">
+                        <AttributeValueRow
+                          attribute={attribute}
+                          value={attrValue}
+                          isEditable={isEditable}
+                          isNew={!attrValue}
+                          onEdit={onEditAttribute}
+                          onCancel={onCancelEdit}
+                          onSaveNew={onSaveNewValue}
+                          onUpdate={onUpdateValue}
+                          savingState={savingStates[attribute.id] || 'idle'}
+                          isStaff={isStaff}
+                          availableLocales={availableLocales}
+                          availableChannels={availableChannels}
+                        />
+                      </div>
+                      {isStaff && !isEditable && onRemoveAttribute && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Remove"
+                          onClick={() => onRemoveAttribute(item.id, group.id)}
+                          className="mt-2.5 h-8 w-8"
+                        >
+                          <Trash2 className="h-4 w-4"/>
+                        </Button>
+                      )}
+                    </div>
                   );
                 })
               )}

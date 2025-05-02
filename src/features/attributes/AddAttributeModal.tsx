@@ -153,6 +153,61 @@ const AddAttributeModal: React.FC<AddAttributeModalProps> = ({
         </DialogHeader>
         
         <div className="mt-4 space-y-4">
+          {/* Always show Locale and Channel selectors at the top */}
+          <div className="grid grid-cols-2 gap-4 p-4 bg-muted/20 rounded-lg border border-muted">
+            <div className="space-y-2">
+              <label className="text-sm font-medium flex items-center gap-1">
+                <Badge variant="outline" className="px-2 py-0 h-5">Locale</Badge>
+              </label>
+              <Select
+                value={selectedLocale}
+                onValueChange={setSelectedLocale}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All locales">
+                    {selectedLocale === 'default' 
+                      ? 'All locales' 
+                      : availableLocales.find(l => l.code === selectedLocale)?.label || selectedLocale}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">All locales</SelectItem>
+                  {availableLocales.map(locale => (
+                    <SelectItem key={locale.code} value={locale.code}>
+                      {locale.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium flex items-center gap-1">
+                <Badge variant="outline" className="px-2 py-0 h-5">Channel</Badge>
+              </label>
+              <Select
+                value={selectedChannel}
+                onValueChange={setSelectedChannel}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All channels">
+                    {selectedChannel === 'default' 
+                      ? 'All channels' 
+                      : availableChannels.find(c => c.code === selectedChannel)?.label || selectedChannel}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">All channels</SelectItem>
+                  {availableChannels.map(channel => (
+                    <SelectItem key={channel.code} value={channel.code}>
+                      {channel.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          
           {selectedAttribute ? (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -161,54 +216,6 @@ const AddAttributeModal: React.FC<AddAttributeModalProps> = ({
                   <p className="text-sm text-gray-500">{selectedAttribute.code}</p>
                 </div>
                 <Badge variant="outline">{selectedAttribute.data_type}</Badge>
-              </div>
-              
-              {/* Always show Locale Selector */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium flex items-center gap-1">
-                  <Globe className="h-3.5 w-3.5" />
-                  Locale
-                </label>
-                <Select
-                  value={selectedLocale}
-                  onValueChange={setSelectedLocale}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="All locales" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="default">All locales</SelectItem>
-                    {availableLocales.map(locale => (
-                      <SelectItem key={locale.code} value={locale.code}>
-                        {locale.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              {/* Always show Channel Selector */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium flex items-center gap-1">
-                  <Monitor className="h-3.5 w-3.5" />
-                  Channel
-                </label>
-                <Select
-                  value={selectedChannel}
-                  onValueChange={setSelectedChannel}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="All channels" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="default">All channels</SelectItem>
-                    {availableChannels.map(channel => (
-                      <SelectItem key={channel.code} value={channel.code}>
-                        {channel.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
               
               <div className="flex justify-between mt-6">

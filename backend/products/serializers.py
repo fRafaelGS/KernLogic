@@ -477,21 +477,22 @@ class AttributeGroupSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         items_data = validated_data.pop('attributegroupitem_set', None)
         
+        # Check if attempting to update items through PATCH
+        if items_data is not None:
+            raise serializers.ValidationError(
+                "Use POST /api/attribute-groups/<id>/items/ to add or DELETE /api/attribute-groups/<id>/items/<item_id>/ to remove"
+            )
+        
         # Update basic fields
         for k, v in validated_data.items():
             setattr(instance, k, v)
         instance.save()
         
-        # Update items if provided
-        if items_data is not None:
-            self._sync_items(instance, items_data)
-            
         return instance
 
     def _sync_items(self, group, items_data):
         """
-        Sync the group items based on the provided data.
-        Creates, updates, or deletes items as needed.
+        Only order-update existing items – creation / deletion are now handled by viewset.
         """
         if not items_data:
             print("No items data provided")
@@ -499,53 +500,11 @@ class AttributeGroupSerializer(serializers.ModelSerializer):
             
         print(f"Syncing items for group {group.id}: {len(items_data)} items")
         
-        # Get current items for comparison
-        current_items = AttributeGroupItem.objects.filter(group=group)
-        seen_ids = []
+        # Create id to item mapping 
+        id_map = {i.get('id'): i for i in items_data if i.get('id')}
         
-        # Process each item from the incoming data
-        for position, item_data in enumerate(items_data):
-            item_id = item_data.get('id')
-            raw_attr = item_data.get('attribute')
-            
-            # Accept either an int or an Attribute instance
-            if isinstance(raw_attr, int):
-                attribute_id = raw_attr
-            elif hasattr(raw_attr, 'pk'):
-                attribute_id = raw_attr.pk
-            else:
-                raise serializers.ValidationError("attribute must be ID")
-            
-            print(f"Processing item at position {position}: id={item_id}, attribute={attribute_id}")
-            
-            # Update existing item's order if it exists
-            if item_id:
-                try:
-                    item = AttributeGroupItem.objects.get(id=item_id)
-                    item.order = position
-                    item.save()
-                    seen_ids.append(item.id)
-                    print(f"Updated existing item {item.id}")
-                except AttributeGroupItem.DoesNotExist:
-                    print(f"Item with id {item_id} not found")
-            
-            # Create new item if it's not an existing one
-            elif attribute_id is not None:
-                print(f"Creating new item for attribute {attribute_id}")
-                try:
-                    # now attribute_id is guaranteed to be int
-                    item = AttributeGroupItem.objects.create(
-                        group=group,
-                        attribute_id=attribute_id,
-                        order=position
-                    )
-                    seen_ids.append(item.id)
-                    print(f"Created new item {item.id}")
-                except Exception as e:
-                    print(f"Error creating item: {e}")
-        
-        # Delete items not in the incoming data
-        items_to_delete = current_items.exclude(id__in=seen_ids)
-        if items_to_delete.exists():
-            print(f"Deleting items: {list(items_to_delete.values_list('id', flat=True))}")
-            items_to_delete.delete() 
+        # Update order of existing items
+        for position, (item_id, payload) in enumerate(id_map.items()):
+            AttributeGroupItem.objects.filter(id=item_id, group=group).update(
+                order=payload.get('order', position)
+            ) 

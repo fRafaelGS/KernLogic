@@ -31,6 +31,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { PlusCircle, AlertCircle } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface AttributesTabProps {
   productId: number;
@@ -67,6 +77,10 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
   const [attributeValues, setAttributeValues] = useState<Record<number, AttributeValue>>({});
   const [savingStates, setSavingStates] = useState<Record<number, SavingState>>({});
   
+  // Confirmation dialog for removing attributes
+  const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
+  const [itemToRemove, setItemToRemove] = useState<{ itemId: number, groupId: number } | null>(null);
+
   // Load attributes (with stable key and staleTime)
   const { 
     data: attributes = [], 
@@ -735,6 +749,45 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
     });
   }, [attributeValues, productId, updateAttributeValueMutation]);
   
+  // Mutation to remove an attribute from a group
+  const removeFromGroupMutation = useMutation({
+    mutationFn: async ({ itemId, groupId }: { itemId: number, groupId: number }) => {
+      await axiosInstance.delete(paths.attributeGroups.removeItem(groupId, itemId));
+    },
+    onSuccess: () => {
+      toast.success('Attribute removed from group');
+      // Refresh the attribute groups data
+      queryClient.invalidateQueries({ 
+        queryKey: qkAttributeGroups(productId, selectedLocale, selectedChannel) 
+      });
+    },
+    onError: (error: any) => {
+      console.error('Error removing attribute from group:', error);
+      toast.error(error.response?.data?.detail || 'Failed to remove attribute from group');
+    }
+  });
+
+  // Handler for removing an attribute from a group
+  const handleRemoveAttribute = useCallback((itemId: number, groupId: number) => {
+    setItemToRemove({ itemId, groupId });
+    setConfirmRemoveOpen(true);
+  }, []);
+
+  // Handler for confirming removal
+  const handleConfirmRemove = useCallback(() => {
+    if (itemToRemove) {
+      removeFromGroupMutation.mutate(itemToRemove);
+    }
+    setConfirmRemoveOpen(false);
+    setItemToRemove(null);
+  }, [itemToRemove, removeFromGroupMutation]);
+
+  // Handler for canceling removal
+  const handleCancelRemove = useCallback(() => {
+    setConfirmRemoveOpen(false);
+    setItemToRemove(null);
+  }, []);
+
   if (!ENABLE_CUSTOM_ATTRIBUTES) {
     return null;
   }
@@ -799,6 +852,7 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
               onCancelEdit={handleCancelEdit}
               onSaveNewValue={handleSaveNewValue}
               onUpdateValue={handleUpdateValue}
+              onRemoveAttribute={handleRemoveAttribute}
               availableLocales={availableLocales}
               availableChannels={availableChannels}
               makeAttrKey={makeAttrKey}
@@ -872,6 +926,22 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
         selectedChannel={selectedChannel}
         groupId={currentGroupId}
       />
+      
+      <AlertDialog open={confirmRemoveOpen} onOpenChange={setConfirmRemoveOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Attribute</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove this attribute from the group?
+              The attribute itself will not be deleted, just removed from this group.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCancelRemove}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmRemove}>Remove</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

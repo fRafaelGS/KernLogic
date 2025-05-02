@@ -96,6 +96,33 @@ class AttributeGroupViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             {'id': item.id, 'attribute': attr_id, 'order': item.order}, 
             status=status.HTTP_201_CREATED
         )
+        
+    @action(detail=True, methods=['delete'], url_path='items/(?P<item_id>\\d+)')
+    def remove_item(self, request, pk=None, item_id=None):
+        """
+        Delete ONE item from the group, leaving the rest intact and re-ordering.
+        """
+        group = self.get_object()
+        try:
+            item = AttributeGroupItem.objects.get(id=item_id, group=group)
+        except AttributeGroupItem.DoesNotExist:
+            return Response(
+                {"detail": "Item not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Delete the item
+        item.delete()
+        
+        # Compact orders (0,1,2,...)
+        for pos, gi in enumerate(
+            AttributeGroupItem.objects.filter(group=group).order_by('order')
+        ):
+            if gi.order != pos:
+                gi.order = pos
+                gi.save(update_fields=['order'])
+                
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 @extend_schema_view(
     list=extend_schema(summary="Get attribute groups with values for a product", 

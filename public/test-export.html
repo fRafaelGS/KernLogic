@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Export Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        button {
+            padding: 10px 15px;
+            margin: 5px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .export-group {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .token-area {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+        }
+        #token {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Export Test Page</h1>
+    <p>Use these buttons to test the direct export functionality.</p>
+    
+    <div class="token-area">
+        <h2>Authentication</h2>
+        <p>Paste your JWT token below (should start with 'Bearer '):</p>
+        <input type="text" id="token" placeholder="Bearer eyJhbGciOiJIUzI1NiIs..." value="" />
+        <button onclick="saveToken()">Save Token</button>
+        <button onclick="fetchFromLocalStorage()">Get From localStorage</button>
+    </div>
+
+    <div class="export-group">
+        <h2>Completeness Report</h2>
+        <button onclick="testExport('completeness', 'csv')">Export CSV</button>
+        <button onclick="testExport('completeness', 'xlsx')">Export Excel</button>
+    </div>
+
+    <div class="export-group">
+        <h2>Readiness Report</h2>
+        <button onclick="testExport('readiness', 'csv')">Export CSV</button>
+        <button onclick="testExport('readiness', 'xlsx')">Export Excel</button>
+    </div>
+
+    <div class="export-group">
+        <h2>Enrichment Velocity Report</h2>
+        <button onclick="testExport('enrichment-velocity', 'csv')">Export CSV</button>
+        <button onclick="testExport('enrichment-velocity', 'xlsx')">Export Excel</button>
+    </div>
+
+    <div class="export-group">
+        <h2>Localization Quality Report</h2>
+        <button onclick="testExport('localization-quality', 'csv')">Export CSV</button>
+        <button onclick="testExport('localization-quality', 'xlsx')">Export Excel</button>
+    </div>
+
+    <div class="export-group">
+        <h2>Change History Report</h2>
+        <button onclick="testExport('change-history', 'csv')">Export CSV</button>
+        <button onclick="testExport('change-history', 'xlsx')">Export Excel</button>
+    </div>
+
+    <script>
+        function saveToken() {
+            const token = document.getElementById('token').value;
+            if (token) {
+                localStorage.setItem('access_token', token);
+                alert('Token saved to localStorage!');
+            } else {
+                alert('Please enter a token first.');
+            }
+        }
+        
+        function fetchFromLocalStorage() {
+            const token = localStorage.getItem('access_token');
+            if (token) {
+                document.getElementById('token').value = token;
+                alert('Token loaded from localStorage.');
+            } else {
+                alert('No token found in localStorage!');
+            }
+        }
+        
+        function testExport(reportType, format) {
+            // Get the token from input or localStorage
+            const inputToken = document.getElementById('token').value;
+            const token = inputToken || localStorage.getItem('access_token');
+            
+            if (!token) {
+                alert('Please enter an authentication token first!');
+                return;
+            }
+            
+            // Create an XMLHttpRequest with proper Auth header
+            const xhr = new XMLHttpRequest();
+            const backendUrl = 'http://localhost:8000';
+            const url = `${backendUrl}/api/analytics/${reportType}-export/?format=${format}`;
+            
+            // Set up the request
+            xhr.open('GET', url, true);
+            xhr.setRequestHeader('Authorization', token.startsWith('Bearer ') ? token : `Bearer ${token}`);
+            xhr.responseType = 'blob';
+            
+            // Handle completion
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    // Create a blob URL and trigger download
+                    const blob = new Blob([xhr.response], {
+                        type: format === 'csv' 
+                            ? 'text/csv' 
+                            : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                    });
+                    
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${reportType}_report.${format}`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                } else {
+                    alert(`Error: ${xhr.status}`);
+                    console.error('Export failed', xhr);
+                }
+            };
+            
+            // Handle errors
+            xhr.onerror = function() {
+                alert('Request failed');
+                console.error('Export request failed', arguments);
+            };
+            
+            // Send the request
+            xhr.send();
+            console.log(`Testing export: ${url} with auth token`);
+        }
+    </script>
+</body>
+</html> 

@@ -45,5 +45,28 @@ export const paths = {
   attributeSets: {
     byId:    (id: number)          => join(API_BASE, 'attribute-sets', id) + '/',
   },
+  reports: {
+    themes: () => join(API_BASE, 'reports/themes') + '/',
+  },
+  analytics: {
+    completeness: () => join(API_BASE, 'analytics/completeness') + '/',
+    readiness: () => join(API_BASE, 'analytics/readiness') + '/',
+    enrichmentVelocity: (days: number = 30) => 
+      join(API_BASE, 'analytics/enrichment-velocity') + `/?days=${days}`,
+    localizationQuality: () => 
+      join(API_BASE, 'analytics/localization-quality') + '/',
+    changeHistory: (params?: { from?: string; to?: string; user?: number }) => {
+      const url = join(API_BASE, 'analytics/change-history') + '/';
+      if (!params) return url;
+      
+      const queryParams = new URLSearchParams();
+      if (params.from) queryParams.append('from', params.from);
+      if (params.to) queryParams.append('to', params.to);
+      if (params.user) queryParams.append('user', params.user.toString());
+      
+      const queryString = queryParams.toString();
+      return queryString ? `${url}?${queryString}` : url;
+    }
+  },
   dashboard: () => join(API_BASE, 'dashboard') + '/',
 } as const; 

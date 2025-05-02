@@ -126,11 +126,6 @@ export const AddRelatedProductPanel: React.FC<AddRelatedProductPanelProps> = ({
     }
   };
   
-  // Focus search input on mount
-  useEffect(() => {
-    searchInputRef.current?.focus();
-  }, []);
-  
   return (
     <div className="border border-input rounded-md p-4 mb-6 bg-card">
       <h3 className="text-sm font-medium mb-3">Add Related Product</h3>

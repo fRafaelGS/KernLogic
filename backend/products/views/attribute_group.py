@@ -8,10 +8,11 @@ from rest_framework import status
 
 from django.db.models import Prefetch, Q
 
-from products.models import AttributeGroup, AttributeValue, Product, AttributeGroupItem
+from products.models import AttributeGroup, AttributeValue, Product, AttributeGroupItem, Attribute
 from products.serializers import AttributeGroupSerializer
 from products.permissions import IsStaffOrReadOnly
 from kernlogic.org_queryset import OrganizationQuerySetMixin
+from ..events import record
 
 @extend_schema_view(
     list=extend_schema(summary="List all attribute groups", 
@@ -91,6 +92,13 @@ class AttributeGroupViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             attribute_id=attr_id, 
             order=max_order+1
         )
+        
+        # Get the attribute name for the log summary
+        attribute = Attribute.objects.get(id=attr_id)
+        
+        # Log this change in the application logs for now - we can't use product events
+        # since this is a group-level change without a specific product
+        print(f"User {request.user.username} added attribute '{attribute.label}' to group '{group.name}'")
         
         return Response(
             {'id': item.id, 'attribute': attr_id, 'order': item.order}, 

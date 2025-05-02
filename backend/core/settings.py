@@ -58,6 +58,9 @@ INSTALLED_APPS = [
     "apps.imports",
     "kernlogic",
     "organizations",
+    "reports",
+    "analytics",
+    "django_filters",
 ]
 
 # Custom middleware to exempt API routes from CSRF
@@ -169,6 +172,10 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.AllowAny',  # Allow access without authentication
+    ],
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend',
+        'rest_framework.filters.OrderingFilter',
     ],
     'UNAUTHENTICATED_USER': None,
     'EXCEPTION_HANDLER': 'kernlogic.exceptions.custom_exception_handler',

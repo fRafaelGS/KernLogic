@@ -8,6 +8,7 @@ from rest_framework import status
 from products.models import AttributeValue, Product, Attribute
 from products.serializers import AttributeValueSerializer
 from kernlogic.org_queryset import OrganizationQuerySetMixin
+from ..events import record
 
 @extend_schema_view(
     list=extend_schema(summary="List attribute values for a product", 
@@ -71,12 +72,42 @@ class AttributeValueViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             channel = None
         
         # Create with our preprocessed data
-        serializer.save(
+        attr_value = serializer.save(
             product_id=product_id,
             attribute_id=attribute_id,
             organization=organization,
             locale=locale,
             channel=channel,
+        )
+
+        # Log the event in the product history
+        product = Product.objects.get(id=product_id)
+        
+        # Create event summary
+        location_context = ""
+        if locale and channel:
+            location_context = f" for locale {locale} and channel {channel}"
+        elif locale:
+            location_context = f" for locale {locale}"
+        elif channel:
+            location_context = f" for channel {channel}"
+        
+        summary = f"Added attribute '{attribute.label}'{location_context}"
+        
+        # Record the event
+        record(
+            product=product,
+            user=self.request.user,
+            event_type="attribute_added",
+            summary=summary,
+            payload={
+                "attribute_id": attribute.id,
+                "attribute_code": attribute.code,
+                "attribute_label": attribute.label,
+                "locale": locale,
+                "channel": channel,
+                "value": attr_value.value
+            }
         )
 
     def perform_update(self, serializer):
@@ -100,10 +131,44 @@ class AttributeValueViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         elif channel == '':
             channel = None
         
+        # Save old value for comparison in event payload
+        old_value = serializer.instance.value
+        
         # Update with our preprocessed data
-        serializer.save(
+        attr_value = serializer.save(
             locale=locale,
             channel=channel
+        )
+        
+        # Log the update event in the product history
+        product = serializer.instance.product
+        
+        # Create event summary
+        location_context = ""
+        if locale and channel:
+            location_context = f" for locale {locale} and channel {channel}"
+        elif locale:
+            location_context = f" for locale {locale}"
+        elif channel:
+            location_context = f" for channel {channel}"
+        
+        summary = f"Updated attribute '{attribute.label}'{location_context}"
+        
+        # Record the event
+        record(
+            product=product,
+            user=self.request.user,
+            event_type="attribute_updated",
+            summary=summary,
+            payload={
+                "attribute_id": attribute.id,
+                "attribute_code": attribute.code,
+                "attribute_label": attribute.label,
+                "locale": locale,
+                "channel": channel,
+                "old_value": old_value,
+                "new_value": attr_value.value
+            }
         )
 
     def create(self, request, *args, **kwargs):
@@ -177,6 +242,37 @@ class AttributeValueViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             serializer = self.get_serializer(existing_value, data=request.data, partial=True, context=context)
             serializer.is_valid(raise_exception=True)
             self.perform_update(serializer)
+            
+            # Log the update event in the product history
+            product = Product.objects.get(id=product_id)
+            
+            # Create event summary
+            location_context = ""
+            if locale and channel:
+                location_context = f" for locale {locale} and channel {channel}"
+            elif locale:
+                location_context = f" for locale {locale}"
+            elif channel:
+                location_context = f" for channel {channel}"
+            
+            summary = f"Updated attribute '{attribute.label}'{location_context}"
+            
+            # Record the event
+            record(
+                product=product,
+                user=request.user,
+                event_type="attribute_updated",
+                summary=summary,
+                payload={
+                    "attribute_id": attribute.id,
+                    "attribute_code": attribute.code,
+                    "attribute_label": attribute.label,
+                    "locale": locale,
+                    "channel": channel,
+                    "value": existing_value.value,
+                    "new_value": serializer.validated_data.get('value', existing_value.value)
+                }
+            )
             
             return Response(serializer.data, status=status.HTTP_200_OK)
             

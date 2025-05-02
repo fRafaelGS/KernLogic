@@ -40,51 +40,193 @@ class AttributeValueViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         """Set organization, product, and attribute from URL parameters and request data"""
-        product = get_object_or_404(
-            Product.objects.filter(organization=self.request.user.profile.organization),
-            pk=self.kwargs.get('product_pk')
-        )
+        # Get data from request
+        data = self.request.data.copy()
         
-        # Get attribute ID from request data
-        attribute_id = self.request.data.get('attribute')
-        if not attribute_id:
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError({"attribute": "This field is required."})
-            
-        # Get the attribute object
+        # Get product and attribute from URL
+        product_id = self.kwargs.get('product_pk')
+        attribute_id = data.get('attribute')
+        
+        # Get organization from current user
+        organization = self.request.user.profile.organization
+        
+        # Get attribute to check if it supports localization/scope
         attribute = get_object_or_404(
-            Attribute.objects.filter(organization=self.request.user.profile.organization),
+            Attribute.objects.filter(organization=organization),
             pk=attribute_id
         )
         
+        # Force locale/channel to None if not supported by attribute
+        locale = data.get('locale')
+        channel = data.get('channel')
+        
+        if not attribute.is_localisable:
+            locale = None
+        elif locale == '':
+            locale = None
+        
+        if not attribute.is_scopable:
+            channel = None
+        elif channel == '':
+            channel = None
+        
+        # Create with our preprocessed data
         serializer.save(
-            organization=self.request.user.profile.organization,
-            product=product,
-            attribute=attribute
+            product_id=product_id,
+            attribute_id=attribute_id,
+            organization=organization,
+            locale=locale,
+            channel=channel,
+        )
+
+    def perform_update(self, serializer):
+        # Get data from request
+        data = self.request.data.copy()
+        
+        # Get attribute to check if it supports localization/scope
+        attribute = serializer.instance.attribute
+        
+        # Force locale/channel to None if not supported by attribute
+        locale = data.get('locale')
+        channel = data.get('channel')
+        
+        if not attribute.is_localisable:
+            locale = None
+        elif locale == '':
+            locale = None
+        
+        if not attribute.is_scopable:
+            channel = None
+        elif channel == '':
+            channel = None
+        
+        # Update with our preprocessed data
+        serializer.save(
+            locale=locale,
+            channel=channel
         )
 
     def create(self, request, *args, **kwargs):
         """Custom create method to set attribute in context"""
+        # Debug the raw request data
+        print(f"[DEBUG] Raw request data: {request.data}")
+        
         # Get attribute ID from request data
         attribute_id = request.data.get('attribute')
         if not attribute_id:
             from rest_framework.exceptions import ValidationError
+            print(f"[DEBUG] ValidationError: attribute field is required")
             raise ValidationError({"attribute": "This field is required."})
             
-        # Get the attribute object
-        attribute = get_object_or_404(
-            Attribute.objects.filter(organization=request.user.profile.organization),
-            pk=attribute_id
-        )
+        # Get product ID from URL
+        product_id = self.kwargs.get('product_pk')
+        print(f"[DEBUG] Product ID from URL: {product_id}")
         
-        # Create a new context dictionary with the attribute
-        context = self.get_serializer_context()
-        context['attribute'] = attribute
+        # Debug the attribute ID
+        print(f"[DEBUG] Attribute ID from request: {attribute_id}, type: {type(attribute_id)}")
         
-        # Create serializer with updated context
-        serializer = self.get_serializer(data=request.data, context=context)
+        try:
+            # Get the attribute object
+            attribute = get_object_or_404(
+                Attribute.objects.filter(organization=request.user.profile.organization),
+                pk=attribute_id
+            )
+            print(f"[DEBUG] Found attribute: {attribute.id} - {attribute.label}")
+        except Exception as e:
+            print(f"[DEBUG] Error getting attribute: {str(e)}")
+            raise
         
-        serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
-        headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers) 
+        # Get locale and channel from request data
+        locale = request.data.get('locale')
+        channel = request.data.get('channel')
+        
+        # Convert empty string values to None for locale and channel
+        if locale == '':
+            locale = None
+        if channel == '':
+            channel = None
+        
+        print(f"[DEBUG] Locale: {locale}, Channel: {channel}")
+        
+        # Check if an attribute value already exists for this combination
+        try:
+            # Build filter for finding existing attribute value
+            filter_kwargs = {
+                'product_id': product_id,
+                'attribute_id': attribute_id,
+                'organization': request.user.profile.organization
+            }
+            
+            # Only add locale/channel to filter if provided
+            if locale is not None:
+                filter_kwargs['locale'] = locale
+            if channel is not None:
+                filter_kwargs['channel'] = channel
+                
+            print(f"[DEBUG] Looking for existing attribute value with filters: {filter_kwargs}")
+            
+            # Try to find existing attribute value
+            existing_value = AttributeValue.objects.get(**filter_kwargs)
+            
+            print(f"[DEBUG] Found existing attribute value: {existing_value.id}")
+            
+            # If we get here, an attribute value exists - update it instead
+            context = self.get_serializer_context()
+            context['attribute'] = attribute
+            
+            serializer = self.get_serializer(existing_value, data=request.data, partial=True, context=context)
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
+            
+            return Response(serializer.data, status=status.HTTP_200_OK)
+            
+        except AttributeValue.DoesNotExist:
+            # No existing value found, create a new one
+            print("[DEBUG] No existing attribute value found, creating new one")
+            
+            # Create a new context dictionary with the attribute
+            context = self.get_serializer_context()
+            context['attribute'] = attribute
+            
+            # Create serializer with updated context
+            serializer = self.get_serializer(data=request.data, context=context)
+            
+            # Validate and check for errors
+            try:
+                serializer.is_valid(raise_exception=True)
+                print(f"[DEBUG] Serializer valid with data: {serializer.validated_data}")
+            except Exception as e:
+                print(f"[DEBUG] Serializer validation error: {str(e)}")
+                raise
+            
+            # Create the instance
+            try:
+                self.perform_create(serializer)
+                print(f"[DEBUG] Successfully created attribute value")
+            except Exception as e:
+                print(f"[DEBUG] Error in perform_create: {str(e)}")
+                raise
+            
+            headers = self.get_success_headers(serializer.data)
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        except AttributeValue.MultipleObjectsReturned:
+            # If multiple values exist, handle the duplication issue
+            print("[DEBUG] Multiple attribute values found, resolving duplication...")
+            
+            # Get all duplicate values
+            duplicates = AttributeValue.objects.filter(**filter_kwargs).order_by('-id')
+            
+            # Keep the most recent one
+            latest_value = duplicates.first()
+            # Delete the rest
+            duplicates.exclude(id=latest_value.id).delete()
+            
+            # Update the remaining value
+            context = self.get_serializer_context()
+            context['attribute'] = attribute
+            
+            serializer = self.get_serializer(latest_value, data=request.data, partial=True, context=context)
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
+            
+            return Response(serializer.data, status=status.HTTP_200_OK) 

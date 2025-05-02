@@ -39,6 +39,7 @@ export const paths = {
   attributeGroups: {
     root: () => join(API_BASE, 'attribute-groups') + '/',
     byId: (id: number) => join(API_BASE, 'attribute-groups', id) + '/',
+    addItem: (id: number) => join(API_BASE, 'attribute-groups', id, 'add-item') + '/',
   },
   attributeSets: {
     byId:    (id: number)          => join(API_BASE, 'attribute-sets', id) + '/',

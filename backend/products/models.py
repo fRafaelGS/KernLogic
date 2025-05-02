@@ -439,7 +439,27 @@ class AttributeValue(models.Model):
     value = models.JSONField()
     
     class Meta:
-        unique_together = [('organization', 'product', 'attribute', 'locale', 'channel')]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['organization','product','attribute'],
+                condition=models.Q(locale__isnull=True, channel__isnull=True),
+                name='uniq_attr_global'
+            ),
+            models.UniqueConstraint(
+                fields=['organization','product','attribute','locale'],
+                condition=models.Q(channel__isnull=True),
+                name='uniq_attr_locale'
+            ),
+            models.UniqueConstraint(
+                fields=['organization','product','attribute','channel'],
+                condition=models.Q(locale__isnull=True),
+                name='uniq_attr_channel'
+            ),
+            models.UniqueConstraint(
+                fields=['organization','product','attribute','locale','channel'],
+                name='uniq_attr_locale_channel'
+            ),
+        ]
         
     def __str__(self):
         attr_code = self.attribute.code if self.attribute else 'unknown'

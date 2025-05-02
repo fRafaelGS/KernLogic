@@ -12,6 +12,10 @@ export interface AttributeGroup {
     id: number;
     attribute: number;
     order: number;
+    value?: any;
+    value_id?: number;
+    locale?: string;
+    channel?: string;
   }>;
 }
 
@@ -25,8 +29,11 @@ interface AttributeGroupTabsProps {
   onAddAttributeClick: (groupId: number) => void;
   onEditAttribute: (attributeId: number) => void;
   onCancelEdit: (attributeId: number) => void;
-  onSaveNewValue: (attributeId: number, value: any) => void;
-  onUpdateValue: (valueId: number, value: any) => void;
+  onSaveNewValue: (attributeId: number, value: any, locale?: string, channel?: string) => void;
+  onUpdateValue: (valueId: number, value: any, locale?: string, channel?: string) => void;
+  availableLocales?: Array<{ code: string, label: string }>;
+  availableChannels?: Array<{ code: string, label: string }>;
+  makeAttrKey?: (aId: number, l?: string | null, c?: string | null) => string;
 }
 
 /**
@@ -43,7 +50,10 @@ const AttributeGroupTabs: React.FC<AttributeGroupTabsProps> = ({
   onEditAttribute,
   onCancelEdit,
   onSaveNewValue,
-  onUpdateValue
+  onUpdateValue,
+  availableLocales = [],
+  availableChannels = [],
+  makeAttrKey
 }) => {
   // If no groups, show a placeholder
   if (groups.length === 0) {
@@ -98,31 +108,43 @@ const AttributeGroupTabs: React.FC<AttributeGroupTabsProps> = ({
             
             <div className="space-y-4">
               {group.items.length === 0 ? (
-                <div className="p-6 text-center text-enterprise-500 border rounded-md bg-slate-50">
-                  No attributes in this group yet.
+                <div className="text-center py-8 text-enterprise-500">
+                  <p>No attributes in this group yet.</p>
+                  {isStaff && (
+                    <Button 
+                      variant="link" 
+                      onClick={() => onAddAttributeClick(group.id)}
+                      className="mt-2"
+                    >
+                      <PlusCircle className="h-3.5 w-3.5 mr-1" />
+                      Add your first attribute
+                    </Button>
+                  )}
                 </div>
               ) : (
                 group.items.map((item) => {
                   const attribute = findAttributeById(item.attribute);
                   if (!attribute) return null;
                   
-                  const value = attributeValues[attribute.id];
-                  const isEditable = Boolean(editableAttributeIds[attribute.id]);
-                  const savingState = savingStates[attribute.id] || 'idle';
+                  const isEditable = editableAttributeIds[attribute.id] || false;
+                  const attrKey = makeAttrKey ? makeAttrKey(attribute.id, item.locale, item.channel) : attribute.id.toString();
+                  const attrValue = attributeValues[attrKey] || attributeValues[attribute.id];
                   
                   return (
                     <AttributeValueRow
-                      key={item.id}
+                      key={makeAttrKey?.(attribute.id, item.locale, item.channel) || `${attribute.id}-${item.locale || 'null'}-${item.channel || 'null'}`}
                       attribute={attribute}
-                      value={value || null}
+                      value={attrValue}
                       isEditable={isEditable}
-                      isNew={isEditable && !value}
+                      isNew={!attrValue}
                       onEdit={onEditAttribute}
                       onCancel={onCancelEdit}
                       onSaveNew={onSaveNewValue}
                       onUpdate={onUpdateValue}
-                      savingState={savingState}
+                      savingState={savingStates[attribute.id] || 'idle'}
                       isStaff={isStaff}
+                      availableLocales={availableLocales}
+                      availableChannels={availableChannels}
                     />
                   );
                 })

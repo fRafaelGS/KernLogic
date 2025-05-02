@@ -364,6 +364,9 @@ class AttributeValueSerializer(serializers.ModelSerializer):
             
         org = self.context['request'].user.profile.organization
         
+        # Debug log the incoming value
+        print(f"AttributeValueSerializer.validate: Validating value for attr {attr.id} ({attr.label}): {data.get('value')}, type: {type(data.get('value'))}")
+        
         # Check organization matches
         if attr.organization_id != org.id:
             raise serializers.ValidationError("Attribute belongs to a different organization")
@@ -374,7 +377,15 @@ class AttributeValueSerializer(serializers.ModelSerializer):
             if attr.data_type == 'number':
                 # Ensure value is numeric
                 try:
-                    float(value)
+                    # Convert to float for validation, but use the raw value in the data
+                    # This preserves integers vs. floats distinction
+                    float_val = float(value)
+                    # If it's a whole number, convert to int
+                    if float_val.is_integer():
+                        data['value'] = int(float_val)
+                    else:
+                        data['value'] = float_val
+                    print(f"Converted number value: {data['value']} (type: {type(data['value'])})")
                 except (ValueError, TypeError):
                     raise serializers.ValidationError({"value": f"Value must be a number for attribute '{attr.label}'"})
             
@@ -387,6 +398,10 @@ class AttributeValueSerializer(serializers.ModelSerializer):
                         data['value'] = False
                     else:
                         raise serializers.ValidationError({"value": f"Invalid boolean value for attribute '{attr.label}'"})
+                else:
+                    # Ensure it's a proper boolean
+                    data['value'] = bool(value)
+                print(f"Converted boolean value: {data['value']} (type: {type(data['value'])})")
             
             elif attr.data_type == 'date':
                 # Validate date format - strictly enforce ISO-8601 (YYYY-MM-DD)
@@ -413,6 +428,7 @@ class AttributeValueSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError(
                         {"value": f"Invalid date value for attribute '{attr.label}'. Must be a valid date in ISO-8601 format (YYYY-MM-DD)"}
                     )
+                print(f"Validated date value: {data['value']}")
             
         except Exception as e:
             if not isinstance(e, serializers.ValidationError):
@@ -420,6 +436,18 @@ class AttributeValueSerializer(serializers.ModelSerializer):
             raise
             
         return data
+        
+    def create(self, validated_data):
+        print(f"AttributeValueSerializer.create: Creating with data: {validated_data}")
+        instance = super().create(validated_data)
+        print(f"Created attribute value: {instance.id}, value: {instance.value}, type: {type(instance.value)}")
+        return instance
+        
+    def update(self, instance, validated_data):
+        print(f"AttributeValueSerializer.update: Updating with data: {validated_data}")
+        instance = super().update(instance, validated_data)
+        print(f"Updated attribute value: {instance.id}, value: {instance.value}, type: {type(instance.value)}")
+        return instance
 
 class AttributeGroupItemSerializer(serializers.ModelSerializer):
     class Meta:
@@ -461,19 +489,32 @@ class AttributeGroupSerializer(serializers.ModelSerializer):
         return instance
 
     def _sync_items(self, group, items_data):
-        """Synchronize the items for this group, preserving order."""
-        print(f"Syncing items for group {group.id}: {items_data}")
+        """
+        Sync the group items based on the provided data.
+        Creates, updates, or deletes items as needed.
+        """
+        if not items_data:
+            print("No items data provided")
+            return
+            
+        print(f"Syncing items for group {group.id}: {len(items_data)} items")
         
-        # Get existing items
+        # Get current items for comparison
         current_items = AttributeGroupItem.objects.filter(group=group)
-        
-        # Remember seen IDs to know which ones to keep
         seen_ids = []
         
         # Process each item from the incoming data
         for position, item_data in enumerate(items_data):
             item_id = item_data.get('id')
-            attribute_id = item_data.get('attribute')
+            raw_attr = item_data.get('attribute')
+            
+            # Accept either an int or an Attribute instance
+            if isinstance(raw_attr, int):
+                attribute_id = raw_attr
+            elif hasattr(raw_attr, 'pk'):
+                attribute_id = raw_attr.pk
+            else:
+                raise serializers.ValidationError("attribute must be ID")
             
             print(f"Processing item at position {position}: id={item_id}, attribute={attribute_id}")
             
@@ -489,10 +530,10 @@ class AttributeGroupSerializer(serializers.ModelSerializer):
                     print(f"Item with id {item_id} not found")
             
             # Create new item if it's not an existing one
-            elif attribute_id:
+            elif attribute_id is not None:
                 print(f"Creating new item for attribute {attribute_id}")
                 try:
-                    # Create with direct integer ID (not attribute object)
+                    # now attribute_id is guaranteed to be int
                     item = AttributeGroupItem.objects.create(
                         group=group,
                         attribute_id=attribute_id,

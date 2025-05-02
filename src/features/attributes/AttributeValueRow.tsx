@@ -8,6 +8,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Check, X, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { useDebouncedCallback } from '@/hooks/useDebouncedCallback';
+import { Edit, Calendar as CalendarIcon, Globe, Monitor } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 // Types
 export interface Attribute {
@@ -36,10 +38,12 @@ interface AttributeValueRowProps {
   isNew?: boolean;
   onEdit: (attributeId: number) => void;
   onCancel: (attributeId: number) => void;
-  onSaveNew: (attributeId: number, value: any) => void;
-  onUpdate: (valueId: number, value: any) => void;
+  onSaveNew: (attributeId: number, value: any, locale?: string, channel?: string) => void;
+  onUpdate: (valueId: number, value: any, locale?: string, channel?: string) => void;
   savingState: SavingState;
   isStaff: boolean;
+  availableLocales?: Array<{ code: string, label: string }>;
+  availableChannels?: Array<{ code: string, label: string }>;
 }
 
 /**
@@ -55,19 +59,30 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
   onSaveNew,
   onUpdate,
   savingState,
-  isStaff
+  isStaff,
+  availableLocales = [],
+  availableChannels = []
 }) => {
   // Keep a local value for editing
   const [localValue, setLocalValue] = useState<any>(
     isNew ? '' : value?.value
   );
   
+  // Add state for locale and channel
+  const [localLocale, setLocalLocale] = useState<string | null>(
+    isNew ? null : value?.locale || null
+  );
+  
+  const [localChannel, setLocalChannel] = useState<string | null>(
+    isNew ? null : value?.channel || null
+  );
+  
   // Use debounced callback for saving
   const debouncedSave = useDebouncedCallback((newValue: any) => {
     if (isNew) {
-      onSaveNew(attribute.id, newValue);
+      onSaveNew(attribute.id, newValue, localLocale, localChannel);
     } else if (value?.id) {
-      onUpdate(value.id, newValue);
+      onUpdate(value.id, newValue, localLocale, localChannel);
     }
   }, 800);
   
@@ -83,15 +98,15 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
       e.preventDefault();
       // Manually trigger save
       if (isNew) {
-        onSaveNew(attribute.id, localValue);
+        onSaveNew(attribute.id, localValue, localLocale, localChannel);
       } else if (value?.id) {
-        onUpdate(value.id, localValue);
+        onUpdate(value.id, localValue, localLocale, localChannel);
       }
     } else if (e.key === 'Escape') {
       e.preventDefault();
       onCancel(attribute.id);
     }
-  }, [attribute.id, isNew, localValue, onCancel, onSaveNew, onUpdate, value?.id]);
+  }, [attribute.id, isNew, localValue, onCancel, onSaveNew, onUpdate, value?.id, localLocale, localChannel]);
   
   // Render attribute editor based on data type
   const renderAttributeEditor = () => {
@@ -104,8 +119,9 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
             value={localValue || ''}
             onChange={(e) => handleValueChange(e.target.value)}
             disabled={isDisabled}
-            placeholder={`Enter ${attribute.label}`}
+            placeholder={`Enter ${attribute.label} (press Enter to save)`}
             onKeyDown={handleKeyDown}
+            autoFocus
           />
         );
         
@@ -116,8 +132,9 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
             value={localValue || ''}
             onChange={(e) => handleValueChange(parseFloat(e.target.value))}
             disabled={isDisabled}
-            placeholder={`Enter ${attribute.label}`}
+            placeholder={`Enter ${attribute.label} (press Enter to save)`}
             onKeyDown={handleKeyDown}
+            autoFocus
           />
         );
         
@@ -141,6 +158,7 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
             <Popover>
               <PopoverTrigger asChild>
                 <Button
+                  type="button"
                   variant="outline"
                   className={`w-full justify-start text-left font-normal ${!localValue ? 'text-muted-foreground' : ''}`}
                   disabled={isDisabled}
@@ -149,12 +167,18 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
                   {localValue ? format(new Date(localValue), 'PPP') : `Select ${attribute.label}`}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
+              <PopoverContent className="w-auto p-0" align="start">
                 <Calendar
                   mode="single"
                   selected={localValue ? new Date(localValue) : undefined}
-                  onSelect={(date) => handleValueChange(date ? format(date, 'yyyy-MM-dd') : null)}
+                  onSelect={(date) => {
+                    console.log("Selected date:", date);
+                    const formattedDate = date ? format(date, 'yyyy-MM-dd') : null;
+                    console.log("Formatted date:", formattedDate);
+                    handleValueChange(formattedDate);
+                  }}
                   initialFocus
+                  disabled={isDisabled}
                 />
               </PopoverContent>
             </Popover>
@@ -167,8 +191,9 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
             value={localValue || ''}
             onChange={(e) => handleValueChange(e.target.value)}
             disabled={isDisabled}
-            placeholder={`Enter ${attribute.label}`}
+            placeholder={`Enter ${attribute.label} (press Enter to save)`}
             onKeyDown={handleKeyDown}
+            autoFocus
           />
         );
     }
@@ -206,49 +231,138 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
     }
   };
   
-  // Render attribute value display
-  const renderAttributeValue = () => {
-    if (!value) return <span className="text-enterprise-400 italic">Not set</span>;
+  // Render value based on data type
+  const renderValue = () => {
+    // For editable mode, don't show value
+    if (isEditable) {
+      return renderAttributeEditor();
+    }
     
-    const displayValue = value.value;
+    // Not in edit mode - render the value based on type
+    if (value === null || value === undefined) {
+      return <span className="text-muted-foreground italic">No value</span>;
+    }
+    
+    // Extract the actual value from the AttributeValue object if needed
+    const actualValue = typeof value === 'object' && value !== null && 'value' in value 
+      ? value.value 
+      : value;
     
     switch (attribute.data_type) {
-      case 'text':
-        return <span>{displayValue || ''}</span>;
-        
-      case 'number':
-        return <span>{displayValue || ''}</span>;
-        
       case 'boolean':
-        return (
-          <Badge variant={displayValue ? 'default' : 'outline'}>
-            {displayValue ? 'Yes' : 'No'}
+        return Boolean(actualValue) ? (
+          <Badge variant="outline" className="bg-green-50 text-green-600 border-green-100">
+            <Check className="h-3 w-3 mr-1" />
+            Yes
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="bg-red-50 text-red-600 border-red-100">
+            <X className="h-3 w-3 mr-1" />
+            No
           </Badge>
         );
-        
       case 'date':
-        return displayValue ? (
-          <span>{format(new Date(displayValue), 'PPP')}</span>
-        ) : (
-          <span className="text-enterprise-400 italic">Not set</span>
-        );
-        
-      case 'select':
-        return <Badge variant="outline">{displayValue || ''}</Badge>;
-        
+        if (!actualValue) return <span className="text-muted-foreground italic">No date</span>;
+        return format(new Date(actualValue as string), 'yyyy-MM-dd');
+      case 'number':
+        // Make sure we display 0 values properly (don't treat them as falsy)
+        if (actualValue === 0) return "0";
+        return actualValue?.toString() || '';
       default:
-        return <span>{displayValue || ''}</span>;
+        // Text
+        return actualValue as string || '';
     }
+  };
+  
+  // Render locale and channel selectors
+  const renderLocaleChannelSelectors = () => {
+    const isDisabled = savingState === 'saving';
+    
+    return (
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        {/* Locale selector - only show if attribute is localisable */}
+        {attribute.is_localisable && (
+          <div className="space-y-2">
+            <label className="text-sm font-medium flex items-center gap-1">
+              <Globe className="h-3.5 w-3.5" />
+              Locale
+            </label>
+            <Select
+              value={localLocale || ""}
+              onValueChange={setLocalLocale}
+              disabled={isDisabled}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select locale" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">All locales</SelectItem>
+                {availableLocales.map(locale => (
+                  <SelectItem key={locale.code} value={locale.code}>
+                    {locale.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        
+        {/* Channel selector - only show if attribute is scopable */}
+        {attribute.is_scopable && (
+          <div className="space-y-2">
+            <label className="text-sm font-medium flex items-center gap-1">
+              <Monitor className="h-3.5 w-3.5" />
+              Channel
+            </label>
+            <Select 
+              value={localChannel || ""}
+              onValueChange={setLocalChannel}
+              disabled={isDisabled}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select channel" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">All channels</SelectItem>
+                {availableChannels.map(channel => (
+                  <SelectItem key={channel.code} value={channel.code}>
+                    {channel.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </div>
+    );
   };
   
   return (
     <div className="border rounded-md overflow-hidden">
       <div className="bg-slate-50 px-4 py-2 border-b flex items-center justify-between">
-        <div>
+        <div className="flex items-center">
           <span className="font-medium">{attribute.label}</span>
           <Badge variant="outline" className="ml-2 text-xs">
             {attribute.data_type}
           </Badge>
+          
+          {/* Display badges for locale and channel when not editing */}
+          {!isEditable && (
+            <>
+              {value?.locale && (
+                <Badge variant="outline" className="ml-2 text-xs bg-blue-50">
+                  <Globe className="h-3 w-3 mr-1" />
+                  {value.locale || 'All'}
+                </Badge>
+              )}
+              {value?.channel && (
+                <Badge variant="outline" className="ml-2 text-xs bg-purple-50">
+                  <Monitor className="h-3 w-3 mr-1" />
+                  {value.channel || 'All'}
+                </Badge>
+              )}
+            </>
+          )}
         </div>
         
         {isStaff && !isEditable && (
@@ -267,6 +381,9 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
       <div className="p-4">
         {isEditable ? (
           <div className="space-y-4">
+            {/* Add locale/channel selectors */}
+            {renderLocaleChannelSelectors()}
+            
             {renderAttributeEditor()}
             
             <div className="flex items-center justify-between">
@@ -282,20 +399,32 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
                 >
                   Cancel
                 </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  disabled={savingState === 'saving'}
+                  onClick={() => {
+                    if (isNew) {
+                      onSaveNew(attribute.id, localValue, localLocale, localChannel);
+                    } else if (value?.id) {
+                      onUpdate(value.id, localValue, localLocale, localChannel);
+                    }
+                  }}
+                >
+                  <Check className="h-3.5 w-3.5 mr-1" />
+                  Save
+                </Button>
               </div>
             </div>
           </div>
         ) : (
           <div className="py-1.5">
-            {renderAttributeValue()}
+            {renderValue()}
           </div>
         )}
       </div>
     </div>
   );
 };
-
-// Missing import for Edit icon and CalendarIcon
-import { Edit, Calendar as CalendarIcon } from 'lucide-react';
 
 export default React.memo(AttributeValueRow); 

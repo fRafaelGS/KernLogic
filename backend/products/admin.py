@@ -22,13 +22,28 @@ if 'makemigrations' not in sys.argv and 'migrate' not in sys.argv:
         model = ProductAsset
         extra = 1
 
+    class AttributeValueInline(admin.TabularInline):
+        model = AttributeValue
+        extra = 0
+        # keep tenant safety
+        def get_queryset(self, request):
+            qs = super().get_queryset(request)
+            if request.user.is_superuser:
+                return qs
+            return qs.filter(organization=request.user.profile.organization)
+
+        fields = ('attribute', 'value', 'locale', 'channel')
+        can_delete = False
+        readonly_fields = ()  # make empty tuple → rows are editable
+        ordering = ('attribute__label',)
+
     @admin.register(Product)
     class ProductAdmin(admin.ModelAdmin):
         list_display = ('name', 'sku', 'price', 'category', 'is_active', 'created_at')
         list_filter = ('is_active', 'category')
         search_fields = ('name', 'sku', 'description')
         ordering = ('-created_at',)
-        inlines = [ProductImageInline, ProductRelationInline, ProductAssetInline]
+        inlines = [AttributeValueInline, ProductImageInline, ProductRelationInline, ProductAssetInline]
         
         readonly_fields = ('organization',)
         

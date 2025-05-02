@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Attribute } from './AttributeValueRow';
+import React, { useState, useEffect } from 'react';
+import { Attribute, AttributeValue } from './AttributeValueRow';
 import { 
   Dialog, 
   DialogContent, 
@@ -20,13 +20,20 @@ import {
   CommandItem, 
   CommandList 
 } from "@/components/ui/command";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Globe, Monitor } from 'lucide-react';
 
 interface AddAttributeModalProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   availableAttributes: Attribute[];
-  onAddAttribute: (attributeId: number) => void;
+  onAddAttribute: (attribute: Attribute, locale?: string, channel?: string) => void;
   isPending: boolean;
+  availableLocales?: Array<{ code: string, label: string }>;
+  availableChannels?: Array<{ code: string, label: string }>;
+  attributeValues?: Record<string, AttributeValue>;
+  selectedLocale?: string;
+  selectedChannel?: string;
 }
 
 /**
@@ -37,9 +44,48 @@ const AddAttributeModal: React.FC<AddAttributeModalProps> = ({
   onOpenChange,
   availableAttributes,
   onAddAttribute,
-  isPending
+  isPending,
+  availableLocales = [],
+  availableChannels = [],
+  attributeValues = {},
+  selectedLocale: propSelectedLocale = '',
+  selectedChannel: propSelectedChannel = ''
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedAttribute, setSelectedAttribute] = useState<Attribute | null>(null);
+  const [selectedLocale, setSelectedLocale] = useState<string>(propSelectedLocale);
+  const [selectedChannel, setSelectedChannel] = useState<string>(propSelectedChannel);
+  
+  // Initialize locale/channel from props when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedLocale(propSelectedLocale);
+      setSelectedChannel(propSelectedChannel);
+    }
+  }, [isOpen, propSelectedLocale, propSelectedChannel]);
+  
+  // Debug props
+  React.useEffect(() => {
+    if (isOpen) {
+      console.log('AddAttributeModal opened with props:', { 
+        attributesCount: availableAttributes?.length,
+        localesCount: availableLocales?.length,
+        channelsCount: availableChannels?.length,
+        defaultLocale: propSelectedLocale,
+        defaultChannel: propSelectedChannel
+      });
+    }
+  }, [isOpen, availableAttributes, availableLocales, availableChannels, propSelectedLocale, propSelectedChannel]);
+  
+  // Reset state when modal opens or closes
+  React.useEffect(() => {
+    if (!isOpen) {
+      setSelectedAttribute(null);
+      setSelectedLocale(propSelectedLocale);
+      setSelectedChannel(propSelectedChannel);
+      setSearchQuery('');
+    }
+  }, [isOpen, propSelectedLocale, propSelectedChannel]);
   
   // Filter attributes by search query
   const filterAttributesByQuery = (attrs: Attribute[], query: string) => {
@@ -54,6 +100,27 @@ const AddAttributeModal: React.FC<AddAttributeModalProps> = ({
   
   const filteredAttributes = filterAttributesByQuery(availableAttributes, searchQuery);
   
+  const handleSelectAttribute = (attribute: Attribute) => {
+    console.log('Selected attribute:', attribute);
+    setSelectedAttribute(attribute);
+  };
+  
+  const handleAddAttribute = () => {
+    if (selectedAttribute) {
+      console.log('Adding attribute with locale/channel:', {
+        attribute: selectedAttribute,
+        locale: selectedLocale || null,
+        channel: selectedChannel || null
+      });
+      
+      onAddAttribute(
+        selectedAttribute,
+        selectedLocale || null,
+        selectedChannel || null
+      );
+    }
+  };
+  
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -65,57 +132,140 @@ const AddAttributeModal: React.FC<AddAttributeModalProps> = ({
         </DialogHeader>
         
         <div className="mt-4 space-y-4">
-          <div className="flex items-center space-x-2">
-            <Input
-              type="text"
-              placeholder="Search attributes..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex-1"
-            />
-          </div>
-          
-          <div className="border rounded-md overflow-hidden">
-            <ScrollArea className="h-[300px]">
-              <Command>
-                <CommandInput
+          {selectedAttribute ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-medium">{selectedAttribute.label}</h3>
+                  <p className="text-sm text-gray-500">{selectedAttribute.code}</p>
+                </div>
+                <Badge variant="outline">{selectedAttribute.data_type}</Badge>
+              </div>
+              
+              {/* Locale Selector - Always show if attribute is localisable */}
+              {selectedAttribute.is_localisable && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-1">
+                    <Globe className="h-3.5 w-3.5" />
+                    Locale
+                  </label>
+                  <Select
+                    value={selectedLocale}
+                    onValueChange={setSelectedLocale}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="All locales" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">All locales</SelectItem>
+                      {availableLocales.map(locale => (
+                        <SelectItem key={locale.code} value={locale.code}>
+                          {locale.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              
+              {/* Channel Selector - Always show if attribute is scopable */}
+              {selectedAttribute.is_scopable && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-1">
+                    <Monitor className="h-3.5 w-3.5" />
+                    Channel
+                  </label>
+                  <Select
+                    value={selectedChannel}
+                    onValueChange={setSelectedChannel}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="All channels" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">All channels</SelectItem>
+                      {availableChannels.map(channel => (
+                        <SelectItem key={channel.code} value={channel.code}>
+                          {channel.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              
+              <div className="flex justify-between mt-6">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setSelectedAttribute(null)}
+                  size="sm"
+                >
+                  Back
+                </Button>
+                <Button 
+                  onClick={handleAddAttribute}
+                  disabled={isPending}
+                  size="sm"
+                >
+                  Add Attribute
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center space-x-2">
+                <Input
+                  type="text"
                   placeholder="Search attributes..."
                   value={searchQuery}
-                  onValueChange={setSearchQuery}
-                  className="border-0"
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="flex-1"
                 />
-                <CommandList>
-                  {filteredAttributes.length === 0 ? (
-                    <CommandEmpty>No attributes found.</CommandEmpty>
-                  ) : (
-                    <CommandGroup>
-                      {filteredAttributes.map((attribute) => (
-                        <CommandItem
-                          key={attribute.id}
-                          onSelect={() => onAddAttribute(attribute.id)}
-                          className="flex items-center justify-between px-4 py-2 cursor-pointer"
-                          disabled={isPending}
-                        >
-                          <div>
-                            <div className="font-medium">{attribute.label}</div>
-                            <div className="text-sm text-enterprise-500">{attribute.code}</div>
-                          </div>
-                          <Badge variant="outline">{attribute.data_type}</Badge>
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  )}
-                </CommandList>
-              </Command>
-            </ScrollArea>
-          </div>
+              </div>
+              
+              <div className="border rounded-md overflow-hidden">
+                <ScrollArea className="h-[300px]">
+                  <Command>
+                    <CommandInput
+                      placeholder="Search attributes..."
+                      value={searchQuery}
+                      onValueChange={setSearchQuery}
+                      className="border-0"
+                    />
+                    <CommandList>
+                      {filteredAttributes.length === 0 ? (
+                        <CommandEmpty>No attributes found.</CommandEmpty>
+                      ) : (
+                        <CommandGroup>
+                          {filteredAttributes.map((attribute) => (
+                            <CommandItem
+                              key={attribute.id}
+                              onSelect={() => handleSelectAttribute(attribute)}
+                              className="flex items-center justify-between px-4 py-2 cursor-pointer"
+                              disabled={isPending}
+                            >
+                              <div>
+                                <div className="font-medium">{attribute.label}</div>
+                                <div className="text-sm text-enterprise-500">{attribute.code}</div>
+                              </div>
+                              <Badge variant="outline">{attribute.data_type}</Badge>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      )}
+                    </CommandList>
+                  </Command>
+                </ScrollArea>
+              </div>
+              
+              <DialogFooter className="mt-4">
+                <Button variant="outline" onClick={() => onOpenChange(false)}>
+                  Cancel
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </div>
-        
-        <DialogFooter className="mt-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

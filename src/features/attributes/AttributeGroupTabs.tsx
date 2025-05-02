@@ -130,6 +130,30 @@ const AttributeGroupTabs: React.FC<AttributeGroupTabsProps> = ({
                   const attrKey = makeAttrKey ? makeAttrKey(attribute.id, item.locale, item.channel) : attribute.id.toString();
                   const attrValue = attributeValues[attrKey] || attributeValues[attribute.id];
                   
+                  // Skip rendering this item if:
+                  // 1. It has a specific locale/channel that doesn't match the current value in the parent
+                  // 2. And it's not currently being edited
+                  // This ensures we only show attributes in their correct locale/channel tab
+                  if (!isEditable && attrValue) {
+                    // If item has locale or channel that doesn't match the attributeValue
+                    // and we're not in edit mode, don't show it
+                    const valueLocale = attrValue.locale;
+                    const valueChannel = attrValue.channel;
+                    
+                    // Check if this value should be visible in current context
+                    const shouldHide = 
+                      // If value has a specific locale that doesn't match item.locale, hide it
+                      (valueLocale && item.locale && valueLocale !== item.locale) ||
+                      // If value has a specific channel that doesn't match item.channel, hide it
+                      (valueChannel && item.channel && valueChannel !== item.channel);
+                    
+                    // Skip rendering this item if it shouldn't be visible
+                    if (shouldHide) {
+                      console.log(`Hiding attribute ${attribute.label} with locale=${valueLocale} channel=${valueChannel} because it doesn't match item locale=${item.locale} channel=${item.channel}`);
+                      return null;
+                    }
+                  }
+                  
                   return (
                     <AttributeValueRow
                       key={makeAttrKey?.(attribute.id, item.locale, item.channel) || `${attribute.id}-${item.locale || 'null'}-${item.channel || 'null'}`}

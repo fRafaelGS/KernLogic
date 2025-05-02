@@ -204,21 +204,41 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
   const getUnassignedAttributes = useCallback(() => {
     if (!attributes) return [];
     
-    if (ENABLE_ATTRIBUTE_GROUPS) {
-      // In group mode we only consider attributes that already have a value.
-      // Attributes present in a group but without a value SHOULD be selectable.
-      return attributes.filter(attr =>
-        !attributeValues[attr.id] &&
+    if (ENABLE_ATTRIBUTE_GROUPS && currentGroupId) {
+      console.log('Getting attributes for group', currentGroupId);
+      
+      // Find the current group
+      const currentGroup = attributeGroups.find((g: any) => g.id === currentGroupId);
+      if (!currentGroup) {
+        console.log('Group not found:', currentGroupId);
+        return [];
+      }
+      
+      // Get all attributes that are part of this group
+      const groupItems = currentGroup.items || [];
+      console.log('Group items:', groupItems);
+      
+      // Get the attributes that are part of this group
+      const groupAttributeIds = groupItems.map((item: any) => item.attribute);
+      console.log('Group attribute IDs:', groupAttributeIds);
+      
+      // Return attributes that ARE in the group but DON'T have values yet
+      return attributes.filter(attr => 
+        // Attribute must be in the group
+        groupAttributeIds.includes(attr.id) && 
+        // But must not have a value yet for this locale/channel
+        !attributeValues[makeAttrKey(attr.id, selectedLocale, selectedChannel)] &&
+        // And must not already be in edit mode
         !editableAttributeIds[attr.id]
       );
     }
     
     // In non-groups mode, just check attributeValues
     return attributes.filter(attr => 
-      !attributeValues[attr.id] && 
+      !attributeValues[makeAttrKey(attr.id, selectedLocale, selectedChannel)] && 
       !editableAttributeIds[attr.id]
     );
-  }, [attributes, attributeValues, editableAttributeIds]);
+  }, [attributes, attributeValues, editableAttributeIds, ENABLE_ATTRIBUTE_GROUPS, currentGroupId, attributeGroups, selectedLocale, selectedChannel, makeAttrKey]);
   
   // Create attribute value mutation with optimistic updates
   const createAttributeValueMutation = useMutation({
@@ -600,115 +620,45 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
     }
   });
   
-  // Update attribute group mutation (add attribute to group)
-  const addToGroupMutation = useMutation({
-    mutationFn: async ({ groupId, attributeId }: { groupId: number; attributeId: number }) => {
-      if (!isStaff) {
-        toast.error('Read-only tenant');
-        throw new Error('Permission denied');
-      }
-
-      console.log(`Adding attribute ${attributeId} to group ${groupId}`);
-      
-      try {
-        // Use the new add-item endpoint
-        const url = paths.attributeGroups.addItem(groupId);
-        console.log(`Using API path: ${url}`);
-        
-        // Make a POST request to add a single item
-        const response = await axiosInstance.post(
-          url, 
-          { attribute: attributeId }, 
-          {
-            headers: { 
-              'Accept': 'application/json', 
-              'Content-Type': 'application/json' 
-            }
-          }
-        );
-        console.log('Add item response:', response.data);
-        return {
-          ...response.data,
-          id: groupId // Include the group ID for compatibility with existing code
-        };
-      } catch (error) {
-        console.error('API error adding item to group:', error);
-        if (error.response) {
-          console.error('Error response:', {
-            status: error.response.status,
-            data: JSON.stringify(error.response.data)
-          });
-        }
-        throw error;
-      }
-    },
-    onSuccess: (data, variables) => {
-      console.log(`Successfully added attribute ${variables.attributeId} to group ${variables.groupId}`, data);
-      
-      toast.success('Attribute added to group successfully');
-      
-      // Invalidate groups query to refresh
-      queryClient.invalidateQueries({ queryKey: qkAttributeGroups(productId, selectedLocale, selectedChannel) });
-    },
-    onError: (error: any) => {
-      console.error('Error adding attribute to group:', error);
-      
-      let errorMessage = 'Failed to add attribute to group';
-      
-      // Improved error message extraction
-      if (error.response?.data) {
-        const responseData = error.response.data;
-        console.error('Error response data:', responseData);
-        
-        if (responseData.detail) {
-          errorMessage = `Error: ${responseData.detail}`;
-        } else if (typeof responseData === 'string') {
-          errorMessage = `Error: ${responseData}`;
-        } else {
-          // Try to extract any field error
-          const firstErrorField = Object.keys(responseData)[0];
-          if (firstErrorField) {
-            errorMessage = `Error in ${firstErrorField}: ${responseData[firstErrorField]}`;
-          }
-        }
-      } else if (error.message) {
-        errorMessage = `Error: ${error.message}`;
-      }
-      
-      toast.error(errorMessage);
-    }
-  });
-  
   // Event handlers
-  const handleAddAttribute = useCallback((attribute: Attribute, locale?: string, channel?: string) => {
-    console.log("Adding attribute:", attribute, "locale:", locale, "channel:", channel);
+  const handleAddAttribute = useCallback(async (attribute: Attribute, locale?: string, channel?: string) => {
+    console.log("Adding attribute value for:", attribute, "with locale:", locale, "channel:", channel);
     
-    // Don't close the modal immediately - let onSuccess handle it
+    // Convert 'default' to null for backend
+    const apiLocale = locale === 'default' ? null : locale;
+    const apiChannel = channel === 'default' ? null : channel;
     
-    // Create an attribute value for this attribute
+    console.log(`Using API values: locale=${apiLocale}, channel=${apiChannel}`);
+    
+    // No more group modification in this function!
+    // Simply create an attribute value and open it for editing
+    
     createAttributeValueMutation.mutate({
       attributeId: attribute.id,
       value: '',  // Start with empty value
-      productId: productId,  // Pass the product ID
-      locale: locale, 
-      channel: channel
+      productId: productId,
+      locale: apiLocale, 
+      channel: apiChannel
     }, {
       onSuccess: (data) => {
         console.log("Created attribute value:", data);
         
-        // Now add this attribute to the current group
-        if (currentGroupId) {
-          addToGroupMutation.mutate({
-            groupId: currentGroupId,
-            attributeId: attribute.id
-          });
-        }
+        // Mark the new attribute as "editing" right away
+        setEditableAttributeIds(prev => ({
+          ...prev,
+          [data.attribute]: true
+        }));
         
-        // Only close the modal after successful creation
+        // Ensure the groups query is refreshed to show the new value
+        queryClient.invalidateQueries({ 
+          queryKey: qkAttributeGroups(productId, selectedLocale, selectedChannel) 
+        });
+        
+        // Close the modal after successful creation
         setIsAddModalOpen(false);
       }
     });
-  }, [addToGroupMutation, createAttributeValueMutation, currentGroupId, productId, setIsAddModalOpen]);
+  }, [createAttributeValueMutation, productId, setIsAddModalOpen, queryClient, selectedLocale, selectedChannel]);
   
   const handleEditAttribute = useCallback((attributeId: number) => {
     setEditableAttributeIds(prev => ({
@@ -868,6 +818,25 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
                 
                 if (!isEditable && !value) return null;
                 
+                // In non-group mode, check if value matches selected locale/channel
+                if (!isEditable && value) {
+                  const valueLocale = value.locale;
+                  const valueChannel = value.channel;
+                  
+                  // Skip rendering if this value has a specific locale/channel 
+                  // that doesn't match the current selection
+                  const shouldHide = 
+                    // If value has a specific locale that doesn't match selectedLocale, hide it
+                    (valueLocale && valueLocale !== selectedLocale) ||
+                    // If value has a specific channel that doesn't match selectedChannel, hide it
+                    (valueChannel && valueChannel !== selectedChannel);
+                  
+                  if (shouldHide) {
+                    console.log(`Hiding attribute ${attribute.label} with locale=${valueLocale} channel=${valueChannel} because it doesn't match selection locale=${selectedLocale} channel=${selectedChannel}`);
+                    return null;
+                  }
+                }
+                
                 return (
                   <AttributeValueRow
                     key={attribute.id}
@@ -901,6 +870,7 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
         availableChannels={availableChannels}
         selectedLocale={selectedLocale}
         selectedChannel={selectedChannel}
+        groupId={currentGroupId}
       />
     </div>
   );

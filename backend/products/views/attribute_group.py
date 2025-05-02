@@ -112,15 +112,19 @@ class ProductAttributeGroupViewSet(OrganizationQuerySetMixin, viewsets.ReadOnlyM
     
     def get_queryset(self):
         product_id = self.kwargs.get('product_pk')
-        locale = self.request.query_params.get('locale')
-        channel = self.request.query_params.get('channel')
+        locale     = self.request.query_params.get('locale')
+        channel    = self.request.query_params.get('channel')
         
-        # Build filter for attribute values
+        # Build a more precise filter for attribute values
         value_filter = Q(product_id=product_id)
         if locale:
             value_filter &= Q(locale=locale)
+        else:
+            value_filter &= Q(locale__isnull=True)
         if channel:
             value_filter &= Q(channel=channel)
+        else:
+            value_filter &= Q(channel__isnull=True)
             
         # Get organization from request
         org = self.request.user.profile.organization
@@ -134,7 +138,7 @@ class ProductAttributeGroupViewSet(OrganizationQuerySetMixin, viewsets.ReadOnlyM
             Prefetch(
                 'attributegroupitem_set__attribute__attributevalue_set',
                 queryset=AttributeValue.objects.filter(
-                    product_id=product_id,
+                    value_filter,
                     organization=org
                 ).select_related('attribute'),
                 to_attr='product_values'
@@ -163,56 +167,113 @@ class ProductAttributeGroupViewSet(OrganizationQuerySetMixin, viewsets.ReadOnlyM
         # Create a mapping of attribute ID to value for quick lookup
         attribute_value_map = {}
         for value in all_attribute_values:
-            key = f"{value.attribute_id}"
-            if locale and value.locale != locale:
+            # Create a composite key that includes attribute ID, locale, and channel
+            # This ensures we respect the specific locale/channel selection
+            key = f"{value.attribute_id}::{value.locale or ''}::{value.channel or ''}"
+            
+            # If specific locale/channel requested, only include exact matches or null values
+            # (null meaning "applies to all")
+            if locale and value.locale and value.locale != locale:
                 continue
-            if channel and value.channel != channel:
+            if channel and value.channel and value.channel != channel:
                 continue
             
-            # Only store the most relevant value
-            # If we already have a value with matching locale/channel, use that
+            # Only store the value if it's the most specific match:
+            # 1. Values with exact locale/channel match are preferred
+            # 2. Values with partial matches (one matches, one null) are next
+            # 3. Values with both locale and channel as null are last (they apply to all)
             if key in attribute_value_map:
-                existing = attribute_value_map[key]
-                # If current matches the locale/channel better, replace
-                if (locale and value.locale == locale and existing.locale != locale) or \
-                   (channel and value.channel == channel and existing.channel != channel):
-                    attribute_value_map[key] = value
+                # We already have a value for this attribute+locale+channel, skip
+                continue
             else:
-                attribute_value_map[key] = value
+                # Create a more specific key that we'll use for duplicate detection
+                # when specific locale/channel is requested
+                if locale or channel:
+                    specific_key = f"{value.attribute_id}"
+                    attribute_value_map[key] = value
+                    
+                    # If we have both a specific locale/channel and null locale/channel,
+                    # prefer the specific one (overwrite the general one)
+                    if specific_key in attribute_value_map:
+                        existing = attribute_value_map[specific_key]
+                        replace_existing = False
+                        
+                        # If locale is specified, prefer matching locale over null
+                        if locale and existing.locale != locale and (value.locale == locale or value.locale is None):
+                            replace_existing = True
+                            
+                        # If channel is specified, prefer matching channel over null
+                        if channel and existing.channel != channel and (value.channel == channel or value.channel is None):
+                            replace_existing = True
+                            
+                        if replace_existing:
+                            attribute_value_map[specific_key] = value
+                    else:
+                        attribute_value_map[specific_key] = value
+                else:
+                    # No specific locale/channel requested, just use the attribute ID as key
+                    attribute_value_map[key] = value
         
-        print(f"Found {len(attribute_value_map)} direct attribute values")
+        print(f"Found {len(attribute_value_map)} direct attribute values after filtering")
+        for k, v in attribute_value_map.items():
+            print(f"  Map entry: {k} -> value={v.value}, locale={v.locale}, channel={v.channel}")
         
         # Now process each group and item
         for group in data:
             print(f"Group: {group['name']} (id: {group['id']})")
             for item in group.get('items', []):
                 attribute_id = item['attribute']
-                print(f"  Item: id={item['id']}, attribute={attribute_id}")
                 
-                # First check our direct map
-                if str(attribute_id) in attribute_value_map:
-                    value_obj = attribute_value_map[str(attribute_id)]
+                # Generate keys for this attribute with the current locale/channel context
+                attr_key = f"{attribute_id}::{locale or ''}::{channel or ''}"
+                attr_key_any = f"{attribute_id}:::::"  # Key for values that apply to all locales/channels
+                
+                print(f"  Item: id={item['id']}, attribute={attribute_id}, looking for keys {attr_key} or {attr_key_any}")
+                
+                # First try to find an exact match for the locale/channel
+                if attr_key in attribute_value_map:
+                    value_obj = attribute_value_map[attr_key]
                     item['value'] = value_obj.value
                     item['locale'] = value_obj.locale
                     item['channel'] = value_obj.channel
                     item['value_id'] = value_obj.id
-                    print(f"  → Setting value from direct map: {value_obj.value} (ID: {value_obj.id})")
+                    print(f"  → Setting value from EXACT match: {value_obj.value} (ID: {value_obj.id})")
+                # Then try to find a value that applies to all locales/channels
+                elif attr_key_any in attribute_value_map:
+                    value_obj = attribute_value_map[attr_key_any]
+                    item['value'] = value_obj.value
+                    item['locale'] = value_obj.locale
+                    item['channel'] = value_obj.channel
+                    item['value_id'] = value_obj.id
+                    print(f"  → Setting value from ALL match: {value_obj.value} (ID: {value_obj.id})")
+                # If no specific match, look for a partial match
                 else:
-                    # Fall back to the original logic
-                    for attr_group_item in queryset:
-                        for attr_item in attr_group_item.attributegroupitem_set.all():
-                            if attr_item.id == item['id']:
-                                # Found the attribute, now get its values for this product
-                                values = getattr(attr_item.attribute, 'product_values', [])
-                                # Debug log for attribute values
-                                print(f"Item {item['id']} (attr: {attr_item.attribute.id}): Found {len(values)} values from prefetch")
-                                if values:
-                                    item['value'] = values[0].value
-                                    item['locale'] = values[0].locale
-                                    item['channel'] = values[0].channel
-                                    # Add the actual attributevalue id
-                                    item['value_id'] = values[0].id
-                                    print(f"  → Setting value from prefetch: {values[0].value} (ID: {values[0].id})")
+                    # Look for any key that starts with the attribute ID
+                    potential_keys = [k for k in attribute_value_map.keys() if k.startswith(f"{attribute_id}::")]
+                    if potential_keys:
+                        # Use the first match we find
+                        value_obj = attribute_value_map[potential_keys[0]]
+                        item['value'] = value_obj.value
+                        item['locale'] = value_obj.locale
+                        item['channel'] = value_obj.channel
+                        item['value_id'] = value_obj.id
+                        print(f"  → Setting value from PARTIAL match: {value_obj.value} (ID: {value_obj.id})")
+                    else:
+                        # Fall back to the original prefetch-based logic
+                        for attr_group_item in queryset:
+                            for attr_item in attr_group_item.attributegroupitem_set.all():
+                                if attr_item.id == item['id']:
+                                    # Found the attribute, now get its values for this product
+                                    values = getattr(attr_item.attribute, 'product_values', [])
+                                    # Debug log for attribute values
+                                    print(f"Item {item['id']} (attr: {attr_item.attribute.id}): Found {len(values)} values from prefetch")
+                                    if values:
+                                        item['value'] = values[0].value
+                                        item['locale'] = values[0].locale
+                                        item['channel'] = values[0].channel
+                                        # Add the actual attributevalue id
+                                        item['value_id'] = values[0].id
+                                        print(f"  → Setting value from prefetch: {values[0].value} (ID: {values[0].id})")
         
         # Final review of populated data
         for group in data:

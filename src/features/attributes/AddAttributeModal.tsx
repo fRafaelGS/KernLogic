@@ -34,6 +34,7 @@ interface AddAttributeModalProps {
   attributeValues?: Record<string, AttributeValue>;
   selectedLocale?: string;
   selectedChannel?: string;
+  groupId?: number | null;
 }
 
 /**
@@ -49,18 +50,19 @@ const AddAttributeModal: React.FC<AddAttributeModalProps> = ({
   availableChannels = [],
   attributeValues = {},
   selectedLocale: propSelectedLocale = '',
-  selectedChannel: propSelectedChannel = ''
+  selectedChannel: propSelectedChannel = '',
+  groupId = null
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAttribute, setSelectedAttribute] = useState<Attribute | null>(null);
-  const [selectedLocale, setSelectedLocale] = useState<string>(propSelectedLocale);
-  const [selectedChannel, setSelectedChannel] = useState<string>(propSelectedChannel);
+  const [selectedLocale, setSelectedLocale] = useState<string>(propSelectedLocale || 'default');
+  const [selectedChannel, setSelectedChannel] = useState<string>(propSelectedChannel || 'default');
   
   // Initialize locale/channel from props when modal opens
   useEffect(() => {
     if (isOpen) {
-      setSelectedLocale(propSelectedLocale);
-      setSelectedChannel(propSelectedChannel);
+      setSelectedLocale(propSelectedLocale || 'default');
+      setSelectedChannel(propSelectedChannel || 'default');
     }
   }, [isOpen, propSelectedLocale, propSelectedChannel]);
   
@@ -72,17 +74,18 @@ const AddAttributeModal: React.FC<AddAttributeModalProps> = ({
         localesCount: availableLocales?.length,
         channelsCount: availableChannels?.length,
         defaultLocale: propSelectedLocale,
-        defaultChannel: propSelectedChannel
+        defaultChannel: propSelectedChannel,
+        groupId
       });
     }
-  }, [isOpen, availableAttributes, availableLocales, availableChannels, propSelectedLocale, propSelectedChannel]);
+  }, [isOpen, availableAttributes, availableLocales, availableChannels, propSelectedLocale, propSelectedChannel, groupId]);
   
   // Reset state when modal opens or closes
   React.useEffect(() => {
     if (!isOpen) {
       setSelectedAttribute(null);
-      setSelectedLocale(propSelectedLocale);
-      setSelectedChannel(propSelectedChannel);
+      setSelectedLocale(propSelectedLocale || 'default');
+      setSelectedChannel(propSelectedChannel || 'default');
       setSearchQuery('');
     }
   }, [isOpen, propSelectedLocale, propSelectedChannel]);
@@ -109,17 +112,35 @@ const AddAttributeModal: React.FC<AddAttributeModalProps> = ({
     if (selectedAttribute) {
       console.log('Adding attribute with locale/channel:', {
         attribute: selectedAttribute,
-        locale: selectedLocale || null,
-        channel: selectedChannel || null
+        locale: selectedLocale === 'default' ? null : selectedLocale,
+        channel: selectedChannel === 'default' ? null : selectedChannel
       });
       
       onAddAttribute(
         selectedAttribute,
-        selectedLocale || null,
-        selectedChannel || null
+        selectedLocale === 'default' ? null : selectedLocale,
+        selectedChannel === 'default' ? null : selectedChannel
       );
     }
   };
+  
+  // Add validation for locale/channel requirements
+  const isAddButtonDisabled = React.useMemo(() => {
+    if (!selectedAttribute) return true;
+    if (isPending) return true;
+    
+    // Check if locale is required but not selected
+    if (selectedAttribute.is_localisable && selectedLocale === 'default') {
+      return true;
+    }
+    
+    // Check if channel is required but not selected
+    if (selectedAttribute.is_scopable && selectedChannel === 'default') {
+      return true;
+    }
+    
+    return false;
+  }, [selectedAttribute, selectedLocale, selectedChannel, isPending]);
   
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -142,57 +163,53 @@ const AddAttributeModal: React.FC<AddAttributeModalProps> = ({
                 <Badge variant="outline">{selectedAttribute.data_type}</Badge>
               </div>
               
-              {/* Locale Selector - Always show if attribute is localisable */}
-              {selectedAttribute.is_localisable && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium flex items-center gap-1">
-                    <Globe className="h-3.5 w-3.5" />
-                    Locale
-                  </label>
-                  <Select
-                    value={selectedLocale}
-                    onValueChange={setSelectedLocale}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="All locales" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">All locales</SelectItem>
-                      {availableLocales.map(locale => (
-                        <SelectItem key={locale.code} value={locale.code}>
-                          {locale.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+              {/* Always show Locale Selector */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium flex items-center gap-1">
+                  <Globe className="h-3.5 w-3.5" />
+                  Locale
+                </label>
+                <Select
+                  value={selectedLocale}
+                  onValueChange={setSelectedLocale}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All locales" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">All locales</SelectItem>
+                    {availableLocales.map(locale => (
+                      <SelectItem key={locale.code} value={locale.code}>
+                        {locale.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               
-              {/* Channel Selector - Always show if attribute is scopable */}
-              {selectedAttribute.is_scopable && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium flex items-center gap-1">
-                    <Monitor className="h-3.5 w-3.5" />
-                    Channel
-                  </label>
-                  <Select
-                    value={selectedChannel}
-                    onValueChange={setSelectedChannel}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="All channels" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">All channels</SelectItem>
-                      {availableChannels.map(channel => (
-                        <SelectItem key={channel.code} value={channel.code}>
-                          {channel.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+              {/* Always show Channel Selector */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium flex items-center gap-1">
+                  <Monitor className="h-3.5 w-3.5" />
+                  Channel
+                </label>
+                <Select
+                  value={selectedChannel}
+                  onValueChange={setSelectedChannel}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All channels" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">All channels</SelectItem>
+                    {availableChannels.map(channel => (
+                      <SelectItem key={channel.code} value={channel.code}>
+                        {channel.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               
               <div className="flex justify-between mt-6">
                 <Button 
@@ -204,10 +221,15 @@ const AddAttributeModal: React.FC<AddAttributeModalProps> = ({
                 </Button>
                 <Button 
                   onClick={handleAddAttribute}
-                  disabled={isPending}
+                  disabled={isAddButtonDisabled}
                   size="sm"
                 >
-                  Add Attribute
+                  {isPending ? (
+                    <>
+                      <span className="mr-2">Adding...</span>
+                      <span className="animate-spin">⟳</span>
+                    </>
+                  ) : "Add Attribute"}
                 </Button>
               </div>
             </div>

@@ -69,28 +69,47 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
   );
   
   // Add state for locale and channel
-  const [localLocale, setLocalLocale] = useState<string | null>(
-    isNew ? null : value?.locale || null
+  const [localLocale, setLocalLocale] = useState<string>(
+    isNew ? "default" : (value?.locale || "default")
   );
   
-  const [localChannel, setLocalChannel] = useState<string | null>(
-    isNew ? null : value?.channel || null
+  const [localChannel, setLocalChannel] = useState<string>(
+    isNew ? "default" : (value?.channel || "default")
   );
   
   // Use debounced callback for saving
   const debouncedSave = useDebouncedCallback((newValue: any) => {
     if (isNew) {
-      onSaveNew(attribute.id, newValue, localLocale, localChannel);
+      onSaveNew(
+        attribute.id, 
+        newValue, 
+        localLocale === "default" ? null : localLocale, 
+        localChannel === "default" ? null : localChannel
+      );
     } else if (value?.id) {
-      onUpdate(value.id, newValue, localLocale, localChannel);
+      onUpdate(
+        value.id, 
+        newValue, 
+        localLocale === "default" ? null : localLocale, 
+        localChannel === "default" ? null : localChannel
+      );
     }
   }, 800);
   
   // Handle value change
   const handleValueChange = useCallback((newValue: any) => {
+    console.log(`Value changed for attribute ${attribute.id} to:`, newValue);
+    console.log(`Current locale: ${localLocale}, channel: ${localChannel}`);
+    
+    // Process locale and channel
+    const apiLocale = localLocale === 'default' ? null : localLocale;
+    const apiChannel = localChannel === 'default' ? null : localChannel;
+    
+    console.log(`Using API values: locale=${apiLocale}, channel=${apiChannel}`);
+    
     setLocalValue(newValue);
     debouncedSave(newValue);
-  }, [debouncedSave]);
+  }, [debouncedSave, attribute.id, localLocale, localChannel]);
   
   // Handle keyboard events
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -98,9 +117,19 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
       e.preventDefault();
       // Manually trigger save
       if (isNew) {
-        onSaveNew(attribute.id, localValue, localLocale, localChannel);
+        onSaveNew(
+          attribute.id, 
+          localValue, 
+          localLocale === "default" ? null : localLocale,
+          localChannel === "default" ? null : localChannel
+        );
       } else if (value?.id) {
-        onUpdate(value.id, localValue, localLocale, localChannel);
+        onUpdate(
+          value.id, 
+          localValue, 
+          localLocale === "default" ? null : localLocale,
+          localChannel === "default" ? null : localChannel
+        );
       }
     } else if (e.key === 'Escape') {
       e.preventDefault();
@@ -172,10 +201,14 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
                   mode="single"
                   selected={localValue ? new Date(localValue) : undefined}
                   onSelect={(date) => {
-                    console.log("Selected date:", date);
-                    const formattedDate = date ? format(date, 'yyyy-MM-dd') : null;
-                    console.log("Formatted date:", formattedDate);
-                    handleValueChange(formattedDate);
+                    if (date) {
+                      // Format date to ISO string (YYYY-MM-DD)
+                      const formattedDate = format(date, 'yyyy-MM-dd');
+                      console.log("Selected date:", date, "Formatted:", formattedDate);
+                      handleValueChange(formattedDate);
+                    } else {
+                      handleValueChange(null);
+                    }
                   }}
                   initialFocus
                   disabled={isDisabled}
@@ -288,7 +321,7 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
               Locale
             </label>
             <Select
-              value={localLocale || ""}
+              value={localLocale || "default"}
               onValueChange={setLocalLocale}
               disabled={isDisabled}
             >
@@ -296,7 +329,7 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
                 <SelectValue placeholder="Select locale" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All locales</SelectItem>
+                <SelectItem value="default">All locales</SelectItem>
                 {availableLocales.map(locale => (
                   <SelectItem key={locale.code} value={locale.code}>
                     {locale.label}
@@ -315,7 +348,7 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
               Channel
             </label>
             <Select 
-              value={localChannel || ""}
+              value={localChannel || "default"}
               onValueChange={setLocalChannel}
               disabled={isDisabled}
             >
@@ -323,7 +356,7 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
                 <SelectValue placeholder="Select channel" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All channels</SelectItem>
+                <SelectItem value="default">All channels</SelectItem>
                 {availableChannels.map(channel => (
                   <SelectItem key={channel.code} value={channel.code}>
                     {channel.label}
@@ -405,9 +438,19 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
                   disabled={savingState === 'saving'}
                   onClick={() => {
                     if (isNew) {
-                      onSaveNew(attribute.id, localValue, localLocale, localChannel);
+                      onSaveNew(
+                        attribute.id, 
+                        localValue, 
+                        localLocale === "default" ? null : localLocale,
+                        localChannel === "default" ? null : localChannel
+                      );
                     } else if (value?.id) {
-                      onUpdate(value.id, localValue, localLocale, localChannel);
+                      onUpdate(
+                        value.id, 
+                        localValue, 
+                        localLocale === "default" ? null : localLocale,
+                        localChannel === "default" ? null : localChannel
+                      );
                     }
                   }}
                 >

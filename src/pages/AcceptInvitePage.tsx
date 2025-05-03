@@ -5,6 +5,9 @@ import api from '@/services/api';
 import { Button } from '@/components/ui/button';
 import { InvitationToken } from '@/types/team';
 import { AlertCircle, CheckCircle } from 'lucide-react';
+import { toast } from 'sonner';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Loader2 } from 'lucide-react';
 
 const AcceptInvitePage: React.FC = () => {
   const { membershipId, token } = useParams<{ membershipId: string; token: string }>();
@@ -101,66 +104,111 @@ const AcceptInvitePage: React.FC = () => {
     }
   }, [membershipId, token, isAuthenticated, navigate, user, invitedEmail, membership]);
 
-  return (
-    <div className="flex justify-center items-center" style={{ minHeight: '80vh' }}>
-      <div className="w-full max-w-md p-6 bg-white rounded-lg shadow-md">
-        <div className="bg-primary-600 text-white p-4 rounded-t-lg">
-          <h2 className="text-xl font-bold text-center">Team Invitation</h2>
-        </div>
-        <div className="p-6 text-center">
-          {loading && (
-            <>
-              <div className="flex justify-center mb-4">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-600"></div>
-              </div>
-              <p className="text-gray-600">Processing your invitation...</p>
-            </>
-          )}
-          
-          {error && (
-            <>
-              <div className="flex justify-center mb-4">
-                <AlertCircle className="h-12 w-12 text-red-500" />
-              </div>
-              <div className="bg-red-50 text-red-600 p-4 rounded-md mb-4">
-                {error}
-              </div>
-              <div className="flex gap-3 justify-center">
-                <Button 
-                  onClick={() => navigate('/login')}
-                  variant="outline"
-                  className="px-4 py-2"
-                >
-                  Log In
-                </Button>
-                <Button 
-                  onClick={() => navigate('/app')}
-                  className="px-4 py-2"
-                >
-                  Go to Dashboard
-                </Button>
-              </div>
-            </>
-          )}
-          
-          {success && (
-            <>
-              <div className="flex justify-center mb-4">
-                <CheckCircle className="h-12 w-12 text-green-500" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">Invitation Accepted!</h3>
-              <p className="text-gray-600 mb-2">You are now a member of the team.</p>
-              <p className="text-gray-400 text-sm mb-4">Redirecting to dashboard in 3 seconds...</p>
-              <Button 
-                onClick={() => navigate('/app')}
-                className="px-4 py-2"
-              >
-                Go to Dashboard Now
-              </Button>
-            </>
-          )}
+  const handleAutoAccept = async () => {
+    try {
+      setLoading(true);
+      
+      // Automatically accept the invitation if already logged in
+      await api.post(`/api/orgs/memberships/${membershipId}/accept/`, {
+        token: membershipId
+      });
+      
+      toast.success('Invitation accepted!');
+      navigate('/app');
+    } catch (err: any) {
+      console.error('Error auto-accepting invitation:', err);
+      setError(err.response?.data?.detail || 'Failed to accept invitation');
+      setLoading(false);
+    }
+  };
+
+  const handleRedirect = () => {
+    // If the user needs to set a password (new user), redirect to the set password page
+    if (membership?.is_new_user) {
+      navigate(`/set-password/${membership.organization?.id}?token=${membershipId}&email=${membership.user?.email}`);
+    } else {
+      // Otherwise, redirect to login
+      navigate(`/login?invitation=${membershipId}`);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary-600 mx-auto" />
+          <h2 className="mt-4 text-xl font-medium text-gray-900">Checking invitation...</h2>
         </div>
       </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="mx-auto rounded-full bg-red-100 p-3 w-fit">
+              <AlertCircle className="h-8 w-8 text-red-600" />
+            </div>
+            <CardTitle className="text-xl mt-3">Invalid Invitation</CardTitle>
+            <CardDescription className="text-red-600">{error}</CardDescription>
+          </CardHeader>
+          <CardFooter className="flex justify-center">
+            <Button onClick={() => navigate('/')}>Return to Home</Button>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
+
+  if (success) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="mx-auto rounded-full bg-green-100 p-3 w-fit">
+              <CheckCircle className="h-8 w-8 text-green-600" />
+            </div>
+            <CardTitle className="text-xl mt-3">Already Accepted</CardTitle>
+            <CardDescription>This invitation has already been accepted</CardDescription>
+          </CardHeader>
+          <CardFooter className="flex justify-center">
+            <Button onClick={() => navigate('/login')}>Log In</Button>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle className="text-xl">You've Been Invited</CardTitle>
+          <CardDescription>
+            {membership?.organization?.name || 'An organization'} has invited you to join their team
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="bg-gray-50 p-4 rounded-md">
+              <p className="text-sm text-gray-700"><strong>Email:</strong> {membership?.user?.email}</p>
+              {membership?.role && (
+                <p className="text-sm text-gray-700 mt-2"><strong>Role:</strong> {membership.role}</p>
+              )}
+            </div>
+          </div>
+        </CardContent>
+        <CardFooter className="flex justify-end space-x-4">
+          <Button variant="outline" onClick={() => navigate('/')}>
+            Cancel
+          </Button>
+          <Button onClick={handleRedirect}>
+            {membership?.is_new_user ? 'Set Up Account' : 'Accept Invitation'}
+          </Button>
+        </CardFooter>
+      </Card>
     </div>
   );
 };

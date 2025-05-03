@@ -116,6 +116,9 @@ urlpatterns = [
     # Organization API
     path('api/orgs/<int:org_id>/', OrganizationDetailView.as_view(), name='organization-detail'),
     
+    # Add organizations/orgs API URLs
+    path('api/', include('orgs.api.urls')),
+    
     # Direct test endpoint for debugging
     path('api/test-export/', test_csv_export, name='test-export'),
     

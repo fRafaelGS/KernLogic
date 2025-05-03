@@ -23,6 +23,7 @@ import {
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from 'date-fns';
+import Avatar from "@/components/Avatar";
 
 export function Header() {
   const { user, logout, notifications, unreadCount, markAllAsRead } = useAuth();
@@ -157,8 +158,13 @@ export function Header() {
               variant="ghost" 
               className="flex items-center gap-2 text-enterprise-700 hover:bg-enterprise-50 px-2 md:px-3"
             >
-              <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-medium">
-                {user?.name?.[0]?.toUpperCase() || 'U'}
+              <div className="relative">
+                <Avatar 
+                  size="sm"
+                  name={user?.name || 'User'}
+                  avatarUrl={user?.avatar_url}
+                  showUploadButton={false}
+                />
               </div>
               <div className="hidden md:block text-left">
                 <p className="text-sm font-medium text-enterprise-800">
@@ -175,16 +181,19 @@ export function Header() {
             <DropdownMenuSeparator />
             <DropdownMenuItem className="flex items-center">
               <User className="h-4 w-4 mr-2 text-enterprise-500" />
-              Profile
+              <span>Profile</span>
             </DropdownMenuItem>
-            <DropdownMenuItem className="flex items-center">
+            <DropdownMenuItem className="flex items-center cursor-pointer">
               <Settings className="h-4 w-4 mr-2 text-enterprise-500" />
-              Settings
+              <span>Settings</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-danger-600" onClick={logout}>
+            <DropdownMenuItem 
+              className="text-danger-600 cursor-pointer" 
+              onClick={logout}
+            >
               <LogOut className="mr-2 h-4 w-4" />
-              Log out
+              <span>Log out</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

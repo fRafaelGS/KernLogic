@@ -261,7 +261,7 @@ class CurrentUserView(APIView):
     def get(self, request):
         # Use the serializer to return the user data with organization_id and role
         user = request.user
-        serializer = UserSerializer(user)
+        serializer = UserSerializer(user, context={'request': request})
         return Response(serializer.data)
 
 class SetPasswordView(APIView):
@@ -277,6 +277,7 @@ class SetPasswordView(APIView):
             password_confirm = request.data.get('password_confirm')
             organization_id = request.data.get('organization_id')
             invitation_token = request.data.get('invitation_token')
+            name = request.data.get('name')  # Get user's name if provided
             
             # Validate inputs
             if not email or not password or not password_confirm:
@@ -299,10 +300,18 @@ class SetPasswordView(APIView):
                     {'error': 'User not found with this email'},
                     status=status.HTTP_404_NOT_FOUND
                 )
+            
+            # Update name if provided
+            if name:
+                user.name = name
                 
             # Set the password
             user.set_password(password)
             user.save()
+            
+            # Initialize organization_info and role for the response
+            org_id = None
+            role = None
             
             # If organization_id and invitation_token are provided, update membership
             if organization_id and invitation_token:
@@ -324,6 +333,10 @@ class SetPasswordView(APIView):
                         membership.status = 'active'
                         membership.save()
                         print(f"DEBUG: Activated membership for {user.email} in org {organization.name}")
+                        
+                        # Set organization ID and role for response
+                        org_id = organization.id
+                        role = membership.role.name.lower() if membership.role else 'viewer'
                     else:
                         print(f"DEBUG: No pending membership found for {user.email}")
                 except Exception as e:
@@ -333,7 +346,7 @@ class SetPasswordView(APIView):
             # Generate authentication tokens
             tokens = get_tokens_for_user(user)
             
-            # Return successful response with tokens
+            # Return successful response with tokens and user data including organization_id and role
             return Response({
                 'detail': 'Password set successfully',
                 'access': tokens['access'],
@@ -341,7 +354,11 @@ class SetPasswordView(APIView):
                 'user': {
                     'id': user.id,
                     'email': user.email,
-                    'name': user.name
+                    'name': user.name,
+                    'is_staff': user.is_staff,
+                    'is_superuser': user.is_superuser,
+                    'organization_id': org_id,
+                    'role': role
                 }
             }, status=status.HTTP_200_OK)
             

@@ -43,19 +43,36 @@ const DASHBOARD_URL = API_ENDPOINTS.dashboard;
 console.log('Dashboard API endpoints configured at:', DASHBOARD_URL);
 
 /**
- * Fetch dashboard summary data
+ * Build URL with organization ID parameter
+ * @param endpoint Base endpoint URL
+ * @param organizationId Organization ID
+ * @returns URL with organization_id parameter
  */
-export const getDashboardSummary = async (): Promise<DashboardSummary> => {
+const withOrgParam = (endpoint: string, organizationId?: string): string => {
+  if (!organizationId) return endpoint;
+  
+  const separator = endpoint.includes('?') ? '&' : '?';
+  return `${endpoint}${separator}organization_id=${organizationId}`;
+};
+
+/**
+ * Fetch dashboard summary data
+ * @param organizationId Optional organization ID to filter data
+ */
+export const getDashboardSummary = async (organizationId?: string): Promise<DashboardSummary> => {
   try {
     // Log the request URL and authorization header
     const token = localStorage.getItem('access_token');
+    const url = withOrgParam(`${DASHBOARD_URL}/summary/`, organizationId);
+    
     console.log('Dashboard Summary API Call:', {
-      url: `${DASHBOARD_URL}/summary/`,
+      url,
       hasToken: !!token,
-      tokenPrefix: token ? token.substring(0, 15) + '...' : 'none'
+      tokenPrefix: token ? token.substring(0, 15) + '...' : 'none',
+      organizationId: organizationId || 'not provided'
     });
     
-    const response = await axiosInstance.get(`${DASHBOARD_URL}/summary/`);
+    const response = await axiosInstance.get(url);
     
     // Debug the response data
     console.log('Dashboard Summary Response:', {
@@ -74,10 +91,20 @@ export const getDashboardSummary = async (): Promise<DashboardSummary> => {
 /**
  * Fetch inventory trend data
  * @param range Number of days (30, 60, 90)
+ * @param organizationId Optional organization ID to filter data
  */
-export const getInventoryTrend = async (range: 30 | 60 | 90 = 30): Promise<InventoryTrend> => {
+export const getInventoryTrend = async (range: 30 | 60 | 90 = 30, organizationId?: string): Promise<InventoryTrend> => {
   try {
-    const response = await axiosInstance.get(`${DASHBOARD_URL}/inventory-trend/?range=${range}`);
+    let url = `${DASHBOARD_URL}/inventory-trend/?range=${range}`;
+    url = withOrgParam(url, organizationId);
+    
+    console.log('Inventory Trend API Call:', {
+      url,
+      range,
+      organizationId: organizationId || 'not provided'
+    });
+    
+    const response = await axiosInstance.get(url);
     return response.data;
   } catch (error) {
     console.error('Error fetching inventory trend:', error);
@@ -87,18 +114,22 @@ export const getInventoryTrend = async (range: 30 | 60 | 90 = 30): Promise<Inven
 
 /**
  * Fetch recent activity data
+ * @param organizationId Optional organization ID to filter data
  */
-export const getRecentActivity = async (): Promise<Activity[]> => {
+export const getRecentActivity = async (organizationId?: string): Promise<Activity[]> => {
   try {
     // Log the request URL for debugging
     const token = localStorage.getItem('access_token');
+    const url = withOrgParam(`${DASHBOARD_URL}/activity/`, organizationId);
+    
     console.log('Recent Activity API Call:', {
-      url: `${DASHBOARD_URL}/activity/`,
+      url,
       hasToken: !!token,
-      tokenPrefix: token ? token.substring(0, 15) + '...' : 'none'
+      tokenPrefix: token ? token.substring(0, 15) + '...' : 'none',
+      organizationId: organizationId || 'not provided'
     });
     
-    const response = await axiosInstance.get(`${DASHBOARD_URL}/activity/`);
+    const response = await axiosInstance.get(url);
     
     // Debug log to check the response structure
     console.log('Activity API response:', {
@@ -118,18 +149,22 @@ export const getRecentActivity = async (): Promise<Activity[]> => {
 
 /**
  * Fetch incomplete products
+ * @param organizationId Optional organization ID to filter data
  */
-export const getIncompleteProducts = async (): Promise<IncompleteProduct[]> => {
+export const getIncompleteProducts = async (organizationId?: string): Promise<IncompleteProduct[]> => {
   try {
     // Log the request URL for debugging
     const token = localStorage.getItem('access_token');
+    const url = withOrgParam(`${DASHBOARD_URL}/incomplete-products/`, organizationId);
+    
     console.log('Incomplete Products API Call:', {
-      url: `${DASHBOARD_URL}/incomplete-products/`,
+      url,
       hasToken: !!token,
-      tokenPrefix: token ? token.substring(0, 15) + '...' : 'none'
+      tokenPrefix: token ? token.substring(0, 15) + '...' : 'none',
+      organizationId: organizationId || 'not provided'
     });
     
-    const response = await axiosInstance.get(`${DASHBOARD_URL}/incomplete-products/`);
+    const response = await axiosInstance.get(url);
     
     // Debug log to check the response structure
     console.log('Incomplete Products API response:', {

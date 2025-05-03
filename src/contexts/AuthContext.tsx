@@ -35,6 +35,7 @@ interface ExtendedUser extends User {
   role?: 'admin' | 'editor' | 'viewer';
   is_staff?: boolean;
   organization_id?: string;
+  rolePermissions?: string[];
 }
 
 interface AuthContextType {
@@ -75,14 +76,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const navigate = useNavigate();
 
-  // Update the normalizeUserData function to not use default org ID
+  // Update the normalizeUserData function to fetch role permissions
   const normalizeUserData = (data: any): ExtendedUser => {
+    // Get the user's role and role permissions if available
+    let role: 'admin' | 'editor' | 'viewer' | undefined = undefined;
+    let rolePermissions: string[] | undefined = undefined;
+    
+    if (data.memberships && data.memberships.length > 0) {
+      const membership = data.memberships[0];
+      if (membership.role) {
+        // Set role based on role name
+        if (membership.role.name === 'Admin') role = 'admin';
+        else if (membership.role.name === 'Editor') role = 'editor';
+        else if (membership.role.name === 'Viewer') role = 'viewer';
+        
+        // Get permissions from the role object if available
+        if (membership.role.permissions && Array.isArray(membership.role.permissions)) {
+          rolePermissions = membership.role.permissions;
+        }
+      }
+    }
+    
     const userData = {
       id: data.id,
       email: data.email,
       name: data.name || data.username,
       avatar_url: data.avatar_url,
       is_staff: Boolean(data.is_staff),
+      role, // Add role from membership
+      rolePermissions, // Add permissions from role
       // Look for organization_id in different possible locations
       organization_id: data.organization_id 
         ?? data.organization?.id 
@@ -155,8 +177,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (err: any) {
         console.error('Auth init error', err);
         if (axios.isAxiosError(err) && err.response?.status === 401) {
+          // Only remove the access token on 401, but keep the refresh token
+          // The axios interceptor will attempt to refresh the token on subsequent requests
           localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
           delete axiosInstance.defaults.headers.common['Authorization'];
         }
         setUser(null);
@@ -287,7 +310,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${data.access}`;
         
         try {
-          // Fetch user profile after successful login
+          // Check if the login response contains user data with organization and role
+          if (data.user && typeof data.user === 'object') {
+            console.log('Login response includes user data:', data.user);
+            
+            // If the login response has organization_id and role, use them directly
+            if (data.user.organization_id && data.user.role) {
+              console.log('Using organization_id and role directly from login response');
+              
+              const userData = normalizeUserData(data.user);
+              setUser({
+                ...userData,
+                organization_id: data.user.organization_id,
+                role: data.user.role.toLowerCase()
+              });
+              
+              toast.success('Logged in successfully!');
+              navigate('/app');
+              return;
+            }
+          }
+          
+          // If user data is not in the login response or is incomplete, fetch the profile
           const userEndpoint = `${API_ENDPOINTS.auth.user}`;
           console.log('Fetching user profile from:', userEndpoint);
           
@@ -318,20 +362,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               console.log('Memberships response:', memRes.data);
               
               const membership = Array.isArray(memRes.data) 
-                ? memRes.data.find((m: any) => m.user?.id === me.id || m.user === me.id)
+                ? memRes.data.find((m: any) => {
+                    // More robust logic to find the user's membership
+                    const userIdMatch = m.user?.id === me.id || m.user === me.id;
+                    const userEmailMatch = m.user_email === me.email;
+                    return userIdMatch || userEmailMatch;
+                  })
                 : null;
               
               if (membership) {
                 console.log('Found membership:', membership);
                 
+                // Ensure the organization ID is preserved from the membership
+                const orgId = membership.organization?.id || 
+                              (typeof membership.organization === 'string' ? membership.organization : null) ||
+                              me.organization_id;
+                
                 // Set user with organization ID and role from membership
                 setUser({
                   ...me,
-                  organization_id: membership.organization.id,
-                  role: membership.role.name.toLowerCase(),
+                  organization_id: orgId,
+                  role: membership.role?.name?.toLowerCase() || 'viewer' // Default to viewer if role name is missing
                 });
               } else {
                 console.warn('No matching membership found for user');
+                // Still keep the organization_id we already found
                 setUser(me);
               }
             } catch (membershipError) {
@@ -485,19 +540,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     toast.info("You have been logged out.");
   };
 
-  // Check if user has permission - simplified
+  // Check if user has permission
   const checkPermission = (permission: string): boolean => {
     if (!user) return false;
     
     // Admin or staff always has all permissions
-    if (user.is_staff || user.role === 'admin') return true;
+    if (user.is_staff) return true;
     
-    // Get permissions based on role
-    const userRole = user.role;
-    if (!userRole) return false;
+    // Check direct permissions array if available
+    if (user.rolePermissions && Array.isArray(user.rolePermissions)) {
+      return user.rolePermissions.includes(permission);
+    }
     
-    const permissions = rolePermissions[userRole] || [];
-    return permissions.includes(permission);
+    // Fallback to role-based checking if permissions array not available
+    if (user.role === 'admin') return true;
+    
+    if (user.role === 'editor') {
+      return ['product.view', 'product.add', 'product.change', 'dashboard.view'].includes(permission);
+    }
+    
+    if (user.role === 'viewer') {
+      return ['product.view', 'team.view', 'dashboard.view'].includes(permission);
+    }
+    
+    return false;
   };
   
   // Check for pending invitations
@@ -513,7 +579,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         // Redirect to the accept invitation page
         if (pendingInvite.membershipId && pendingInvite.token) {
-          window.location.href = `/accept-invite/${pendingInvite.membershipId}/${pendingInvite.token}`;
+          window.location.href = `/accept-invite/${pendingInvite.membershipId}`;
         }
       } catch (error) {
         console.error('Error processing pending invitation:', error);

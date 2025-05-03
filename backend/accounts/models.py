@@ -17,10 +17,22 @@ class User(AbstractUser):
         return self.email
 
 class Profile(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    avatar = models.ImageField(upload_to='avatars/', null=True, blank=True)
     
     def __str__(self):
         return f"{self.user.email}'s profile"
+
+# Create profile when user is created
+@receiver(post_save, sender=User)
+def create_user_profile(sender, instance, created, **kwargs):
+    """Create profile when user is created if it doesn't exist."""
+    if created:
+        try:
+            Profile.objects.create(user=instance)
+            print(f"Created profile for {instance.email}")
+        except Exception as e:
+            print(f"Error creating profile for {instance.email}: {str(e)}")
 
 # DEPRECATED: No longer needed since team-invite logic ensures every new user gets exactly one membership
 # @receiver(post_save, sender=User)

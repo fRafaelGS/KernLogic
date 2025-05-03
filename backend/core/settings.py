@@ -63,6 +63,7 @@ INSTALLED_APPS = [
     "django_filters",
     "teams",
     "anymail",
+    "orgs",
 ]
 
 # Custom middleware to exempt API routes from CSRF

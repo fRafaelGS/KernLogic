@@ -9,6 +9,26 @@ export interface AvatarBadgeProps {
   status?: 'online' | 'offline' | 'away' | 'busy';
 }
 
+// Generate a consistent color based on the user's name
+const getColorFromName = (name: string): string => {
+  // Color options - tailwind colors
+  const colors = [
+    'bg-red-500', 'bg-pink-500', 'bg-purple-500', 'bg-indigo-500', 
+    'bg-blue-500', 'bg-cyan-500', 'bg-teal-500', 'bg-green-500', 
+    'bg-yellow-500', 'bg-orange-500', 'bg-amber-500'
+  ];
+  
+  // Calculate a hash value from the name
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  
+  // Use the hash to pick a color
+  const index = Math.abs(hash) % colors.length;
+  return colors[index];
+};
+
 export const AvatarBadge = forwardRef<HTMLDivElement, AvatarBadgeProps>(({ 
   src, 
   name, 
@@ -32,6 +52,10 @@ export const AvatarBadge = forwardRef<HTMLDivElement, AvatarBadgeProps>(({
 
   // Get initials if no image
   const initials = nameToInitials(name);
+  
+  // Get background color for user without avatar
+  const bgColor = getColorFromName(name);
+  const textColor = 'text-white'; // White text on colored backgrounds
 
   return (
     <div className="relative" ref={ref}>
@@ -39,7 +63,7 @@ export const AvatarBadge = forwardRef<HTMLDivElement, AvatarBadgeProps>(({
         {src ? (
           <AvatarImage src={src} alt={name} />
         ) : null}
-        <AvatarFallback className="bg-primary/10 text-primary font-medium">
+        <AvatarFallback className={`${src ? 'bg-primary/10 text-primary' : `${bgColor} ${textColor}`} font-medium`}>
           {initials}
         </AvatarFallback>
       </Avatar>

@@ -1,25 +1,30 @@
 import { useState, useEffect, useCallback } from 'react';
 import { dashboardService, DashboardSummary, InventoryTrend, Activity, IncompleteProduct } from '@/services/dashboardService';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Define cache types
 interface DashboardCache {
   summary?: {
     data: DashboardSummary;
     timestamp: number;
+    organizationId?: string; // Add organization ID to cache key
   };
   inventoryTrend?: {
     data: InventoryTrend;
     timestamp: number;
     range: number;
+    organizationId?: string; // Add organization ID to cache key
   };
   activity?: {
     data: Activity[];
     timestamp: number;
+    organizationId?: string; // Add organization ID to cache key
   };
   incompleteProducts?: {
     data: IncompleteProduct[];
     timestamp: number;
+    organizationId?: string; // Add organization ID to cache key
   };
 }
 
@@ -33,6 +38,9 @@ const cache: DashboardCache = {};
  * Custom hook for fetching dashboard data with caching
  */
 export function useDashboardData() {
+  const { user } = useAuth();
+  const organizationId = user?.organization_id;
+  
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [inventoryTrend, setInventoryTrend] = useState<InventoryTrend | null>(null);
   const [activity, setActivity] = useState<Activity[] | null>(null);
@@ -51,13 +59,22 @@ export function useDashboardData() {
   });
 
   /**
-   * Check if cache is valid
-   * @param cacheEntry Cache entry with timestamp
+   * Check if cache is valid with organization ID match
+   * @param cacheEntry Cache entry with timestamp and organizationId
    * @returns Whether cache is valid
    */
-  const isCacheValid = <T extends {}>(cacheEntry?: { data: T; timestamp: number }): boolean => {
+  const isCacheValid = <T extends {}>(
+    cacheEntry?: { data: T; timestamp: number; organizationId?: string }
+  ): boolean => {
     if (!cacheEntry) return false;
-    return Date.now() - cacheEntry.timestamp < CACHE_TTL;
+    
+    // Check if cache is still fresh
+    const isFresh = Date.now() - cacheEntry.timestamp < CACHE_TTL;
+    
+    // Check if organization ID matches (or there's no organization ID in both cases)
+    const isOrgMatch = cacheEntry.organizationId === organizationId;
+    
+    return isFresh && isOrgMatch;
   };
 
   /**
@@ -74,6 +91,7 @@ export function useDashboardData() {
     cache[key] = {
       data,
       timestamp: Date.now(),
+      organizationId, // Store current organization ID with cache
       ...params
     } as any;
   };
@@ -82,6 +100,23 @@ export function useDashboardData() {
    * Fetch dashboard summary
    */
   const fetchSummary = useCallback(async (force = false) => {
+    // Skip if no organization ID is available
+    if (!organizationId) {
+      console.log('Cannot fetch dashboard summary: No organization ID available');
+      const emptyData = {
+        total_products: 0,
+        inventory_value: 0,
+        inactive_product_count: 0, 
+        team_members: 0,
+        data_completeness: 0,
+        most_missing_fields: [],
+        active_products: 0,
+        inactive_products: 0
+      };
+      setSummary(emptyData);
+      return;
+    }
+    
     // Return cached data if valid
     if (!force && isCacheValid(cache.summary)) {
       console.log('Using cached dashboard summary data:', cache.summary!.data);
@@ -93,8 +128,8 @@ export function useDashboardData() {
     setError(prev => ({ ...prev, summary: null }));
 
     try {
-      console.log('Fetching dashboard summary data...');
-      const data = await dashboardService.getDashboardSummary();
+      console.log('Fetching dashboard summary data for organization:', organizationId);
+      const data = await dashboardService.getDashboardSummary(organizationId);
       console.log('Dashboard summary data received:', data);
       
       // Check that data meets expected structure
@@ -130,12 +165,23 @@ export function useDashboardData() {
     } finally {
       setLoading(prev => ({ ...prev, summary: false }));
     }
-  }, []);
+  }, [organizationId]);
 
   /**
    * Fetch inventory trend
    */
   const fetchInventoryTrend = useCallback(async (range: 30 | 60 | 90 = 30, force = false) => {
+    // Skip if no organization ID is available
+    if (!organizationId) {
+      console.log('Cannot fetch inventory trend: No organization ID available');
+      const emptyData = {
+        dates: [],
+        values: []
+      };
+      setInventoryTrend(emptyData);
+      return;
+    }
+    
     // Return cached data if valid and range matches
     if (
       !force && 
@@ -150,7 +196,7 @@ export function useDashboardData() {
     setError(prev => ({ ...prev, inventoryTrend: null }));
 
     try {
-      const data = await dashboardService.getInventoryTrend(range);
+      const data = await dashboardService.getInventoryTrend(range, organizationId);
       setInventoryTrend(data);
       updateCache('inventoryTrend', data, { range });
     } catch (err: any) {
@@ -171,12 +217,19 @@ export function useDashboardData() {
     } finally {
       setLoading(prev => ({ ...prev, inventoryTrend: false }));
     }
-  }, []);
+  }, [organizationId]);
 
   /**
    * Fetch recent activity
    */
   const fetchActivity = useCallback(async (force = false) => {
+    // Skip if no organization ID is available
+    if (!organizationId) {
+      console.log('Cannot fetch activity: No organization ID available');
+      setActivity([]);
+      return;
+    }
+    
     // Return cached data if valid
     if (!force && isCacheValid(cache.activity)) {
       setActivity(cache.activity!.data);
@@ -187,7 +240,7 @@ export function useDashboardData() {
     setError(prev => ({ ...prev, activity: null }));
 
     try {
-      const data = await dashboardService.getRecentActivity();
+      const data = await dashboardService.getRecentActivity(organizationId);
       
       // Add validation check for activity data
       if (!Array.isArray(data)) {
@@ -210,12 +263,19 @@ export function useDashboardData() {
     } finally {
       setLoading(prev => ({ ...prev, activity: false }));
     }
-  }, []);
+  }, [organizationId]);
 
   /**
    * Fetch incomplete products
    */
   const fetchIncompleteProducts = useCallback(async (force = false) => {
+    // Skip if no organization ID is available
+    if (!organizationId) {
+      console.log('Cannot fetch incomplete products: No organization ID available');
+      setIncompleteProducts([]);
+      return;
+    }
+    
     // Return cached data if valid
     if (!force && isCacheValid(cache.incompleteProducts)) {
       setIncompleteProducts(cache.incompleteProducts!.data);
@@ -226,7 +286,7 @@ export function useDashboardData() {
     setError(prev => ({ ...prev, incompleteProducts: null }));
 
     try {
-      const data = await dashboardService.getIncompleteProducts();
+      const data = await dashboardService.getIncompleteProducts(organizationId);
 
       // Add validation check here
       if (!Array.isArray(data)) {
@@ -250,7 +310,7 @@ export function useDashboardData() {
     } finally {
       setLoading(prev => ({ ...prev, incompleteProducts: false }));
     }
-  }, []);
+  }, [organizationId]);
 
   /**
    * Fetch all dashboard data

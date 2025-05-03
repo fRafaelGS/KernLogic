@@ -22,13 +22,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Label } from "@/components/ui/label";
 
 interface RoleChangeModalProps {
-  membershipId: number;
-  currentRoleId: number;
+  membershipId: string | number;
+  currentRoleId: string | number;
   trigger: React.ReactNode;
 }
 
 type UpdateRoleData = {
-  membershipId: number;
+  membershipId: string | number;
   roleId: number;
 };
 
@@ -40,12 +40,12 @@ export const RoleChangeModal: React.FC<RoleChangeModalProps> = ({
   const { user } = useAuth();
   const orgId = user?.organization_id;
   const queryClient = useQueryClient();
-  const [roleId, setRoleId] = useState<number>(currentRoleId);
+  const [roleId, setRoleId] = useState<number>(Number(currentRoleId));
   const [open, setOpen] = useState(false);
 
   // Keep internal state in sync with props
   useEffect(() => {
-    setRoleId(currentRoleId);
+    setRoleId(Number(currentRoleId));
   }, [currentRoleId]);
 
   // Fetch available roles
@@ -68,7 +68,7 @@ export const RoleChangeModal: React.FC<RoleChangeModalProps> = ({
       if (!orgId) {
         throw new Error('No organization ID available');
       }
-      return updateMemberRole(membershipId, roleId, orgId);
+      return updateMemberRole(Number(membershipId), roleId, orgId);
     },
     onSuccess: () => {
       toast.success('Role updated successfully');
@@ -88,7 +88,7 @@ export const RoleChangeModal: React.FC<RoleChangeModalProps> = ({
   };
 
   const handleSubmit = () => {
-    if (roleId === currentRoleId) {
+    if (roleId === Number(currentRoleId)) {
       return toast.info('Role is unchanged');
     }
     
@@ -142,7 +142,7 @@ export const RoleChangeModal: React.FC<RoleChangeModalProps> = ({
           </Button>
           <Button 
             onClick={handleSubmit}
-            disabled={updateMutation.isPending || roleId === currentRoleId}
+            disabled={updateMutation.isPending || roleId === Number(currentRoleId)}
           >
             {updateMutation.isPending ? 'Updating...' : 'Update Role'}
           </Button>

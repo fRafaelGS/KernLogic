@@ -1,9 +1,9 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { QueryClientProvider } from "@/components/QueryClientProvider";
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { NewProduct } from '@/pages/NewProduct';
@@ -33,8 +33,6 @@ import SettingsPage from './pages/SettingsPage';
 import TeamHistoryPage from './pages/TeamHistoryPage';
 import AcceptInvitePage from './pages/AcceptInvitePage';
 import SetPasswordPage from './pages/auth/SetPasswordPage';
-
-const queryClient = new QueryClient();
 
 // Protected route component that handles authentication
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -75,9 +73,9 @@ export const App: React.FC = () => {
 
     return (
         <Router>
-            <QueryClientProvider client={queryClient}>
-                <TooltipProvider>
-                    <AuthProvider>
+            <AuthProvider>
+                <QueryClientProvider>
+                    <TooltipProvider>
                         <Toaster 
                           position="top-right"
                           richColors
@@ -249,13 +247,13 @@ export const App: React.FC = () => {
                                     </ProtectedRoute>
                                 }
                             />
-                            <Route path="/accept-invite/:membershipId/:token" element={<AcceptInvitePage />} />
+                            <Route path="/accept-invite/:membershipId" element={<AcceptInvitePage />} />
                             <Route path="/set-password/:orgId" element={<SetPasswordPage />} />
                             <Route path="*" element={<Navigate to="/" replace />} />
                         </Routes>
-                    </AuthProvider>
-                </TooltipProvider>
-            </QueryClientProvider>
+                    </TooltipProvider>
+                </QueryClientProvider>
+            </AuthProvider>
         </Router>
     );
 };

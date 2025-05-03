@@ -13,11 +13,12 @@ import { removeMember, resendInvite } from '@/services/teamService';
 import { toast } from 'sonner';
 import RoleChangeModal from './RoleChangeModal';
 import { useAuth } from '@/contexts/AuthContext';
+import { PermissionGuard } from './common/PermissionGuard';
 
 interface ManageControlsProps {
-  membershipId: number;
+  membershipId: string | number;
   status: 'active' | 'pending';
-  currentRoleId: number;
+  currentRoleId: string | number;
 }
 
 export const ManageControls: React.FC<ManageControlsProps> = ({
@@ -25,14 +26,25 @@ export const ManageControls: React.FC<ManageControlsProps> = ({
   status,
   currentRoleId
 }) => {
-  const { user } = useAuth();
+  const { user, checkPermission } = useAuth();
   const orgId = user?.organization_id;
   const queryClient = useQueryClient();
+  
+  // Check permissions for the various actions
+  const canInvite = checkPermission('team.invite');
+  const canChangeRole = checkPermission('team.change_role');
+  const canRemove = checkPermission('team.remove');
 
   const handleRemove = async () => {
     try {
       if (!orgId) {
         toast.error('Organization ID is missing');
+        return;
+      }
+      
+      // Additional check to ensure user has permission
+      if (!canRemove) {
+        toast.error('You do not have permission to remove team members');
         return;
       }
       
@@ -54,6 +66,12 @@ export const ManageControls: React.FC<ManageControlsProps> = ({
         return;
       }
       
+      // Additional check to ensure user has permission
+      if (!canInvite) {
+        toast.error('You do not have permission to invite team members');
+        return;
+      }
+      
       await resendInvite(membershipId, orgId);
       toast.success('Invitation resent');
       queryClient.invalidateQueries({ queryKey: ['teamMembers'] });
@@ -70,20 +88,24 @@ export const ManageControls: React.FC<ManageControlsProps> = ({
       {status === 'pending' ? (
         // For pending members, show direct action buttons
         <div className="flex space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleResend}
-          >
-            Resend
-          </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={handleRemove}
-          >
-            Cancel
-          </Button>
+          {canInvite && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleResend}
+            >
+              Resend
+            </Button>
+          )}
+          {canRemove && (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleRemove}
+            >
+              Cancel
+            </Button>
+          )}
         </div>
       ) : (
         // For active members, show dropdown menu
@@ -94,22 +116,28 @@ export const ManageControls: React.FC<ManageControlsProps> = ({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <RoleChangeModal 
-              membershipId={membershipId}
-              currentRoleId={currentRoleId}
-              trigger={
-                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                  Change Role
+            {canChangeRole && (
+              <RoleChangeModal 
+                membershipId={membershipId}
+                currentRoleId={currentRoleId}
+                trigger={
+                  <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                    Change Role
+                  </DropdownMenuItem>
+                }
+              />
+            )}
+            {canRemove && (
+              <>
+                {canChangeRole && <DropdownMenuSeparator />}
+                <DropdownMenuItem 
+                  className="text-red-600 focus:text-red-50 focus:bg-red-600"
+                  onSelect={handleRemove}
+                >
+                  Remove Member
                 </DropdownMenuItem>
-              }
-            />
-            <DropdownMenuSeparator />
-            <DropdownMenuItem 
-              className="text-red-600 focus:text-red-50 focus:bg-red-600"
-              onSelect={handleRemove}
-            >
-              Remove Member
-            </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       )}

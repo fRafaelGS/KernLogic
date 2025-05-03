@@ -18,14 +18,14 @@ class NumericOrgIdDeprecationMiddleware(MiddlewareMixin):
         if self.numeric_pattern.search(request.path):
             # Log warning
             logger.warning(
-                f"Deprecated numeric organization ID used in URL: {request.path}. "
-                f"Please use UUID format instead."
+                f"Deprecated UUID organization ID used in URL: {request.path}. "
+                f"Please use Numeric ID format instead."
             )
             
             # Also output to console for development environments
             warnings.warn(
-                f"Numeric organization ID in URL '{request.path}' is deprecated. "
-                f"Please use UUID format instead.",
+                f"UUID organization ID in URL '{request.path}' is deprecated. "
+                f"Please use Numeric ID format instead.",
                 DeprecationWarning, 
                 stacklevel=2
             )

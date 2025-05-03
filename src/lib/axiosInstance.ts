@@ -131,41 +131,75 @@ axiosInstance.interceptors.response.use(
             console.log('[Response Interceptor] Received 401, attempting token refresh...');
             originalRequest._retry = true; // Mark to prevent infinite refresh loops
 
-            // Check if refresh token exists
-            const refreshToken = localStorage.getItem('refresh_token');
-            if (!refreshToken) {
-                console.error('[Refresh] No refresh token found.');
-                localStorage.removeItem('access_token');
-                window.location.href = '/login?sessionExpired=true';
-                return Promise.reject(new Error('No refresh token available'));
+            // Create refresh promise if it doesn't exist
+            if (!window.tokenRefreshPromise) {
+                console.log('[Refresh] Creating new token refresh promise');
+                
+                window.tokenRefreshPromise = (async () => {
+                    try {
+                        // Check if refresh token exists
+                        const refreshToken = localStorage.getItem('refresh_token');
+                        if (!refreshToken) {
+                            console.error('[Refresh] No refresh token found.');
+                            throw new Error('No refresh token available');
+                        }
+                        
+                        // Use fetch for refresh to bypass this interceptor
+                        const refreshUrl = `${API_URL}/api/token/refresh/`; 
+                        console.log('[Refresh] Calling refresh URL:', refreshUrl);
+                        console.log('[Refresh] Using refresh token:', refreshToken.substring(0, 10) + '...');
+
+                        const refreshResponse = await fetch(refreshUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ refresh: refreshToken }),
+                        });
+
+                        if (!refreshResponse.ok) {
+                            const errorText = await refreshResponse.text();
+                            console.error(`[Refresh] Failed: ${refreshResponse.status}`, errorText);
+                            throw new Error(`Token refresh failed: ${refreshResponse.status}`);
+                        }
+
+                        const data = await refreshResponse.json();
+                        const newToken = data.access;
+                        console.log('[Refresh] Success, received new access token.');
+
+                        // Store the new token
+                        localStorage.setItem('access_token', newToken);
+                        
+                        // Update axios default headers for future requests
+                        axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+                        
+                        return newToken;
+                    } catch (refreshError: any) {
+                        console.error('[Refresh] Error during token refresh:', refreshError.message);
+                        
+                        // Clear tokens on refresh failure
+                        localStorage.removeItem('access_token');
+                        localStorage.removeItem('refresh_token');
+                        
+                        // Only redirect if we're not already on the login page to avoid loops
+                        if (!window.location.pathname.includes('/login')) {
+                            window.location.href = '/login?sessionExpired=true';
+                        }
+                        
+                        throw refreshError;
+                    } finally {
+                        // Clear the promise regardless of outcome
+                        window.tokenRefreshPromise = null;
+                    }
+                })();
+            } else {
+                console.log('[Refresh] Using existing token refresh promise');
             }
-
+            
             try {
-                // Use fetch for refresh to bypass this interceptor
-                const refreshUrl = `${API_URL}/auth/token/refresh/`; 
-                console.log('[Refresh] Calling refresh URL:', refreshUrl);
-
-                const refreshResponse = await fetch(refreshUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ refresh: refreshToken }),
-                });
-
-                if (!refreshResponse.ok) {
-                    const errorText = await refreshResponse.text();
-                    console.error(`[Refresh] Failed: ${refreshResponse.status}`, errorText);
-                    throw new Error(`Token refresh failed: ${refreshResponse.status}`);
-                }
-
-                const data = await refreshResponse.json();
-                const newToken = data.access;
-                console.log('[Refresh] Success, received new access token.');
-
-                // Store the new token
-                localStorage.setItem('access_token', newToken);
-
+                // Wait for the refresh token process to complete
+                const newToken = await window.tokenRefreshPromise;
+                
                 // Update the header of the original failed request
                 if (originalRequest.headers) {
                     originalRequest.headers.Authorization = `Bearer ${newToken}`;
@@ -174,20 +208,8 @@ axiosInstance.interceptors.response.use(
                 // Retry the original request with the new token
                 console.log('[Refresh] Retrying original request to:', originalRequest.url);
                 return axiosInstance(originalRequest);
-
-            } catch (refreshError: any) {
-                console.error('[Refresh] Error during token refresh:', refreshError.message);
-                
-                // Clear tokens and redirect to login on refresh failure
-                localStorage.removeItem('access_token');
-                localStorage.removeItem('refresh_token');
-                
-                // Only redirect if we're not already on the login page to avoid loops
-                if (!window.location.pathname.includes('/login')) {
-                    window.location.href = '/login?sessionExpired=true';
-                }
-                
-                return Promise.reject(refreshError);
+            } catch (error) {
+                return Promise.reject(error);
             }
         } else if (error.response?.status === 500) {
             // Better handling for server errors
@@ -199,5 +221,15 @@ axiosInstance.interceptors.response.use(
         return Promise.reject(error);
     }
 );
+
+// Add TypeScript declaration for the window object
+declare global {
+    interface Window {
+        tokenRefreshPromise: Promise<string> | null;
+    }
+}
+
+// Initialize the tokenRefreshPromise property
+window.tokenRefreshPromise = null;
 
 export default axiosInstance; 

@@ -68,6 +68,7 @@ import ProductHistoryTab from './ProductHistoryTab';
 import { Suspense } from 'react';
 import AttributesTab from './AttributesTab';
 import { ENABLE_CUSTOM_ATTRIBUTES } from '@/config/featureFlags';
+import { PermissionGuard } from '@/components/common/PermissionGuard';
 
 // ====== ATTRIBUTES INTERFACES (EXACT MATCH TO SPEC) ======
 // (Following exactly the backend shape specified in the requirements)
@@ -151,8 +152,10 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
   const { user, checkPermission } = useAuth();
   
   // Permissions check
-  const hasEditPermission = checkPermission ? checkPermission('product.edit') : true;
-  const hasRevertPermission = checkPermission ? checkPermission('product.revert') : true;
+  const hasViewPermission = checkPermission('product.view');
+  const hasEditPermission = checkPermission('product.change');
+  const hasAddPermission = checkPermission('product.add');
+  const hasRevertPermission = checkPermission('product.revert');
   
   // Load data when component mounts or product changes
   useEffect(() => {
@@ -537,6 +540,12 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
   
   // Start editing an attribute
   const handleEditAttribute = (attributeId: number) => {
+    // Check if user has permission to edit products
+    if (!hasEditPermission) {
+      toast.error("You don't have permission to edit product attributes");
+      return;
+    }
+    
     const value = attributeValues.find(v => 
       v.attributeId === attributeId && v.locale === selectedLocale
     );
@@ -618,6 +627,12 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
   
   // Save the edited attribute value
   const handleSaveAttribute = async (attributeId: number) => {
+    // Check if user has permission to edit products
+    if (!hasEditPermission) {
+      toast.error("You don't have permission to save product attributes");
+      return;
+    }
+    
     const validationError = validateAttributeValue(attributeId, currentEditValue);
     if (validationError) {
       setAttributeSaveError({
@@ -680,6 +695,12 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
   
   // Add a new attribute (start editing it inline)
   const handleAddAttribute = (attributeId: number) => {
+    // Check if user has permission to add attributes
+    if (!hasAddPermission) {
+      toast.error("You don't have permission to add product attributes");
+      return;
+    }
+    
     const attributeDef = availableAttributes.find((def) => def.id === attributeId);
     if (!attributeDef) return;
     let initialValue: any = '';
@@ -1055,7 +1076,16 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
     return (
       <Dialog open={isAddAttributeOpen} onOpenChange={setIsAddAttributeOpen}>
         <DialogTrigger asChild>
-          <Button className="mb-4">
+          <Button 
+            className="mb-4" 
+            disabled={!hasAddPermission}
+            onClick={() => {
+              if (!hasAddPermission) {
+                toast.error("You don't have permission to add attributes");
+                return;
+              }
+            }}
+          >
             <PlusIcon className="h-4 w-4 mr-2" />
             Add Attribute
           </Button>

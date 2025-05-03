@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { BeakerIcon, LockKeyhole, ArrowRight, AlertCircle } from 'lucide-react';
+import { BeakerIcon, LockKeyhole, ArrowRight, AlertCircle, User } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
 import { API_URL } from '@/config';
@@ -15,6 +15,7 @@ export default function SetPasswordPage() {
   const token = searchParams.get('token');
   const email = searchParams.get('email');
   
+  const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +29,11 @@ export default function SetPasswordPage() {
     setError(null);
     
     // Validate inputs
+    if (!fullName) {
+      setError('Please enter your full name');
+      return;
+    }
+    
     if (!password || password.length < 6) {
       setError('Password must be at least 6 characters long');
       return;
@@ -46,13 +52,20 @@ export default function SetPasswordPage() {
     try {
       setLoading(true);
       
-      // Make API call to set password
+      console.log(`Setting password for user with token: ${token}`);
+      
+      // Extract numeric ID from token if it's a UUID
+      // If token is already numeric, this will work fine
+      // If token is a UUID or other non-numeric string, we need to use a different endpoint
+      
+      // Use the /api/set-password/ endpoint instead which doesn't require a membership ID
       const response = await axios.post(`${API_URL}/api/set-password/`, {
         email,
         password,
         password_confirm: confirmPassword,
         organization_id: orgId,
-        invitation_token: token
+        invitation_token: token,
+        name: fullName
       });
       
       console.log('Password set successfully:', response.data);
@@ -66,20 +79,20 @@ export default function SetPasswordPage() {
         // Try to log in with the new credentials
         try {
           await login(email, password);
-          toast.success('Password set successfully! Logging you in...');
+          toast.success('Account set up successfully! Logging you in...');
           navigate('/app');
         } catch (loginError) {
           console.error('Auto-login failed after setting password:', loginError);
-          toast.success('Password set successfully! Please log in.');
+          toast.success('Account set up successfully! Please log in.');
           navigate('/login');
         }
       } else {
         // No tokens returned, redirect to login
-        toast.success('Password set successfully! Please log in.');
+        toast.success('Account set up successfully! Please log in.');
         navigate('/login');
       }
     } catch (err: any) {
-      console.error('Error setting password:', err);
+      console.error('Error setting up account:', err);
       
       // Handle specific error messages from the API
       if (axios.isAxiosError(err) && err.response) {
@@ -87,7 +100,7 @@ export default function SetPasswordPage() {
         
         if (typeof err.response.data === 'object') {
           const errorData = err.response.data;
-          let errorMessage = 'Error setting password: ';
+          let errorMessage = 'Error setting up account: ';
           
           Object.keys(errorData).forEach(key => {
             const value = errorData[key];
@@ -102,7 +115,7 @@ export default function SetPasswordPage() {
           
           setError(errorMessage);
         } else {
-          setError(err.response.data || 'An error occurred while setting your password.');
+          setError(err.response.data || 'An error occurred while setting up your account.');
         }
       } else {
         setError('An unexpected error occurred. Please try again.');
@@ -119,9 +132,9 @@ export default function SetPasswordPage() {
         <div className="absolute inset-0 bg-gradient-to-b from-primary-500 to-primary-700">
           <div className="absolute inset-0 bg-enterprise-900 opacity-20 mix-blend-multiply"></div>
           <div className="absolute bottom-0 left-0 right-0 p-8 text-white">
-            <h2 className="text-2xl font-bold mb-4">Set Your Password</h2>
+            <h2 className="text-2xl font-bold mb-4">Complete Your Account</h2>
             <p className="text-primary-100">
-              Create a secure password to complete your account setup.
+              Set your name and create a secure password to complete your account setup.
             </p>
           </div>
         </div>
@@ -135,18 +148,43 @@ export default function SetPasswordPage() {
               <BeakerIcon className="h-7 w-7 text-primary-600 mr-2" />
               <h1 className="text-2xl font-bold text-enterprise-900">KernLogic</h1>
             </div>
-            <h2 className="mt-6 text-3xl font-bold text-enterprise-900">Set Your Password</h2>
+            <h2 className="mt-6 text-3xl font-bold text-enterprise-900">Complete Your Account</h2>
             <p className="mt-2 text-sm text-enterprise-600">
-              Your account has already been created. Please set a password to access it.
+              Your account has already been created. Please set your name and password to access it.
             </p>
             {email && (
               <div className="mt-4 p-3 bg-primary-50 border border-primary-100 rounded-md">
-                <p className="text-sm text-primary-600">Setting password for: <strong>{email}</strong></p>
+                <p className="text-sm text-primary-600">Setting up account for: <strong>{email}</strong></p>
               </div>
             )}
           </div>
 
           <form className="space-y-6" onSubmit={handleSubmit}>
+            <div>
+              <Label 
+                htmlFor="fullName" 
+                className="block text-sm font-medium text-enterprise-700"
+              >
+                Full Name
+              </Label>
+              <div className="mt-1 relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <User className="h-5 w-5 text-enterprise-400" />
+                </div>
+                <Input
+                  id="fullName"
+                  name="fullName"
+                  type="text"
+                  autoComplete="name"
+                  required
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="block w-full pl-10 border border-enterprise-200 focus-visible:ring-primary-500 focus-visible:border-primary-500"
+                  placeholder="Jane Doe"
+                />
+              </div>
+            </div>
+
             <div>
               <Label 
                 htmlFor="password" 
@@ -217,10 +255,10 @@ export default function SetPasswordPage() {
                 variant="primary"
                 fullWidth={true}
                 isLoading={loading}
-                loadingText="Setting password..."
+                loadingText="Setting up account..."
               >
                 <div className="flex items-center">
-                  Set Password
+                  Complete Setup
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </div>
               </Button>

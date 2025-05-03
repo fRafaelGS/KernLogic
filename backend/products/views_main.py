@@ -74,7 +74,6 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     API endpoint for managing product data.
     """
     serializer_class = ProductSerializer
-    permission_classes = [permissions.IsAuthenticated]
     pagination_class = StandardResultsSetPagination
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'sku', 'description', 'brand', 'tags', 'barcode']
@@ -84,6 +83,32 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options']
     queryset = Product.objects.all()  # Add base queryset for OrganizationQuerySetMixin to use
+    
+    def get_permissions(self):
+        """
+        Return permissions based on the action:
+        - list, retrieve: product.view permission
+        - create: product.add permission
+        - update, partial_update: product.change permission
+        - destroy: product.delete permission
+        """
+        from .permissions import (
+            HasProductViewPermission, 
+            HasProductAddPermission, 
+            HasProductChangePermission, 
+            HasProductDeletePermission
+        )
+        
+        if self.action in ['list', 'retrieve', 'brands', 'categories', 'tags', 'stats', 'related_products']:
+            return [HasProductViewPermission()]
+        elif self.action in ['create', 'bulk_create']:
+            return [HasProductAddPermission()]
+        elif self.action in ['update', 'partial_update', 'upload_image', 'manage_image', 'reorder_images', 'bulk_update']:
+            return [HasProductChangePermission()]
+        elif self.action in ['destroy', 'bulk_delete']:
+            return [HasProductDeletePermission()]
+        # Default to requiring view permission
+        return [HasProductViewPermission()]
 
     def get_queryset(self):
         """
@@ -1022,7 +1047,12 @@ class DashboardViewSet(viewsets.ViewSet):
     """
     API endpoints for dashboard data
     """
-    permission_classes = [permissions.IsAuthenticated]
+    def get_permissions(self):
+        """
+        Return dashboard.view permission for all dashboard actions
+        """
+        from teams.permissions import HasDashboardViewPermission
+        return [HasDashboardViewPermission()]
     
     @action(detail=False, methods=['get'])
     def summary(self, request):
@@ -1355,9 +1385,21 @@ class AssetViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     Handles upload, delete, reorder and set-primary.
     """
     serializer_class = ProductAssetSerializer
-    permission_classes = [permissions.IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     queryset = ProductAsset.objects.all()
+    
+    def get_permissions(self):
+        """
+        Return permissions based on the action:
+        - list, retrieve: product.view permission
+        - create, update, destroy: product.change permission
+        """
+        from .permissions import HasProductViewPermission, HasProductChangePermission
+        
+        if self.action in ['list', 'retrieve']:
+            return [HasProductViewPermission()]
+        else:
+            return [HasProductChangePermission()]
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -1489,9 +1531,15 @@ class AssetViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
 
 class ProductEventViewSet(OrganizationQuerySetMixin, mixins.ListModelMixin, viewsets.GenericViewSet):
     serializer_class = ProductEventSerializer
-    permission_classes = [permissions.IsAuthenticated]
     pagination_class = PageNumberPagination
     queryset = ProductEvent.objects.all()
+    
+    def get_permissions(self):
+        """
+        Only need product.view permission to see product events
+        """
+        from .permissions import HasProductViewPermission
+        return [HasProductViewPermission()]
 
     def get_queryset(self):
         qs = super().get_queryset()

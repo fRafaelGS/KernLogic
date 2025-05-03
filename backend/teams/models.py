@@ -9,19 +9,31 @@ def get_default_org():
     return default_org.id
 
 class Role(models.Model):
-    name = models.CharField(max_length=50, unique=True)
+    name = models.CharField(max_length=50)
     description = models.TextField(blank=True)
     permissions = models.JSONField(default=list, blank=True)
+    organization = models.ForeignKey(
+        "organizations.Organization", 
+        on_delete=models.CASCADE,
+        related_name="roles",
+        null=True,
+        blank=True
+    )
+
+    class Meta:
+        # Each role name must be unique within an organization
+        unique_together = [["name", "organization"]]
 
     def __str__(self):
-        return self.name
+        org_name = self.organization.name if self.organization else "Global"
+        return f"{self.name} ({org_name})"
 
 class Membership(models.Model):
     STATUS_CHOICES = [
         ("pending", "Pending"),
         ("active", "Active"),
     ]
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="memberships")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="teams_memberships")
     organization = models.ForeignKey(
         "organizations.Organization", 
         on_delete=models.CASCADE,

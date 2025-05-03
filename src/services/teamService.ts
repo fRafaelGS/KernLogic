@@ -176,7 +176,7 @@ export const exportTeamToCSV = async (orgId: string): Promise<void> => {
 /**
  * Resend an invite to a pending team member
  */
-export const resendInvite = async (membershipId: number, orgId?: string): Promise<void> => {
+export const resendInvite = async (membershipId: string | number, orgId?: string): Promise<void> => {
   if (!orgId) {
     throw new Error('No organization ID provided');
   }
@@ -233,18 +233,17 @@ export const fetchRoles = async (orgId?: string | number): Promise<Role[]> => {
 /**
  * Update a team member's role
  */
-export const updateMemberRole = async (membershipId: number, roleId: number, orgId?: string | number): Promise<TeamMember> => {
+export const updateMemberRole = async (membershipId: number | string, roleId: number, orgId?: string | number): Promise<TeamMember> => {
   if (!orgId) {
     throw new Error('No organization ID provided');
   }
 
   try {
-    devLog(`Updating role for membership: ${membershipId}`, {
-      new_role_id: roleId,
+    devLog(`Updating role for membership ${membershipId} to role ${roleId}`, {
       endpoint: `/api/orgs/${orgId}/memberships/${membershipId}/`
     });
     
-    const response = await axiosInstance.patch(`/api/orgs/${orgId}/memberships/${membershipId}/`, {
+    const response = await axiosInstance.patch(`/api/orgs/${String(orgId)}/memberships/${membershipId}/`, {
       role_id: roleId
     });
     
@@ -256,19 +255,19 @@ export const updateMemberRole = async (membershipId: number, roleId: number, org
 };
 
 /**
- * Remove a team member
+ * Remove a team member from the organization
  */
-export const removeMember = async (membershipId: number, orgId?: string | number): Promise<void> => {
+export const removeMember = async (membershipId: string | number, orgId?: string | number): Promise<void> => {
   if (!orgId) {
     throw new Error('No organization ID provided');
   }
 
   try {
-    devLog(`Removing member with membership: ${membershipId}`, {
+    devLog(`Removing member with membership ID: ${membershipId}`, {
       endpoint: `/api/orgs/${orgId}/memberships/${membershipId}/`
     });
     
-    await axiosInstance.delete(`/api/orgs/${orgId}/memberships/${membershipId}/`);
+    await axiosInstance.delete(`/api/orgs/${String(orgId)}/memberships/${membershipId}/`);
   } catch (error) {
     console.error('Error removing member:', error);
     throw error;

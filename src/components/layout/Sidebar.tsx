@@ -25,9 +25,17 @@ interface NavItemProps {
   label: string;
   href: string;
   badge?: string | number;
+  requiredPermission?: string;
 }
 
-const NavItem = ({ icon: Icon, label, href, badge }: NavItemProps) => {
+const NavItem = ({ icon: Icon, label, href, badge, requiredPermission }: NavItemProps) => {
+  const { checkPermission } = useAuth();
+  
+  // If a permission is required but user doesn't have it, don't show the item
+  if (requiredPermission && !checkPermission(requiredPermission)) {
+    return null;
+  }
+  
   return (
     <NavLink 
       to={href} 
@@ -79,24 +87,54 @@ export function Sidebar({ className }: SidebarProps) {
         <div className="mb-8">
           <p className="px-3 text-xs font-medium uppercase tracking-wider text-enterprise-400 mb-3">Main</p>
           <nav className="space-y-1.5">
-            <NavItem icon={LayoutDashboard} label="Dashboard" href="/app" />
+            <NavItem 
+              icon={LayoutDashboard} 
+              label="Dashboard" 
+              href="/app" 
+              requiredPermission="dashboard.view" 
+            />
             <NavItem 
               icon={Package} 
               label="Products" 
               href="/app/products" 
               badge={location.pathname.includes('/app/products') ? '' : '24'} 
+              requiredPermission="product.view" 
             />
-            <NavItem icon={BarChart2} label="Reports" href="/app/reports" />
+            <NavItem 
+              icon={BarChart2} 
+              label="Reports" 
+              href="/app/reports" 
+              requiredPermission="dashboard.view" 
+            />
           </nav>
         </div>
         
         <div className="mb-8">
           <p className="px-3 text-xs font-medium uppercase tracking-wider text-enterprise-400 mb-3">Management</p>
           <nav className="space-y-1.5">
-            <NavItem icon={Upload} label="Upload Data" href="/app/upload" />
-            <NavItem icon={FileText} label="Documentation" href="/app/documentation" />
-            <NavItem icon={Users} label="Team" href="/app/team" />
-            <NavItem icon={Settings} label="Settings" href="/app/settings" />
+            <NavItem 
+              icon={Upload} 
+              label="Upload Data" 
+              href="/app/upload" 
+              requiredPermission="product.add" 
+            />
+            <NavItem 
+              icon={FileText} 
+              label="Documentation" 
+              href="/app/documentation" 
+            />
+            <NavItem 
+              icon={Users} 
+              label="Team" 
+              href="/app/team" 
+              requiredPermission="team.view" 
+            />
+            <NavItem 
+              icon={Settings} 
+              label="Settings" 
+              href="/app/settings" 
+              requiredPermission="team.view" 
+            />
           </nav>
         </div>
 
@@ -136,6 +174,11 @@ export function Sidebar({ className }: SidebarProps) {
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-enterprise-900 truncate">{user?.name || 'User'}</p>
             <p className="text-xs text-enterprise-500 truncate">{user?.email || 'user@example.com'}</p>
+            {user?.role && (
+              <p className="text-xs bg-enterprise-100 rounded-full px-2 py-0.5 inline-block mt-1 text-enterprise-700">
+                {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+              </p>
+            )}
           </div>
           <Button 
             variant="ghost" 

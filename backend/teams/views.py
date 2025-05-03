@@ -4,22 +4,50 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import Role, Membership, AuditLog
-from .serializers import RoleSerializer, MembershipSerializer, AuditLogSerializer
+from .serializers import RoleSerializer, MembershipSerializer, AuditLogSerializer, MembershipAcceptSerializer
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from .permissions import IsOrgAdmin, IsTeamReadOnly
+from .permissions import (
+    IsOrgAdmin, 
+    IsTeamReadOnly, 
+    HasTeamViewPermission, 
+    HasTeamInvitePermission,
+    HasTeamChangeRolePermission,
+    HasTeamRemovePermission
+)
 import uuid
 from django.utils.crypto import get_random_string
 from .utils import send_invitation_email, mock_send_invitation_email
+from accounts.views import get_tokens_for_user
 
 User = get_user_model()
 
 # Create your views here.
 
 class RoleViewSet(viewsets.ModelViewSet):
-    queryset = Role.objects.all()
     serializer_class = RoleSerializer
-    permission_classes = [permissions.IsAuthenticated, IsOrgAdmin]
+    
+    def get_permissions(self):
+        """
+        Return permissions based on the action:
+        - list, retrieve: team.view permission
+        - create, update, delete: team.change_role permission
+        """
+        if self.action in ['list', 'retrieve']:
+            return [permissions.IsAuthenticated(), HasTeamViewPermission()]
+        else:
+            return [permissions.IsAuthenticated(), HasTeamChangeRolePermission()]
+    
+    def get_queryset(self):
+        """
+        Return roles for a specific organization
+        """
+        org_id = self.kwargs.get('org_id')
+        if not org_id:
+            return Role.objects.none()
+            
+        # Filter roles by organization
+        return Role.objects.filter(organization_id=org_id)
 
 class MembershipViewSet(viewsets.ModelViewSet):
     queryset = Membership.objects.all()
@@ -28,10 +56,29 @@ class MembershipViewSet(viewsets.ModelViewSet):
     # Add action-specific permissions
     def get_permissions(self):
         """
-        Allow unauthenticated access to check_invitation endpoint
+        Return permissions based on the action:
+        - check_invitation, accept: allow any (public endpoints)
+        - list, retrieve: team.view permission
+        - create, resend_invite: team.invite permission
+        - partial_update: team.change_role permission
+        - destroy: team.remove permission
         """
-        if self.action == 'check_invitation':
+        if self.action in ['check_invitation', 'accept']:
             return [permissions.AllowAny()]
+            
+        if self.action in ['list', 'retrieve']:
+            return [permissions.IsAuthenticated(), HasTeamViewPermission()]
+            
+        if self.action in ['create', 'resend_invite']:
+            return [permissions.IsAuthenticated(), HasTeamInvitePermission()]
+            
+        if self.action in ['partial_update']:
+            return [permissions.IsAuthenticated(), HasTeamChangeRolePermission()]
+            
+        if self.action in ['destroy']:
+            return [permissions.IsAuthenticated(), HasTeamRemovePermission()]
+            
+        # Default to requiring authentication
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
@@ -270,40 +317,79 @@ class MembershipViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def accept(self, request, pk=None, org_id=None):
         """
-        Accept an invitation.
-        This would typically be called after a user clicks a link in an invitation email.
+        Accept an invitation to join an organization.
+        
+        Expected payload:
+        {
+            "name": "Full Name",
+            "password": "securepassword",
+            "password_confirm": "securepassword",
+            "invitation_token": "token"
+        }
         """
         membership = self.get_object()
         
-        # Only pending invitations can be accepted
-        if membership.status != "pending":
-            return Response({"detail": "This invitation has already been processed"}, 
-                           status=status.HTTP_400_BAD_REQUEST)
+        # Check if the membership is in pending status
+        if membership.status != 'pending':
+            return Response(
+                {"error": "This invitation has already been accepted or is invalid"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
-        # Verify the user is accepting their own invitation
-        if membership.user != request.user:
-            return Response({"detail": "You can only accept your own invitations"}, 
-                           status=status.HTTP_403_FORBIDDEN)
+        # Validate data with the serializer
+        serializer = MembershipAcceptSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
-        # Update status to active
-        membership.status = "active"
+        # Get validated data
+        name = serializer.validated_data['name']
+        password = serializer.validated_data['password']
+        invitation_token = serializer.validated_data['invitation_token']
+        
+        # Verify the invitation token matches
+        # In a real app, you'd hash and compare these securely
+        if invitation_token != str(membership.id):  # Simple validation for demonstration
+            return Response(
+                {"error": "Invalid invitation token"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get or create the user
+        user = membership.user
+        
+        # Update user details
+        user.name = name
+        user.set_password(password)
+        user.save()
+        
+        # Activate the membership
+        membership.status = 'active'
         membership.save()
-        
-        # Use organization.id directly (now a UUID)
-        org_id = membership.organization.id
         
         # Create audit log
         AuditLog.objects.create(
-            user=request.user,
+            user=user,
             organization=membership.organization,
-            action="accept_invite",
-            target_type="Membership",
+            action='invite',
+            target_type='Membership',
             target_id=membership.pk,
-            details=None
+            details={
+                'message': 'Invitation accepted'
+            }
         )
         
-        serializer = self.get_serializer(membership)
-        return Response(serializer.data)
+        # Generate auth tokens
+        tokens = get_tokens_for_user(user)
+        
+        # Return user and tokens
+        from accounts.serializers import UserSerializer
+        user_data = UserSerializer(user).data
+        
+        return Response({
+            'user': user_data,
+            'access': tokens['access'],
+            'refresh': tokens['refresh']
+        }, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["get"])
     def check_invitation(self, request, pk=None, org_id=None):
@@ -347,10 +433,31 @@ class MembershipViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True, context={'request': request})
+        return Response(serializer.data)
+        
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, context={'request': request})
+        return Response(serializer.data)
+
 class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = AuditLog.objects.all()
     serializer_class = AuditLogSerializer
-    permission_classes = [permissions.IsAuthenticated, IsTeamReadOnly]
+    
+    def get_permissions(self):
+        """
+        Return team.view permission for all audit log views
+        """
+        return [permissions.IsAuthenticated(), HasTeamViewPermission()]
 
     def get_queryset(self):
         org_id = self.kwargs["org_id"]

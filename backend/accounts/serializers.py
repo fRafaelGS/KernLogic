@@ -122,11 +122,12 @@ class UserLoginSerializer(serializers.Serializer):
 class UserSerializer(serializers.ModelSerializer):
     organization_id = serializers.SerializerMethodField()
     role = serializers.SerializerMethodField()
+    avatar_url = serializers.SerializerMethodField()
     
     class Meta:
         model = User
-        fields = ('id', 'email', 'name', 'is_active', 'is_staff', 'is_superuser', 'organization_id', 'role')
-        read_only_fields = ('id', 'is_active', 'is_staff', 'is_superuser', 'organization_id', 'role')
+        fields = ('id', 'email', 'name', 'is_active', 'is_staff', 'is_superuser', 'organization_id', 'role', 'avatar_url')
+        read_only_fields = ('id', 'is_active', 'is_staff', 'is_superuser', 'organization_id', 'role', 'avatar_url')
         
     def get_organization_id(self, user):
         try:
@@ -144,4 +145,17 @@ class UserSerializer(serializers.ModelSerializer):
             return membership.role.name.lower() if membership and membership.role else None
         except Exception as e:
             print(f"Error getting role for user {user.id}: {str(e)}")
+            return None
+            
+    def get_avatar_url(self, user):
+        try:
+            # Check if user has a profile with an avatar
+            if hasattr(user, 'profile') and user.profile.avatar:
+                request = self.context.get('request')
+                if request:
+                    return request.build_absolute_uri(user.profile.avatar.url)
+                return user.profile.avatar.url
+            return None
+        except Exception as e:
+            print(f"Error getting avatar_url for user {user.id}: {str(e)}")
             return None 

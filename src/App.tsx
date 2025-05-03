@@ -11,6 +11,7 @@ import { EditProduct } from '@/pages/EditProduct';
 import { ProductDetail } from '@/pages/ProductDetail';
 import LoginPage from '@/pages/auth/LoginPage';
 import RegisterPage from '@/pages/auth/RegisterPage';
+import OrganizationRegisterPage from '@/pages/auth/OrganizationRegisterPage';
 import ProductsPage from "@/pages/ProductsPage";
 import ButtonDemo from "@/pages/ButtonDemo";
 import AttributesPage from '@/pages/AttributesPage';
@@ -101,6 +102,7 @@ export const App: React.FC = () => {
                             {/* Auth Routes */}
                             <Route path="/login" element={<LoginPage />} />
                             <Route path="/register" element={<RegisterPage />} />
+                            <Route path="/register/:orgId" element={<OrganizationRegisterPage />} />
                             
                             {/* Protected App Routes */}
                             <Route

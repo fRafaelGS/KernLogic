@@ -63,7 +63,7 @@ const NavItem = ({ icon: Icon, label, href, badge }: NavItemProps) => {
 export function Sidebar({ className }: SidebarProps) {
   const { user, logout } = useAuth();
   const location = useLocation();
-
+  
   return (
     <div className={cn("flex h-screen w-64 flex-col bg-white border-r border-enterprise-200 shadow-sm", className)}>
       {/* Logo area */}

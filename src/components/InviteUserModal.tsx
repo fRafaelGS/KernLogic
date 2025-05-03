@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useParams } from 'react-router-dom';
-import api from '@/services/api';
+import { useAuth } from '@/contexts/AuthContext';
+import { inviteMember, TeamMember } from '@/services/teamService';
 import { Role } from '@/types/team';
 import {
   Dialog,
@@ -22,32 +21,79 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 interface InviteUserModalProps {
   show: boolean;
   onHide: () => void;
   roles: Role[];
+  onSuccess?: () => void;
 }
 
-const InviteUserModal: React.FC<InviteUserModalProps> = ({ show, onHide, roles }) => {
-  const { orgId } = useParams<{ orgId: string }>();
+const InviteUserModal: React.FC<InviteUserModalProps> = ({ show, onHide, roles, onSuccess }) => {
   const [email, setEmail] = useState('');
-  const [roleId, setRoleId] = useState('');
+  const [selectedRoleId, setSelectedRoleId] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
-  const queryClient = useQueryClient();
 
-  const inviteMutation = useMutation({
-    mutationFn: (formData: { email: string; role_id: number }) => 
-      api.post(`/api/orgs/${orgId}/memberships/`, formData),
+  // Get organization ID from auth context
+  const { user } = useAuth();
+  const orgId = user?.organization_id;
+  
+  // Form validation
+  const isEmailValid = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+  
+  const canSubmit = selectedRoleId > 0 && isEmailValid(email);
+  
+  // Invite mutation
+  const inviteMutation = useMutation<TeamMember, Error, { email: string; roleId: number }>({
+    mutationFn: ({ email, roleId }) => {
+      if (!orgId) {
+        throw new Error('No organization ID available');
+      }
+      return inviteMember(email, roleId, orgId);
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['teamMembers'] });
-      toast.success('Invitation sent successfully');
-      handleClose();
+      setEmail('');
+      setSelectedRoleId(0);
+      setError(null);
+      toast.success(`Invitation sent to ${email}`);
+      onHide();
+      if (onSuccess) {
+        onSuccess();
+      }
     },
     onError: (err: any) => {
-      setError(err.response?.data?.error || 'Failed to send invitation');
-      toast.error('Failed to send invitation');
+      console.error('Error inviting user:', err);
+      
+      let errorMessage = 'Failed to send invitation';
+      
+      // Handle different error formats
+      if (err.response) {
+        // Axios error with response
+        const { data } = err.response;
+        if (typeof data === 'string') {
+          errorMessage = data;
+        } else if (data && typeof data === 'object') {
+          if (data.detail) {
+            errorMessage = data.detail;
+          } else if (data.message) {
+            errorMessage = data.message;
+          } else if (data.error) {
+            errorMessage = data.error;
+          } else if (data.email) {
+            errorMessage = `Email: ${data.email}`;
+          }
+        }
+      } else if (err.message) {
+        // Regular error object
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
+      toast.error(errorMessage);
     }
   });
 
@@ -60,20 +106,29 @@ const InviteUserModal: React.FC<InviteUserModalProps> = ({ show, onHide, roles }
       return;
     }
 
-    if (!roleId) {
+    if (!selectedRoleId) {
       setError('Please select a role');
       return;
     }
 
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Sending single invite to API:', {
+        email: email.trim(),
+        roleId: selectedRoleId,
+        orgId
+      });
+    }
+
     inviteMutation.mutate({
       email: email.trim(),
-      role_id: parseInt(roleId, 10)
+      roleId: selectedRoleId
     });
   };
 
   const handleClose = () => {
+    inviteMutation.reset(); // Reset mutation state on close
     setEmail('');
-    setRoleId('');
+    setSelectedRoleId(0);
     setError(null);
     onHide();
   };
@@ -106,6 +161,7 @@ const InviteUserModal: React.FC<InviteUserModalProps> = ({ show, onHide, roles }
                 placeholder="colleague@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={inviteMutation.isPending}
                 required
               />
               <p className="text-sm text-muted-foreground">
@@ -115,7 +171,11 @@ const InviteUserModal: React.FC<InviteUserModalProps> = ({ show, onHide, roles }
 
             <div className="grid gap-2">
               <Label htmlFor="role">Role</Label>
-              <Select value={roleId} onValueChange={setRoleId}>
+              <Select 
+                value={selectedRoleId.toString()} 
+                onValueChange={(value) => setSelectedRoleId(parseInt(value, 10))} 
+                disabled={inviteMutation.isPending}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a role" />
                 </SelectTrigger>
@@ -132,7 +192,13 @@ const InviteUserModal: React.FC<InviteUserModalProps> = ({ show, onHide, roles }
           
           <DialogFooter>
             <DialogClose asChild>
-              <Button type="button" variant="outline">Cancel</Button>
+              <Button 
+                type="button" 
+                variant="outline"
+                disabled={inviteMutation.isPending}
+              >
+                Cancel
+              </Button>
             </DialogClose>
             <Button 
               type="submit" 

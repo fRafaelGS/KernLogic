@@ -12,6 +12,7 @@ import { MoreHorizontal } from 'lucide-react';
 import { removeMember, resendInvite } from '@/services/teamService';
 import { toast } from 'sonner';
 import RoleChangeModal from './RoleChangeModal';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ManageControlsProps {
   membershipId: number;
@@ -24,23 +25,42 @@ export const ManageControls: React.FC<ManageControlsProps> = ({
   status,
   currentRoleId
 }) => {
+  const { user } = useAuth();
+  const orgId = user?.organization_id;
   const queryClient = useQueryClient();
 
   const handleRemove = async () => {
     try {
-      await removeMember(membershipId);
+      if (!orgId) {
+        toast.error('Organization ID is missing');
+        return;
+      }
+      
+      await removeMember(membershipId, orgId);
       toast.success(status === 'pending' ? 'Invite canceled' : 'Member removed');
       queryClient.invalidateQueries({ queryKey: ['teamMembers'] });
     } catch (error: any) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error removing member:', error);
+      }
       toast.error(`Error: ${error.message}`);
     }
   };
 
   const handleResend = async () => {
     try {
-      await resendInvite(membershipId);
+      if (!orgId) {
+        toast.error('Organization ID is missing');
+        return;
+      }
+      
+      await resendInvite(membershipId, orgId);
       toast.success('Invitation resent');
+      queryClient.invalidateQueries({ queryKey: ['teamMembers'] });
     } catch (error: any) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error resending invitation:', error);
+      }
       toast.error(`Error: ${error.message}`);
     }
   };

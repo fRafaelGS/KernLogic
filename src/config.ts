@@ -1,7 +1,7 @@
 // API Configuration
-export const API_BASE_URL = 'http://localhost:8000'; // Explicit backend URL
-export const API_URL = 'http://localhost:8000/api'; // Base URL with /api prefix
-export const API_AUTH_URL = `http://localhost:8000/api`; // Base URL for auth endpoints with /api prefix
+export const API_BASE_URL = 'http://localhost:8000'; // Changed to remove /api suffix
+export const API_URL = 'http://localhost:8000'; // Changed to remove /api suffix
+export const API_AUTH_URL = `http://localhost:8000`; // Changed to remove /api suffix
 
 // Add debug logging
 console.log('API Configuration:', {
@@ -13,24 +13,24 @@ console.log('API Configuration:', {
 // API endpoints - updated to match actual Django URL structure
 export const API_ENDPOINTS = {
     auth: {
-        login: '/token/', // Path is relative to API_URL (/api/token/)
-        refresh: '/token/refresh/', // Path is relative to API_URL (/api/token/refresh/)
-        user: '/users/me/', // Path is relative to API_URL (/api/users/me/)
-        register: '/accounts/register/', // If registration endpoint exists
-        logout: '/auth/logout/' // If logout endpoint exists
+        login: '/api/token/', // Updated with full /api path
+        refresh: '/api/token/refresh/', // Updated with full /api path
+        user: '/api/users/me/', // Updated with full /api path
+        register: '/api/accounts/register/', // Updated with full /api path
+        logout: '/api/auth/logout/' // Updated with full /api path
     },
     orgs: {
-        memberships: (orgId: string) => `/orgs/${orgId}/memberships/`,
-        roles: (orgId: string) => `/orgs/${orgId}/roles/`,
-        invitations: (orgId: string) => `/orgs/${orgId}/invitations/`
+        memberships: (orgId: string) => `/api/orgs/${orgId}/memberships/`,
+        roles: (orgId: string) => `/api/orgs/${orgId}/roles/`,
+        invitations: (orgId: string) => `/api/orgs/${orgId}/invitations/`
     },
     products: {
-        list: '/products/',
-        create: '/products/',
-        update: (id: number) => `/products/${id}/`,
-        delete: (id: number) => `/products/${id}/`,
-        categories: '/products/categories/',
-        stats: '/products/stats/'
+        list: '/api/products/',
+        create: '/api/products/',
+        update: (id: number) => `/api/products/${id}/`,
+        delete: (id: number) => `/api/products/${id}/`,
+        categories: '/api/products/categories/',
+        stats: '/api/products/stats/'
     },
-    dashboard: '/dashboard'
+    dashboard: '/api/dashboard'
 }; 

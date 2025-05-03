@@ -1,5 +1,6 @@
 from rest_framework import permissions
 from .models import Membership
+from organizations.models import Organization
 
 class IsOrgAdmin(permissions.BasePermission):
     """
@@ -11,9 +12,10 @@ class IsOrgAdmin(permissions.BasePermission):
         if not org_id:
             return False
             
+        # Look up by organization_id
         return Membership.objects.filter(
             user=request.user,
-            org_id=org_id,
+            organization_id=org_id,
             role__name='Admin',
             status='active'
         ).exists()
@@ -28,9 +30,10 @@ class IsTeamReadOnly(permissions.BasePermission):
         if not org_id:
             return False
             
+        # Look up by organization_id
         is_member = Membership.objects.filter(
             user=request.user,
-            org_id=org_id,
+            organization_id=org_id,
             status='active'
         ).exists()
         

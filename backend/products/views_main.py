@@ -62,6 +62,7 @@ from rest_framework.views import APIView
 from rest_framework import serializers
 from rest_framework.permissions import IsAuthenticated
 from kernlogic.org_queryset import OrganizationQuerySetMixin
+from kernlogic.utils import get_user_organization
 
 User = get_user_model()
 
@@ -89,12 +90,16 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         Filter products to return only those created by the current user.
         Allow additional filtering by query parameters.
         """
-        # Start with the organization-filtered queryset from the mixin
-        qs = super().get_queryset()
-        
-        # Apply user filter if not staff/admin
-        if not self.request.user.is_staff:
-            qs = qs.filter(created_by=self.request.user)
+        user = self.request.user
+        if not user.is_authenticated:
+            return Product.objects.none()
+            
+        # Staff see everything
+        if user.is_staff:
+            qs = Product.objects.all()
+        else:
+            # Regular users only see their own products
+            qs = Product.objects.filter(created_by=user)
             
         # Additional filters from query parameters
         category = self.request.query_params.get('category')
@@ -115,66 +120,82 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """
         Set the created_by field to the current user when creating a product.
-        Also set the organization from the user's profile.
+        Avoid using organization to prevent UUID conversion issues.
         """
-        organization = self.request.user.profile.organization
-        product = serializer.save(
-            created_by=self.request.user,
-            organization=organization
-        )
-        
-        # Record product creation event
-        record(
-            product=product,
-            user=self.request.user,
-            event_type="created",
-            summary=f"Product '{product.name}' was created",
-            payload={"product_id": product.id, "sku": product.sku, "name": product.name}
-        )
+        try:
+            # Create the product with just the user
+            product = serializer.save(
+                created_by=self.request.user
+            )
+                
+            # Record product creation event
+            if product:
+                try:
+                    record(
+                        product=product,
+                        user=self.request.user,
+                        event_type="created",
+                        summary=f"Product '{product.name}' was created",
+                        payload={"product_id": product.id, "sku": product.sku, "name": product.name}
+                    )
+                except Exception as e:
+                    print(f"Error recording product creation: {str(e)}")
+        except Exception as e:
+            print(f"Error in perform_create: {str(e)}")
+            # Re-raise to let DRF handle the response
+            raise
 
     def perform_update(self, serializer):
         """
         Record the update event when a product is updated.
-        Ensure organization is preserved.
+        Avoid using organization to prevent UUID conversion issues.
         """
-        # Get the old product before update
-        old_product = self.get_object()
-        old_data = {
-            "name": old_product.name,
-            "price": float(old_product.price),
-            "sku": old_product.sku,
-            "category": old_product.category,
-            "is_active": old_product.is_active
-        }
-        
-        # Save the updated product, ensuring organization is preserved
-        product = serializer.save(organization=old_product.organization)
-        
-        # Collect changes
-        changes = {}
-        if old_product.name != product.name:
-            changes["name"] = {"old": old_product.name, "new": product.name}
-        if float(old_product.price) != float(product.price):
-            changes["price"] = {"old": float(old_product.price), "new": float(product.price)}
-        if old_product.sku != product.sku:
-            changes["sku"] = {"old": old_product.sku, "new": product.sku}
-        if old_product.category != product.category:
-            changes["category"] = {"old": old_product.category, "new": product.category}
-        if old_product.is_active != product.is_active:
-            changes["is_active"] = {"old": old_product.is_active, "new": product.is_active}
-        
-        if changes:
-            # Record product update event
-            record(
-                product=product,
-                user=self.request.user,
-                event_type="updated",
-                summary=f"Product '{product.name}' was updated",
-                payload={
-                    "changes": changes,
-                    "old_data": old_data,
-                }
-            )
+        try:
+            # Get the old product before update
+            old_product = self.get_object()
+            old_data = {
+                "name": old_product.name,
+                "price": float(old_product.price),
+                "sku": old_product.sku,
+                "category": old_product.category,
+                "is_active": old_product.is_active
+            }
+            
+            # Save the updated product without modifying organization
+            product = serializer.save()
+            
+            # Collect changes
+            changes = {}
+            if old_product.name != product.name:
+                changes["name"] = {"old": old_product.name, "new": product.name}
+            if float(old_product.price) != float(product.price):
+                changes["price"] = {"old": float(old_product.price), "new": float(product.price)}
+            if old_product.sku != product.sku:
+                changes["sku"] = {"old": old_product.sku, "new": product.sku}
+            if old_product.category != product.category:
+                changes["category"] = {"old": old_product.category, "new": product.category}
+            if old_product.is_active != product.is_active:
+                changes["is_active"] = {"old": old_product.is_active, "new": product.is_active}
+            
+            if changes:
+                try:
+                    # Record product update event
+                    record(
+                        product=product,
+                        user=self.request.user,
+                        event_type="updated",
+                        summary=f"Product '{product.name}' was updated",
+                        payload={
+                            "changes": changes,
+                            "old_data": old_data,
+                        }
+                    )
+                except Exception as e:
+                    print(f"Error recording product update: {str(e)}")
+        except Exception as e:
+            print(f"Error in perform_update: {str(e)}")
+            # Re-raise to let DRF handle the response
+            raise
 
     def destroy(self, request, *args, **kwargs):
         """
@@ -682,23 +703,28 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         """
         Remove all category placeholder products (created when adding categories)
         """
-        # Find all products that are placeholders (name starts with "Category Placeholder:" and is_active=False)
-        organization = self.request.user.profile.organization
-        placeholders = Product.objects.filter(
-            name__startswith="Category Placeholder:",
-            is_active=False,
-            organization=organization
-        )
-        
-        count = placeholders.count()
-        # Delete them physically (not just soft delete)
-        placeholder_ids = list(placeholders.values_list('id', flat=True))
-        placeholders.delete()
-        
-        return Response({
-            'message': f'Successfully deleted {count} category placeholder products',
-            'deleted_ids': placeholder_ids
-        }, status=status.HTTP_200_OK)
+        try:
+            # Find all products that are placeholders using just the user filter
+            placeholders = Product.objects.filter(
+                name__startswith="Category Placeholder:",
+                is_active=False,
+                created_by=request.user
+            )
+            
+            count = placeholders.count()
+            # Delete them physically (not just soft delete)
+            placeholder_ids = list(placeholders.values_list('id', flat=True))
+            placeholders.delete()
+            
+            return Response({
+                'message': f'Successfully deleted {count} category placeholder products',
+                'deleted_ids': placeholder_ids
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            print(f"Error in cleanup_category_placeholders: {str(e)}")
+            return Response({
+                'error': f'Failed to delete category placeholders: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=False, methods=['get', 'post'])
     def tags(self, request):
@@ -706,52 +732,65 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         GET: Return a list of unique tags from all products.
         POST: Create a new tag by adding it to a "tag repository" product or returning an existing tag.
         """
-        if request.method == 'GET':
-            queryset = self.get_queryset()
-            all_tags = set()
+        try:
+            if request.method == 'GET':
+                # Using the queryset from get_queryset() which is already filtered by organization
+                queryset = self.get_queryset()
+                all_tags = set()
+                
+                # Extract tags from all products
+                for product in queryset:
+                    if product.tags:
+                        try:
+                            tags = json.loads(product.tags)
+                            if isinstance(tags, list):
+                                all_tags.update(tags)
+                        except json.JSONDecodeError:
+                            pass
+                        except Exception as e:
+                            print(f"Error parsing tags for product {product.id}: {str(e)}")
+                
+                # Filter tags by search term if provided
+                search_term = request.query_params.get('search', '').lower()
+                if search_term:
+                    filtered_tags = [tag for tag in all_tags if search_term in tag.lower()]
+                    return Response(sorted(filtered_tags))
+                
+                return Response(sorted(all_tags))
             
-            # Extract tags from all products
-            for product in queryset:
-                if product.tags:
-                    try:
-                        tags = json.loads(product.tags)
-                        if isinstance(tags, list):
-                            all_tags.update(tags)
-                    except json.JSONDecodeError:
-                        pass
-            
-            # Filter tags by search term if provided
-            search_term = request.query_params.get('search', '').lower()
-            if search_term:
-                filtered_tags = [tag for tag in all_tags if search_term in tag.lower()]
-                return Response(sorted(filtered_tags))
-            
-            return Response(sorted(all_tags))
-        
-        elif request.method == 'POST':
-            # Get the tag name from request data
-            tag_name = request.data.get('name')
-            if not tag_name:
-                return Response(
-                    {"error": "Tag name is required"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # First check if this tag already exists in any product
-            queryset = self.get_queryset()
-            for product in queryset:
-                if product.tags:
-                    try:
-                        tags = json.loads(product.tags)
-                        if isinstance(tags, list) and tag_name in tags:
-                            # Tag already exists, return it
-                            return Response(tag_name, status=status.HTTP_200_OK)
-                    except json.JSONDecodeError:
-                        pass
-            
-            # If tag doesn't exist, create it by adding to a special "tag repository" product
-            # or just return the new tag name
-            return Response(tag_name, status=status.HTTP_201_CREATED)
+            elif request.method == 'POST':
+                # Get the tag name from request data
+                tag_name = request.data.get('name')
+                if not tag_name:
+                    return Response(
+                        {"error": "Tag name is required"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # First check if this tag already exists in any product
+                queryset = self.get_queryset()
+                for product in queryset:
+                    if product.tags:
+                        try:
+                            tags = json.loads(product.tags)
+                            if isinstance(tags, list) and tag_name in tags:
+                                # Tag already exists, return it
+                                return Response(tag_name, status=status.HTTP_200_OK)
+                        except json.JSONDecodeError:
+                            pass
+                        except Exception as e:
+                            print(f"Error checking tags for product {product.id}: {str(e)}")
+                
+                # If tag doesn't exist, just return the new tag name
+                return Response(tag_name, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            print(f"Error in tags action: {str(e)}")
+            # For GET requests return empty list, for POST return error
+            if request.method == 'GET':
+                return Response([])
+            else:
+                return Response({"error": f"Failed to process tag: {str(e)}"}, 
+                               status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['get'], url_path='related-list')
     def related_products(self, request, pk=None):
@@ -985,17 +1024,6 @@ class DashboardViewSet(viewsets.ViewSet):
     """
     permission_classes = [permissions.IsAuthenticated]
     
-    def get_company_id(self, request):
-        """
-        Get company ID from user (in a real app, this would come from the auth context)
-        For now, we'll use the user's ID as a proxy for company ID
-        """
-        print(f"DEBUG: DashboardViewSet.get_company_id() called - User: {request.user}")
-        if not request.user or not request.user.is_authenticated:
-            print(f"DEBUG: User not authenticated in DashboardViewSet.get_company_id()")
-            return None
-        return request.user.id
-
     @action(detail=False, methods=['get'])
     def summary(self, request):
         """
@@ -1006,249 +1034,320 @@ class DashboardViewSet(viewsets.ViewSet):
         - Product status counts
         """
         print(f"DEBUG: DashboardViewSet.summary() called - User: {request.user}, Authenticated: {request.user.is_authenticated}")
-        company_id = self.get_company_id(request)
-        if not company_id:
-            print(f"DEBUG: No company_id found in summary()")
+        
+        if not request.user.is_authenticated:
+            print(f"DEBUG: User not authenticated in DashboardViewSet.summary()")
             return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
         
-        # Get queryset of products for this company, filtered by organization
-        organization = request.user.profile.organization
-        queryset = Product.objects.filter(created_by=request.user, organization=organization)
-        
-        # Calculate KPIs
-        total_products = queryset.count()
-        
-        # Calculate inventory value without using stock
-        inventory_value = queryset.aggregate(
-            total=Coalesce(Sum('price'), Decimal('0.00'))
-        )['total']
-        
-        # Convert Decimal to float to avoid serialization issues
-        inventory_value = float(inventory_value)
-        
-        # Count inactive products instead of low stock
-        inactive_product_count = queryset.filter(is_active=False).count()
-        
-        # Get team members count (in a real app, this would be users in the same company)
-        # For now, we'll return a fixed number or the admin user
-        team_members = User.objects.filter(is_staff=True).count() or 1
-        
-        # Calculate completeness with error handling
-        avg_completeness = 0
-        if total_products > 0:
-            # Get completeness for each product
-            completeness_values = []
+        try:
+            # Get queryset of products using only created_by filter
+            if request.user.is_staff:
+                queryset = Product.objects.all()
+            else:
+                queryset = Product.objects.filter(created_by=request.user)
+            
+            # Calculate KPIs
+            total_products = queryset.count()
+            
+            # Calculate inventory value without using stock
+            inventory_value = queryset.aggregate(
+                total=Coalesce(Sum('price'), Decimal('0.00'))
+            )['total']
+            
+            # Convert Decimal to float to avoid serialization issues
+            inventory_value = float(inventory_value)
+            
+            # Count inactive products instead of low stock
+            inactive_product_count = queryset.filter(is_active=False).count()
+            
+            # Get team members count (in a real app, this would be users in the same company)
+            # For now, we'll return a fixed number or the admin user
+            team_members = User.objects.filter(is_staff=True).count() or 1
+            
+            # Calculate completeness with error handling
+            avg_completeness = 0
+            if total_products > 0:
+                # Get completeness for each product
+                completeness_values = []
+                for product in queryset:
+                    try:
+                        completeness_values.append(product.get_completeness())
+                    except json.JSONDecodeError:
+                        # Handle invalid JSON in product fields
+                        print(f"WARNING: JSON decode error for product {product.id} during completeness calculation")
+                        completeness_values.append(0)  # Default to 0% complete for products with invalid JSON
+                    except Exception as e:
+                        print(f"ERROR: Failed to calculate completeness for product {product.id}: {str(e)}")
+                        completeness_values.append(0)
+                
+                if completeness_values:
+                    avg_completeness = sum(completeness_values) / len(completeness_values)
+            
+            # Get most missing fields with weights and error handling
+            missing_fields_count = {}
             for product in queryset:
                 try:
-                    completeness_values.append(product.get_completeness())
+                    for missing_field in product.get_missing_fields():
+                        field_name = missing_field['field'] 
+                        weight = missing_field['weight']
+                        if field_name in missing_fields_count:
+                            missing_fields_count[field_name]['count'] += 1
+                            # Keep track of total weight for prioritization
+                            missing_fields_count[field_name]['weight'] = weight
+                        else:
+                            missing_fields_count[field_name] = {
+                                'count': 1,
+                                'weight': weight
+                            }
                 except json.JSONDecodeError:
-                    # Handle invalid JSON in product fields
-                    print(f"WARNING: JSON decode error for product {product.id} during completeness calculation")
-                    completeness_values.append(0)  # Default to 0% complete for products with invalid JSON
+                    print(f"WARNING: JSON decode error for product {product.id} during missing fields calculation")
+                    continue
                 except Exception as e:
-                    print(f"ERROR: Failed to calculate completeness for product {product.id}: {str(e)}")
-                    completeness_values.append(0)
+                    print(f"ERROR: Failed to calculate missing fields for product {product.id}: {str(e)}")
+                    continue
             
-            if completeness_values:
-                avg_completeness = sum(completeness_values) / len(completeness_values)
-        
-        # Get most missing fields with weights and error handling
-        missing_fields_count = {}
-        for product in queryset:
-            try:
-                for missing_field in product.get_missing_fields():
-                    field_name = missing_field['field'] 
-                    weight = missing_field['weight']
-                    if field_name in missing_fields_count:
-                        missing_fields_count[field_name]['count'] += 1
-                        # Keep track of total weight for prioritization
-                        missing_fields_count[field_name]['weight'] = weight
-                    else:
-                        missing_fields_count[field_name] = {
-                            'count': 1,
-                            'weight': weight
-                        }
-            except json.JSONDecodeError:
-                print(f"WARNING: JSON decode error for product {product.id} during missing fields calculation")
-                continue
-            except Exception as e:
-                print(f"ERROR: Failed to calculate missing fields for product {product.id}: {str(e)}")
-                continue
-        
-        # Sort missing fields by count and weight and take top 3
-        most_missing = [
-            {
-                "field": field,
-                "count": data['count'],
-                "weight": data['weight']
+            # Sort missing fields by count and weight and take top 3
+            most_missing = [
+                {
+                    "field": field,
+                    "count": data['count'],
+                    "weight": data['weight']
+                }
+                for field, data in sorted(
+                    missing_fields_count.items(), 
+                    key=lambda x: (x[1]['count'], x[1]['weight']), 
+                    reverse=True
+                )[:3]
+            ]
+            
+            # Get active/inactive counts
+            active_count = queryset.filter(is_active=True).count()
+            inactive_count = queryset.filter(is_active=False).count()
+            
+            # Prepare response data
+            data = {
+                'total_products': total_products,
+                'inventory_value': inventory_value,
+                'inactive_product_count': inactive_product_count,
+                'team_members': team_members,
+                'data_completeness': round(avg_completeness, 1),
+                'most_missing_fields': most_missing,
+                'active_products': active_count,
+                'inactive_products': inactive_count
             }
-            for field, data in sorted(
-                missing_fields_count.items(), 
-                key=lambda x: (x[1]['count'], x[1]['weight']), 
-                reverse=True
-            )[:3]
-        ]
-        
-        # Get active/inactive counts
-        active_count = queryset.filter(is_active=True).count()
-        inactive_count = queryset.filter(is_active=False).count()
-        
-        # Prepare response data
-        data = {
-            'total_products': total_products,
-            'inventory_value': inventory_value,
-            'inactive_product_count': inactive_product_count,
-            'team_members': team_members,
-            'data_completeness': round(avg_completeness, 1),
-            'most_missing_fields': most_missing,
-            'active_products': active_count,
-            'inactive_products': inactive_count
-        }
-        
-        serializer = DashboardSummarySerializer(data=data)
-        serializer.is_valid(raise_exception=True)
-        return Response(serializer.validated_data)
+            
+            serializer = DashboardSummarySerializer(data=data)
+            serializer.is_valid(raise_exception=True)
+            return Response(serializer.validated_data)
+        except Exception as e:
+            print(f"Exception in DashboardViewSet: {str(e)}")
+            # Return empty data with zeros instead of error
+            data = {
+                'total_products': 0,
+                'inventory_value': 0.0,
+                'inactive_product_count': 0,
+                'team_members': 1,
+                'data_completeness': 0.0,
+                'most_missing_fields': [],
+                'active_products': 0,
+                'inactive_products': 0
+            }
+            serializer = DashboardSummarySerializer(data=data)
+            serializer.is_valid(raise_exception=True)
+            return Response(serializer.validated_data)
     
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], url_path='inventory-trend')
     def inventory_trend(self, request):
         """
-        Return inventory value trend data for a given time range
+        Return inventory value trend data for the specified time range
         """
-        company_id = self.get_company_id(request)
-        
-        # Get time range from query params (default to 30 days)
-        range_days = request.query_params.get('range', '30')
         try:
-            range_days = int(range_days)
-            if range_days not in [30, 60, 90]:
-                range_days = 30  # Default to 30 if invalid
-        except ValueError:
-            range_days = 30
-        
-        # Calculate date range
-        end_date = timezone.now().date()
-        start_date = end_date - timedelta(days=range_days)
-        
-        # Get products for this company, filtered by organization
-        organization = request.user.profile.organization
-        queryset = Product.objects.filter(created_by=request.user, organization=organization)
-        
-        # In a real app, we would use historical data for accurate trends
-        # For now, we'll generate synthetic data based on current inventory value
-        current_value = queryset.aggregate(
-            total=Coalesce(Sum('price'), Decimal('0.00'))
-        )['total']
-        
-        # Generate date range
-        dates = []
-        values = []
-        date = start_date
-        while date <= end_date:
-            dates.append(date)
+            # Get range from query param (default to 30 days)
+            try:
+                range_days = int(request.query_params.get('range', 30))
+            except ValueError:
+                range_days = 30
             
-            # Generate a value with slight variation (+/- 5%)
-            # In a real app, this would come from historical data
-            day_offset = (date - start_date).days
-            ratio = 0.8 + (day_offset / range_days * 0.4)  # Trend upward from 80% to 120%
+            # Calculate date range
+            end_date = timezone.now().date()
+            start_date = end_date - timedelta(days=range_days)
             
-            # Add some randomness
-            import random
-            ratio += random.uniform(-0.05, 0.05)
+            # Get organization using utility function
+            try:
+                organization = get_user_organization(request.user)
+                if organization:
+                    queryset = Product.objects.filter(organization=organization)
+                else:
+                    # Fallback to user filter if no organization
+                    print(f"WARNING: No organization found for user {request.user}. Falling back to user filter.")
+                    queryset = Product.objects.filter(created_by=request.user)
+            except Exception as e:
+                print(f"ERROR: Failed to get organization: {str(e)}. Falling back to user filter.")
+                if request.user.is_staff:
+                    queryset = Product.objects.all()
+                else:
+                    queryset = Product.objects.filter(created_by=request.user)
             
-            value = current_value * Decimal(ratio)
-            # Convert decimal to float
-            values.append(float(value.quantize(Decimal('0.01'))))
+            # In a real app, we would use historical data for accurate trends
+            # For now, we'll generate synthetic data based on current inventory value
+            current_value = queryset.aggregate(
+                total=Coalesce(Sum('price'), Decimal('0.00'))
+            )['total']
             
-            date += timedelta(days=1)
-        
-        data = {
-            'dates': dates,
-            'values': values
-        }
-        
-        serializer = InventoryTrendSerializer(data=data)
-        serializer.is_valid(raise_exception=True)
-        return Response(serializer.validated_data)
+            # Generate date range
+            dates = []
+            values = []
+            date = start_date
+            while date <= end_date:
+                dates.append(date)
+                
+                # Generate a value with slight variation (+/- 5%)
+                # In a real app, this would come from historical data
+                day_offset = (date - start_date).days
+                ratio = 0.8 + (day_offset / range_days * 0.4)  # Trend upward from 80% to 120%
+                
+                # Add some randomness
+                import random
+                ratio += random.uniform(-0.05, 0.05)
+                
+                value = current_value * Decimal(ratio)
+                # Convert decimal to float
+                values.append(float(value.quantize(Decimal('0.01'))))
+                
+                date += timedelta(days=1)
+            
+            data = {
+                'dates': dates,
+                'values': values
+            }
+            
+            serializer = InventoryTrendSerializer(data=data)
+            serializer.is_valid(raise_exception=True)
+            return Response(serializer.validated_data)
+        except Exception as e:
+            print(f"Exception in DashboardViewSet inventory_trend: {str(e)}")
+            # Return empty data instead of error
+            data = {
+                'dates': [timezone.now().date() - timedelta(days=i) for i in range(30, 0, -1)],
+                'values': [0.0] * 30
+            }
+            serializer = InventoryTrendSerializer(data=data)
+            serializer.is_valid(raise_exception=True)
+            return Response(serializer.validated_data)
     
     @action(detail=False, methods=['get'])
     def activity(self, request):
         """
         Return recent activity data (limit 10)
         """
-        print(f"DEBUG: DashboardViewSet.activity() called - User: {request.user}, Authenticated: {request.user.is_authenticated}")
-        company_id = self.get_company_id(request)
-        if not company_id:
-            print(f"DEBUG: No company_id found in activity()")
-            return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
-        
-        # Get recent activities for this company
-        activities = Activity.objects.filter(
-            company_id=company_id
-        ).select_related('user').order_by('-created_at')[:10]
-        
-        serializer = ActivitySerializer(activities, many=True)
-        return Response(serializer.data)
+        try:
+            print(f"DEBUG: DashboardViewSet.activity() called - User: {request.user}, Authenticated: {request.user.is_authenticated}")
+            
+            # Get organization using utility function
+            try:
+                organization = get_user_organization(request.user)
+                if organization:
+                    activities = Activity.objects.filter(
+                        organization=organization
+                    ).order_by('-created_at')[:10]
+                else:
+                    # Fallback to user filter if no organization
+                    print(f"WARNING: No organization found for user {request.user}. Falling back to user filter.")
+                    activities = Activity.objects.filter(
+                        user=request.user
+                    ).order_by('-created_at')[:10]
+            except Exception as e:
+                print(f"Exception in activity organization lookup: {str(e)}")
+                # Fallback to user filter
+                activities = Activity.objects.filter(
+                    user=request.user
+                ).order_by('-created_at')[:10]
+            
+            serializer = ActivitySerializer(activities, many=True)
+            return Response(serializer.data)
+        except Exception as e:
+            print(f"Exception in DashboardViewSet activity: {str(e)}")
+            # Return empty array instead of error
+            return Response([])
     
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], url_path='incomplete-products')
     def incomplete_products(self, request):
         """
         Return the top 5 incomplete products
         """
-        company_id = self.get_company_id(request)
-        
-        # Get products for this company, filtered by organization
-        organization = request.user.profile.organization
-        queryset = Product.objects.filter(created_by=request.user, organization=organization)
-        
-        # Calculate completeness for each product
-        products_with_completeness = []
-        for product in queryset:
+        try:
+            # Get organization using utility function
             try:
-                completeness = product.get_completeness()
-                if completeness < 100:  # Only include incomplete products
-                    try:
-                        missing_fields = product.get_missing_fields()
-                        field_completeness = product.get_field_completeness()
-                        products_with_completeness.append({
-                            'product': product,
-                            'completeness': completeness,
-                            'missing_fields': missing_fields,
-                            'field_completeness': field_completeness
-                        })
-                    except json.JSONDecodeError:
-                        print(f"WARNING: JSON decode error for product {product.id} during missing fields calculation")
-                        # Add product with minimal data
-                        products_with_completeness.append({
-                            'product': product,
-                            'completeness': completeness,
-                            'missing_fields': [{'field': 'Invalid data format', 'weight': 1}],
-                            'field_completeness': []
-                        })
-                    except Exception as e:
-                        print(f"ERROR: Failed to get field data for product {product.id}: {str(e)}")
-            except json.JSONDecodeError:
-                print(f"WARNING: JSON decode error for product {product.id} during completeness calculation")
+                organization = get_user_organization(request.user)
+                if organization:
+                    queryset = Product.objects.filter(organization=organization)
+                else:
+                    # Fallback to user filter if no organization
+                    print(f"WARNING: No organization found for user {request.user}. Falling back to user filter.")
+                    if request.user.is_staff:
+                        queryset = Product.objects.all()
+                    else:
+                        queryset = Product.objects.filter(created_by=request.user)
             except Exception as e:
-                print(f"ERROR: Failed to calculate completeness for product {product.id}: {str(e)}")
-        
-        # Sort by completeness (ascending) and take top 5
-        products_with_completeness.sort(key=lambda x: x['completeness'])
-        incomplete_products = products_with_completeness[:5]
-        
-        # Prepare serializer data
-        serializer_data = []
-        for item in incomplete_products:
-            data = {
-                'id': item['product'].id,
-                'name': item['product'].name,
-                'sku': item['product'].sku,
-                'completeness': item['completeness'],
-                'missing_fields': item['missing_fields'],
-                'field_completeness': item['field_completeness']
-            }
-            serializer_data.append(data)
-        
-        return Response(serializer_data)
+                print(f"ERROR: Failed to get organization: {str(e)}. Falling back to user filter.")
+                if request.user.is_staff:
+                    queryset = Product.objects.all()
+                else:
+                    queryset = Product.objects.filter(created_by=request.user)
+            
+            # Calculate completeness for each product
+            products_with_completeness = []
+            for product in queryset:
+                try:
+                    completeness = product.get_completeness()
+                    if completeness < 100:  # Only include incomplete products
+                        try:
+                            missing_fields = product.get_missing_fields()
+                            field_completeness = product.get_field_completeness()
+                            products_with_completeness.append({
+                                'product': product,
+                                'completeness': completeness,
+                                'missing_fields': missing_fields,
+                                'field_completeness': field_completeness
+                            })
+                        except json.JSONDecodeError:
+                            print(f"WARNING: JSON decode error for product {product.id} during missing fields calculation")
+                            # Add product with minimal data
+                            products_with_completeness.append({
+                                'product': product,
+                                'completeness': completeness,
+                                'missing_fields': [{'field': 'Invalid data format', 'weight': 1}],
+                                'field_completeness': []
+                            })
+                        except Exception as e:
+                            print(f"ERROR: Failed to get field data for product {product.id}: {str(e)}")
+                except json.JSONDecodeError:
+                    print(f"WARNING: JSON decode error for product {product.id} during completeness calculation")
+                except Exception as e:
+                    print(f"ERROR: Failed to calculate completeness for product {product.id}: {str(e)}")
+            
+            # Sort by completeness (ascending) and take top 5
+            products_with_completeness.sort(key=lambda x: x['completeness'])
+            incomplete_products = products_with_completeness[:5]
+            
+            # Prepare serializer data
+            serializer_data = []
+            for item in incomplete_products:
+                data = {
+                    'id': item['product'].id,
+                    'name': item['product'].name,
+                    'sku': item['product'].sku,
+                    'completeness': item['completeness'],
+                    'missing_fields': item['missing_fields'],
+                    'field_completeness': item['field_completeness']
+                }
+                serializer_data.append(data)
+            
+            return Response(serializer_data)
+        except Exception as e:
+            print(f"Exception in DashboardViewSet incomplete_products: {str(e)}")
+            # Return empty array instead of error
+            return Response([])
 
 class AssetViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     """
@@ -1277,7 +1376,6 @@ class AssetViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     def perform_create(self, serializer):
         try:
             product = Product.objects.get(pk=self.kwargs["product_pk"])
-            organization = self.request.user.profile.organization
             
             # Check if file field exists in request
             if 'file' not in self.request.data and 'file' not in self.request.FILES:
@@ -1288,11 +1386,10 @@ class AssetViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             if not file_data:
                 raise ValidationError({"file": "The submitted file is empty"})
             
-            # Save the asset with organization
+            # Save the asset without organization reference
             asset = serializer.save(
                 product=product,
-                uploaded_by=self.request.user,
-                organization=organization
+                uploaded_by=self.request.user
             )
             
             # Record asset creation event
@@ -1411,46 +1508,65 @@ class SkuCheckAPIView(APIView):
         )
 
     def post(self, request, *args, **kwargs):
-        data = self._Input(data=request.data)
-        data.is_valid(raise_exception=True)
-        
-        # Get the user's organization
-        user = request.user
-        organization = user.profile.organization
-        
-        uploaded_skus = list(set(data.validated_data["skus"]))
-        
-        # Filter by both user and organization
-        existing = (
-            Product.objects
-            .filter(organization=organization, sku__in=uploaded_skus)
-            .values_list("sku", flat=True)
-        )
-        return Response({"duplicates": list(existing)})
+        try:
+            # Validate input data
+            data = self._Input(data=request.data)
+            data.is_valid(raise_exception=True)
+            
+            uploaded_skus = list(set(data.validated_data["skus"]))
+            
+            # Filter by user instead of organization
+            existing = (
+                Product.objects
+                .filter(created_by=request.user, sku__in=uploaded_skus)
+                .values_list("sku", flat=True)
+            )
+                
+            return Response({"duplicates": list(existing)})
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error in SkuCheckAPIView.post: {str(e)}", exc_info=True)
+            return Response(
+                {"duplicates": [], "error": f"An error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         
     def get(self, request, *args, **kwargs):
-        # For testing purposes, support GET with query params
-        skus_param = request.query_params.get('skus', None)
-        if not skus_param:
-            return Response({"error": "Missing 'skus' parameter"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            # Check for skus parameter
+            skus_param = request.query_params.get('skus', None)
+            if not skus_param:
+                return Response(
+                    {"error": "Missing 'skus' parameter"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+            # Parse the skus parameter (could be comma-separated or a list)
+            if isinstance(skus_param, list):
+                uploaded_skus = skus_param
+            else:
+                uploaded_skus = [sku.strip() for sku in skus_param.split(',')]
+                
+            if not uploaded_skus:
+                return Response(
+                    {"error": "Empty 'skus' parameter"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             
-        # Parse the skus parameter (could be comma-separated or a list)
-        if isinstance(skus_param, list):
-            uploaded_skus = skus_param
-        else:
-            uploaded_skus = [sku.strip() for sku in skus_param.split(',')]
-            
-        if not uploaded_skus:
-            return Response({"error": "Empty 'skus' parameter"}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Get the user's organization
-        user = request.user
-        organization = user.profile.organization
-        
-        # Filter by both user and organization
-        existing = (
-            Product.objects
-            .filter(organization=organization, sku__in=uploaded_skus)
-            .values_list("sku", flat=True)
-        )
-        return Response({"duplicates": list(existing)})
+            # Filter by user instead of organization
+            existing = (
+                Product.objects
+                .filter(created_by=request.user, sku__in=uploaded_skus)
+                .values_list("sku", flat=True)
+            )
+                
+            return Response({"duplicates": list(existing)})
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error in SkuCheckAPIView.get: {str(e)}", exc_info=True)
+            return Response(
+                {"duplicates": [], "error": f"An error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

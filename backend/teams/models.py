@@ -27,7 +27,6 @@ class Membership(models.Model):
         on_delete=models.CASCADE,
         default=get_default_org
     )
-    org_id = models.UUIDField(null=True, blank=True)
     role = models.ForeignKey(Role, on_delete=models.PROTECT)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="pending")
     invited_at = models.DateTimeField(auto_now_add=True)
@@ -45,7 +44,7 @@ class AuditLog(models.Model):
         ("remove", "User Removed"),
     ]
     user = models.ForeignKey(User, null=True, on_delete=models.SET_NULL)
-    org_id = models.UUIDField()
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.CASCADE, null=True)
     action = models.CharField(max_length=20, choices=ACTION_CHOICES)
     target_type = models.CharField(max_length=50)   # e.g. "Membership"
     target_id = models.UUIDField()                  # e.g. membership.pk

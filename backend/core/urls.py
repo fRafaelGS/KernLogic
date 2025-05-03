@@ -140,7 +140,7 @@ urlpatterns = [
     path('api/', include('analytics.urls')),
     
     # Teams API
-    path('', include('teams.urls')),
+    path('api/', include('teams.urls')),
     
     # Accounts API - add this line to include accounts URLs
     path('api/', include('accounts.urls')),
@@ -156,5 +156,6 @@ if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
-# React SPA - serve in production (This must be last)
-urlpatterns.append(re_path('.*', TemplateView.as_view(template_name='index.html')))
+# React SPA - serve in production
+# This must be last and should NOT match /api/ URLs
+urlpatterns.append(re_path(r'^(?!api/).*$', TemplateView.as_view(template_name='index.html')))

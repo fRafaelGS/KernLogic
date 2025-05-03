@@ -33,7 +33,7 @@ export interface IncompleteProduct {
   name: string;
   sku: string;
   completeness: number;
-  missing_fields: string[];
+  missing_fields: Array<{field: string, weight: number}>;
 }
 
 // Define path to dashboard endpoints - use the path from config

@@ -303,7 +303,7 @@ class Activity(models.Model):
         ('delete', 'Delete'),
     )
     
-    company_id = models.IntegerField(db_index=True)  # Foreign key to company
+    # Remove integer company_id, rely only on organization UUID
     organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, db_index=True, null=True)
     user = models.ForeignKey(
         User, 
@@ -312,7 +312,7 @@ class Activity(models.Model):
         related_name='activities'
     )
     entity = models.CharField(max_length=50)  # e.g., 'product'
-    entity_id = models.IntegerField()
+    entity_id = models.CharField(max_length=40)  # Changed to CharField to support both int and UUID
     action = models.CharField(max_length=20, choices=ACTION_CHOICES)
     message = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
@@ -320,7 +320,7 @@ class Activity(models.Model):
     class Meta:
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['company_id', 'created_at']),
+            models.Index(fields=['organization', 'created_at']),
             models.Index(fields=['entity', 'entity_id']),
         ]
         verbose_name_plural = 'Activities'

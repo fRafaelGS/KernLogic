@@ -88,6 +88,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "products.middleware.AssetRequestMiddleware",  # Add our middleware for asset uploads
+    "teams.middleware.NumericOrgIdDeprecationMiddleware",  # Add middleware for org ID deprecation
 ]
 
 ROOT_URLCONF = "core.urls"
@@ -333,3 +334,17 @@ if DEBUG:
 
 # Allow the following attribute to be used in signals
 DJANGORESIZED_DEFAULT_FORMAT_EXTENSIONS = {'JPEG': ".jpg", 'PNG': '.png', 'GIF': '.gif'}
+
+# Email configuration
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'rgarciaraiva@gmail.com'
+EMAIL_HOST_PASSWORD = 'gvcclpihtsrvuyvc'
+DEFAULT_FROM_EMAIL = 'KernLogic <rgarciasaraiva@gmail.com>'
+# Ensure emails are sent even in development mode
+EMAIL_DEBUG = False  # Prevents email interception in debug mode
+
+# Frontend URL for email links
+FRONTEND_URL = 'http://localhost:3004'  # Update this in production to your actual domain

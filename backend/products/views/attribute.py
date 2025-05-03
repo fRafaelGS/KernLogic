@@ -6,6 +6,7 @@ from products.models import Attribute
 from products.serializers import AttributeSerializer
 from products.permissions import IsStaffOrReadOnly
 from kernlogic.org_queryset import OrganizationQuerySetMixin
+from kernlogic.utils import get_user_organization
 
 @extend_schema_view(
     list=extend_schema(summary="List all attributes", 
@@ -32,6 +33,6 @@ class AttributeViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """Set organization and created_by from request user"""
         serializer.save(
-            organization=self.request.user.profile.organization,
+            organization=get_user_organization(self.request.user),
             created_by=self.request.user
         ) 

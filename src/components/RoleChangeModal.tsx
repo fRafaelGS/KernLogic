@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, ReactNode } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import {
   Dialog,
@@ -16,8 +16,10 @@ import {
   SelectItem
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { fetchRoles, updateMemberRole } from '@/services/teamService';
+import { fetchRoles, updateMemberRole, TeamMember, Role } from '@/services/teamService';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
+import { Label } from "@/components/ui/label";
 
 interface RoleChangeModalProps {
   membershipId: number;
@@ -25,11 +27,18 @@ interface RoleChangeModalProps {
   trigger: React.ReactNode;
 }
 
+type UpdateRoleData = {
+  membershipId: number;
+  roleId: number;
+};
+
 export const RoleChangeModal: React.FC<RoleChangeModalProps> = ({
   membershipId,
   currentRoleId,
   trigger
 }) => {
+  const { user } = useAuth();
+  const orgId = user?.organization_id;
   const queryClient = useQueryClient();
   const [roleId, setRoleId] = useState<number>(currentRoleId);
   const [open, setOpen] = useState(false);
@@ -40,20 +49,36 @@ export const RoleChangeModal: React.FC<RoleChangeModalProps> = ({
   }, [currentRoleId]);
 
   // Fetch available roles
-  const { data: roles = [] } = useQuery({
-    queryKey: ['roles'],
-    queryFn: fetchRoles
+  const { data: roles = [] } = useQuery<Role[]>({
+    queryKey: ['roles', orgId],
+    queryFn: () => {
+      if (!orgId) {
+        console.error('[RoleChangeModal] No organization ID available for fetching roles');
+        throw new Error('No organization ID available');
+      }
+      return fetchRoles(orgId);
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled: Boolean(orgId), // Only run if we have an org ID
   });
 
   // Setup mutation for updating role
-  const updateMutation = useMutation({
-    mutationFn: () => updateMemberRole(membershipId, roleId),
+  const updateMutation = useMutation<TeamMember, Error, UpdateRoleData>({
+    mutationFn: ({ membershipId, roleId }) => {
+      if (!orgId) {
+        throw new Error('No organization ID available');
+      }
+      return updateMemberRole(membershipId, roleId, orgId);
+    },
     onSuccess: () => {
       toast.success('Role updated successfully');
       queryClient.invalidateQueries({ queryKey: ['teamMembers'] });
       setOpen(false);
     },
     onError: (error: any) => {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error updating role:', error);
+      }
       toast.error(`Failed to update role: ${error.message}`);
     }
   });
@@ -67,7 +92,7 @@ export const RoleChangeModal: React.FC<RoleChangeModalProps> = ({
       return toast.info('Role is unchanged');
     }
     
-    updateMutation.mutate();
+    updateMutation.mutate({ membershipId, roleId });
   };
 
   return (
@@ -87,6 +112,7 @@ export const RoleChangeModal: React.FC<RoleChangeModalProps> = ({
             <Select
               value={roleId.toString()}
               onValueChange={handleRoleChange}
+              disabled={updateMutation.isPending}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select a role" />

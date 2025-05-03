@@ -1,11 +1,20 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useParams } from 'react-router-dom';
 import { fetchAuditLogs, AuditLogEntry } from '@/services/teamService';
 import { formatDistanceToNow } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Clock, UserPlus, UserCog, UserMinus } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+
+// Development only logging helper
+const devLog = (...args: any[]) => {
+  if (process.env.NODE_ENV === 'development') {
+    console.log(...args);
+  }
+};
 
 // Helper function to get action icon
 const getActionIcon = (action: string) => {
@@ -41,9 +50,30 @@ const formatActionText = (action: string) => {
 };
 
 export const TeamHistoryPage: React.FC = () => {
-  const { data: logs = [], isLoading, isError } = useQuery({
-    queryKey: ['auditLogs'],
-    queryFn: fetchAuditLogs
+  const { orgId } = useParams<{ orgId: string }>();
+  const { user } = useAuth();
+  
+  // Use the non-null assertion as requested
+  const orgID = orgId ?? user?.organization_id ?? '1';
+
+  const { 
+    data: logs = [], 
+    isLoading, 
+    isError 
+  } = useQuery({
+    queryKey: ['auditLogs', orgID],
+    queryFn: async () => {
+      try {
+        const data = await fetchAuditLogs(orgID);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`Fetched ${data.length} audit logs for organization: ${orgID}`);
+        }
+        return data;
+      } catch (error) {
+        console.error('Error fetching audit logs:', error);
+        throw error;
+      }
+    }
   });
 
   return (

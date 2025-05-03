@@ -12,6 +12,7 @@ from django.core.exceptions import PermissionDenied
 import os
 import logging
 from kernlogic.org_queryset import OrganizationQuerySetMixin
+from kernlogic.utils import get_user_organization
 
 logger = logging.getLogger(__name__)
 
@@ -32,16 +33,15 @@ class ImportTaskViewSet(OrganizationQuerySetMixin,
     queryset = ImportTask.objects.all()
     
     def get_queryset(self):
-        """Return only tasks created by the current user and in the same organization."""
-        qs = super().get_queryset()
-        return qs.filter(created_by=self.request.user)
+        """Filter to current user's organization"""
+        return super().get_queryset().order_by('-created_at')
 
     def perform_create(self, serializer):
-        """Create a new import task and enqueue it for processing."""
+        """Handle file upload and start the import task"""
         try:
-            # Get the file extension to validate file type
-            file = serializer.validated_data.get('csv_file')
-            if file:
+            # Get the uploaded file
+            if 'csv_file' in self.request.FILES:
+                file = self.request.FILES['csv_file']
                 _, file_ext = os.path.splitext(file.name)
                 file_ext = file_ext.lower()
                 
@@ -49,8 +49,8 @@ class ImportTaskViewSet(OrganizationQuerySetMixin,
                 if file_ext not in ['.csv', '.xlsx', '.xls']:
                     raise ValueError(f"Unsupported file type: {file_ext}. Only CSV and Excel files are supported.")
                 
-                # Get organization from user profile
-                organization = self.request.user.profile.organization
+                # Get organization using the utility function
+                organization = get_user_organization(self.request.user)
                 
                 # Save task and enqueue for processing
                 task = serializer.save(

@@ -5,34 +5,30 @@ from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from django.db import models
 from rest_framework import status
+from django.db import transaction
 
 from django.db.models import Prefetch, Q
 
 from products.models import AttributeGroup, AttributeValue, Product, AttributeGroupItem, Attribute
-from products.serializers import AttributeGroupSerializer
+from products.serializers import AttributeGroupSerializer, AttributeGroupItemSerializer
 from products.permissions import IsStaffOrReadOnly
 from kernlogic.org_queryset import OrganizationQuerySetMixin
+from kernlogic.utils import get_user_organization
 from ..events import record
 
 @extend_schema_view(
-    list=extend_schema(summary="List all attribute groups", 
-                      description="Returns attribute groups for the current organization.",
-                      tags=["Attributes - Groups"]),
+    list=extend_schema(summary="List attribute groups", 
+                      description="Returns attribute groups for the current organization."),
     retrieve=extend_schema(summary="Get a specific attribute group", 
-                         description="Returns details of a specific attribute group.",
-                         tags=["Attributes - Groups"]),
+                         description="Returns details of a specific attribute group."),
     create=extend_schema(summary="Create a new attribute group", 
-                       description="Create a new attribute group for the current organization. Staff only.",
-                       tags=["Attributes - Groups"]),
+                       description="Create a new attribute group for the current organization. Staff only."),
     update=extend_schema(summary="Update an attribute group", 
-                       description="Update an existing attribute group. Staff only.",
-                       tags=["Attributes - Groups"]),
+                       description="Update an existing attribute group. Staff only."),
     partial_update=extend_schema(summary="Partially update an attribute group", 
-                              description="Partially update an existing attribute group. Staff only.",
-                              tags=["Attributes - Groups"]),
+                               description="Partially update an existing attribute group. Staff only."),
     destroy=extend_schema(summary="Delete an attribute group", 
-                        description="Delete an attribute group. Staff only.",
-                        tags=["Attributes - Groups"]),
+                        description="Delete an attribute group. Staff only."),
 )
 class AttributeGroupViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     """
@@ -45,9 +41,103 @@ class AttributeGroupViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """Set organization and created_by from request user"""
         serializer.save(
-            organization=self.request.user.profile.organization,
+            organization=get_user_organization(self.request.user),
             created_by=self.request.user
         )
+    
+    @action(detail=False, methods=['post'])
+    def reorder(self, request):
+        """
+        Reorder all attribute groups
+        Request body should contain a list of group IDs in the desired order.
+        Example: {"group_ids": [5, 1, 3, 2, 4]}
+        """
+        organization = get_user_organization(request.user)
+        if not organization:
+            return Response(
+                {"error": "User is not associated with an organization"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        group_ids = request.data.get('group_ids', [])
+        if not isinstance(group_ids, list):
+            return Response(
+                {"error": "Expected 'group_ids' to be a list of integers"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # Validate all IDs belong to the user's organization
+        groups = AttributeGroup.objects.filter(
+            id__in=group_ids,
+            organization=organization
+        )
+        
+        if len(groups) != len(group_ids):
+            return Response(
+                {"error": "Some group IDs were not found or do not belong to your organization"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # Update order fields
+        with transaction.atomic():
+            for index, group_id in enumerate(group_ids, 1):
+                AttributeGroup.objects.filter(
+                    id=group_id,
+                    organization=organization
+                ).update(order=index)
+                
+        return Response({"status": "Groups reordered successfully"})
+        
+    @action(detail=True, methods=['post'])
+    def reorder_items(self, request, pk=None):
+        """
+        Reorder items within an attribute group
+        Request body should contain a list of item IDs in the desired order.
+        Example: {"item_ids": [5, 1, 3, 2, 4]}
+        """
+        organization = get_user_organization(request.user)
+        if not organization:
+            return Response(
+                {"error": "User is not associated with an organization"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        try:
+            group = AttributeGroup.objects.get(pk=pk, organization=organization)
+        except AttributeGroup.DoesNotExist:
+            return Response(
+                {"error": "Attribute group not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+            
+        item_ids = request.data.get('item_ids', [])
+        if not isinstance(item_ids, list):
+            return Response(
+                {"error": "Expected 'item_ids' to be a list of integers"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # Validate all IDs belong to this group
+        items = AttributeGroupItem.objects.filter(
+            id__in=item_ids,
+            group=group
+        )
+        
+        if len(items) != len(item_ids):
+            return Response(
+                {"error": "Some item IDs were not found or do not belong to this group"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # Update order fields
+        with transaction.atomic():
+            for index, item_id in enumerate(item_ids, 1):
+                AttributeGroupItem.objects.filter(
+                    id=item_id,
+                    group=group
+                ).update(order=index)
+                
+        return Response({"status": "Group items reordered successfully"})
         
     @action(detail=True, methods=['post'], url_path='add-item')
     def add_item(self, request, pk=None):
@@ -162,7 +252,7 @@ class ProductAttributeGroupViewSet(OrganizationQuerySetMixin, viewsets.ReadOnlyM
             value_filter &= Q(channel__isnull=True)
             
         # Get organization from request
-        org = self.request.user.profile.organization
+        org = get_user_organization(self.request.user)
         
         # Get all groups for the organization with their attributes
         return AttributeGroup.objects.filter(
@@ -196,7 +286,7 @@ class ProductAttributeGroupViewSet(OrganizationQuerySetMixin, viewsets.ReadOnlyM
         # This ensures we don't miss any values that may not be correctly prefetched
         all_attribute_values = AttributeValue.objects.filter(
             product_id=product_id,
-            organization=request.user.profile.organization
+            organization=get_user_organization(request.user)
         )
         
         # Create a mapping of attribute ID to value for quick lookup

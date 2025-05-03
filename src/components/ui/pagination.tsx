@@ -2,21 +2,25 @@ import * as React from "react"
 import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { ButtonProps, buttonVariants } from "@/components/ui/button"
+import { Button } from "@/components/ui/button"
 
-const Pagination = ({ className, ...props }: React.ComponentProps<"nav">) => (
+const Pagination = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
   <nav
+    ref={ref}
+    className={cn("flex w-full items-center justify-center gap-2", className)}
     role="navigation"
     aria-label="pagination"
-    className={cn("mx-auto flex w-full justify-center", className)}
     {...props}
   />
-)
+))
 Pagination.displayName = "Pagination"
 
 const PaginationContent = React.forwardRef<
   HTMLUListElement,
-  React.ComponentProps<"ul">
+  React.HTMLAttributes<HTMLUListElement>
 >(({ className, ...props }, ref) => (
   <ul
     ref={ref}
@@ -26,75 +30,93 @@ const PaginationContent = React.forwardRef<
 ))
 PaginationContent.displayName = "PaginationContent"
 
-const PaginationItem = React.forwardRef<
-  HTMLLIElement,
-  React.ComponentProps<"li">
->(({ className, ...props }, ref) => (
-  <li ref={ref} className={cn("", className)} {...props} />
-))
+type PaginationItemProps = {
+  className?: string
+  isActive?: boolean
+} & React.ComponentProps<"li">
+
+const PaginationItem = React.forwardRef<HTMLLIElement, PaginationItemProps>(
+  ({ className, isActive, ...props }, ref) => (
+    <li ref={ref} className={cn(className)} {...props} />
+  )
+)
 PaginationItem.displayName = "PaginationItem"
 
 type PaginationLinkProps = {
   isActive?: boolean
-} & Pick<ButtonProps, "size"> &
-  React.ComponentProps<"a">
+  children?: React.ReactNode
+  className?: string
+  onClick?: () => void
+  disabled?: boolean
+}
 
 const PaginationLink = ({
   className,
   isActive,
-  size = "icon",
+  children,
+  disabled,
+  onClick,
   ...props
 }: PaginationLinkProps) => (
-  <a
-    aria-current={isActive ? "page" : undefined}
-    className={cn(
-      buttonVariants({
-        variant: isActive ? "outline" : "ghost",
-        size,
-      }),
-      className
-    )}
+  <Button
+    variant={isActive ? "primary" : "outline"}
+    size="sm"
+    onClick={onClick}
+    disabled={disabled}
+    className={cn(className)}
     {...props}
-  />
+  >
+    {children}
+  </Button>
 )
 PaginationLink.displayName = "PaginationLink"
 
 const PaginationPrevious = ({
   className,
+  onClick,
+  disabled,
   ...props
-}: React.ComponentProps<typeof PaginationLink>) => (
-  <PaginationLink
+}: PaginationLinkProps) => (
+  <Button
     aria-label="Go to previous page"
-    size="default"
-    className={cn("gap-1 pl-2.5", className)}
+    size="sm"
+    variant="outline"
+    disabled={disabled}
+    onClick={onClick}
+    className={cn("gap-1", className)}
     {...props}
   >
     <ChevronLeft className="h-4 w-4" />
     <span>Previous</span>
-  </PaginationLink>
+  </Button>
 )
 PaginationPrevious.displayName = "PaginationPrevious"
 
 const PaginationNext = ({
   className,
+  onClick,
+  disabled,
   ...props
-}: React.ComponentProps<typeof PaginationLink>) => (
-  <PaginationLink
+}: PaginationLinkProps) => (
+  <Button
     aria-label="Go to next page"
-    size="default"
-    className={cn("gap-1 pr-2.5", className)}
+    size="sm"
+    variant="outline"
+    disabled={disabled}
+    onClick={onClick}
+    className={cn("gap-1", className)}
     {...props}
   >
     <span>Next</span>
     <ChevronRight className="h-4 w-4" />
-  </PaginationLink>
+  </Button>
 )
 PaginationNext.displayName = "PaginationNext"
 
 const PaginationEllipsis = ({
   className,
   ...props
-}: React.ComponentProps<"span">) => (
+}: React.HTMLAttributes<HTMLSpanElement>) => (
   <span
     aria-hidden
     className={cn("flex h-9 w-9 items-center justify-center", className)}
@@ -109,9 +131,9 @@ PaginationEllipsis.displayName = "PaginationEllipsis"
 export {
   Pagination,
   PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
   PaginationLink,
-  PaginationNext,
+  PaginationItem,
   PaginationPrevious,
+  PaginationNext,
+  PaginationEllipsis,
 }

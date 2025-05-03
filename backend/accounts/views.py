@@ -12,6 +12,10 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 import json
 import traceback
+from django.contrib.auth import login
+from .models import User, Profile
+from kernlogic.utils import get_user_org_id, get_user_organization
+from teams.models import Membership
 
 # Get user model
 User = get_user_model()
@@ -34,29 +38,64 @@ def get_tokens_for_user(user):
         print(traceback.format_exc())
         raise
 
+@method_decorator(csrf_exempt, name='dispatch')
 class RegisterView(APIView):
     """API View for user registration"""
     permission_classes = (permissions.AllowAny,)
 
     def post(self, request):
         print("DEBUG: RegisterView POST request received")
+        print(f"DEBUG: Request headers: {dict(request.headers)}")
+        print(f"DEBUG: Request body: {request.body.decode('utf-8')}")
+        
         try:
-            serializer = UserRegistrationSerializer(data=request.data)
+            # Check if the content type is correct
+            content_type = request.headers.get('Content-Type', '').lower()
+            if 'application/json' not in content_type:
+                print(f"DEBUG: Invalid content type: {content_type}")
+                return Response(
+                    {'error': f'Expected application/json, got {content_type}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+            # Get organization ID from request data if provided
+            organization_id = request.data.get('organization_id')
+            if organization_id:
+                print(f"DEBUG: Organization registration for org ID: {organization_id}")
             
+            # Save user with the serializer (which handles org membership)
+            serializer = UserRegistrationSerializer(data=request.data)
             if serializer.is_valid():
-                print("DEBUG: Registration data is valid")
                 user = serializer.save()
+                
+                # Get user's organization ID using the new utility
+                org_id = get_user_org_id(user)
                 
                 # Generate tokens
                 tokens = get_tokens_for_user(user)
                 
+                # Get user role if available
+                role = None
+                try:
+                    membership = Membership.objects.filter(user=user, status='active').first()
+                    if membership:
+                        role = membership.role.name.lower()
+                except Exception as e:
+                    print(f"DEBUG: Error getting user role: {str(e)}")
+                
+                # Build response with user data and tokens
                 response_data = {
                     'user': {
                         'id': user.id,
                         'email': user.email,
-                        'name': user.name
+                        'name': user.name,
+                        'is_staff': user.is_staff,
+                        'is_superuser': user.is_superuser,
+                        'role': role,
+                        'organization_id': org_id
                     },
-                    'tokens': tokens
+                    'access': tokens['access'],
+                    'refresh': tokens['refresh']
                 }
                 
                 print(f"DEBUG: User registered successfully: {user.email}")
@@ -214,11 +253,10 @@ class CurrentUserView(APIView):
     def get(self, request):
         # Return information about the current user
         user = request.user
-        org_id = None
         
-        # Try to get organization ID from profile if it exists
-        if hasattr(user, 'profile') and user.profile and hasattr(user.profile, 'organization'):
-            org_id = str(user.profile.organization.id) if user.profile.organization else None
+        # Get organization using the new utility function
+        organization = get_user_organization(user)
+        org_id = organization.id if organization else None
         
         # Build user data response
         user_data = {

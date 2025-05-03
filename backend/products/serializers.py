@@ -6,6 +6,10 @@ from decimal import Decimal
 from django.conf import settings
 from django.utils import timezone
 from django.db.models.functions import TruncDay
+from kernlogic.utils import get_user_organization
+from django.core.validators import MinValueValidator
+from django.core.exceptions import ValidationError
+from django.db import transaction
 
 # --- NEW ProductImage Serializer ---
 class ProductImageSerializer(serializers.ModelSerializer):
@@ -131,23 +135,22 @@ class ProductSerializer(serializers.ModelSerializer):
 
     def validate_sku(self, value):
         """
-        Ensure SKU is unique within the organization, but allow the same SKU on update
-        if it's the current instance.
+        Check that the SKU is unique within the organization
         """
         request = self.context.get('request')
-        if not request or not request.user:
+        if not request:
             return value
         
         instance = getattr(self, 'instance', None)
         if instance and instance.sku == value:
             return value
             
-        # Get the organization from the user's profile
+        # Get the organization using the utility function
         try:
-            organization = request.user.profile.organization
+            organization = get_user_organization(request.user)
             
             # Check if a product with this SKU already exists in this organization
-            if Product.objects.filter(
+            if organization and Product.objects.filter(
                 created_by=request.user,
                 organization=organization,
                 sku=value
@@ -238,7 +241,7 @@ class ActivitySerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Activity
-        fields = ['id', 'company_id', 'user', 'user_name', 'entity', 'entity_id', 
+        fields = ['id', 'organization', 'user', 'user_name', 'entity', 'entity_id', 
                   'action', 'message', 'created_at']
         read_only_fields = ['created_at']
 
@@ -362,7 +365,7 @@ class AttributeValueSerializer(serializers.ModelSerializer):
         if not attr:
             return data
             
-        org = self.context['request'].user.profile.organization
+        org = get_user_organization(self.context['request'].user)
         
         # Debug log the incoming value
         print(f"AttributeValueSerializer.validate: Validating value for attr {attr.id} ({attr.label}): {data.get('value')}, type: {type(data.get('value'))}")
@@ -448,6 +451,21 @@ class AttributeValueSerializer(serializers.ModelSerializer):
         instance = super().update(instance, validated_data)
         print(f"Updated attribute value: {instance.id}, value: {instance.value}, type: {type(instance.value)}")
         return instance
+
+# Add the missing AttributeValueDetailSerializer
+class AttributeValueDetailSerializer(AttributeValueSerializer):
+    """
+    Serializer for attribute values with more detailed attribute information.
+    Used for list and retrieve actions.
+    """
+    attribute_code = serializers.CharField(source='attribute.code', read_only=True)
+    attribute_label = serializers.CharField(source='attribute.label', read_only=True)
+    attribute_type = serializers.CharField(source='attribute.data_type', read_only=True)
+    
+    class Meta(AttributeValueSerializer.Meta):
+        # Since parent's fields is '__all__', we need to explicitly list all fields
+        fields = ('id', 'attribute', 'product', 'organization', 'value', 'locale', 'channel',
+                'attribute_code', 'attribute_label', 'attribute_type')
 
 class AttributeGroupItemSerializer(serializers.ModelSerializer):
     class Meta:

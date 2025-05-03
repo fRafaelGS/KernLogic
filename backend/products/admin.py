@@ -1,5 +1,6 @@
 from django.contrib import admin
 import sys
+from kernlogic.utils import get_user_organization
 
 # Separate imports to avoid circular dependencies
 if 'makemigrations' not in sys.argv and 'migrate' not in sys.argv:
@@ -30,7 +31,8 @@ if 'makemigrations' not in sys.argv and 'migrate' not in sys.argv:
             qs = super().get_queryset(request)
             if request.user.is_superuser:
                 return qs
-            return qs.filter(organization=request.user.profile.organization)
+            organization = get_user_organization(request.user)
+            return qs.filter(organization=organization)
 
         fields = ('attribute', 'value', 'locale', 'channel')
         can_delete = False
@@ -39,17 +41,26 @@ if 'makemigrations' not in sys.argv and 'migrate' not in sys.argv:
 
     @admin.register(Product)
     class ProductAdmin(admin.ModelAdmin):
-        list_display = ('name', 'sku', 'price', 'category', 'is_active', 'created_at')
-        list_filter = ('is_active', 'category')
+        list_display = ('id', 'name', 'sku', 'price', 'organization', 'is_active', 'created_at')
+        list_filter = ('is_active', 'created_at', 'organization')
         search_fields = ('name', 'sku', 'description')
-        ordering = ('-created_at',)
+        readonly_fields = ('created_at', 'updated_at', 'created_by')
         inlines = [AttributeValueInline, ProductImageInline, ProductRelationInline, ProductAssetInline]
         
-        readonly_fields = ('organization',)
-        
         def get_queryset(self, request):
-            # Add prefetch for related models to optimize admin performance
-            return super().get_queryset(request).select_related('created_by')
+            qs = super().get_queryset(request)
+            # If not superuser, limit to user's organization
+            if not request.user.is_superuser:
+                organization = get_user_organization(request.user)
+                return qs.filter(organization=organization)
+            return qs
+        
+        def save_model(self, request, obj, form, change):
+            if not obj.created_by:
+                obj.created_by = request.user
+            if not obj.organization:
+                obj.organization = get_user_organization(request.user)
+            obj.save()
 
     @admin.register(ProductImage)
     class ProductImageAdmin(admin.ModelAdmin):
@@ -71,12 +82,18 @@ if 'makemigrations' not in sys.argv and 'migrate' not in sys.argv:
 
     @admin.register(ProductAsset)
     class ProductAssetAdmin(admin.ModelAdmin):
-        list_display = ('product', 'name', 'asset_type', 'file', 'order', 'is_primary', 'uploaded_at')
-        list_filter = ('asset_type', 'is_primary')
-        search_fields = ('product__name', 'name')
-        ordering = ('product', 'order')
+        list_display = ('id', 'product', 'name', 'asset_type', 'is_primary', 'uploaded_at')
+        list_filter = ('asset_type', 'is_primary', 'organization')
+        search_fields = ('name', 'product__name', 'product__sku')
+        raw_id_fields = ('product',)
         
-        readonly_fields = ('organization',)
+        def get_queryset(self, request):
+            qs = super().get_queryset(request)
+            # If not superuser, limit to user's organization
+            if not request.user.is_superuser:
+                organization = get_user_organization(request.user)
+                return qs.filter(organization=organization)
+            return qs
 
     @admin.register(ProductEvent)
     class ProductEventAdmin(admin.ModelAdmin):
@@ -89,41 +106,31 @@ if 'makemigrations' not in sys.argv and 'migrate' not in sys.argv:
 
     @admin.register(Attribute)
     class AttributeAdmin(admin.ModelAdmin):
-        list_display = ['id', 'code', 'label', 'data_type', 'is_localisable', 'is_scopable', 'organization', 'created_by']
-        list_filter = ['data_type', 'is_localisable', 'is_scopable', 'organization']
-        search_fields = ['code', 'label']
-        ordering = ['code']
-        readonly_fields = ('organization',)
+        list_display = ('id', 'code', 'label', 'data_type', 'organization')
+        list_filter = ('data_type', 'is_localisable', 'organization')
+        search_fields = ('code', 'label')
+        
+        def get_queryset(self, request):
+            qs = super().get_queryset(request)
+            # If not superuser, limit to user's organization
+            if not request.user.is_superuser:
+                organization = get_user_organization(request.user)
+                return qs.filter(organization=organization)
+            return qs
 
     @admin.register(AttributeValue)
     class AttributeValueAdmin(admin.ModelAdmin):
-        list_display = ['id', 'get_attribute_code', 'get_product_sku', 'locale', 'channel', 'display_value', 'organization']
-        list_filter = ['attribute__data_type', 'locale', 'channel', 'organization']
-        search_fields = ['attribute__code', 'attribute__label', 'product__sku']
-        readonly_fields = ('organization',)
+        list_display = ('id', 'attribute', 'product', 'value', 'organization')
+        list_filter = ('attribute', 'organization')
+        raw_id_fields = ('product', 'attribute')
         
-        def get_attribute_code(self, obj):
-            return obj.attribute.code
-        get_attribute_code.short_description = 'Attribute'
-        get_attribute_code.admin_order_field = 'attribute__code'
-        
-        def get_product_sku(self, obj):
-            return obj.product.sku
-        get_product_sku.short_description = 'Product'
-        get_product_sku.admin_order_field = 'product__sku'
-        
-        def display_value(self, obj):
-            """Format the value nicely based on the attribute type"""
-            if not obj.attribute:
-                return str(obj.value)
-            
-            if obj.attribute.data_type == 'boolean':
-                return 'Yes' if obj.value else 'No'
-            elif obj.attribute.data_type == 'date':
-                return obj.value
-            else:
-                return str(obj.value)
-        display_value.short_description = 'Value'
+        def get_queryset(self, request):
+            qs = super().get_queryset(request)
+            # If not superuser, limit to user's organization
+            if not request.user.is_superuser:
+                organization = get_user_organization(request.user)
+                return qs.filter(organization=organization)
+            return qs
 
     class AttributeGroupItemInline(admin.TabularInline):
         model = AttributeGroupItem
@@ -131,13 +138,39 @@ if 'makemigrations' not in sys.argv and 'migrate' not in sys.argv:
 
     @admin.register(AttributeGroup)
     class AttributeGroupAdmin(admin.ModelAdmin):
-        list_display = ['id', 'name', 'order', 'organization', 'item_count']
-        list_filter = ['organization']
-        search_fields = ['name']
-        ordering = ['order', 'name']
-        readonly_fields = ('organization',)
+        list_display = ('id', 'name', 'order', 'organization')
+        list_filter = ('organization',)
+        search_fields = ('name',)
+        
+        def get_queryset(self, request):
+            qs = super().get_queryset(request)
+            # If not superuser, limit to user's organization
+            if not request.user.is_superuser:
+                organization = get_user_organization(request.user)
+                return qs.filter(organization=organization)
+            return qs
         inlines = [AttributeGroupItemInline]
         
         def item_count(self, obj):
             return obj.attributegroupitem_set.count()
         item_count.short_description = 'Attributes'
+
+    @admin.register(AttributeGroupItem)
+    class AttributeGroupItemAdmin(admin.ModelAdmin):
+        list_display = ('id', 'group', 'attribute', 'order')
+        list_filter = ('group', 'attribute')
+        raw_id_fields = ('group', 'attribute')
+
+    @admin.register(Activity)
+    class ActivityAdmin(admin.ModelAdmin):
+        list_display = ('id', 'user', 'entity', 'entity_id', 'action', 'created_at')
+        list_filter = ('action', 'created_at', 'organization')
+        search_fields = ('entity', 'entity_id', 'message')
+        
+        def get_queryset(self, request):
+            qs = super().get_queryset(request)
+            # If not superuser, limit to user's organization
+            if not request.user.is_superuser:
+                organization = get_user_organization(request.user)
+                return qs.filter(organization=organization)
+            return qs

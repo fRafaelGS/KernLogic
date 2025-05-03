@@ -3,30 +3,35 @@ from rest_framework import status
 from products.models import Product
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError
-from accounts.models import Profile
 from organizations.models import Organization
+from teams.models import Membership, Role
 
 User = get_user_model()
 
 class SkuUniquenessTestCase(TestCase):
     def setUp(self):
         # Create organizations
-        self.org1 = Organization.objects.create(name="Organization 1")
-        self.org2 = Organization.objects.create(name="Organization 2")
+        self.org1 = Organization.objects.create(name="Test Org 1")
+        self.org2 = Organization.objects.create(name="Test Org 2")
+
+        # Create role for memberships
+        self.role = Role.objects.create(name="Admin")
         
-        # Create users
+        # Create test users
         self.user1 = User.objects.create_user(
             username="user1", 
             email="user1@example.com", 
             password="password123",
             name="Test User 1"
         )
+        
         self.user2 = User.objects.create_user(
             username="user2", 
             email="user2@example.com", 
             password="password123",
             name="Test User 2"
         )
+        
         self.user3 = User.objects.create_user(
             username="user3", 
             email="user3@example.com", 
@@ -34,15 +39,27 @@ class SkuUniquenessTestCase(TestCase):
             name="Test User 3"
         )
         
-        # Configure user profiles
-        self.user1.profile.organization = self.org1
-        self.user1.profile.save()
+        # Create memberships instead of setting profile.organization
+        Membership.objects.create(
+            user=self.user1,
+            organization=self.org1,
+            role=self.role,
+            status='active'
+        )
         
-        self.user2.profile.organization = self.org2
-        self.user2.profile.save()
+        Membership.objects.create(
+            user=self.user2,
+            organization=self.org2,
+            role=self.role,
+            status='active'
+        )
         
-        self.user3.profile.organization = self.org1  # Same org as user1
-        self.user3.profile.save()
+        Membership.objects.create(
+            user=self.user3,
+            organization=self.org1,  # Same org as user1
+            role=self.role,
+            status='active'
+        )
         
     def test_sku_uniqueness_constraint(self):
         """Test that SKUs must be unique per organization."""

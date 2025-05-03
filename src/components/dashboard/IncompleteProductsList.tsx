@@ -75,11 +75,11 @@ export const IncompleteProductsList: React.FC<IncompleteProductsListProps> = ({
                   {product?.missing_fields && Array.isArray(product.missing_fields) ? (
                     product.missing_fields.map((field) => (
                       <Badge 
-                        key={field} 
+                        key={field.field}
                         variant="outline"
                         className="bg-danger-50 text-danger-700 border-danger-200"
                       >
-                        Missing: {field}
+                        Missing: {field.field}
                       </Badge>
                     ))
                   ) : (

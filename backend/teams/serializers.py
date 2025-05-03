@@ -16,9 +16,9 @@ class MembershipSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Membership
-        fields = ["id", "user_email", "user", "org_id", "role", "role_id", "status", "invited_at"]
+        fields = ["id", "user_email", "user", "role", "role_id", "status", "invited_at"]
 
 class AuditLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = AuditLog
-        fields = ["id", "action", "user", "org_id", "target_type", "target_id", "timestamp", "details"] 
+        fields = ["id", "action", "user", "organization", "target_type", "target_id", "timestamp", "details"] 

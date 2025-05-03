@@ -58,6 +58,66 @@ paths:
               schema:
                 $ref: '#/components/schemas/TokenRefresh'
           description: ''
+  /analytics/completeness-export/:
+    get:
+      operationId: analytics_completeness_export_retrieve
+      description: Direct function-based view for exporting completeness report
+      tags:
+      - analytics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /analytics/readiness-export/:
+    get:
+      operationId: analytics_readiness_export_retrieve
+      description: Direct function-based view for exporting readiness report
+      tags:
+      - analytics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /analytics/enrichment-velocity-export/:
+    get:
+      operationId: analytics_enrichment_velocity_export_retrieve
+      description: Direct function-based view for exporting enrichment velocity report
+      tags:
+      - analytics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /analytics/localization-quality-export/:
+    get:
+      operationId: analytics_localization_quality_export_retrieve
+      description: Direct function-based view for exporting localization quality report
+      tags:
+      - analytics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /analytics/change-history-export/:
+    get:
+      operationId: analytics_change_history_export_retrieve
+      description: Direct function-based view for exporting change history report
+      tags:
+      - analytics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
   /products/:
     get:
       operationId: products_list
@@ -365,7 +425,8 @@ paths:
       - in: path
         name: id
         schema:
-          type: string
+          type: integer
+        description: A unique integer value identifying this Product.
         required: true
       tags:
       - products
@@ -378,22 +439,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Product'
           description: ''
-    delete:
-      operationId: products_destroy
-      description: API endpoint for managing product data.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - products
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
     patch:
       operationId: products_partial_update
       description: API endpoint for managing product data.
@@ -401,7 +446,8 @@ paths:
       - in: path
         name: id
         schema:
-          type: string
+          type: integer
+        description: A unique integer value identifying this Product.
         required: true
       tags:
       - products
@@ -425,6 +471,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/Product'
           description: ''
+    delete:
+      operationId: products_destroy
+      description: Soft delete by setting is_archived=True or permanently delete if
+        requested
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Product.
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /products/{id}/related-add/:
     post:
       operationId: products_related_add_create
@@ -433,7 +497,8 @@ paths:
       - in: path
         name: id
         schema:
-          type: string
+          type: integer
+        description: A unique integer value identifying this Product.
         required: true
       tags:
       - products
@@ -468,7 +533,8 @@ paths:
       - in: path
         name: id
         schema:
-          type: string
+          type: integer
+        description: A unique integer value identifying this Product.
         required: true
       tags:
       - products
@@ -482,27 +548,6 @@ paths:
                 $ref: '#/components/schemas/Product'
           description: ''
   /products/{id}/images/{image_pk}/:
-    delete:
-      operationId: products_images_destroy
-      description: API endpoint for managing product data.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      - in: path
-        name: image_pk
-        schema:
-          type: string
-        required: true
-      tags:
-      - products
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
     patch:
       operationId: products_images_partial_update
       description: API endpoint for managing product data.
@@ -510,7 +555,8 @@ paths:
       - in: path
         name: id
         schema:
-          type: string
+          type: integer
+        description: A unique integer value identifying this Product.
         required: true
       - in: path
         name: image_pk
@@ -539,18 +585,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Product'
           description: ''
-  /products/{id}/related/{related_id}/:
     delete:
-      operationId: products_related_destroy
-      description: Update or delete a related product relationship
+      operationId: products_images_destroy
+      description: API endpoint for managing product data.
       parameters:
       - in: path
         name: id
         schema:
-          type: string
+          type: integer
+        description: A unique integer value identifying this Product.
         required: true
       - in: path
-        name: related_id
+        name: image_pk
         schema:
           type: string
         required: true
@@ -561,6 +607,7 @@ paths:
       responses:
         '204':
           description: No response body
+  /products/{id}/related/{related_id}/:
     patch:
       operationId: products_related_partial_update
       description: Update or delete a related product relationship
@@ -568,7 +615,8 @@ paths:
       - in: path
         name: id
         schema:
-          type: string
+          type: integer
+        description: A unique integer value identifying this Product.
         required: true
       - in: path
         name: related_id
@@ -597,6 +645,28 @@ paths:
               schema:
                 $ref: '#/components/schemas/Product'
           description: ''
+    delete:
+      operationId: products_related_destroy
+      description: Update or delete a related product relationship
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Product.
+        required: true
+      - in: path
+        name: related_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /products/{id}/related-list/:
     get:
       operationId: products_related_list_retrieve
@@ -607,7 +677,8 @@ paths:
       - in: path
         name: id
         schema:
-          type: string
+          type: integer
+        description: A unique integer value identifying this Product.
         required: true
       tags:
       - products
@@ -628,7 +699,8 @@ paths:
       - in: path
         name: id
         schema:
-          type: string
+          type: integer
+        description: A unique integer value identifying this Product.
         required: true
       tags:
       - products
@@ -660,7 +732,8 @@ paths:
       - in: path
         name: id
         schema:
-          type: string
+          type: integer
+        description: A unique integer value identifying this Product.
         required: true
       tags:
       - products
@@ -693,7 +766,8 @@ paths:
       - in: path
         name: id
         schema:
-          type: string
+          type: integer
+        description: A unique integer value identifying this Product.
         required: true
       tags:
       - products
@@ -767,7 +841,18 @@ paths:
   /products/{product_pk}/history/:
     get:
       operationId: products_history_list
+      description: |-
+        A mixin that filters querysets by the user's organization.
+
+        This mixin should be applied to viewsets that need to filter
+        models that have an organization foreign key.
       parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
       - name: page
         required: false
         in: query
@@ -808,6 +893,387 @@ paths:
       responses:
         '200':
           description: No response body
+  /attributes/:
+    get:
+      operationId: attributes_list
+      description: Returns attributes for the current organization.
+      summary: List all attributes
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      tags:
+      - attributes
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Attribute'
+          description: ''
+    post:
+      operationId: attributes_create
+      description: Create a new attribute for the current organization. Staff only.
+      summary: Create a new attribute
+      tags:
+      - attributes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttributeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AttributeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AttributeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Attribute'
+          description: ''
+  /attributes/{id}/:
+    get:
+      operationId: attributes_retrieve
+      description: Returns details of a specific attribute.
+      summary: Get a specific attribute
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this attribute.
+        required: true
+      tags:
+      - attributes
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Attribute'
+          description: ''
+    put:
+      operationId: attributes_update
+      description: Update an existing attribute. Staff only.
+      summary: Update an attribute
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this attribute.
+        required: true
+      tags:
+      - attributes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttributeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AttributeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AttributeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Attribute'
+          description: ''
+    patch:
+      operationId: attributes_partial_update
+      description: Partially update an existing attribute. Staff only.
+      summary: Partially update an attribute
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this attribute.
+        required: true
+      tags:
+      - attributes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAttributeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAttributeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAttributeRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Attribute'
+          description: ''
+    delete:
+      operationId: attributes_destroy
+      description: Delete an attribute. Staff only.
+      summary: Delete an attribute
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this attribute.
+        required: true
+      tags:
+      - attributes
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /attribute-groups/:
+    get:
+      operationId: attribute_groups_list
+      description: Returns attribute groups for the current organization.
+      summary: List all attribute groups
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      tags:
+      - Attributes - Groups
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AttributeGroup'
+          description: ''
+    post:
+      operationId: attribute_groups_create
+      description: Create a new attribute group for the current organization. Staff
+        only.
+      summary: Create a new attribute group
+      tags:
+      - Attributes - Groups
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttributeGroupRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AttributeGroupRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AttributeGroupRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeGroup'
+          description: ''
+  /attribute-groups/{id}/:
+    get:
+      operationId: attribute_groups_retrieve
+      description: Returns details of a specific attribute group.
+      summary: Get a specific attribute group
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this attribute group.
+        required: true
+      tags:
+      - Attributes - Groups
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeGroup'
+          description: ''
+    put:
+      operationId: attribute_groups_update
+      description: Update an existing attribute group. Staff only.
+      summary: Update an attribute group
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this attribute group.
+        required: true
+      tags:
+      - Attributes - Groups
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttributeGroupRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AttributeGroupRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AttributeGroupRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeGroup'
+          description: ''
+    patch:
+      operationId: attribute_groups_partial_update
+      description: Partially update an existing attribute group. Staff only.
+      summary: Partially update an attribute group
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this attribute group.
+        required: true
+      tags:
+      - Attributes - Groups
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAttributeGroupRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAttributeGroupRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAttributeGroupRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeGroup'
+          description: ''
+    delete:
+      operationId: attribute_groups_destroy
+      description: Delete an attribute group. Staff only.
+      summary: Delete an attribute group
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this attribute group.
+        required: true
+      tags:
+      - Attributes - Groups
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /attribute-groups/{id}/add-item/:
+    post:
+      operationId: attribute_groups_add_item_create
+      description: |-
+        Add a single attribute to a group without affecting other attributes.
+        This is a simpler alternative to the full PATCH operation.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this attribute group.
+        required: true
+      tags:
+      - attribute-groups
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttributeGroupRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AttributeGroupRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AttributeGroupRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeGroup'
+          description: ''
+  /attribute-groups/{id}/items/{item_id}/:
+    delete:
+      operationId: attribute_groups_items_destroy
+      description: Delete ONE item from the group, leaving the rest intact and re-ordering.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this attribute group.
+        required: true
+      - in: path
+        name: item_id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      tags:
+      - attribute-groups
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /products/{product_pk}/assets/:
     get:
       operationId: products_assets_list
@@ -815,10 +1281,16 @@ paths:
         Nested under /products/<product_pk>/assets/.
         Handles upload, delete, reorder and set-primary.
       parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
       - in: path
         name: product_pk
         schema:
-          type: string
+          type: integer
         required: true
       tags:
       - products
@@ -842,7 +1314,7 @@ paths:
       - in: path
         name: product_pk
         schema:
-          type: string
+          type: integer
         required: true
       tags:
       - products
@@ -875,7 +1347,7 @@ paths:
       - in: path
         name: product_pk
         schema:
-          type: string
+          type: integer
         required: true
       tags:
       - products
@@ -910,12 +1382,13 @@ paths:
       - in: path
         name: id
         schema:
-          type: string
+          type: integer
+        description: A unique integer value identifying this product asset.
         required: true
       - in: path
         name: product_pk
         schema:
-          type: string
+          type: integer
         required: true
       tags:
       - products
@@ -928,29 +1401,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProductAsset'
           description: ''
-    delete:
-      operationId: products_assets_destroy
-      description: |-
-        Nested under /products/<product_pk>/assets/.
-        Handles upload, delete, reorder and set-primary.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      - in: path
-        name: product_pk
-        schema:
-          type: string
-        required: true
-      tags:
-      - products
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
     put:
       operationId: products_assets_update
       description: |-
@@ -960,12 +1410,13 @@ paths:
       - in: path
         name: id
         schema:
-          type: string
+          type: integer
+        description: A unique integer value identifying this product asset.
         required: true
       - in: path
         name: product_pk
         schema:
-          type: string
+          type: integer
         required: true
       tags:
       - products
@@ -999,12 +1450,13 @@ paths:
       - in: path
         name: id
         schema:
-          type: string
+          type: integer
+        description: A unique integer value identifying this product asset.
         required: true
       - in: path
         name: product_pk
         schema:
-          type: string
+          type: integer
         required: true
       tags:
       - products
@@ -1028,6 +1480,30 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProductAsset'
           description: ''
+    delete:
+      operationId: products_assets_destroy
+      description: |-
+        Nested under /products/<product_pk>/assets/.
+        Handles upload, delete, reorder and set-primary.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this product asset.
+        required: true
+      - in: path
+        name: product_pk
+        schema:
+          type: integer
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /products/{product_pk}/assets/{id}/set_primary/:
     post:
       operationId: products_assets_set_primary_create
@@ -1038,12 +1514,13 @@ paths:
       - in: path
         name: id
         schema:
-          type: string
+          type: integer
+        description: A unique integer value identifying this product asset.
         required: true
       - in: path
         name: product_pk
         schema:
-          type: string
+          type: integer
         required: true
       tags:
       - products
@@ -1071,7 +1548,15 @@ paths:
   /products/{product_pk}/attributes/:
     get:
       operationId: products_attributes_list
+      description: Returns all attribute values for a specific product.
+      summary: List attribute values for a product
       parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
       - in: path
         name: product_pk
         schema:
@@ -1081,7 +1566,6 @@ paths:
       - products
       security:
       - jwtAuth: []
-      - {}
       responses:
         '200':
           content:
@@ -1089,12 +1573,233 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/ProductAttributeValue'
+                  $ref: '#/components/schemas/AttributeValue'
+          description: ''
+    post:
+      operationId: products_attributes_create
+      description: Create a new attribute value for a product.
+      summary: Create a new attribute value
+      parameters:
+      - in: path
+        name: product_pk
+        schema:
+          type: string
+        required: true
+      tags:
+      - products
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttributeValueRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AttributeValueRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AttributeValueRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeValue'
+          description: ''
+  /products/{product_pk}/attributes/{id}/:
+    get:
+      operationId: products_attributes_retrieve
+      description: Returns details of a specific attribute value for a product.
+      summary: Get a specific attribute value
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: product_pk
+        schema:
+          type: string
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeValue'
+          description: ''
+    put:
+      operationId: products_attributes_update
+      description: Update an existing attribute value.
+      summary: Update an attribute value
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: product_pk
+        schema:
+          type: string
+        required: true
+      tags:
+      - products
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttributeValueRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AttributeValueRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AttributeValueRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeValue'
+          description: ''
+    patch:
+      operationId: products_attributes_partial_update
+      description: Partially update an existing attribute value.
+      summary: Partially update an attribute value
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: product_pk
+        schema:
+          type: string
+        required: true
+      tags:
+      - products
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAttributeValueRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAttributeValueRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAttributeValueRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeValue'
+          description: ''
+    delete:
+      operationId: products_attributes_destroy
+      description: Delete an attribute value from a product.
+      summary: Delete an attribute value
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: product_pk
+        schema:
+          type: string
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /products/{product_pk}/attribute-groups/:
+    get:
+      operationId: products_attribute_groups_list
+      description: Returns attribute groups with their values for a specific product.
+      summary: Get attribute groups with values for a product
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - in: path
+        name: product_pk
+        schema:
+          type: string
+        required: true
+      tags:
+      - Attributes - Groups
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AttributeGroup'
+          description: ''
+  /products/{product_pk}/attribute-groups/{id}/:
+    get:
+      operationId: products_attribute_groups_retrieve
+      description: |-
+        API endpoint for retrieving product attribute groups with values.
+        This is a read-only endpoint.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: product_pk
+        schema:
+          type: string
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeGroup'
           description: ''
   /products/{product_pk}/activities/:
     get:
       operationId: products_activities_list
       parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
       - in: path
         name: product_pk
         schema:
@@ -1118,6 +1823,12 @@ paths:
     get:
       operationId: products_price_history_list
       parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
       - in: path
         name: product_pk
         schema:
@@ -1141,6 +1852,12 @@ paths:
     get:
       operationId: products_versions_list
       parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
       - in: path
         name: product_pk
         schema:
@@ -1178,6 +1895,13 @@ paths:
 
         Supports creating new import tasks, retrieving status, listing all tasks,
         canceling tasks, and generating reports of imported data.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
       tags:
       - imports
       security:
@@ -1327,8 +2051,1083 @@ paths:
               schema:
                 $ref: '#/components/schemas/ImportTask'
           description: ''
+  /reports/themes/:
+    get:
+      operationId: reports_themes_list
+      description: Public list of available report themes.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      tags:
+      - reports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReportTheme'
+          description: ''
+  /reports/themes/{id}/:
+    get:
+      operationId: reports_themes_retrieve
+      description: Public list of available report themes.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this report theme.
+        required: true
+      tags:
+      - reports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportTheme'
+          description: ''
+  /analytics/categories/:
+    get:
+      operationId: analytics_categories_retrieve
+      description: Returns available product categories for filtering
+      tags:
+      - analytics
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /analytics/change-history/:
+    get:
+      operationId: analytics_change_history_retrieve
+      description: Returns change history/audit trail data
+      tags:
+      - analytics
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /analytics/channels/:
+    get:
+      operationId: analytics_channels_retrieve
+      description: Returns available channels for filtering
+      tags:
+      - analytics
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /analytics/completeness/:
+    get:
+      operationId: analytics_completeness_retrieve
+      description: Returns data about product data completeness across attributes
+        and categories
+      tags:
+      - analytics
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /analytics/enrichment-velocity/:
+    get:
+      operationId: analytics_enrichment_velocity_retrieve
+      description: Returns data about enrichment velocity (edits per day)
+      tags:
+      - analytics
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /analytics/locales/:
+    get:
+      operationId: analytics_locales_retrieve
+      description: Returns available locales for filtering
+      tags:
+      - analytics
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /analytics/localization-quality/:
+    get:
+      operationId: analytics_localization_quality_retrieve
+      description: Returns data about localization quality by locale
+      tags:
+      - analytics
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /analytics/readiness/:
+    get:
+      operationId: analytics_readiness_retrieve
+      description: Returns data about product readiness for different channels
+      tags:
+      - analytics
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /completeness-export/:
+    get:
+      operationId: completeness_export_retrieve
+      description: Direct function-based view for exporting completeness report
+      tags:
+      - completeness-export
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /readiness-export/:
+    get:
+      operationId: readiness_export_retrieve
+      description: Direct function-based view for exporting readiness report
+      tags:
+      - readiness-export
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /enrichment-velocity-export/:
+    get:
+      operationId: enrichment_velocity_export_retrieve
+      description: Direct function-based view for exporting enrichment velocity report
+      tags:
+      - enrichment-velocity-export
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /localization-quality-export/:
+    get:
+      operationId: localization_quality_export_retrieve
+      description: Direct function-based view for exporting localization quality report
+      tags:
+      - localization-quality-export
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /change-history-export/:
+    get:
+      operationId: change_history_export_retrieve
+      description: Direct function-based view for exporting change history report
+      tags:
+      - change-history-export
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /orgs/{org_id}/roles/:
+    post:
+      operationId: orgs_roles_create
+      parameters:
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RoleRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RoleRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+          description: ''
+    get:
+      operationId: orgs_roles_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Role'
+          description: ''
+  /orgs/{org_id}/roles/{id}/:
+    get:
+      operationId: orgs_roles_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this role.
+        required: true
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+          description: ''
+    put:
+      operationId: orgs_roles_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this role.
+        required: true
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RoleRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RoleRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+          description: ''
+    patch:
+      operationId: orgs_roles_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this role.
+        required: true
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedRoleRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedRoleRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedRoleRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+          description: ''
+    delete:
+      operationId: orgs_roles_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this role.
+        required: true
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /orgs/{org_id}/memberships/:
+    post:
+      operationId: orgs_memberships_create
+      description: |-
+        Invite a user to the organization. If user doesn't exist, creates the account.
+
+        Expected payload:
+        {
+            "email": "user@example.com",
+            "role_id": 1
+        }
+      parameters:
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MembershipRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MembershipRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MembershipRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Membership'
+          description: ''
+    get:
+      operationId: orgs_memberships_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Membership'
+          description: ''
+  /orgs/{org_id}/memberships/invites/:
+    get:
+      operationId: orgs_memberships_invites_retrieve
+      parameters:
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Membership'
+          description: ''
+  /orgs/{org_id}/memberships/{id}/:
+    get:
+      operationId: orgs_memberships_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this membership.
+        required: true
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Membership'
+          description: ''
+    put:
+      operationId: orgs_memberships_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this membership.
+        required: true
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MembershipRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MembershipRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MembershipRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Membership'
+          description: ''
+    patch:
+      operationId: orgs_memberships_partial_update
+      description: Update a membership (e.g., change role) and log the change
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this membership.
+        required: true
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedMembershipRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedMembershipRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedMembershipRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Membership'
+          description: ''
+    delete:
+      operationId: orgs_memberships_destroy
+      description: Remove a membership and log the action
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this membership.
+        required: true
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /orgs/{org_id}/memberships/{id}/accept/:
+    post:
+      operationId: orgs_memberships_accept_create
+      description: |-
+        Accept an invitation.
+        This would typically be called after a user clicks a link in an invitation email.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this membership.
+        required: true
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MembershipRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MembershipRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MembershipRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Membership'
+          description: ''
+  /orgs/{org_id}/memberships/{id}/check_invitation/:
+    get:
+      operationId: orgs_memberships_check_invitation_retrieve
+      description: |-
+        Check if an invitation is valid without requiring authentication.
+        Used when a user follows an invitation link to verify the email and determine next steps.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this membership.
+        required: true
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Membership'
+          description: ''
+  /orgs/{org_id}/memberships/{id}/resend_invite/:
+    post:
+      operationId: orgs_memberships_resend_invite_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this membership.
+        required: true
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MembershipRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MembershipRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MembershipRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Membership'
+          description: ''
+  /orgs/{org_id}/audit/:
+    get:
+      operationId: orgs_audit_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditLog'
+          description: ''
+  /orgs/{org_id}/audit/{id}/:
+    get:
+      operationId: orgs_audit_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this audit log.
+        required: true
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLog'
+          description: ''
+  /orgs/memberships/{id}/check/:
+    get:
+      operationId: orgs_memberships_check_retrieve
+      description: |-
+        Check if an invitation is valid without requiring authentication.
+        Used when a user follows an invitation link to verify the email and determine next steps.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Membership'
+          description: ''
+  /register/:
+    post:
+      operationId: register_create
+      description: API View for user registration
+      tags:
+      - register
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /login/:
+    post:
+      operationId: login_create
+      description: API View for user login
+      tags:
+      - login
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /logout/:
+    post:
+      operationId: logout_create
+      description: API View for user logout - blacklists the refresh token
+      tags:
+      - logout
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /user/:
+    get:
+      operationId: user_retrieve
+      description: API View to retrieve authenticated user information
+      tags:
+      - user
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+  /users/:
+    get:
+      operationId: users_list
+      description: API View to list all users (admin only)
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      tags:
+      - users
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+          description: ''
+  /users/me/:
+    get:
+      operationId: users_me_retrieve
+      tags:
+      - users
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /test-db/:
+    get:
+      operationId: test_db_retrieve
+      tags:
+      - test-db
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
 components:
   schemas:
+    ActionEnum:
+      enum:
+      - invite
+      - role_change
+      - remove
+      type: string
+      description: |-
+        * `invite` - Invite Sent
+        * `role_change` - Role Changed
+        * `remove` - User Removed
+    Attribute:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        code:
+          type: string
+          description: Slug-like unique identifier per organization
+          maxLength: 64
+        label:
+          type: string
+          maxLength: 255
+        data_type:
+          $ref: '#/components/schemas/DataTypeEnum'
+        is_localisable:
+          type: boolean
+        is_scopable:
+          type: boolean
+        organization:
+          type: integer
+          readOnly: true
+        created_by:
+          type: integer
+          readOnly: true
+          nullable: true
+      required:
+      - code
+      - created_by
+      - data_type
+      - id
+      - label
+      - organization
+    AttributeGroup:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 80
+        order:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttributeGroupItem'
+      required:
+      - id
+      - name
+    AttributeGroupItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        attribute:
+          type: integer
+        order:
+          type: integer
+      required:
+      - attribute
+      - id
+    AttributeGroupItemRequest:
+      type: object
+      properties:
+        attribute:
+          type: integer
+        order:
+          type: integer
+      required:
+      - attribute
+    AttributeGroupRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        order:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttributeGroupItemRequest'
+      required:
+      - name
+    AttributeRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          minLength: 1
+          description: Slug-like unique identifier per organization
+          maxLength: 64
+        label:
+          type: string
+          minLength: 1
+          maxLength: 255
+        data_type:
+          $ref: '#/components/schemas/DataTypeEnum'
+        is_localisable:
+          type: boolean
+        is_scopable:
+          type: boolean
+      required:
+      - code
+      - data_type
+      - label
+    AttributeValue:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        locale:
+          type: string
+          nullable: true
+          maxLength: 10
+        channel:
+          type: string
+          nullable: true
+          maxLength: 32
+        value: {}
+        organization:
+          type: integer
+          readOnly: true
+        product:
+          type: integer
+          readOnly: true
+        attribute:
+          type: integer
+          readOnly: true
+      required:
+      - attribute
+      - id
+      - organization
+      - product
+      - value
+    AttributeValueRequest:
+      type: object
+      properties:
+        locale:
+          type: string
+          nullable: true
+          maxLength: 10
+        channel:
+          type: string
+          nullable: true
+          maxLength: 32
+        value: {}
+      required:
+      - value
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        action:
+          $ref: '#/components/schemas/ActionEnum'
+        user:
+          type: integer
+          nullable: true
+        org_id:
+          type: string
+          format: uuid
+        target_type:
+          type: string
+          maxLength: 50
+        target_id:
+          type: string
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+          readOnly: true
+        details: {}
+      required:
+      - action
+      - id
+      - org_id
+      - target_id
+      - target_type
+      - timestamp
+    DataTypeEnum:
+      enum:
+      - text
+      - number
+      - boolean
+      - date
+      - select
+      type: string
+      description: |-
+        * `text` - Text
+        * `number` - Number
+        * `boolean` - Boolean
+        * `date` - Date
+        * `select` - Select
     DuplicateStrategyEnum:
       enum:
       - skip
@@ -1363,7 +3162,7 @@ components:
             * `abort` - Abort
         status:
           allOf:
-          - $ref: '#/components/schemas/StatusEnum'
+          - $ref: '#/components/schemas/ImportTaskStatusEnum'
           readOnly: true
         status_display:
           type: string
@@ -1431,6 +3230,79 @@ components:
       required:
       - csv_file
       - mapping
+    ImportTaskStatusEnum:
+      enum:
+      - queued
+      - running
+      - success
+      - partial_success
+      - error
+      type: string
+      description: |-
+        * `queued` - Queued
+        * `running` - Running
+        * `success` - Success
+        * `partial_success` - Partial Success
+        * `error` - Error
+    Membership:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        user_email:
+          type: string
+          format: email
+          readOnly: true
+        user:
+          type: integer
+        org_id:
+          type: string
+          format: uuid
+          nullable: true
+        role:
+          allOf:
+          - $ref: '#/components/schemas/Role'
+          readOnly: true
+        role_id:
+          type: integer
+        status:
+          $ref: '#/components/schemas/MembershipStatusEnum'
+        invited_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - id
+      - invited_at
+      - role
+      - role_id
+      - user
+      - user_email
+    MembershipRequest:
+      type: object
+      properties:
+        user:
+          type: integer
+        org_id:
+          type: string
+          format: uuid
+          nullable: true
+        role_id:
+          type: integer
+        status:
+          $ref: '#/components/schemas/MembershipStatusEnum'
+      required:
+      - role_id
+      - user
+    MembershipStatusEnum:
+      enum:
+      - pending
+      - active
+      type: string
+      description: |-
+        * `pending` - Pending
+        * `active` - Active
     PaginatedProductEventList:
       type: object
       properties:
@@ -1471,6 +3343,62 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Product'
+    PatchedAttributeGroupRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        order:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttributeGroupItemRequest'
+    PatchedAttributeRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          minLength: 1
+          description: Slug-like unique identifier per organization
+          maxLength: 64
+        label:
+          type: string
+          minLength: 1
+          maxLength: 255
+        data_type:
+          $ref: '#/components/schemas/DataTypeEnum'
+        is_localisable:
+          type: boolean
+        is_scopable:
+          type: boolean
+    PatchedAttributeValueRequest:
+      type: object
+      properties:
+        locale:
+          type: string
+          nullable: true
+          maxLength: 10
+        channel:
+          type: string
+          nullable: true
+          maxLength: 32
+        value: {}
+    PatchedMembershipRequest:
+      type: object
+      properties:
+        user:
+          type: integer
+        org_id:
+          type: string
+          format: uuid
+          nullable: true
+        role_id:
+          type: integer
+        status:
+          $ref: '#/components/schemas/MembershipStatusEnum'
     PatchedProductAssetRequest:
       type: object
       properties:
@@ -1505,19 +3433,19 @@ components:
           nullable: true
     PatchedProductRequest:
       type: object
-      description: Serializer for products with JSON fields handling
+      description: Serializer for Product model
       properties:
         name:
           type: string
           minLength: 1
           maxLength: 255
-        description:
-          type: string
-          nullable: true
         sku:
           type: string
           minLength: 1
           maxLength: 50
+        description:
+          type: string
+          nullable: true
         price:
           type: number
           format: double
@@ -1525,8 +3453,6 @@ components:
           type: string
           nullable: true
           maxLength: 100
-        is_active:
-          type: boolean
         brand:
           type: string
           nullable: true
@@ -1541,13 +3467,27 @@ components:
             type: string
             minLength: 1
         attributes: {}
+        is_active:
+          type: boolean
+        is_archived:
+          type: boolean
         primary_image:
           type: string
           format: binary
           nullable: true
+    PatchedRoleRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        description:
+          type: string
+        permissions: {}
     Product:
       type: object
-      description: Serializer for products with JSON fields handling
+      description: Serializer for Product model
       properties:
         id:
           type: integer
@@ -1555,12 +3495,12 @@ components:
         name:
           type: string
           maxLength: 255
-        description:
-          type: string
-          nullable: true
         sku:
           type: string
           maxLength: 50
+        description:
+          type: string
+          nullable: true
         price:
           type: number
           format: double
@@ -1568,16 +3508,6 @@ components:
           type: string
           nullable: true
           maxLength: 100
-        is_active:
-          type: boolean
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-        updated_at:
-          type: string
-          format: date-time
-          readOnly: true
         brand:
           type: string
           nullable: true
@@ -1591,16 +3521,44 @@ components:
           items:
             type: string
         attributes: {}
+        is_active:
+          type: boolean
+        is_archived:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
         primary_image:
           type: string
           format: uri
           nullable: true
-        primary_image_thumb:
+        completeness_percent:
           type: string
           readOnly: true
-        primary_image_large:
+        missing_fields:
           type: string
           readOnly: true
+        assets:
+          type: string
+          readOnly: true
+        has_primary_image:
+          type: string
+          readOnly: true
+        primary_image_url:
+          type: string
+          readOnly: true
+        primary_asset:
+          type: string
+          readOnly: true
+        organization:
+          type: integer
+          readOnly: true
+          nullable: true
         created_by:
           type: string
           format: email
@@ -1610,15 +3568,28 @@ components:
           items:
             $ref: '#/components/schemas/ProductImage'
           readOnly: true
+        primary_image_thumb:
+          type: string
+          readOnly: true
+        primary_image_large:
+          type: string
+          readOnly: true
       required:
+      - assets
+      - completeness_percent
       - created_at
       - created_by
+      - has_primary_image
       - id
       - images
+      - missing_fields
       - name
+      - organization
       - price
+      - primary_asset
       - primary_image_large
       - primary_image_thumb
+      - primary_image_url
       - sku
       - updated_at
     ProductActivity:
@@ -1734,34 +3705,6 @@ components:
           nullable: true
       required:
       - file
-    ProductAttributeValue:
-      type: object
-      properties:
-        id:
-          type: integer
-          default: 0
-        product_id:
-          type: integer
-        name:
-          type: string
-          default: ''
-        value:
-          type: string
-          default: ''
-        group:
-          type: string
-          default: ''
-        locale:
-          type: string
-          default: en
-        updated_at:
-          type: string
-          format: date-time
-        isMandatory:
-          type: boolean
-          default: false
-      required:
-      - product_id
     ProductEvent:
       type: object
       properties:
@@ -1835,19 +3778,19 @@ components:
           default: system
     ProductRequest:
       type: object
-      description: Serializer for products with JSON fields handling
+      description: Serializer for Product model
       properties:
         name:
           type: string
           minLength: 1
           maxLength: 255
-        description:
-          type: string
-          nullable: true
         sku:
           type: string
           minLength: 1
           maxLength: 50
+        description:
+          type: string
+          nullable: true
         price:
           type: number
           format: double
@@ -1855,8 +3798,6 @@ components:
           type: string
           nullable: true
           maxLength: 100
-        is_active:
-          type: boolean
         brand:
           type: string
           nullable: true
@@ -1871,6 +3812,10 @@ components:
             type: string
             minLength: 1
         attributes: {}
+        is_active:
+          type: boolean
+        is_archived:
+          type: boolean
         primary_image:
           type: string
           format: binary
@@ -1900,20 +3845,48 @@ components:
       - timestamp
       - user
       - version
-    StatusEnum:
-      enum:
-      - queued
-      - running
-      - success
-      - partial_success
-      - error
-      type: string
-      description: |-
-        * `queued` - Queued
-        * `running` - Running
-        * `success` - Success
-        * `partial_success` - Partial Success
-        * `error` - Error
+    ReportTheme:
+      type: object
+      properties:
+        slug:
+          type: string
+          maxLength: 64
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          maxLength: 128
+        description:
+          type: string
+      required:
+      - name
+      - slug
+    Role:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 50
+        description:
+          type: string
+        permissions: {}
+      required:
+      - id
+      - name
+    RoleRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        description:
+          type: string
+        permissions: {}
+      required:
+      - name
     TokenObtainPair:
       type: object
       properties:
@@ -1959,6 +3932,40 @@ components:
           minLength: 1
       required:
       - refresh
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        name:
+          type: string
+          maxLength: 255
+        is_active:
+          type: boolean
+          readOnly: true
+        is_staff:
+          type: boolean
+          readOnly: true
+          title: Staff status
+          description: Designates whether the user can log into this admin site.
+        is_superuser:
+          type: boolean
+          readOnly: true
+          title: Superuser status
+          description: Designates that this user has all permissions without explicitly
+            assigning them.
+      required:
+      - email
+      - id
+      - is_active
+      - is_staff
+      - is_superuser
+      - name
   securitySchemes:
     jwtAuth:
       type: http

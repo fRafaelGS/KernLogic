@@ -1,113 +1,98 @@
-from rest_framework import viewsets
+from rest_framework import viewsets, generics, status
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework.decorators import action
 
 from products.models import AttributeValue, Product, Attribute
-from products.serializers import AttributeValueSerializer
+from products.serializers import AttributeValueSerializer, AttributeValueDetailSerializer
+from products.permissions import IsStaffOrReadOnly
 from kernlogic.org_queryset import OrganizationQuerySetMixin
+from kernlogic.utils import get_user_organization
 from ..events import record
 
 @extend_schema_view(
-    list=extend_schema(summary="List attribute values for a product", 
-                     description="Returns all attribute values for a specific product."),
+    list=extend_schema(summary="List all attribute values", 
+                      description="Returns attribute values for the current organization."),
     retrieve=extend_schema(summary="Get a specific attribute value", 
-                         description="Returns details of a specific attribute value for a product."),
+                         description="Returns details of a specific attribute value."),
     create=extend_schema(summary="Create a new attribute value", 
-                       description="Create a new attribute value for a product."),
+                       description="Create a new attribute value for the current organization. Staff only."),
     update=extend_schema(summary="Update an attribute value", 
-                       description="Update an existing attribute value."),
+                       description="Update an existing attribute value. Staff only."),
     partial_update=extend_schema(summary="Partially update an attribute value", 
-                              description="Partially update an existing attribute value."),
+                               description="Partially update an existing attribute value. Staff only."),
     destroy=extend_schema(summary="Delete an attribute value", 
-                        description="Delete an attribute value from a product."),
+                        description="Delete an attribute value. Staff only."),
 )
 class AttributeValueViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     """
-    API endpoint for managing product attribute values.
-    Nested under products.
+    API endpoint for managing attribute values.
+    """
+    queryset = AttributeValue.objects.all()
+    serializer_class = AttributeValueSerializer
+    permission_classes = [IsAuthenticated, IsStaffOrReadOnly]
+    
+    def get_serializer_class(self):
+        if self.action in ['retrieve', 'list']:
+            return AttributeValueDetailSerializer
+        return AttributeValueSerializer
+    
+    def perform_create(self, serializer):
+        """Set organization and created_by from request user"""
+        organization = get_user_organization(self.request.user)
+        serializer.save(
+            organization=organization,
+            created_by=self.request.user
+        )
+
+    @action(detail=False, methods=['post'])
+    def bulk_create(self, request):
+        """Create multiple attribute values at once"""
+        serializer = AttributeValueSerializer(data=request.data, many=True)
+        if serializer.is_valid():
+            serializer.save(organization=get_user_organization(request.user), created_by=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class ProductAttributeValueList(generics.ListAPIView):
+    """
+    API endpoint to list all attribute values for a specific product
+    """
+    serializer_class = AttributeValueDetailSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        """Filter by product ID"""
+        product_id = self.kwargs['product_id']
+        organization = get_user_organization(self.request.user)
+        
+        # Get the product
+        try:
+            product = Product.objects.get(id=product_id, organization=organization)
+        except Product.DoesNotExist:
+            return AttributeValue.objects.none()
+            
+        # Return all attribute values for this product
+        return AttributeValue.objects.filter(
+            product=product,
+            organization=organization
+        ).select_related('attribute')
+
+class AttributeValuesByAttributeList(generics.ListAPIView):
+    """
+    API endpoint to list all values for a specific attribute
     """
     serializer_class = AttributeValueSerializer
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
-        """
-        Filter attribute values by product ID from URL and organization
-        """
-        qs = super().get_queryset()
-        return qs.filter(product_id=self.kwargs.get('product_pk'))
-    
-    def perform_create(self, serializer):
-        """Set organization, product, and attribute from URL parameters and request data"""
-        # Get data from request
-        data = self.request.data.copy()
-        
-        # Get product and attribute from URL
-        product_id = self.kwargs.get('product_pk')
-        attribute_id = data.get('attribute')
-        
-        # Get organization from current user
-        organization = self.request.user.profile.organization
-        
-        # Get attribute to check if it supports localization/scope
-        attribute = get_object_or_404(
-            Attribute.objects.filter(organization=organization),
-            pk=attribute_id
-        )
-        
-        # Force locale/channel to None if not supported by attribute
-        locale = data.get('locale')
-        channel = data.get('channel')
-        
-        if not attribute.is_localisable:
-            locale = None
-        elif locale == '':
-            locale = None
-        
-        if not attribute.is_scopable:
-            channel = None
-        elif channel == '':
-            channel = None
-        
-        # Create with our preprocessed data
-        attr_value = serializer.save(
-            product_id=product_id,
-            attribute_id=attribute_id,
-            organization=organization,
-            locale=locale,
-            channel=channel,
-        )
-
-        # Log the event in the product history
-        product = Product.objects.get(id=product_id)
-        
-        # Create event summary
-        location_context = ""
-        if locale and channel:
-            location_context = f" for locale {locale} and channel {channel}"
-        elif locale:
-            location_context = f" for locale {locale}"
-        elif channel:
-            location_context = f" for channel {channel}"
-        
-        summary = f"Added attribute '{attribute.label}'{location_context}"
-        
-        # Record the event
-        record(
-            product=product,
-            user=self.request.user,
-            event_type="attribute_added",
-            summary=summary,
-            payload={
-                "attribute_id": attribute.id,
-                "attribute_code": attribute.code,
-                "attribute_label": attribute.label,
-                "locale": locale,
-                "channel": channel,
-                "value": attr_value.value
-            }
+        """Filter by attribute ID"""
+        attribute_id = self.kwargs['attribute_id']
+        return AttributeValue.objects.filter(
+            attribute__id=attribute_id,
+            attribute__in=Attribute.objects.filter(organization=get_user_organization(self.request.user)),
         )
 
     def perform_update(self, serializer):
@@ -193,7 +178,7 @@ class AttributeValueViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         try:
             # Get the attribute object
             attribute = get_object_or_404(
-                Attribute.objects.filter(organization=request.user.profile.organization),
+                Attribute.objects.filter(organization=get_user_organization(request.user)),
                 pk=attribute_id
             )
             print(f"[DEBUG] Found attribute: {attribute.id} - {attribute.label}")
@@ -219,7 +204,7 @@ class AttributeValueViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             filter_kwargs = {
                 'product_id': product_id,
                 'attribute_id': attribute_id,
-                'organization': request.user.profile.organization
+                'organization': get_user_organization(request.user)
             }
             
             # Only add locale/channel to filter if provided

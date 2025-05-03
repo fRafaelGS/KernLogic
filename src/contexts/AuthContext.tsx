@@ -44,7 +44,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
-  register: (email: string, password: string, name: string) => Promise<void>;
+  register: (email: string, password: string, name: string, orgId?: string, token?: string) => Promise<void>;
   // --- Notification State and Functions ---
   notifications: Notification[];
   unreadCount: number;
@@ -76,15 +76,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
 
   // Update the normalizeUserData function to not use default org ID
-  const normalizeUserData = (data: any): ExtendedUser => ({
-    id: data.id,
-    email: data.email,
-    name: data.name || data.username,
-    avatar_url: data.avatar_url,
-    is_staff: Boolean(data.is_staff),
-    // Extract organization ID from the response - this path may need adjustment
-    organization_id: data.profile?.organization?.id,
-  });
+  const normalizeUserData = (data: any): ExtendedUser => {
+    const userData = {
+      id: data.id,
+      email: data.email,
+      name: data.name || data.username,
+      avatar_url: data.avatar_url,
+      is_staff: Boolean(data.is_staff),
+      // Look for organization_id in different possible locations
+      organization_id: data.organization_id 
+        ?? data.organization?.id 
+        ?? null,
+    };
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Normalized user data with organization ID:', userData.organization_id || 'Not available');
+      if (data.organization) {
+        console.log('Organization data from API:', data.organization);
+      }
+    }
+    
+    return userData;
+  };
 
   // Update auth flow to use async IIFE and proper token handling
   useEffect(() => {
@@ -113,43 +126,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw new Error('Failed to retrieve user profile');
         }
         
+        // 3) Normalize user data and handle organization ID for staff
         const me = normalizeUserData(meRes.data);
         console.log('Normalized user data:', me);
 
-        // 3) If we have an org ID, fetch memberships to determine role
-        if (me.id && me.organization_id) {
-          try {
-            console.log(`Fetching memberships from: ${API_URL}${API_ENDPOINTS.orgs.memberships(me.organization_id)}`);
-            
-            const memRes = await axiosInstance.get(
-              API_ENDPOINTS.orgs.memberships(me.organization_id)
-            );
-            console.log('Memberships response:', memRes.data);
-            
-            const membership = Array.isArray(memRes.data) 
-              ? memRes.data.find((m: any) => m.user?.id === me.id || m.user === me.id)
-              : null;
-            
-            if (membership) {
-              console.log('Found membership with role:', membership.role);
-              
-              // 4) Set user with role from membership
-              setUser({
-                ...me,
-                role: membership.role?.name?.toLowerCase(),
-              });
-            } else {
-              console.warn('No matching membership found for user');
-              setUser(me);
-            }
-          } catch (membershipError) {
-            console.error('Error fetching memberships:', membershipError);
-            setUser(me);
-          }
-        } else {
-          console.warn('No organization ID found in user profile');
-          setUser(me);
+        // For staff users without an organization_id, default to organization 1
+        if (!me.organization_id && me.is_staff) {
+          console.log('Staff user with no organization ID, defaulting to org 1');
+          me.organization_id = "1";
+          me.role = "admin";
         }
+
+        // Set the user with available data
+        setUser(me);
+
       } catch (err: any) {
         console.error('Auth init error', err);
         if (axios.isAxiosError(err) && err.response?.status === 401) {
@@ -163,6 +153,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     })();
   }, []);
+
+  // Add logging for user state changes
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('User state changed:', {
+        isAuthenticated: Boolean(user),
+        user: user ? {
+          ...user,
+          organization_id: user.organization_id || 'Not set'
+        } : null,
+        loading
+      });
+    }
+  }, [user, loading]);
 
   // --- Notification Functions ---
   const addNotification = useCallback((notificationData: Omit<Notification, 'id' | 'timestamp' | 'read'>) => {
@@ -361,13 +365,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   /* ─── register ─── */
-  const register = async (email: string, password: string, name: string) => {
+  const register = async (email: string, password: string, name: string, orgId?: string, token?: string) => {
     setLoading(true);
     setError(null);
     try {
+      // Prepare the registration data
+      const registrationData: any = { email, password, name };
+      
+      // Include organization ID and token if provided (for invited users)
+      // Always use UUID format for organization_id
+      if (orgId) {
+        console.log(`Registering with organization ID: ${orgId}`);
+        registrationData.organization_id = orgId;
+      }
+      
+      if (token) {
+        registrationData.invitation_token = token;
+      }
+      
+      // Log the registration data before sending
+      console.log("Sending registration data:", JSON.stringify(registrationData));
+      
       // Use shared axiosInstance for registration
       // Path is relative to axiosInstance baseURL ('/api')
-      const response = await axiosInstance.post('/accounts/register/', { email, password, name });
+      const response = await axiosInstance.post('/accounts/register/', registrationData);
       const { access, refresh, user: userData } = response.data;
 
       localStorage.setItem('access_token', access);

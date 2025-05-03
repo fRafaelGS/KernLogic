@@ -5,6 +5,7 @@ from rest_framework import status
 from products.models import Attribute, AttributeValue, Product
 from organizations.models import Organization
 from django.contrib.auth import get_user_model
+from teams.models import Membership, Role
 import json
 
 User = get_user_model()
@@ -12,32 +13,53 @@ User = get_user_model()
 class AttributeTests(TestCase):
     def setUp(self):
         # Create test organizations
-        self.org1 = Organization.objects.create(name="Test Org 1")
-        self.org2 = Organization.objects.create(name="Test Org 2")
+        self.org1 = Organization.objects.create(name="Organization 1")
+        self.org2 = Organization.objects.create(name="Organization 2")
+
+        # Create role for memberships
+        self.role = Role.objects.create(name="Admin")
         
-        # Create test users - use email instead of username for custom User model
+        # Create users and add to organizations via memberships
         self.staff_user = User.objects.create_user(
             email='staff@example.com',
             password='password',
         )
         self.staff_user.is_staff = True
         self.staff_user.save()
-        self.staff_user.profile.organization = self.org1
-        self.staff_user.profile.save()
+        
+        # Create membership for staff user in org1
+        Membership.objects.create(
+            user=self.staff_user,
+            organization=self.org1,
+            role=self.role,
+            status='active'
+        )
         
         self.regular_user = User.objects.create_user(
             email='user@example.com',
             password='password'
         )
-        self.regular_user.profile.organization = self.org1
-        self.regular_user.profile.save()
+        
+        # Create membership for regular user in org1
+        Membership.objects.create(
+            user=self.regular_user,
+            organization=self.org1,
+            role=self.role,
+            status='active'
+        )
         
         self.other_org_user = User.objects.create_user(
             email='other@example.com',
             password='password'
         )
-        self.other_org_user.profile.organization = self.org2
-        self.other_org_user.profile.save()
+        
+        # Create membership for other user in org2
+        Membership.objects.create(
+            user=self.other_org_user,
+            organization=self.org2,
+            role=self.role,
+            status='active'
+        )
         
         # Create test product
         self.product = Product.objects.create(

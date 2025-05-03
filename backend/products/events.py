@@ -17,10 +17,25 @@ def record(product: Product, user: User, event_type: str, summary: str, payload=
     Returns:
         ProductEvent: The created event instance
     """
-    return ProductEvent.objects.create(
-        product=product,
-        created_by=user,
-        event_type=event_type,
-        summary=summary[:255],
-        payload=payload or {},
-    ) 
+    try:
+        # Get organization_id directly from product
+        organization_id = product.organization_id
+        
+        return ProductEvent.objects.create(
+            product=product,
+            created_by=user,
+            event_type=event_type,
+            summary=summary[:255],
+            payload=payload or {},
+            organization_id=organization_id,  # Set organization_id from product
+        )
+    except Exception as e:
+        print(f"Error recording event: {str(e)}")
+        # Create record without organization if there's an error
+        return ProductEvent.objects.create(
+            product=product,
+            created_by=user,
+            event_type=event_type,
+            summary=summary[:255],
+            payload=payload or {},
+        ) 

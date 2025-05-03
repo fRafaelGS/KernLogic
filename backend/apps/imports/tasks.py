@@ -15,6 +15,7 @@ import json
 from django.db import IntegrityError
 import os
 import traceback
+from kernlogic.utils import get_user_organization
 
 logger = logging.getLogger(__name__)
 
@@ -280,16 +281,19 @@ def import_csv_task(task_id: int):
 
 def save_batch(serializers, user, errors):
     """
-    Save a batch of validated serializers with appropriate error handling.
+    Save a batch of products to the database.
     """
     try:
         with transaction.atomic():
             for serializer in serializers:
                 try:
-                    # Set created_by and organization before saving
+                    # Get organization using utility function
+                    organization = get_user_organization(user)
+                    
+                    # Save the product
                     serializer.save(
                         created_by=user,
-                        organization=user.profile.organization
+                        organization=organization
                     )
                 except IntegrityError as e:
                     # Handle possible race condition with unique constraint
@@ -308,6 +312,9 @@ def save_overwrite_batch(data_list, user, errors):
     """
     Update existing products with new data from import.
     """
+    # Get organization using utility function
+    organization = get_user_organization(user)
+    
     for data in data_list:
         try:
             # Get existing product by SKU
@@ -316,7 +323,7 @@ def save_overwrite_batch(data_list, user, errors):
                 product = Product.objects.get(
                     sku=sku, 
                     created_by=user,
-                    organization=user.profile.organization
+                    organization=organization
                 )
                 
                 # Update product with new data

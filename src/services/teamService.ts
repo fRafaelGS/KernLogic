@@ -41,9 +41,12 @@ export interface AuditLogEntry {
   details: Record<string, any>;
 }
 
-// TODO: This should be integrated with AuthContext
-// For now, we'll use a mock organization ID
-const MOCK_ORG_ID = "80a23f5f-27da-46d0-9b7f-bcc01f0d4313";
+// Utility function to log in development only
+const devLog = (...args: any[]) => {
+  if (process.env.NODE_ENV === 'development') {
+    console.log(...args);
+  }
+};
 
 /**
  * Fetch team members for the current organization with optional filters
@@ -51,14 +54,12 @@ const MOCK_ORG_ID = "80a23f5f-27da-46d0-9b7f-bcc01f0d4313";
 export const fetchTeamMembers = async (
   search?: string,
   role?: string,
-  status?: string
+  status?: string,
+  orgId?: string | number
 ): Promise<TeamMember[]> => {
-  // In a real app, we would get the org ID from auth context
-  // const { currentOrgId } = useAuth();
-  const currentOrgId = MOCK_ORG_ID;
-  
-  if (!currentOrgId) {
-    throw new Error('No organization selected');
+  // Validate that we have an organization ID
+  if (!orgId) {
+    throw new Error('No organization ID provided');
   }
 
   const params: Record<string, string> = {};
@@ -66,65 +67,10 @@ export const fetchTeamMembers = async (
   if (role) params.role = role;
   if (status) params.status = status;
 
-  console.log('Fetching team members with params:', params);
-
-  // For development environment, use mock data that respects filters
-  if (process.env.NODE_ENV === 'development') {
-    // Mock data that we'll filter client-side
-    const mockData: TeamMember[] = [
-      { 
-        id: 1, 
-        user: { id: 'user1', email: 'rgarciasaraiva@gmail.com', name: 'You (Owner)' }, 
-        org_id: currentOrgId,
-        role: { id: 1, name: 'Admin', description: 'Full access', permissions: [] }, 
-        status: 'active' as const, 
-        invited_at: '2023-05-01T12:00:00Z',
-        last_login: '2023-05-01T12:00:00Z'
-      },
-      { 
-        id: 2, 
-        user: { id: 'user2', email: 'jane@example.com', name: 'Jane Doe' }, 
-        org_id: currentOrgId,
-        role: { id: 2, name: 'Editor', description: 'Can edit items', permissions: [] }, 
-        status: 'active' as const, 
-        invited_at: '2023-04-15T09:00:00Z',
-        last_login: '2023-04-30T09:00:00Z'
-      },
-      { 
-        id: 3, 
-        user: { id: 'user3', email: 'bob@example.com', name: 'Bob Smith' }, 
-        org_id: currentOrgId,
-        role: { id: 3, name: 'Viewer', description: 'View only', permissions: [] }, 
-        status: 'pending' as const, 
-        invited_at: '2023-05-02T15:30:00Z'
-      },
-    ];
-
-    // Filter the mock data based on the search, role, and status parameters
-    return mockData.filter(member => {
-      // Filter by search (name or email)
-      if (search && !member.user.name.toLowerCase().includes(search.toLowerCase()) && 
-          !member.user.email.toLowerCase().includes(search.toLowerCase())) {
-        return false;
-      }
-      
-      // Filter by role
-      if (role && member.role.name !== role) {
-        return false;
-      }
-      
-      // Filter by status
-      if (status && member.status !== status) {
-        return false;
-      }
-      
-      // If all filters pass, include this member
-      return true;
-    });
-  }
+  devLog('Fetching team members with params:', params);
   
   try {
-    const response = await axiosInstance.get(`/api/teams/orgs/${currentOrgId}/members/`, { params });
+    const response = await axiosInstance.get(`/api/orgs/${orgId}/memberships/`, { params });
     return response.data;
   } catch (error) {
     console.error('Error fetching team members:', error);
@@ -135,131 +81,213 @@ export const fetchTeamMembers = async (
 /**
  * Invite a new team member to the organization
  */
-export const inviteMember = async (email: string, roleId: number): Promise<TeamMember> => {
-  const currentOrgId = MOCK_ORG_ID;
-  
-  if (!currentOrgId) {
-    throw new Error('No organization selected');
+export const inviteMember = async (
+  email: string, 
+  roleId: number, 
+  orgId?: string | number
+): Promise<TeamMember> => {
+  // Validate that we have an organization ID
+  if (!orgId) {
+    throw new Error('No organization ID provided');
   }
 
-  const response = await axiosInstance.post(`/api/teams/orgs/${currentOrgId}/members/`, {
-    email,
-    role_id: roleId
-  });
-  
-  return response.data;
+  try {
+    devLog(`Inviting member to organization: ${orgId}`, {
+      email,
+      role_id: roleId,
+      endpoint: `/api/orgs/${orgId}/memberships/`
+    });
+    
+    const response = await axiosInstance.post(`/api/orgs/${String(orgId)}/memberships/`, {
+      email,
+      role_id: roleId
+    });
+    
+    return response.data;
+  } catch (error) {
+    console.error('Error inviting member:', error);
+    throw error;
+  }
+};
+
+/**
+ * Bulk invite multiple team members to the organization
+ */
+export const bulkInviteMembers = async (
+  invites: { email: string; role_id: number }[], 
+  orgId?: string | number
+): Promise<TeamMember[]> => {
+  // Validate that we have an organization ID
+  if (!orgId) {
+    throw new Error('No organization ID provided');
+  }
+
+  try {
+    devLog(`Bulk inviting members to organization: ${orgId}`, {
+      inviteCount: invites.length,
+      endpoint: `/api/orgs/${orgId}/memberships/bulk/`
+    });
+
+    const response = await axiosInstance.post(`/api/orgs/${String(orgId)}/memberships/bulk/`, {
+      invites
+    });
+    
+    return response.data;
+  } catch (error) {
+    console.error('Error bulk inviting members:', error);
+    throw error;
+  }
+};
+
+/**
+ * Export team members to CSV
+ */
+export const exportTeamToCSV = async (orgId: string): Promise<void> => {
+  if (!orgId) {
+    throw new Error('No organization ID provided');
+  }
+
+  try {
+    // Get all team members including active and pending
+    const response = await axiosInstance.get(`/api/orgs/${orgId}/memberships/export/`, {
+      responseType: 'blob'
+    });
+
+    // Create blob link to download
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `team-members-${new Date().toISOString().split('T')[0]}.csv`);
+    
+    // Append to html page
+    document.body.appendChild(link);
+    
+    // Force download
+    link.click();
+    
+    // Clean up and remove the link
+    link.parentNode?.removeChild(link);
+  } catch (error) {
+    console.error('Error exporting team to CSV:', error);
+    throw error;
+  }
 };
 
 /**
  * Resend an invite to a pending team member
  */
-export const resendInvite = async (membershipId: number): Promise<void> => {
-  const currentOrgId = MOCK_ORG_ID;
-  
-  if (!currentOrgId) {
-    throw new Error('No organization selected');
+export const resendInvite = async (membershipId: number, orgId?: string): Promise<void> => {
+  if (!orgId) {
+    throw new Error('No organization ID provided');
   }
 
-  await axiosInstance.post(`/api/teams/orgs/${currentOrgId}/members/${membershipId}/resend-invite/`);
+  try {
+    devLog(`Resending invite for membership: ${membershipId}`, {
+      endpoint: `/api/orgs/${orgId}/memberships/${membershipId}/resend_invite/`
+    });
+    
+    await axiosInstance.post(`/api/orgs/${orgId}/memberships/${membershipId}/resend_invite/`);
+  } catch (error) {
+    console.error('Error resending invite:', error);
+    throw error;
+  }
 };
 
 /**
- * Cancel a pending invitation
+ * Cancel an invitation
  */
-export const cancelInvite = async (membershipId: number): Promise<void> => {
-  await removeMember(membershipId);
+export const cancelInvite = async (membershipId: number, orgId?: string): Promise<void> => {
+  if (!orgId) {
+    throw new Error('No organization ID provided');
+  }
+
+  try {
+    await axiosInstance.delete(`/api/orgs/${orgId}/memberships/${membershipId}/`);
+  } catch (error) {
+    console.error('Error canceling invite:', error);
+    throw error;
+  }
 };
 
 /**
- * Fetch all available roles
+ * Fetch available roles for the current organization
  */
-export const fetchRoles = async (): Promise<Role[]> => {
-  const response = await axiosInstance.get('/api/teams/roles/');
-  return response.data;
+export const fetchRoles = async (orgId?: string | number): Promise<Role[]> => {
+  if (!orgId) {
+    throw new Error('No organization ID provided');
+  }
+
+  try {
+    devLog(`Fetching roles for organization: ${orgId}`, {
+      endpoint: `/api/orgs/${orgId}/roles/`
+    });
+    
+    const response = await axiosInstance.get(`/api/orgs/${orgId}/roles/`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching roles:', error);
+    return [];
+  }
 };
 
 /**
  * Update a team member's role
  */
-export const updateMemberRole = async (membershipId: number, roleId: number): Promise<TeamMember> => {
-  const currentOrgId = MOCK_ORG_ID;
-  
-  if (!currentOrgId) {
-    throw new Error('No organization selected');
+export const updateMemberRole = async (membershipId: number, roleId: number, orgId?: string | number): Promise<TeamMember> => {
+  if (!orgId) {
+    throw new Error('No organization ID provided');
   }
 
-  const response = await axiosInstance.patch(`/api/teams/orgs/${currentOrgId}/members/${membershipId}/`, {
-    role_id: roleId
-  });
-  
-  return response.data;
+  try {
+    devLog(`Updating role for membership: ${membershipId}`, {
+      new_role_id: roleId,
+      endpoint: `/api/orgs/${orgId}/memberships/${membershipId}/`
+    });
+    
+    const response = await axiosInstance.patch(`/api/orgs/${orgId}/memberships/${membershipId}/`, {
+      role_id: roleId
+    });
+    
+    return response.data;
+  } catch (error) {
+    console.error('Error updating member role:', error);
+    throw error;
+  }
 };
 
 /**
- * Remove a team member from the organization
+ * Remove a team member
  */
-export const removeMember = async (membershipId: number): Promise<void> => {
-  const currentOrgId = MOCK_ORG_ID;
-  
-  if (!currentOrgId) {
-    throw new Error('No organization selected');
+export const removeMember = async (membershipId: number, orgId?: string | number): Promise<void> => {
+  if (!orgId) {
+    throw new Error('No organization ID provided');
   }
 
-  await axiosInstance.delete(`/api/teams/orgs/${currentOrgId}/members/${membershipId}/`);
+  try {
+    devLog(`Removing member with membership: ${membershipId}`, {
+      endpoint: `/api/orgs/${orgId}/memberships/${membershipId}/`
+    });
+    
+    await axiosInstance.delete(`/api/orgs/${orgId}/memberships/${membershipId}/`);
+  } catch (error) {
+    console.error('Error removing member:', error);
+    throw error;
+  }
 };
 
 /**
  * Fetch audit logs for the organization
  */
-export const fetchAuditLogs = async (): Promise<AuditLogEntry[]> => {
-  const currentOrgId = MOCK_ORG_ID;
-  
-  if (!currentOrgId) {
-    throw new Error('No organization selected');
+export const fetchAuditLogs = async (orgId?: string): Promise<AuditLogEntry[]> => {
+  if (!orgId) {
+    throw new Error('No organization ID provided');
   }
 
   try {
-    const response = await axiosInstance.get(`/api/teams/orgs/${currentOrgId}/audit-logs/`);
+    const response = await axiosInstance.get(`/api/orgs/${orgId}/audit/`);
     return response.data;
   } catch (error) {
     console.error('Error fetching audit logs:', error);
-    
-    // For development, return mock data if API call fails
-    if (process.env.NODE_ENV === 'development') {
-      return [
-        {
-          id: 1,
-          user: { id: 'user1', email: 'admin@example.com', name: 'Admin User' },
-          org_id: currentOrgId,
-          action: 'invite',
-          target_type: 'Membership',
-          target_id: 2,
-          timestamp: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
-          details: { email: 'jane@example.com', role: 'Editor' }
-        },
-        {
-          id: 2,
-          user: { id: 'user1', email: 'admin@example.com', name: 'Admin User' },
-          org_id: currentOrgId,
-          action: 'role_change',
-          target_type: 'Membership',
-          target_id: 2,
-          timestamp: new Date(Date.now() - 1800000).toISOString(), // 30 minutes ago
-          details: { from: 'Editor', to: 'Admin' }
-        },
-        {
-          id: 3,
-          user: { id: 'user1', email: 'admin@example.com', name: 'Admin User' },
-          org_id: currentOrgId,
-          action: 'remove',
-          target_type: 'Membership',
-          target_id: 3,
-          timestamp: new Date(Date.now() - 900000).toISOString(), // 15 minutes ago
-          details: { email: 'removed@example.com', role: 'Viewer' }
-        }
-      ];
-    }
-    
     return [];
   }
 }; 

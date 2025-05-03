@@ -8,10 +8,12 @@ User = get_user_model()
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
     password_confirm = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
+    organization_id = serializers.CharField(write_only=True, required=False)
+    invitation_token = serializers.CharField(write_only=True, required=False)
 
     class Meta:
         model = User
-        fields = ('id', 'email', 'name', 'password', 'password_confirm')
+        fields = ('id', 'email', 'name', 'password', 'password_confirm', 'organization_id', 'invitation_token')
         extra_kwargs = {
             'email': {'required': True},
             'name': {'required': True}
@@ -33,12 +35,59 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         # Remove password_confirm from validated data
         validated_data.pop('password_confirm')
         
+        # Extract organization info before creating user
+        organization_id = validated_data.pop('organization_id', None)
+        invitation_token = validated_data.pop('invitation_token', None)
+        
         # Create user with validated data
         user = User.objects.create_user(
             email=validated_data['email'],
             name=validated_data['name'],
             password=validated_data['password']
         )
+        
+        # If this is an organization invitation registration, create/update membership
+        if organization_id:
+            try:
+                from organizations.models import Organization
+                from teams.models import Membership, Role
+                
+                # Get the organization
+                try:
+                    organization = Organization.objects.get(id=organization_id)
+                    
+                    # Check if there's a pending membership for this email
+                    membership = Membership.objects.filter(
+                        user__email=user.email,
+                        organization=organization,
+                        status='pending'
+                    ).first()
+                    
+                    if membership:
+                        # Update the existing membership to active status
+                        membership.user = user  # Ensure it's linked to the newly created user
+                        membership.status = 'active'
+                        membership.save()
+                    else:
+                        # If no pending membership exists, create a new one with default viewer role
+                        default_role = Role.objects.filter(name='Viewer').first()
+                        if not default_role:
+                            # Fall back to the first available role
+                            default_role = Role.objects.first()
+                        
+                        if default_role:
+                            Membership.objects.create(
+                                user=user,
+                                organization=organization,
+                                role=default_role,
+                                status='active'
+                            )
+                except Organization.DoesNotExist:
+                    # Log this but don't fail registration
+                    print(f"WARNING: Could not find organization with ID {organization_id} for user registration")
+            except Exception as e:
+                # Log the error but don't prevent user creation
+                print(f"ERROR: Failed to process organization membership during registration: {str(e)}")
         
         return user
 

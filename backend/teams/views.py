@@ -24,11 +24,21 @@ class RoleViewSet(viewsets.ModelViewSet):
 class MembershipViewSet(viewsets.ModelViewSet):
     queryset = Membership.objects.all()
     serializer_class = MembershipSerializer
-    permission_classes = [permissions.IsAuthenticated, IsTeamReadOnly]
+    
+    # Add action-specific permissions
+    def get_permissions(self):
+        """
+        Allow unauthenticated access to check_invitation endpoint
+        """
+        if self.action == 'check_invitation':
+            return [permissions.AllowAny()]
+        return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
         org_id = self.kwargs["org_id"]
-        queryset = super().get_queryset().filter(org_id=org_id)
+        
+        # All org IDs are now UUIDs
+        queryset = super().get_queryset().filter(organization_id=org_id)
         
         # Apply search and filter params
         search = self.request.query_params.get('search', None)
@@ -94,8 +104,18 @@ class MembershipViewSet(viewsets.ModelViewSet):
             # For now, just log the temp password for testing
             print(f"Created user {email} with temporary password: {temp_password}")
         
+        # Get the organization from org_id (now UUID)
+        from organizations.models import Organization
+        try:
+            organization = Organization.objects.get(id=org_id)
+        except Organization.DoesNotExist:
+            return Response(
+                {"error": f"Organization with ID {org_id} does not exist"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
         # Check if membership already exists
-        existing = Membership.objects.filter(user=user, org_id=org_id).first()
+        existing = Membership.objects.filter(user=user, organization=organization).first()
         if existing:
             # If already active, return error
             if existing.status == 'active':
@@ -107,14 +127,32 @@ class MembershipViewSet(viewsets.ModelViewSet):
             if existing.role.id != role.id:
                 existing.role = role
                 existing.save()
+            
+            # Always resend invitation email for pending memberships
+            if existing.status == 'pending':
+                # Create audit log entry for resending invite
+                AuditLog.objects.create(
+                    user=request.user,
+                    organization=organization,
+                    action="invite",
+                    target_type="Membership",
+                    target_id=existing.pk,
+                    details={"message": "Invite resent via create endpoint"}
+                )
+                
+                # Send invitation email
+                if hasattr(settings, 'EMAIL_DEBUG') and settings.EMAIL_DEBUG:
+                    mock_send_invitation_email(existing, request.user.get_full_name() or request.user.email)
+                else:
+                    send_invitation_email(existing, request.user.get_full_name() or request.user.email)
                 
             serializer = self.get_serializer(existing)
             return Response(serializer.data, status=status.HTTP_200_OK)
         
-        # Create new membership
+        # Create new membership with numeric organization ID
         membership = Membership.objects.create(
             user=user,
-            org_id=org_id,
+            organization=organization,
             role=role,
             status='pending'  # Always start as pending
         )
@@ -122,7 +160,7 @@ class MembershipViewSet(viewsets.ModelViewSet):
         # Create audit log
         AuditLog.objects.create(
             user=request.user,
-            org_id=org_id,
+            organization=organization,
             action='invite',
             target_type='Membership',
             target_id=membership.pk,
@@ -133,8 +171,8 @@ class MembershipViewSet(viewsets.ModelViewSet):
         )
         
         # Send invitation email
-        # Use real email in production, mock for development
-        if settings.DEBUG:
+        # Use real email unless EMAIL_DEBUG is True (instead of using DEBUG)
+        if hasattr(settings, 'EMAIL_DEBUG') and settings.EMAIL_DEBUG:
             mock_send_invitation_email(membership, request.user.get_full_name() or request.user.email)
         else:
             send_invitation_email(membership, request.user.get_full_name() or request.user.email)
@@ -154,9 +192,12 @@ class MembershipViewSet(viewsets.ModelViewSet):
         new_role = membership.role.name
         
         if old_role != new_role:
+            # Use organization.id directly (now a UUID)
+            org_id = membership.organization.id
+            
             AuditLog.objects.create(
                 user=request.user,
-                org_id=membership.org_id,
+                organization=membership.organization,
                 action='role_change',
                 target_type='Membership',
                 target_id=membership.pk,
@@ -172,10 +213,13 @@ class MembershipViewSet(viewsets.ModelViewSet):
         """Remove a membership and log the action"""
         membership = self.get_object()
         
+        # Use the organization.id directly (now a UUID)
+        org_id = membership.organization.id
+        
         # Create audit log before deletion
         AuditLog.objects.create(
             user=request.user,
-            org_id=membership.org_id,
+            organization=membership.organization,
             action='remove',
             target_type='Membership',
             target_id=membership.pk,
@@ -202,10 +246,13 @@ class MembershipViewSet(viewsets.ModelViewSet):
         if membership.status != "pending":
             return Response({"detail": "Can only resend invites for pending memberships"}, status=400)
         
+        # Use organization.id directly (now a UUID)
+        org_id = membership.organization.id
+        
         # Create audit log entry for resending invite
         AuditLog.objects.create(
             user=request.user,
-            org_id=org_id,
+            organization=membership.organization,
             action="invite",
             target_type="Membership",
             target_id=membership.pk,
@@ -213,7 +260,7 @@ class MembershipViewSet(viewsets.ModelViewSet):
         )
         
         # Send invitation email
-        if settings.DEBUG:
+        if hasattr(settings, 'EMAIL_DEBUG') and settings.EMAIL_DEBUG:
             mock_send_invitation_email(membership, request.user.get_full_name() or request.user.email)
         else:
             send_invitation_email(membership, request.user.get_full_name() or request.user.email)
@@ -242,18 +289,63 @@ class MembershipViewSet(viewsets.ModelViewSet):
         membership.status = "active"
         membership.save()
         
+        # Use organization.id directly (now a UUID)
+        org_id = membership.organization.id
+        
         # Create audit log
         AuditLog.objects.create(
             user=request.user,
-            org_id=org_id,
+            organization=membership.organization,
             action="accept_invite",
             target_type="Membership",
             target_id=membership.pk,
-            details={"role": membership.role.name}
+            details=None
         )
         
         serializer = self.get_serializer(membership)
         return Response(serializer.data)
+
+    @action(detail=True, methods=["get"])
+    def check_invitation(self, request, pk=None, org_id=None):
+        """
+        Check if an invitation is valid without requiring authentication.
+        Used when a user follows an invitation link to verify the email and determine next steps.
+        """
+        try:
+            # Get the membership without requiring authentication
+            membership = Membership.objects.get(pk=pk)
+            
+            # Get basic information to return (limited for security)
+            user_data = {
+                'email': membership.user.email
+            }
+            
+            org_data = {
+                'id': str(membership.organization.id),  # Ensure UUID is converted to string
+                'name': membership.organization.name
+            }
+            
+            # Check if this is likely a new user (no last login)
+            is_new_user = membership.user.last_login is None
+            
+            # Return limited data
+            return Response({
+                'id': membership.id,
+                'status': membership.status,
+                'user': user_data,
+                'organization': org_data,
+                'is_new_user': is_new_user
+            })
+        except Membership.DoesNotExist:
+            return Response(
+                {"detail": "Invitation not found or has expired."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {"detail": f"Error checking invitation: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = AuditLog.objects.all()
@@ -262,4 +354,4 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         org_id = self.kwargs["org_id"]
-        return super().get_queryset().filter(org_id=org_id).order_by('-timestamp')
+        return super().get_queryset().filter(organization__id=org_id).order_by('-timestamp')

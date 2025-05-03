@@ -18,34 +18,65 @@ class User(AbstractUser):
 
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
-    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, null=True)
     
     def __str__(self):
         return f"{self.user.email}'s profile"
 
-@receiver(post_save, sender=User)
-def create_user_profile(sender, instance, created, **kwargs):
-    """Create a profile for a newly created user and associate with default organization."""
-    if created:
-        # Import here to avoid circular imports
-        from organizations.models import Organization
-        
-        # Get or create default organization
-        default_org, _ = Organization.objects.get_or_create(name="Default")
-        
-        # Create profile with organization
-        Profile.objects.create(user=instance, organization=default_org)
-        print(f"Created profile for {instance.email} with organization {default_org}")
+# DEPRECATED: No longer needed since team-invite logic ensures every new user gets exactly one membership
+# @receiver(post_save, sender=User)
+# def create_user_profile(sender, instance, created, **kwargs):
+#     """Create profile when user is created."""
+#     if created:
+#         try:
+#             # Import here to avoid circular imports
+#             from organizations.models import Organization
+#             
+#             # Find the default organization without using get_or_create
+#             default_org = Organization.objects.filter(name="Default").first()
+#             
+#             # Create profile with or without organization
+#             if default_org:
+#                 Profile.objects.create(user=instance, organization=default_org)
+#                 print(f"Created profile for {instance.email} with organization {default_org}")
+#             else:
+#                 Profile.objects.create(user=instance)
+#                 print(f"Created profile for {instance.email} without organization")
+#         except Exception as e:
+#             print(f"Error creating profile for {instance.email}: {str(e)}")
+#             try:
+#                 # Create profile without organization as fallback
+#                 Profile.objects.create(user=instance)
+#                 print(f"Created profile for {instance.email} without organization")
+#             except Exception as e:
+#                 print(f"Critical error creating profile: {str(e)}")
 
-@receiver(post_save, sender=User)
-def save_user_profile(sender, instance, **kwargs):
-    """Save profile when user is saved."""
-    # Make sure profile exists
-    if not hasattr(instance, 'profile'):
-        # Import here to avoid circular imports
-        from organizations.models import Organization
-        default_org, _ = Organization.objects.get_or_create(name="Default")
-        Profile.objects.create(user=instance, organization=default_org)
-        print(f"Created missing profile for {instance.email} with organization {default_org}")
-    
-    instance.profile.save()
+# DEPRECATED: No longer needed since team-invite logic ensures every new user gets exactly one membership
+# @receiver(post_save, sender=User)
+# def save_user_profile(sender, instance, **kwargs):
+#     """Save profile when user is saved."""
+#     try:
+#         # First try to access existing profile
+#         profile = Profile.objects.filter(user=instance).first()
+#         
+#         # If profile doesn't exist, create one
+#         if not profile:
+#             # Import here to avoid circular imports
+#             try:
+#                 from organizations.models import Organization
+#                 default_org = Organization.objects.filter(name="Default").first()
+#                 if default_org:
+#                     Profile.objects.create(user=instance, organization=default_org)
+#                 else:
+#                     Profile.objects.create(user=instance)
+#                 print(f"Created missing profile for {instance.email}")
+#             except Exception as e:
+#                 print(f"Error creating profile: {str(e)}")
+#                 # Create profile without organization as fallback
+#                 Profile.objects.create(user=instance)
+#                 print(f"Created profile for {instance.email} without organization")
+#         else:
+#             # Just save the existing profile
+#             profile.save()
+#             
+#     except Exception as e:
+#         print(f"Error in save_user_profile: {str(e)}")

@@ -635,12 +635,12 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
   });
   
   // Event handlers
-  const handleAddAttribute = useCallback(async (attribute: Attribute, locale?: string, channel?: string) => {
-    console.log("Adding attribute value for:", attribute, "with locale:", locale, "channel:", channel);
+  const handleAddAttribute = useCallback(async (attribute: Attribute) => {
+    console.log("Adding attribute value for:", attribute, "with locale:", selectedLocale, "channel:", selectedChannel);
     
     // Convert 'default' to null for backend
-    const apiLocale = locale === 'default' ? null : locale;
-    const apiChannel = channel === 'default' ? null : channel;
+    const apiLocale = selectedLocale === 'default' ? null : selectedLocale;
+    const apiChannel = selectedChannel === 'default' ? null : selectedChannel;
     
     console.log(`Using API values: locale=${apiLocale}, channel=${apiChannel}`);
     
@@ -705,7 +705,7 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
     }
   }, [attributeValues]);
   
-  const handleSaveNewValue = useCallback((attributeId: number, value: any, locale?: string, channel?: string) => {
+  const handleSaveNewValue = useCallback((attributeId: number, value: any) => {
     console.log(`handleSaveNewValue called for attribute ${attributeId} with value:`, value);
     
     // Set saving state for this attribute
@@ -714,17 +714,17 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
       [attributeId]: 'saving'
     }));
     
-    // Call the mutation
+    // Call the mutation with explicitly passing selectedLocale and selectedChannel
     createAttributeValueMutation.mutate({
       attributeId,
       value,
       productId,
-      locale,
-      channel
+      locale: selectedLocale,
+      channel: selectedChannel
     });
-  }, [createAttributeValueMutation, productId]);
+  }, [createAttributeValueMutation, productId, selectedLocale, selectedChannel]);
   
-  const handleUpdateValue = useCallback((valueId: number, value: any, locale?: string, channel?: string) => {
+  const handleUpdateValue = useCallback((valueId: number, value: any) => {
     console.log(`handleUpdateValue called for value ${valueId} with:`, value);
     
     // Find the attribute ID for this value
@@ -739,15 +739,15 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
       }));
     }
     
-    // Call the mutation
+    // Call the mutation with explicitly passing selectedLocale and selectedChannel
     updateAttributeValueMutation.mutate({
       valueId,
       value,
       productId,
-      locale,
-      channel
+      locale: selectedLocale,
+      channel: selectedChannel
     });
-  }, [attributeValues, productId, updateAttributeValueMutation]);
+  }, [attributeValues, productId, updateAttributeValueMutation, selectedLocale, selectedChannel]);
   
   // Mutation to remove an attribute from a group
   const removeFromGroupMutation = useMutation({

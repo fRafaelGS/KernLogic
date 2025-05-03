@@ -38,8 +38,8 @@ interface AttributeValueRowProps {
   isNew?: boolean;
   onEdit: (attributeId: number) => void;
   onCancel: (attributeId: number) => void;
-  onSaveNew: (attributeId: number, value: any, locale?: string, channel?: string) => void;
-  onUpdate: (valueId: number, value: any, locale?: string, channel?: string) => void;
+  onSaveNew: (attributeId: number, value: any) => void;
+  onUpdate: (valueId: number, value: any) => void;
   savingState: SavingState;
   isStaff: boolean;
   availableLocales?: Array<{ code: string, label: string }>;
@@ -80,19 +80,9 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
   // Use debounced callback for saving
   const debouncedSave = useDebouncedCallback((newValue: any) => {
     if (isNew) {
-      onSaveNew(
-        attribute.id, 
-        newValue, 
-        localLocale === "default" ? null : localLocale, 
-        localChannel === "default" ? null : localChannel
-      );
+      onSaveNew(attribute.id, newValue);
     } else if (value?.id) {
-      onUpdate(
-        value.id, 
-        newValue, 
-        localLocale === "default" ? null : localLocale, 
-        localChannel === "default" ? null : localChannel
-      );
+      onUpdate(value.id, newValue);
     }
   }, 800);
   
@@ -119,16 +109,12 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
       if (isNew) {
         onSaveNew(
           attribute.id, 
-          localValue, 
-          localLocale === "default" ? null : localLocale,
-          localChannel === "default" ? null : localChannel
+          localValue
         );
       } else if (value?.id) {
         onUpdate(
           value.id, 
-          localValue, 
-          localLocale === "default" ? null : localLocale,
-          localChannel === "default" ? null : localChannel
+          localValue
         );
       }
     } else if (e.key === 'Escape') {
@@ -440,16 +426,12 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
                     if (isNew) {
                       onSaveNew(
                         attribute.id, 
-                        localValue, 
-                        localLocale === "default" ? null : localLocale,
-                        localChannel === "default" ? null : localChannel
+                        localValue
                       );
                     } else if (value?.id) {
                       onUpdate(
                         value.id, 
-                        localValue, 
-                        localLocale === "default" ? null : localLocale,
-                        localChannel === "default" ? null : localChannel
+                        localValue
                       );
                     }
                   }}

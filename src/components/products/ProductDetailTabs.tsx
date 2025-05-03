@@ -828,14 +828,27 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
       };
     });
     
-    // Add mandatory attributes
-    const mandatoryAttributes = Array.isArray(attributes) 
-      ? attributes.filter(attr => attr.isMandatory).map(attr => ({
-          key: `attr_${attr.id}`, 
-          label: `${attr.group}: ${attr.name}`,
-          weight: 1.5, // Give mandatory attributes higher weight
-          complete: !!attr.value && attr.value.trim() !== ''
-        }))
+    // Process attribute values and identify mandatory attributes
+    const mandatoryAttributes = Array.isArray(attributes) && Array.isArray(availableAttributes)
+      ? availableAttributes
+          .filter(attr => attr.isMandatory)
+          .map(attrDef => {
+            // Find if this attribute has a value for this product
+            const attrValue = attributes.find(attr => 
+              attr.attributeId === attrDef.id && 
+              attr.locale === selectedLocale
+            );
+            
+            return {
+              key: `attr_${attrDef.id}`,
+              label: attrDef.groupName ? `${attrDef.groupName}: ${attrDef.name}` : attrDef.name,
+              weight: 1.5, // Give mandatory attributes higher weight
+              complete: !!attrValue && 
+                       attrValue.value !== null && 
+                       attrValue.value !== undefined && 
+                       (typeof attrValue.value !== 'string' || attrValue.value.trim() !== '')
+            };
+          })
       : [];
     
     // Combine all fields

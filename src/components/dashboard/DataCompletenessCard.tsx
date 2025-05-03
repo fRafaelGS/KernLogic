@@ -10,12 +10,16 @@ interface DataCompletenessCardProps {
   completeness: number;
   mostMissingFields: { field: string; count: number }[];
   loading: boolean;
+  attributesMissingCount?: number;
+  mandatoryAttributes?: string[];
 }
 
 export const DataCompletenessCard: React.FC<DataCompletenessCardProps> = ({
   completeness,
   mostMissingFields,
-  loading
+  loading,
+  attributesMissingCount = 0,
+  mandatoryAttributes = []
 }) => {
   return (
     <Card className="bg-white border-enterprise-200 shadow-sm hover:shadow-md transition-all">
@@ -28,7 +32,7 @@ export const DataCompletenessCard: React.FC<DataCompletenessCardProps> = ({
             </div>
           ) : (
             <CardDescription className="text-enterprise-500">
-              {`${completeness}% of catalog has all required fields filled`}
+              {`${completeness}% of catalog has all required fields & attributes filled`}
             </CardDescription>
           )}
         </div>
@@ -50,6 +54,16 @@ export const DataCompletenessCard: React.FC<DataCompletenessCardProps> = ({
                 <li>Category</li>
                 <li>Brand</li>
               </ul>
+              {mandatoryAttributes.length > 0 && (
+                <>
+                  <p className="text-sm font-medium mt-3 mb-2">Required attributes:</p>
+                  <ul className="text-xs text-enterprise-600 list-disc pl-4 space-y-1">
+                    {mandatoryAttributes.map((attr, index) => (
+                      <li key={index}>{attr}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -89,6 +103,20 @@ export const DataCompletenessCard: React.FC<DataCompletenessCardProps> = ({
                       </Tooltip>
                     </TooltipProvider>
                   ))}
+                  {attributesMissingCount > 0 && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge className="bg-enterprise-100 text-enterprise-700 hover:bg-enterprise-200">
+                            Attributes ({attributesMissingCount})
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                          <p className="text-xs">{attributesMissingCount} products with missing required attributes</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
                 </div>
               ) : (
                 <div className="text-sm text-enterprise-500">No missing fields detected</div>

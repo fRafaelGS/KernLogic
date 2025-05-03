@@ -10,7 +10,7 @@ import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbSeparator, Breadc
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ChevronLeft, Edit, Copy, Trash, Download } from 'lucide-react';
+import { ChevronLeft, Edit, Copy, Trash, Download, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { 
   DropdownMenu,
@@ -18,48 +18,64 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
+import { useAuth } from '@/contexts/AuthContext';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { AnimatePresence, motion } from 'framer-motion';
 
 export const ProductDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Get user permissions from auth context
+  const { checkPermission } = useAuth();
+  const canEdit = checkPermission ? checkPermission('product.edit') : true;
+  const canDelete = checkPermission ? checkPermission('product.delete') : true;
 
   useEffect(() => {
     const fetchProduct = async () => {
       if (!id) {
-        console.warn('No product ID provided in URL params');
         setError('Product ID is missing from the URL');
         setLoading(false);
         return;
       }
       
       try {
-        console.log(`Fetching product with ID: ${id}`);
         setLoading(true);
         const data = await productService.getProduct(Number(id));
         
         if (!data) {
-          console.error('API returned empty product data');
           setError('Product not found or returned empty data');
           setProduct(null);
         } else {
-          console.log('Product data received:', data);
           setProduct(data);
           setError(null);
+          
+          // Set page title for accessibility
+          document.title = `${data.name || 'Product'} - KernLogic PIM`;
         }
-      } catch (err) {
-        console.error('Error fetching product:', err);
-        setError('Failed to load product details. Please try again.');
+      } catch (err: any) {
+        const errorMessage = err.response?.status === 404 
+          ? 'Product not found' 
+          : 'Failed to load product details. Please try again.';
+        
+        setError(errorMessage);
         setProduct(null);
-        toast.error('Failed to load product details');
+        toast.error(errorMessage);
       } finally {
         setLoading(false);
       }
     };
 
     fetchProduct();
+    
+    // Clean up on unmount
+    return () => {
+      document.title = 'KernLogic PIM';
+    };
   }, [id]);
 
   const handleEdit = () => {
@@ -72,6 +88,7 @@ export const ProductDetail = () => {
     if (!product) return;
     
     try {
+      setSaving(true);
       // Create a copy of the product without the ID and timestamps
       const { id: _, created_at, updated_at, ...productCopy } = product;
       productCopy.name = `${productCopy.name} (Copy)`;
@@ -84,22 +101,30 @@ export const ProductDetail = () => {
       
       // Navigate to the new product
       navigate(`/app/products/${newProduct.id}`);
-    } catch (err) {
-      console.error('Error duplicating product:', err);
-      toast.error('Failed to duplicate product');
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.message || 'Failed to duplicate product';
+      toast.error(errorMessage);
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!id || !window.confirm('Are you sure you want to archive this product?')) return;
+    if (!id) return;
+    
+    // Use a more accessible confirmation dialog
+    const confirmAction = window.confirm(`Are you sure you want to ${product?.is_active ? 'archive' : 'delete'} this product?\n\nSKU: ${product?.sku}\nName: ${product?.name}`);
+    if (!confirmAction) return;
     
     try {
+      setSaving(true);
       await productService.deleteProduct(Number(id));
-      toast.success('Product archived successfully');
+      toast.success(`Product ${product?.is_active ? 'archived' : 'deleted'} successfully`);
       navigate('/app/products');
-    } catch (error) {
-      console.error('Failed to archive product:', error);
-      toast.error('Failed to archive product');
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.message || `Failed to ${product?.is_active ? 'archive' : 'delete'} product`;
+      toast.error(errorMessage);
+      setSaving(false);
     }
   };
 
@@ -113,14 +138,37 @@ export const ProductDetail = () => {
     setProduct(updatedProduct);
   };
 
+  const handleRetry = () => {
+    setLoading(true);
+    setError(null);
+    window.location.reload();
+  };
+
   if (loading) {
     return (
       <DashboardLayout>
         <div className="container py-6">
-          <div className="flex items-center space-x-2 mb-6">
+          <div className="flex items-center gap-2 mb-6">
             <Skeleton className="h-5 w-24" />
             <Skeleton className="h-5 w-5" />
             <Skeleton className="h-5 w-32" />
+          </div>
+          
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-8 w-48" />
+              <Skeleton className="h-6 w-16 rounded-full" />
+            </div>
+            <div className="flex gap-2">
+              <Skeleton className="h-9 w-20" />
+              <Skeleton className="h-9 w-28" />
+              <Skeleton className="h-9 w-24" />
+              <Skeleton className="h-9 w-24" />
+            </div>
+          </div>
+          
+          <div className="mb-6">
+            <Skeleton className="h-40 w-full rounded-lg" />
           </div>
           
           <div className="flex flex-col lg:flex-row gap-6">
@@ -129,7 +177,7 @@ export const ProductDetail = () => {
             </div>
             <div className="w-full lg:w-3/4">
               <Skeleton className="h-12 w-full mb-6" />
-              <Skeleton className="h-64 w-full rounded-lg" />
+              <Skeleton className="h-72 w-full rounded-lg" />
             </div>
           </div>
         </div>
@@ -147,23 +195,36 @@ export const ProductDetail = () => {
               size="sm" 
               onClick={() => navigate('/app/products')}
               className="mr-4"
+              aria-label="Back to Products"
             >
               <ChevronLeft className="h-4 w-4 mr-2" />
               Back to Products
             </Button>
           </div>
           
-          <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
-            <h2 className="text-lg font-semibold text-red-700 mb-2">
-              {error || 'Product not found'}
-            </h2>
-            <p className="text-red-600 mb-4">
-              The requested product could not be loaded.
-            </p>
-            <Button onClick={() => window.location.reload()}>
-              Try Again
-            </Button>
-          </div>
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-5 w-5" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription className="flex flex-col gap-4">
+              <p>{error || 'Product not found'}</p>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  onClick={handleRetry}
+                  aria-label="Try again"
+                >
+                  Try Again
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => navigate('/app/products')}
+                  aria-label="Return to Products"
+                >
+                  Return to Products
+                </Button>
+              </div>
+            </AlertDescription>
+          </Alert>
         </div>
       </DashboardLayout>
     );
@@ -190,7 +251,9 @@ export const ProductDetail = () => {
           
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold">{product.name || 'Unnamed Product'}</h1>
+              <h1 className="text-2xl font-bold truncate max-w-md" title={product.name || 'Unnamed Product'}>
+                {product.name || 'Unnamed Product'}
+              </h1>
               <Badge
                 className={
                   product.is_active
@@ -204,23 +267,55 @@ export const ProductDetail = () => {
             
             <div className="flex flex-wrap gap-2">
               {/* Primary Actions */}
-              <Button onClick={handleEdit} size="sm" className="h-9">
-                <Edit className="h-4 w-4 mr-2" />
-                Edit
-              </Button>
-              <Button onClick={handleDuplicate} variant="outline" size="sm" className="h-9">
+              {canEdit && (
+                <Button 
+                  onClick={handleEdit} 
+                  size="sm" 
+                  className="h-9"
+                  aria-label="Edit product"
+                  disabled={saving}
+                >
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit
+                </Button>
+              )}
+              
+              <Button 
+                onClick={handleDuplicate} 
+                variant="outline" 
+                size="sm" 
+                className="h-9"
+                aria-label="Duplicate product"
+                disabled={saving}
+              >
                 <Copy className="h-4 w-4 mr-2" />
-                Duplicate
+                {saving ? 'Creating...' : 'Duplicate'}
               </Button>
-              <Button onClick={handleDelete} variant="destructive" size="sm" className="h-9">
-                <Trash className="h-4 w-4 mr-2" />
-                {product.is_active ? 'Archive' : 'Delete'}
-              </Button>
+              
+              {canDelete && (
+                <Button 
+                  onClick={handleDelete} 
+                  variant="destructive" 
+                  size="sm" 
+                  className="h-9"
+                  aria-label={`${product.is_active ? 'Archive' : 'Delete'} product`}
+                  disabled={saving}
+                >
+                  <Trash className="h-4 w-4 mr-2" />
+                  {saving ? 'Processing...' : (product.is_active ? 'Archive' : 'Delete')}
+                </Button>
+              )}
               
               {/* Export Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-9">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-9"
+                    aria-label="Export options"
+                    disabled={saving}
+                  >
                     <Download className="h-4 w-4 mr-2" />
                     Export
                   </Button>
@@ -242,12 +337,20 @@ export const ProductDetail = () => {
         </div>
         
         {/* Main Content */}
-        <div className="mb-6">
-          <ProductDetailDescription 
-            product={product} 
-            onProductUpdate={handleProductUpdate} 
-          />
-        </div>
+        <AnimatePresence mode="wait">
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="mb-6"
+          >
+            <ProductDetailDescription 
+              product={product} 
+              onProductUpdate={handleProductUpdate} 
+            />
+          </motion.div>
+        </AnimatePresence>
         
         <ProductDetailLayout
           sidebar={<ProductDetailSidebar product={product} />}

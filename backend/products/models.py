@@ -437,6 +437,7 @@ class AttributeValue(models.Model):
     locale = models.CharField(max_length=10, null=True, blank=True)
     channel = models.CharField(max_length=32, null=True, blank=True)
     value = models.JSONField()
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, editable=False)
     
     class Meta:
         constraints = [

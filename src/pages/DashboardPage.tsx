@@ -301,6 +301,8 @@ export const DashboardPage: React.FC = () => {
             completeness={summary?.data_completeness || 0}
             mostMissingFields={summary?.most_missing_fields || []}
             loading={loading.summary}
+            attributesMissingCount={summary?.attributes_missing_count || 0}
+            mandatoryAttributes={summary?.mandatory_attributes || []}
           />
         </AnimatedDiv>
 

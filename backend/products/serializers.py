@@ -267,6 +267,14 @@ class DashboardSummarySerializer(serializers.Serializer):
     active_products = serializers.IntegerField()
     inactive_products = serializers.IntegerField()
     
+    # Add attribute-related fields
+    attributes_missing_count = serializers.IntegerField(required=False, default=0)
+    mandatory_attributes = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        default=list
+    )
+    
     def get_completeness_thresholds(self, obj):
         """Return thresholds for data completeness levels"""
         return {
@@ -353,16 +361,28 @@ class AttributeValueSerializer(serializers.ModelSerializer):
     class Meta:
         model = AttributeValue
         fields = '__all__'
-        read_only_fields = ('id', 'organization', 'product', 'attribute')
+        # Make product and attribute still writable during creation but read-only for updates
+        read_only_fields = ('id', 'organization', 'created_by')
+        extra_kwargs = {
+            'attribute': {'read_only': False},
+            'product': {'read_only': False}
+        }
 
     def validate(self, data):
+        print(f"AttributeValueSerializer.validate called with data: {data}")
+        print(f"Self instance: {getattr(self, 'instance', None)}")
+        print(f"Self context: {self.context}")
+        
         # Get the attribute from the context set in the view
         attr = getattr(self.instance, 'attribute', None)
         if not attr and 'attribute' in self.context:
             attr = self.context.get('attribute')
             
+        print(f"Attribute from context or instance: {attr}")
+            
         # If we still don't have an attribute, skip validation
         if not attr:
+            print("WARNING: No attribute found in context or instance!")
             return data
             
         org = get_user_organization(self.context['request'].user)
@@ -438,10 +458,27 @@ class AttributeValueSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({"value": f"Error validating value: {str(e)}"})
             raise
             
+        # If attribute not in data, add it
+        if 'attribute' not in data and attr:
+            print(f"Adding attribute {attr.id} to validated data")
+            data['attribute'] = attr
+            
         return data
         
     def create(self, validated_data):
         print(f"AttributeValueSerializer.create: Creating with data: {validated_data}")
+        print(f"Attribute in data: {validated_data.get('attribute', 'Not found')}")
+        print(f"Product in data: {validated_data.get('product', 'Not found')}")
+        print(f"Organization in data: {validated_data.get('organization', 'Not found')}")
+        print(f"Created by in data: {validated_data.get('created_by', 'Not found')}")
+        
+        # Ensure attribute is present
+        if 'attribute' not in validated_data:
+            print("ERROR: attribute not in validated_data!")
+            if 'attribute' in self.context:
+                print(f"Adding attribute from context: {self.context['attribute'].id}")
+                validated_data['attribute'] = self.context['attribute']
+                
         instance = super().create(validated_data)
         print(f"Created attribute value: {instance.id}, value: {instance.value}, type: {type(instance.value)}")
         return instance

@@ -187,7 +187,8 @@ const TableFallback = ({
   if (loading) {
     return (
       <>
-        {/* Skeleton Loading Rows with reduced padding */}
+        {/* Skeleton Loading Rows with aria-label for screen readers */}
+        <tr className="sr-only"><td>Loading product data...</td></tr>
         {Array.from({ length: 5 }).map((_, index) => (
           <TableRow key={`skeleton-${index}`} className="border-b border-slate-100 bg-white h-8">
             {columns.map((column, colIndex) => {
@@ -197,9 +198,15 @@ const TableFallback = ({
                 (column as any).accessorKey?.toString() || '';
               const hideOnMobileClass = ['brand', 'barcode', 'created_at', 'tags'].includes(columnId) ? 'hidden md:table-cell' : '';
               
+              // Make first column wider for name
+              const widthClass = columnId === 'name' ? 'w-1/4' : columnId === 'select' ? 'w-10' : '';
+              
               return (
-                <TableCell key={`skeleton-${index}-${columnId || colIndex}`} className={`px-2 py-1 ${hideOnMobileClass}`}>
-                  <Skeleton className="h-4 w-4/5" /> 
+                <TableCell 
+                  key={`skeleton-${index}-${colIndex}`} 
+                  className={`p-2 ${hideOnMobileClass} ${widthClass}`}
+                >
+                  <Skeleton className="h-5 w-full" />
                 </TableCell>
               );
             })}
@@ -208,59 +215,74 @@ const TableFallback = ({
       </>
     );
   }
-  
+
+  // No data scenario with clear filters option
   if (filteredData.length === 0) {
+    const hasFilters = debouncedSearchTerm || 
+      filters.category || 
+      filters.status !== 'all' || 
+      filters.minPrice || 
+      filters.maxPrice;
+      
     return (
       <TableRow>
-        <TableCell colSpan={columns.length} className="h-24 text-center">
-          <div className="flex flex-col items-center justify-center gap-3 py-8">
-            {(!debouncedSearchTerm && !Object.values(filters).some(v => v !== 'all' && v !== '')) ? (
-              // No filters applied - empty product list
+        <TableCell 
+          colSpan={columns.length} 
+          className="h-60 text-center"
+          role="alert"
+        >
+          <div className="flex flex-col items-center justify-center p-6">
+            {hasFilters ? (
               <>
-                <p className="text-slate-500">No products available yet</p>
-                <Button
-                  size="sm"
-                  className="bg-primary-600 hover:bg-primary-700 text-white"
-                  asChild
-                >
-                  <Link to="/app/products/new">
-                    <span className="flex items-center">
-                      <span className="h-4 w-4 mr-2">+</span>
-                      Add Your First Product
-                    </span>
-                  </Link>
-                </Button>
+                <div className="h-24 w-24 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                  <FilterIcon className="h-12 w-12 text-gray-400" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-1">No products match your filters</h3>
+                <p className="text-gray-500 mb-4 max-w-md">
+                  Try adjusting your search or filter criteria to find what you're looking for.
+                </p>
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={handleClearFilters}
+                    className="flex items-center gap-2"
+                  >
+                    <XIcon className="h-4 w-4" />
+                    Clear Filters
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleRefresh}
+                    className="flex items-center gap-2"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    Refresh
+                  </Button>
+                </div>
               </>
             ) : (
-              // Filters applied - no matching results
               <>
-                <p className="text-slate-500">No products match your search criteria</p>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={handleClearFilters}
-                  className="text-slate-700 hover:bg-slate-100"
-                >
-                  Clear Filters
-                </Button>
+                <div className="h-24 w-24 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                  <ShoppingBagIcon className="h-12 w-12 text-gray-400" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-1">No products found</h3>
+                <p className="text-gray-500 mb-4 max-w-md">
+                  There are no products in your inventory yet. Start by adding a new product.
+                </p>
+                <Link to="/app/products/new">
+                  <Button className="flex items-center gap-2">
+                    <PlusIcon className="h-4 w-4" />
+                    Add Product
+                  </Button>
+                </Link>
               </>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRefresh}
-              disabled={loading}
-              className="border-slate-200 text-slate-700"
-            >
-              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              Refresh Results
-            </Button>
           </div>
         </TableCell>
       </TableRow>
     );
   }
-  
+
   return null;
 };
 
@@ -304,7 +326,7 @@ export function ProductsTable() {
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
-    pageSize: 10,
+    pageSize: 25,
   });
   
   // Filters

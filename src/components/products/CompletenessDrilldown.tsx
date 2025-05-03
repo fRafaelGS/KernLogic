@@ -40,9 +40,13 @@ export const CompletenessDrilldown: React.FC<CompletenessDrilldownProps> = ({
   percentage,
   fieldStatus
 }) => {
-  // Group fields by completeness status
+  // Group fields by completeness status and type
   const completeFields = fieldStatus.filter(field => field.complete);
   const incompleteFields = fieldStatus.filter(field => !field.complete);
+  
+  // Separate standard fields from attribute fields
+  const standardFields = fieldStatus.filter(field => !field.key.startsWith('attr_'));
+  const attributeFields = fieldStatus.filter(field => field.key.startsWith('attr_'));
   
   // Calculate total weight
   const totalWeight = fieldStatus.reduce((sum, field) => sum + field.weight, 0);
@@ -66,14 +70,19 @@ export const CompletenessDrilldown: React.FC<CompletenessDrilldownProps> = ({
   };
   
   // Sort fields by weight (highest first) then by completeness
-  const sortedFields = [...fieldStatus].sort((a, b) => {
-    // First by completeness (incomplete first)
-    if (a.complete !== b.complete) {
-      return a.complete ? 1 : -1;
-    }
-    // Then by weight (descending)
-    return b.weight - a.weight;
-  });
+  const sortFieldsByWeight = (fields: FieldStatus[]) => {
+    return [...fields].sort((a, b) => {
+      // First by completeness (incomplete first)
+      if (a.complete !== b.complete) {
+        return a.complete ? 1 : -1;
+      }
+      // Then by weight (descending)
+      return b.weight - a.weight;
+    });
+  };
+  
+  const sortedStandardFields = sortFieldsByWeight(standardFields);
+  const sortedAttributeFields = sortFieldsByWeight(attributeFields);
   
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -126,7 +135,7 @@ export const CompletenessDrilldown: React.FC<CompletenessDrilldownProps> = ({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortedFields.map(field => (
+              {sortedStandardFields.map(field => (
                 <TableRow key={field.key}>
                   <TableCell className="font-medium">{field.label}</TableCell>
                   <TableCell>
@@ -171,6 +180,65 @@ export const CompletenessDrilldown: React.FC<CompletenessDrilldownProps> = ({
           </Table>
         </div>
         
+        {/* Attribute Fields Status Table */}
+        {attributeFields.length > 0 && (
+          <div className="mb-5">
+            <h3 className="text-sm font-medium mb-2">Attribute Completeness</h3>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Attribute</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Weight</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sortedAttributeFields.map(field => (
+                  <TableRow key={field.key}>
+                    <TableCell className="font-medium">{field.label}</TableCell>
+                    <TableCell>
+                      {field.complete ? (
+                        <div className="flex items-center text-green-600">
+                          <CheckCircle className="h-4 w-4 mr-1" />
+                          <span>Complete</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center text-red-500">
+                          <AlertCircle className="h-4 w-4 mr-1" />
+                          <span>Missing</span>
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex items-center justify-end space-x-1 cursor-help">
+                              <span>{field.weight}×</span>
+                              <Info className="h-3 w-3 text-slate-400" />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="left">
+                            <p className="text-xs">
+                              Weight factor: <strong>{field.weight}×</strong>
+                              <br />
+                              {field.weight >= 2 
+                                ? "Essential attributes have higher weight (2×)" 
+                                : field.weight >= 1.5 
+                                  ? "Important attributes have medium weight (1.5×)"
+                                  : "Optional attributes have base weight (1×)"}
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+        
         {/* Summary */}
         <div className="mb-5 space-y-2">
           <div className="flex justify-between text-sm">
@@ -183,6 +251,20 @@ export const CompletenessDrilldown: React.FC<CompletenessDrilldownProps> = ({
               {incompleteFields.length}
             </span>
           </div>
+          {attributeFields.length > 0 && (
+            <>
+              <div className="flex justify-between text-sm">
+                <span>Complete attributes:</span>
+                <span>{attributeFields.filter(f => f.complete).length} of {attributeFields.length}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span>Missing attributes:</span>
+                <span className={attributeFields.filter(f => !f.complete).length > 0 ? "text-red-500 font-medium" : ""}>
+                  {attributeFields.filter(f => !f.complete).length}
+                </span>
+              </div>
+            </>
+          )}
         </div>
         
         <div className="flex justify-end">

@@ -1166,6 +1166,49 @@ class DashboardViewSet(viewsets.ViewSet):
                 'inactive_products': inactive_count
             }
             
+            # Get attribute-related completeness data
+            try:
+                from attributes.models import Attribute, AttributeValue
+                
+                # Get mandatory attributes
+                mandatory_attributes = Attribute.objects.filter(is_mandatory=True)
+                mandatory_attribute_names = [f"{attr.group.name}: {attr.name}" if attr.group else attr.name 
+                                           for attr in mandatory_attributes]
+                
+                # Count products with missing mandatory attributes
+                attributes_missing_count = 0
+                
+                for product in queryset:
+                    # Get attribute values for this product
+                    attribute_values = AttributeValue.objects.filter(
+                        product_id=product.id,
+                        attribute__is_mandatory=True
+                    )
+                    
+                    # Get attribute IDs with values
+                    filled_attribute_ids = set(av.attribute_id for av in attribute_values 
+                                             if av.value and str(av.value).strip())
+                    
+                    # Get all mandatory attribute IDs
+                    mandatory_attribute_ids = set(attr.id for attr in mandatory_attributes)
+                    
+                    # If any mandatory attributes are missing, increment the count
+                    if filled_attribute_ids != mandatory_attribute_ids and mandatory_attribute_ids:
+                        attributes_missing_count += 1
+                
+                # Add attribute data to the response
+                data['attributes_missing_count'] = attributes_missing_count
+                data['mandatory_attributes'] = mandatory_attribute_names
+                
+            except ImportError:
+                # Attributes app might not be installed
+                data['attributes_missing_count'] = 0
+                data['mandatory_attributes'] = []
+            except Exception as e:
+                print(f"Error calculating attribute completeness: {str(e)}")
+                data['attributes_missing_count'] = 0
+                data['mandatory_attributes'] = []
+            
             serializer = DashboardSummarySerializer(data=data)
             serializer.is_valid(raise_exception=True)
             return Response(serializer.validated_data)
@@ -1180,7 +1223,9 @@ class DashboardViewSet(viewsets.ViewSet):
                 'data_completeness': 0.0,
                 'most_missing_fields': [],
                 'active_products': 0,
-                'inactive_products': 0
+                'inactive_products': 0,
+                'attributes_missing_count': 0,
+                'mandatory_attributes': []
             }
             serializer = DashboardSummarySerializer(data=data)
             serializer.is_valid(raise_exception=True)

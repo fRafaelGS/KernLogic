@@ -11,6 +11,8 @@ export interface DashboardSummary {
   most_missing_fields: { field: string; count: number }[];
   active_products: number;
   inactive_products: number;
+  attributes_missing_count: number;
+  mandatory_attributes: string[];
 }
 
 export interface InventoryTrend {

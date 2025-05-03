@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PencilIcon, AlertCircle, RefreshCcw, PlusIcon, ClockIcon } from 'lucide-react';
+import { PencilIcon, AlertCircle, RefreshCcw, PlusIcon, ClockIcon, XIcon, CheckIcon, Loader2 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
 import { toast } from 'sonner';
@@ -8,11 +8,12 @@ import { Product } from '@/services/productService';
 import { productService } from '@/services/productService';
 import { useAuth } from '@/contexts/AuthContext';
 
-import { Card, CardHeader, CardContent, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardHeader, CardContent, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { RichTextEditor } from '@/components/ui/RichTextEditor';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { AnimatePresence, motion } from 'framer-motion';
 
 interface ProductDetailDescriptionProps {
   product: Product;
@@ -27,6 +28,7 @@ export const ProductDetailDescription: React.FC<ProductDetailDescriptionProps> =
   const [editedDescription, setEditedDescription] = useState(product.description || '');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [charCount, setCharCount] = useState(product.description?.length || 0);
   
   // Get current user and permissions from auth context
   const { user, checkPermission } = useAuth();
@@ -37,7 +39,14 @@ export const ProductDetailDescription: React.FC<ProductDetailDescriptionProps> =
   // Update local state when product prop changes
   useEffect(() => {
     setEditedDescription(product.description || '');
+    setCharCount(product.description?.length || 0);
   }, [product.description]);
+  
+  // Handle content change
+  const handleContentChange = (newContent: string) => {
+    setEditedDescription(newContent);
+    setCharCount(newContent.length);
+  };
   
   // Handle saving description
   const handleSaveDescription = async () => {
@@ -45,7 +54,7 @@ export const ProductDetailDescription: React.FC<ProductDetailDescriptionProps> =
     setSaveError(null);
     
     // Validate character limit
-    if (editedDescription.length > 10000) {
+    if (charCount > 10000) {
       toast.error('Description exceeds maximum length of 10,000 characters');
       return;
     }
@@ -71,11 +80,16 @@ export const ProductDetailDescription: React.FC<ProductDetailDescriptionProps> =
       } else {
         throw new Error('Product ID is missing');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating description:', error);
       
-      // Set error message for retry UI
-      setSaveError('Failed to update description. Please try again.');
+      // Set error message for retry UI with more details
+      const errorMessage = error.response?.data?.message || 
+                           error.response?.data?.error || 
+                           error.message || 
+                           'Failed to update description. Please try again.';
+                           
+      setSaveError(errorMessage);
       
       // Show toast with less detail
       toast.error('Failed to update description');
@@ -94,19 +108,20 @@ export const ProductDetailDescription: React.FC<ProductDetailDescriptionProps> =
   const handleCancelEdit = () => {
     // Reset to original description
     setEditedDescription(product.description || '');
+    setCharCount(product.description?.length || 0);
     setEditing(false);
     setSaveError(null);
   };
 
-  // Get the last edit info (mock data - in a real app we'd get this from the product history)
+  // Get the last edit info
   const getLastEditInfo = () => {
-    const mockEditorName = user?.name || 'Admin User';
-    const mockEditDate = new Date(product.updated_at || new Date());
+    const editorName = product.created_by || user?.name || 'Unknown';
+    const editDate = new Date(product.updated_at || new Date());
     
     return {
-      name: mockEditorName,
-      date: mockEditDate,
-      timeAgo: formatDistanceToNow(mockEditDate, { addSuffix: true })
+      name: editorName,
+      date: editDate,
+      timeAgo: formatDistanceToNow(editDate, { addSuffix: true })
     };
   };
   
@@ -139,6 +154,7 @@ export const ProductDetailDescription: React.FC<ProductDetailDescriptionProps> =
             size="sm" 
             onClick={() => setEditing(true)}
             className="h-8 px-2"
+            aria-label="Edit product description"
           >
             <PencilIcon className="h-4 w-4 mr-2" />
             Edit
@@ -146,76 +162,137 @@ export const ProductDetailDescription: React.FC<ProductDetailDescriptionProps> =
         )}
       </CardHeader>
       <CardContent>
-        {saveError && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription className="flex items-center justify-between">
-              <span>{saveError}</span>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleRetrySave}
-                className="ml-2"
-              >
-                <RefreshCcw className="h-3 w-3 mr-1" />
-                Retry
-              </Button>
-            </AlertDescription>
-          </Alert>
-        )}
-        
-        {editing ? (
-          <div className="space-y-4">
-            <RichTextEditor 
-              value={editedDescription} 
-              onChange={setEditedDescription}
-              placeholder="Enter product description using Markdown formatting..."
-            />
-            <div className="flex justify-between items-center">
-              <span className={`text-xs ${editedDescription.length > 10000 ? 'text-red-500 font-medium' : 'text-slate-500'}`}>
-                {editedDescription.length}/10,000 characters
-              </span>
-              <div className="flex items-center gap-2">
-                <Button 
-                  variant="outline" 
-                  onClick={handleCancelEdit} 
-                  disabled={saving}
-                >
-                  Cancel
-                </Button>
-                <Button 
-                  onClick={handleSaveDescription} 
-                  disabled={saving || editedDescription.length > 10000}
-                >
-                  {saving ? 'Saving...' : 'Save'}
-                </Button>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <>
-            {product.description ? (
-              <div className="prose max-w-none">
-                <ReactMarkdown>{product.description}</ReactMarkdown>
-              </div>
-            ) : (
-              <div className="text-center py-10 text-slate-400">
-                <p>No description available for this product.</p>
-                {hasEditPermission && (
+        <AnimatePresence mode="wait">
+          {saveError && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <Alert variant="destructive" className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription className="flex items-center justify-between">
+                  <span>{saveError}</span>
                   <Button 
                     variant="outline" 
-                    className="mt-4"
-                    onClick={() => setEditing(true)}
+                    size="sm" 
+                    onClick={handleRetrySave}
+                    className="ml-2"
+                    aria-label="Retry saving description"
+                    disabled={saving}
                   >
-                    <PlusIcon className="h-4 w-4 mr-2" />
-                    Add description
+                    {saving ? (
+                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                    ) : (
+                      <RefreshCcw className="h-3 w-3 mr-1" />
+                    )}
+                    Retry
                   </Button>
-                )}
+                </AlertDescription>
+              </Alert>
+            </motion.div>
+          )}
+          
+          {editing ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="space-y-4"
+            >
+              <RichTextEditor 
+                value={editedDescription} 
+                onChange={handleContentChange}
+                placeholder="Enter product description using Markdown formatting..."
+                aria-label="Product description editor"
+                aria-required="false"
+                aria-invalid={charCount > 10000}
+              />
+              <div className="flex justify-between items-center">
+                <span 
+                  className={`text-xs ${charCount > 10000 ? 'text-red-500 font-medium' : (charCount > 8000 ? 'text-amber-500' : 'text-slate-500')}`}
+                  aria-live="polite"
+                >
+                  {charCount}/10,000 characters
+                  {charCount > 10000 && (
+                    <span className="ml-2 text-red-500">
+                      ({charCount - 10000} over limit)
+                    </span>
+                  )}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={handleCancelEdit} 
+                    disabled={saving}
+                    aria-label="Cancel editing"
+                  >
+                    <XIcon className="h-4 w-4 mr-2" />
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={handleSaveDescription} 
+                    disabled={saving || charCount > 10000}
+                    aria-label="Save description"
+                  >
+                    {saving ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <CheckIcon className="h-4 w-4 mr-2" />
+                        Save
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
-            )}
-          </>
-        )}
+            </motion.div>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              {product.description ? (
+                <div className="prose max-w-none">
+                  <ReactMarkdown>{product.description}</ReactMarkdown>
+                </div>
+              ) : (
+                <div 
+                  className="text-center py-10 text-slate-400 border border-dashed border-slate-200 rounded-md" 
+                  data-testid="empty-description"
+                >
+                  <p>No description available for this product.</p>
+                  {hasEditPermission && (
+                    <Button 
+                      variant="outline" 
+                      className="mt-4"
+                      onClick={() => setEditing(true)}
+                      aria-label="Add product description"
+                    >
+                      <PlusIcon className="h-4 w-4 mr-2" />
+                      Add description
+                    </Button>
+                  )}
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </CardContent>
+      {product.description && !editing && (
+        <CardFooter className="border-t px-6 py-3 text-xs text-slate-500">
+          <div className="flex items-center">
+            <span>
+              {charCount} characters
+            </span>
+          </div>
+        </CardFooter>
+      )}
     </Card>
   );
 };

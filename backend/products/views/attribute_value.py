@@ -95,6 +95,14 @@ class AttributeValuesByAttributeList(generics.ListAPIView):
             attribute__in=Attribute.objects.filter(organization=get_user_organization(self.request.user)),
         )
 
+    def perform_create(self, serializer):
+        """Set organization and created_by from request user"""
+        organization = get_user_organization(self.request.user)
+        serializer.save(
+            organization=organization,
+            created_by=self.request.user
+        )
+
     def perform_update(self, serializer):
         # Get data from request
         data = self.request.data.copy()
@@ -270,26 +278,57 @@ class AttributeValuesByAttributeList(generics.ListAPIView):
             context['attribute'] = attribute
             
             # Create serializer with updated context
+            print(f"[DEBUG] Creating serializer with attribute in context: {attribute.id}")
             serializer = self.get_serializer(data=request.data, context=context)
             
             # Validate and check for errors
             try:
                 serializer.is_valid(raise_exception=True)
                 print(f"[DEBUG] Serializer valid with data: {serializer.validated_data}")
+                print(f"[DEBUG] Serializer initial_data: {serializer.initial_data}")
+                
+                # Check if attribute exists in validated data (it should be added in perform_create)
+                if 'attribute' not in serializer.validated_data:
+                    print(f"[DEBUG] WARNING: 'attribute' not in validated_data, we'll pass it explicitly")
             except Exception as e:
                 print(f"[DEBUG] Serializer validation error: {str(e)}")
                 raise
             
-            # Create the instance
+            # Get the product object
+            product = get_object_or_404(
+                Product.objects.filter(organization=get_user_organization(request.user)),
+                pk=product_id
+            )
+            
+            print(f"[DEBUG] About to save with attribute: {attribute.id}, product: {product.id}")
+            print(f"[DEBUG] Attribute data: label={attribute.label}, org={attribute.organization_id}")
+            print(f"[DEBUG] Product data: name={product.name}, org={product.organization_id}")
+            print(f"[DEBUG] Additional data: org={get_user_organization(request.user).id}, user={request.user.id}")
+            
+            # Explicitly pass attribute to serializer.save()
             try:
-                self.perform_create(serializer)
-                print(f"[DEBUG] Successfully created attribute value")
+                print(f"[DEBUG] Explicitly passing attribute to serializer.save()")
+                instance = serializer.save(
+                    attribute=attribute,
+                    product=product,
+                    organization=get_user_organization(request.user),
+                    created_by=request.user,
+                )
+                
+                print(f"[DEBUG] Successfully created attribute value directly: {instance.id}")
+                output = AttributeValueDetailSerializer(instance, context=self.get_serializer_context()).data
+                return Response(output, status=status.HTTP_201_CREATED)
             except Exception as e:
-                print(f"[DEBUG] Error in perform_create: {str(e)}")
+                print(f"[DEBUG] Error creating attribute value directly: {str(e)}")
                 raise
             
-            headers = self.get_success_headers(serializer.data)
-            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+            # Original code - now unreachable
+            # instance = serializer.save(
+            #     attribute=attribute,
+            #     product=product,
+            #     organization=get_user_organization(request.user),
+            #     created_by=request.user,
+            # )
         except AttributeValue.MultipleObjectsReturned:
             # If multiple values exist, handle the duplication issue
             print("[DEBUG] Multiple attribute values found, resolving duplication...")

@@ -1,0 +1,27 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="95" fill="#F3F4F6" />
+  
+  <!-- People silhouettes -->
+  <circle cx="100" cy="60" r="25" fill="#D1D5DB" />
+  <circle cx="60" cy="100" r="20" fill="#D1D5DB" />
+  <circle cx="140" cy="100" r="20" fill="#D1D5DB" />
+  <circle cx="80" cy="140" r="18" fill="#D1D5DB" />
+  <circle cx="120" cy="140" r="18" fill="#D1D5DB" />
+  
+  <!-- Person body parts -->
+  <rect x="90" y="85" width="20" height="35" rx="10" fill="#D1D5DB" />
+  <rect x="50" y="120" width="20" height="30" rx="10" fill="#D1D5DB" />
+  <rect x="130" y="120" width="20" height="30" rx="10" fill="#D1D5DB" />
+  
+  <!-- Add button -->
+  <circle cx="100" cy="100" r="20" fill="#60A5FA" stroke="#3B82F6" stroke-width="2" />
+  <line x1="88" y1="100" x2="112" y2="100" stroke="white" stroke-width="4" stroke-linecap="round" />
+  <line x1="100" y1="88" x2="100" y2="112" stroke="white" stroke-width="4" stroke-linecap="round" />
+  
+  <!-- Decorative elements -->
+  <circle cx="40" cy="50" r="4" fill="#9CA3AF" />
+  <circle cx="160" cy="50" r="4" fill="#9CA3AF" />
+  <circle cx="40" cy="150" r="4" fill="#9CA3AF" />
+  <circle cx="160" cy="150" r="4" fill="#9CA3AF" />
+</svg> 

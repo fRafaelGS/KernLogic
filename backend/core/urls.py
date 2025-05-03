@@ -139,6 +139,12 @@ urlpatterns = [
     # Analytics API - make sure module path is correct
     path('api/', include('analytics.urls')),
     
+    # Teams API
+    path('', include('teams.urls')),
+    
+    # Accounts API - add this line to include accounts URLs
+    path('api/', include('accounts.urls')),
+    
     # API Schema documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),

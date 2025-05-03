@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     "reports",
     "analytics",
     "django_filters",
+    "teams",
 ]
 
 # Custom middleware to exempt API routes from CSRF
@@ -202,16 +203,8 @@ CORS_ALLOWED_ORIGINS = [
 
 # Add proper origin patterns with wildcard
 CORS_ALLOWED_ORIGIN_REGEXES = [
-    r'^http://localhost:8080$',
-    r'^http://127\.0\.0\.1:8080$',
-    r'^http://localhost:3002$',
-    r'^http://127\.0\.0\.1:3002$',
-    r'^http://localhost:3003$',
-    r'^http://127\.0\.0\.1:3003$',
-    r'^http://localhost:3004$',
-    r'^http://127\.0\.0\.1:3004$',
-    r'^http://localhost:8000$',
-    r'^http://127\.0\.0\.1:8000$',
+    r'^https?://localhost:[0-9]+$',
+    r'^https?://127\.0\.0\.1:[0-9]+$',
 ]
 
 CORS_ALLOW_METHODS = [

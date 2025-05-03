@@ -1,4 +1,4 @@
-import {
+import React, {
   createContext,
   useContext,
   useState,
@@ -9,22 +9,12 @@ import {
 import axios, { AxiosError } from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { API_URL, API_AUTH_URL, API_ENDPOINTS } from '@/config';
+import { API_URL, API_ENDPOINTS } from '@/config';
 import { v4 as uuidv4 } from 'uuid';
 import axiosInstance from '@/lib/axiosInstance';
+import { User, InvitationToken } from '@/types/team';
 
 /* ──────────────────── types ──────────────────── */
-interface User {
-  id: number;
-  email: string;
-  name: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-  role: 'admin' | 'editor' | 'viewer';
-  is_staff: boolean;
-}
-
 interface AuthError {
   message: string;
   field?: string;
@@ -40,8 +30,15 @@ export interface Notification {
   type: 'info' | 'success' | 'error' | 'warning';
 }
 
+// Define an extended user type that includes role
+interface ExtendedUser extends User {
+  role?: 'admin' | 'editor' | 'viewer';
+  is_staff?: boolean;
+  organization_id?: string;
+}
+
 interface AuthContextType {
-  user: User | null;
+  user: ExtendedUser | null;
   loading: boolean;
   error: AuthError | null;
   isAuthenticated: boolean;
@@ -53,8 +50,9 @@ interface AuthContextType {
   unreadCount: number;
   addNotification: (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => void;
   markAllAsRead: () => void;
-  updateUserContext: (updatedUserData: Partial<User>) => void;
+  updateUserContext: (updatedUserData: Partial<ExtendedUser>) => void;
   checkPermission: (permission: string) => boolean;
+  checkPendingInvitation: () => void;
 }
 
 /* ──────────────────── React context ──────────────────── */
@@ -68,7 +66,7 @@ const rolePermissions = {
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<ExtendedUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<AuthError | null>(null);
   // --- Notification State ---
@@ -77,51 +75,93 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const navigate = useNavigate();
 
-  /* ─── on mount: validate token ─── */
+  // Update the normalizeUserData function to not use default org ID
+  const normalizeUserData = (data: any): ExtendedUser => ({
+    id: data.id,
+    email: data.email,
+    name: data.name || data.username,
+    avatar_url: data.avatar_url,
+    is_staff: Boolean(data.is_staff),
+    // Extract organization ID from the response - this path may need adjustment
+    organization_id: data.profile?.organization?.id,
+  });
+
+  // Update auth flow to use async IIFE and proper token handling
   useEffect(() => {
-    console.log('AuthContext mounted, checking authentication');
-    const existingToken = localStorage.getItem('access_token');
-    
-    if (existingToken) {
-      console.log('Found existing token, validating...');
-      // Instead of fetching a profile, we'll check token validity through a request
-      // to the products endpoint which requires authentication
-      axiosInstance.get('/api/products/')
-        .then(response => {
-          console.log('Token valid, successfully accessed protected resource');
-          
-          // Create minimal user object with data from token
-          // In a real app, you would decode the JWT here
-          const mockUser = {
-            id: 1,
-            email: 'user@example.com',
-            name: 'User',
-            is_active: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            role: 'admin' as const,
-            is_staff: true,
-          };
-          
-          setUser(mockUser);
-          setLoading(false);
-        })
-        .catch(error => {
-          console.error('Error validating token:', error);
-          // Just set loading to false to allow manual login
-          setLoading(false);
-          // Clear tokens if we got a 401 Unauthorized
-          if (axios.isAxiosError(error) && error.response?.status === 401) {
-            console.log('Token invalid (401), clearing local storage');
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
+    (async () => {
+      setLoading(true);
+      const token = localStorage.getItem('access_token');
+      
+      if (!token) {
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+
+      // 1) Set Authorization header
+      axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+      try {
+        console.log('Fetching user profile from:', `${API_URL}${API_ENDPOINTS.auth.user}`);
+        
+        // 2) Fetch user profile
+        const meRes = await axiosInstance.get(API_ENDPOINTS.auth.user);
+        console.log('User profile response:', meRes.data);
+        
+        if (!meRes.data || (Array.isArray(meRes.data) && meRes.data.length === 0)) {
+          console.error('Empty user profile response');
+          throw new Error('Failed to retrieve user profile');
+        }
+        
+        const me = normalizeUserData(meRes.data);
+        console.log('Normalized user data:', me);
+
+        // 3) If we have an org ID, fetch memberships to determine role
+        if (me.id && me.organization_id) {
+          try {
+            console.log(`Fetching memberships from: ${API_URL}${API_ENDPOINTS.orgs.memberships(me.organization_id)}`);
+            
+            const memRes = await axiosInstance.get(
+              API_ENDPOINTS.orgs.memberships(me.organization_id)
+            );
+            console.log('Memberships response:', memRes.data);
+            
+            const membership = Array.isArray(memRes.data) 
+              ? memRes.data.find((m: any) => m.user?.id === me.id || m.user === me.id)
+              : null;
+            
+            if (membership) {
+              console.log('Found membership with role:', membership.role);
+              
+              // 4) Set user with role from membership
+              setUser({
+                ...me,
+                role: membership.role?.name?.toLowerCase(),
+              });
+            } else {
+              console.warn('No matching membership found for user');
+              setUser(me);
+            }
+          } catch (membershipError) {
+            console.error('Error fetching memberships:', membershipError);
+            setUser(me);
           }
-        });
-    } else {
-      // No token, just set loading to false
-      console.log('No existing token, user needs to log in manually');
-      setLoading(false);
-    }
+        } else {
+          console.warn('No organization ID found in user profile');
+          setUser(me);
+        }
+      } catch (err: any) {
+        console.error('Auth init error', err);
+        if (axios.isAxiosError(err) && err.response?.status === 401) {
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+          delete axiosInstance.defaults.headers.common['Authorization'];
+        }
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
   // --- Notification Functions ---
@@ -145,7 +185,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Function to update user state locally
-  const updateUserContext = useCallback((updatedUserData: Partial<User>) => {
+  const updateUserContext = useCallback((updatedUserData: Partial<ExtendedUser>) => {
     setUser(prevUser => {
       if (!prevUser) return null;
       return { ...prevUser, ...updatedUserData };
@@ -159,19 +199,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       console.log('Login attempt for:', email);
       
-      // Development shortcut for easier testing
-      // Remove in production!
-      if (email === 'dev' && password === 'dev') {
-        console.log('Development login shortcut detected - using admin credentials');
-        email = 'admin@example.com';
-        password = 'admin123';
-      }
-      
-      // Use fetch for login as it doesn't need prior auth
-      const loginUrl = `/api/token/`; 
+      // Use the full URL for login - no proxy
+      const loginUrl = `${API_URL}${API_ENDPOINTS.auth.login}`; 
       console.log('Login URL:', loginUrl);
       
-      const loginData = { email, password };
+      // Try both email and username formats to handle different backend configurations
+      const loginData = { 
+        email, 
+        username: email, // Some backends might expect username instead
+        password 
+      };
       console.log('Sending login request with data:', JSON.stringify(loginData));
       
       const response = await fetch(loginUrl, {
@@ -230,22 +267,74 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.setItem('access_token', data.access);
         localStorage.setItem('refresh_token', data.refresh);
         
-        // Create a mock user since we don't have a profile endpoint
-        // In a real app, you would decode the JWT token or make a profile request
-        const mockUser = {
-          id: 1,
-          email: email,
-          name: 'User',
-          is_active: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          role: 'admin' as const,
-          is_staff: true,
-        };
+        // Immediately set the Authorization header
+        axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${data.access}`;
         
-        setUser(mockUser);
-        toast.success('Logged in successfully!');
-        navigate('/app');
+        try {
+          // Fetch user profile after successful login
+          const userEndpoint = `${API_ENDPOINTS.auth.user}`;
+          console.log('Fetching user profile from:', userEndpoint);
+          
+          const userResponse = await axiosInstance.get(userEndpoint);
+          console.log('User profile data:', userResponse.data);
+          
+          if (!userResponse.data || (Array.isArray(userResponse.data) && userResponse.data.length === 0)) {
+            throw new Error('Empty user profile response');
+          }
+          
+          // Normalize user data
+          const me = normalizeUserData(userResponse.data);
+          console.log('Normalized user data:', me);
+          
+          // If we have an org ID, fetch memberships to determine role
+          if (me.id && me.organization_id) {
+            try {
+              const membershipsEndpoint = API_ENDPOINTS.orgs.memberships(me.organization_id);
+              console.log('Fetching memberships from:', membershipsEndpoint);
+              
+              const memRes = await axiosInstance.get(membershipsEndpoint);
+              console.log('Memberships response:', memRes.data);
+              
+              const membership = Array.isArray(memRes.data) 
+                ? memRes.data.find((m: any) => m.user?.id === me.id || m.user === me.id)
+                : null;
+              
+              if (membership) {
+                console.log('Found membership with role:', membership.role);
+                
+                // Set user with role
+                setUser({
+                  ...me,
+                  role: membership.role?.name?.toLowerCase(),
+                });
+              } else {
+                console.warn('No matching membership found for user');
+                setUser(me);
+              }
+            } catch (membershipError) {
+              console.error('Error fetching memberships:', membershipError);
+              setUser(me);
+            }
+          } else {
+            console.warn('No organization ID found in user profile');
+            setUser(me);
+          }
+          
+          // Check for pending invitations after successful login
+          checkPendingInvitation();
+          
+          toast.success('Logged in successfully!');
+          navigate('/app');
+        } catch (profileError) {
+          console.error('Failed to fetch user profile:', profileError);
+          toast.error('Logged in but failed to load user profile');
+          // Clear tokens if we can't load the profile
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+          delete axiosInstance.defaults.headers.common['Authorization'];
+          setUser(null);
+          throw new Error('Failed to load user profile');
+        }
       } else {
         throw new Error('Invalid response format');
       }
@@ -283,7 +372,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       localStorage.setItem('access_token', access);
       localStorage.setItem('refresh_token', refresh);
-      setUser(userData);
+      
+      // Immediately set the Authorization header
+      axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${access}`;
+      
+      // Normalize user data
+      const normalizedUser = normalizeUserData(userData);
+      setUser(normalizedUser);
+      
       toast.success('Registered!');
       navigate('/app');
     } catch (err: any) {
@@ -306,27 +402,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     setUser(null);
-    // Clear Axios default headers if they were ever set (though we removed the explicit setting)
+    // Clear Axios header
     delete axiosInstance.defaults.headers.common['Authorization']; 
     navigate('/login');
     toast.info("You have been logged out.");
   };
 
-  // Check if user has permission
+  // Check if user has permission - simplified
   const checkPermission = (permission: string): boolean => {
     if (!user) return false;
     
-    const userRole = user.role;
-    const permissions = rolePermissions[userRole] || [];
+    // Admin or staff always has all permissions
+    if (user.is_staff || user.role === 'admin') return true;
     
+    // Get permissions based on role
+    const userRole = user.role;
+    if (!userRole) return false;
+    
+    const permissions = rolePermissions[userRole] || [];
     return permissions.includes(permission);
+  };
+  
+  // Check for pending invitations
+  const checkPendingInvitation = () => {
+    const pendingInviteStr = sessionStorage.getItem('pendingInvitation');
+    
+    if (pendingInviteStr) {
+      try {
+        const pendingInvite: InvitationToken = JSON.parse(pendingInviteStr);
+        
+        // Clear the stored invitation
+        sessionStorage.removeItem('pendingInvitation');
+        
+        // Redirect to the accept invitation page
+        if (pendingInvite.membershipId && pendingInvite.token) {
+          window.location.href = `/accept-invite/${pendingInvite.membershipId}/${pendingInvite.token}`;
+        }
+      } catch (error) {
+        console.error('Error processing pending invitation:', error);
+      }
+    }
   };
 
   const value = {
     user,
     loading,
     error,
-    isAuthenticated: !!user,
+    isAuthenticated: Boolean(user), // Simplified isAuthenticated
     login,
     logout,
     register,
@@ -337,6 +459,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     markAllAsRead,
     updateUserContext,
     checkPermission,
+    checkPendingInvitation
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

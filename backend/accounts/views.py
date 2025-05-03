@@ -207,3 +207,33 @@ class DatabaseTestView(APIView):
                 {'error': 'Could not connect to the database'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+class CurrentUserView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        # Return information about the current user
+        user = request.user
+        org_id = None
+        
+        # Try to get organization ID from profile if it exists
+        if hasattr(user, 'profile') and user.profile and hasattr(user.profile, 'organization'):
+            org_id = str(user.profile.organization.id) if user.profile.organization else None
+        
+        # Build user data response
+        user_data = {
+            'id': user.id,
+            'email': user.email,
+            'name': user.get_full_name() or user.username,
+            'username': user.username,
+            'is_staff': user.is_staff,
+            'is_superuser': user.is_superuser,
+            'date_joined': user.date_joined,
+            'profile': {
+                'organization': {
+                    'id': org_id,
+                } if org_id else None
+            }
+        }
+        
+        return Response(user_data)

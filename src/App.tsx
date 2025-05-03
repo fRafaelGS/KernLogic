@@ -29,6 +29,8 @@ import UploadPage from './pages/UploadPage';
 import DocumentationPage from './pages/DocumentationPage';
 import TeamPage from './pages/TeamPage';
 import SettingsPage from './pages/SettingsPage';
+import TeamHistoryPage from './pages/TeamHistoryPage';
+import AcceptInvitePage from './pages/AcceptInvitePage';
 
 const queryClient = new QueryClient();
 
@@ -190,6 +192,16 @@ export const App: React.FC = () => {
                                 }
                             />
                             <Route
+                                path="/app/team/history"
+                                element={
+                                    <ProtectedRoute>
+                                        <DashboardLayout>
+                                            <TeamHistoryPage />
+                                        </DashboardLayout>
+                                    </ProtectedRoute>
+                                }
+                            />
+                            <Route
                                 path="/app/settings"
                                 element={
                                     <ProtectedRoute>
@@ -234,6 +246,7 @@ export const App: React.FC = () => {
                                     </ProtectedRoute>
                                 }
                             />
+                            <Route path="/accept-invite/:membershipId/:token" element={<AcceptInvitePage />} />
                             <Route path="*" element={<Navigate to="/" replace />} />
                         </Routes>
                     </AuthProvider>

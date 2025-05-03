@@ -5,7 +5,8 @@ from .views import (
     LogoutView,
     UserDetailView,
     AdminUserListView,
-    DatabaseTestView
+    DatabaseTestView,
+    CurrentUserView
 )
 from rest_framework_simplejwt.views import TokenRefreshView
 from django.views.decorators.csrf import csrf_exempt
@@ -17,6 +18,7 @@ urlpatterns = [
     path('logout/', LogoutView.as_view(), name='logout'),
     path('user/', UserDetailView.as_view(), name='user_detail'),
     path('users/', AdminUserListView.as_view(), name='admin_user_list'),
+    path('users/me/', CurrentUserView.as_view(), name='current-user'),
     
     # Token endpoints
     path('token/refresh/', csrf_exempt(TokenRefreshView.as_view()), name='token_refresh'),

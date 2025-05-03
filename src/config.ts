@@ -1,7 +1,7 @@
 // API Configuration
-export const API_BASE_URL = ''; // Empty base URL to use the proxy
-export const API_URL = ''; // Empty string instead of '/api' since proxy adds this
-export const API_AUTH_URL = `/api/auth`; // Relative path, proxy will handle it
+export const API_BASE_URL = 'http://localhost:8000'; // Explicit backend URL
+export const API_URL = 'http://localhost:8000/api'; // Base URL with /api prefix
+export const API_AUTH_URL = `http://localhost:8000/api`; // Base URL for auth endpoints with /api prefix
 
 // Add debug logging
 console.log('API Configuration:', {
@@ -10,14 +10,19 @@ console.log('API Configuration:', {
     API_AUTH_URL
 });
 
-// API endpoints
+// API endpoints - updated to match actual Django URL structure
 export const API_ENDPOINTS = {
     auth: {
-        login: '/token/', // Updated to match schema
-        register: '/auth/register/', // Keep as is, might be custom endpoint
-        refresh: '/token/refresh/', // Updated to match schema
-        user: '/auth/user/', // Keep as is, might be custom endpoint
-        logout: '/auth/logout/' // Keep as is, might be custom endpoint
+        login: '/token/', // Path is relative to API_URL (/api/token/)
+        refresh: '/token/refresh/', // Path is relative to API_URL (/api/token/refresh/)
+        user: '/users/me/', // Path is relative to API_URL (/api/users/me/)
+        register: '/accounts/register/', // If registration endpoint exists
+        logout: '/auth/logout/' // If logout endpoint exists
+    },
+    orgs: {
+        memberships: (orgId: string) => `/orgs/${orgId}/memberships/`,
+        roles: (orgId: string) => `/orgs/${orgId}/roles/`,
+        invitations: (orgId: string) => `/orgs/${orgId}/invitations/`
     },
     products: {
         list: '/products/',

@@ -3,12 +3,17 @@ import { API_URL } from '@/config';
 
 // Create the single Axios instance
 const axiosInstance = axios.create({
-    baseURL: API_URL, // Base for all API calls (/api)
-    withCredentials: true,
+    baseURL: API_URL, // Use the full base URL, not just /api
+    withCredentials: false, // Changed to false since we're using JWT in headers
     headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json'
     }
+});
+
+console.log('Axios Instance Configuration:', {
+    baseURL: axiosInstance.defaults.baseURL,
+    withCredentials: axiosInstance.defaults.withCredentials
 });
 
 // Interceptor to add the Authorization token to requests
@@ -35,6 +40,7 @@ axiosInstance.interceptors.request.use(
                 url: config.url,
                 method: config.method,
                 authHeader: authHeader.substring(0, 20) + '...',
+                fullUrl: `${API_URL}${config.url?.startsWith('/') ? config.url : '/' + config.url}`
             });
         } else {
             console.log('[Request Interceptor] No token found for request:', config.url);

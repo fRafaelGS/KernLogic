@@ -39,6 +39,9 @@ from analytics.views import (
     export_change_history_report,
 )
 
+# Import organization view
+from organizations.views import OrganizationDetailView
+
 # Debug view for testing exports directly
 def test_csv_export(request):
     """Simple view to test CSV exports directly"""
@@ -109,6 +112,9 @@ urlpatterns = [
     # Authentication API
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    
+    # Organization API
+    path('api/orgs/<int:org_id>/', OrganizationDetailView.as_view(), name='organization-detail'),
     
     # Direct test endpoint for debugging
     path('api/test-export/', test_csv_export, name='test-export'),

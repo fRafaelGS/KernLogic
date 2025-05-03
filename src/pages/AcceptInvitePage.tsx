@@ -68,6 +68,14 @@ const AcceptInvitePage: React.FC = () => {
           return;
         }
         
+        // If user exists but doesn't have a password set (user was created when invited)
+        if (membership?.user_exists && membership?.needs_password && invitedEmail) {
+          console.log("User exists but needs to set a password");
+          // Redirect to set-password page with the necessary parameters
+          navigate(`/set-password/${membership.organization?.id}?token=${token}&email=${encodeURIComponent(invitedEmail)}`);
+          return;
+        }
+        
         // Call the API to accept the invitation
         await api.post(`/api/orgs/memberships/${membershipId}/accept/`, {
           token: token

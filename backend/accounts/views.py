@@ -166,15 +166,23 @@ class LoginView(APIView):
                     # Generate tokens
                     tokens = get_tokens_for_user(user)
                     
+                    # Find their active membership, if any
+                    membership = Membership.objects.filter(user=user, status='active').first()
+                    org_id = membership.organization.id if membership else None
+                    role = membership.role.name.lower() if membership and membership.role else None
+                    
                     response_data = {
                         'user': {
                             'id': user.id,
                             'email': user.email,
                             'name': user.name,
                             'is_staff': user.is_staff,
-                            'is_superuser': user.is_superuser
+                            'is_superuser': user.is_superuser,
+                            'organization_id': org_id,    # Include organization_id
+                            'role': role,                 # Include role
                         },
-                        'tokens': tokens
+                        'access': tokens['access'],
+                        'refresh': tokens['refresh']
                     }
                     
                     return Response(response_data, status=status.HTTP_200_OK)
@@ -251,27 +259,160 @@ class CurrentUserView(APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
-        # Return information about the current user
+        # Use the serializer to return the user data with organization_id and role
         user = request.user
-        
-        # Get organization using the new utility function
-        organization = get_user_organization(user)
-        org_id = organization.id if organization else None
-        
-        # Build user data response
-        user_data = {
-            'id': user.id,
-            'email': user.email,
-            'name': user.get_full_name() or user.username,
-            'username': user.username,
-            'is_staff': user.is_staff,
-            'is_superuser': user.is_superuser,
-            'date_joined': user.date_joined,
-            'profile': {
-                'organization': {
-                    'id': org_id,
-                } if org_id else None
-            }
-        }
-        
-        return Response(user_data)
+        serializer = UserSerializer(user)
+        return Response(serializer.data)
+
+class SetPasswordView(APIView):
+    """API View for setting password for existing users (typically from invitation)"""
+    permission_classes = (permissions.AllowAny,)
+
+    def post(self, request):
+        print("DEBUG: SetPasswordView POST request received")
+        try:
+            # Get data from request
+            email = request.data.get('email')
+            password = request.data.get('password')
+            password_confirm = request.data.get('password_confirm')
+            organization_id = request.data.get('organization_id')
+            invitation_token = request.data.get('invitation_token')
+            
+            # Validate inputs
+            if not email or not password or not password_confirm:
+                return Response(
+                    {'error': 'Email, password and password confirmation are required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+            if password != password_confirm:
+                return Response(
+                    {'error': 'Passwords do not match'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+            # Find the user
+            try:
+                user = User.objects.get(email=email)
+            except User.DoesNotExist:
+                return Response(
+                    {'error': 'User not found with this email'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+                
+            # Set the password
+            user.set_password(password)
+            user.save()
+            
+            # If organization_id and invitation_token are provided, update membership
+            if organization_id and invitation_token:
+                try:
+                    from organizations.models import Organization
+                    from teams.models import Membership
+                    
+                    organization = Organization.objects.get(id=organization_id)
+                    
+                    # Look for pending membership
+                    membership = Membership.objects.filter(
+                        user=user,
+                        organization=organization,
+                        status='pending'
+                    ).first()
+                    
+                    if membership:
+                        # Activate the membership
+                        membership.status = 'active'
+                        membership.save()
+                        print(f"DEBUG: Activated membership for {user.email} in org {organization.name}")
+                    else:
+                        print(f"DEBUG: No pending membership found for {user.email}")
+                except Exception as e:
+                    print(f"DEBUG: Error updating membership: {str(e)}")
+                    # Continue despite membership update failure
+            
+            # Generate authentication tokens
+            tokens = get_tokens_for_user(user)
+            
+            # Return successful response with tokens
+            return Response({
+                'detail': 'Password set successfully',
+                'access': tokens['access'],
+                'refresh': tokens['refresh'],
+                'user': {
+                    'id': user.id,
+                    'email': user.email,
+                    'name': user.name
+                }
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            print(f"DEBUG: Exception in SetPasswordView: {str(e)}")
+            print(traceback.format_exc())
+            return Response(
+                {'error': f'Password update failed: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class CheckUserView(APIView):
+    """API View to check if a user exists and needs to set a password"""
+    permission_classes = (permissions.AllowAny,)
+
+    def post(self, request):
+        print("DEBUG: CheckUserView POST request received")
+        try:
+            email = request.data.get('email')
+            organization_id = request.data.get('organization_id')
+            
+            if not email:
+                return Response(
+                    {'error': 'Email is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+            # Check if user exists
+            try:
+                user = User.objects.get(email=email)
+                
+                # Check if user has usable password
+                has_password = user.has_usable_password()
+                
+                # Check if user has pending membership in the organization
+                has_pending_membership = False
+                
+                if organization_id:
+                    try:
+                        from organizations.models import Organization
+                        from teams.models import Membership
+                        
+                        organization = Organization.objects.get(id=organization_id)
+                        
+                        membership = Membership.objects.filter(
+                            user=user,
+                            organization=organization,
+                            status='pending'
+                        ).exists()
+                        
+                        has_pending_membership = membership
+                    except Exception as e:
+                        print(f"DEBUG: Error checking membership: {str(e)}")
+                
+                return Response({
+                    'exists': True,
+                    'needs_password': not has_password,
+                    'has_pending_membership': has_pending_membership
+                }, status=status.HTTP_200_OK)
+                
+            except User.DoesNotExist:
+                return Response({
+                    'exists': False,
+                    'needs_password': False,
+                    'has_pending_membership': False
+                }, status=status.HTTP_200_OK)
+                
+        except Exception as e:
+            print(f"DEBUG: Exception in CheckUserView: {str(e)}")
+            print(traceback.format_exc())
+            return Response(
+                {'error': f'User check failed: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

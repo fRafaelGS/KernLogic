@@ -120,7 +120,28 @@ class UserLoginSerializer(serializers.Serializer):
 
 
 class UserSerializer(serializers.ModelSerializer):
+    organization_id = serializers.SerializerMethodField()
+    role = serializers.SerializerMethodField()
+    
     class Meta:
         model = User
-        fields = ('id', 'email', 'name', 'is_active', 'is_staff', 'is_superuser',)
-        read_only_fields = ('id', 'is_active', 'is_staff', 'is_superuser',) 
+        fields = ('id', 'email', 'name', 'is_active', 'is_staff', 'is_superuser', 'organization_id', 'role')
+        read_only_fields = ('id', 'is_active', 'is_staff', 'is_superuser', 'organization_id', 'role')
+        
+    def get_organization_id(self, user):
+        try:
+            from teams.models import Membership
+            membership = Membership.objects.filter(user=user, status='active').select_related('organization').first()
+            return membership.organization.id if membership else None
+        except Exception as e:
+            print(f"Error getting organization_id for user {user.id}: {str(e)}")
+            return None
+            
+    def get_role(self, user):
+        try:
+            from teams.models import Membership
+            membership = Membership.objects.filter(user=user, status='active').select_related('role').first()
+            return membership.role.name.lower() if membership and membership.role else None
+        except Exception as e:
+            print(f"Error getting role for user {user.id}: {str(e)}")
+            return None 

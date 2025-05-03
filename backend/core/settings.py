@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     "analytics",
     "django_filters",
     "teams",
+    "anymail",
 ]
 
 # Custom middleware to exempt API routes from CSRF
@@ -335,16 +336,20 @@ if DEBUG:
 # Allow the following attribute to be used in signals
 DJANGORESIZED_DEFAULT_FORMAT_EXTENSIONS = {'JPEG': ".jpg", 'PNG': '.png', 'GIF': '.gif'}
 
-# Email configuration
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'rgarciaraiva@gmail.com'
-EMAIL_HOST_PASSWORD = 'gvcclpihtsrvuyvc'
+# Email configuration - MailHog for development
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = "localhost"
+EMAIL_PORT = 1025
+EMAIL_USE_TLS = False
+EMAIL_HOST_USER = ""
+EMAIL_HOST_PASSWORD = ""
+
+# These settings are still used by Django for default from addresses
 DEFAULT_FROM_EMAIL = 'KernLogic <rgarciasaraiva@gmail.com>'
+SERVER_EMAIL = 'KernLogic <rgarciasaraiva@gmail.com>'  # For error messages
+
 # Ensure emails are sent even in development mode
-EMAIL_DEBUG = False  # Prevents email interception in debug mode
+EMAIL_DEBUG = False
 
 # Frontend URL for email links
 FRONTEND_URL = 'http://localhost:3004'  # Update this in production to your actual domain

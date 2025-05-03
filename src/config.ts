@@ -16,7 +16,7 @@ export const API_ENDPOINTS = {
         login: '/api/token/', // Updated with full /api path
         refresh: '/api/token/refresh/', // Updated with full /api path
         user: '/api/users/me/', // Updated with full /api path
-        register: '/api/accounts/register/', // Updated with full /api path
+        register: '/api/register/', // Updated to correct path without 'accounts/'
         logout: '/api/auth/logout/' // Updated with full /api path
     },
     orgs: {

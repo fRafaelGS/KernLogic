@@ -6,7 +6,9 @@ from .views import (
     UserDetailView,
     AdminUserListView,
     DatabaseTestView,
-    CurrentUserView
+    CurrentUserView,
+    SetPasswordView,
+    CheckUserView
 )
 from rest_framework_simplejwt.views import TokenRefreshView
 from django.views.decorators.csrf import csrf_exempt
@@ -16,6 +18,8 @@ urlpatterns = [
     path('register/', RegisterView.as_view(), name='register'),
     path('login/', LoginView.as_view(), name='login'),
     path('logout/', LogoutView.as_view(), name='logout'),
+    path('set-password/', SetPasswordView.as_view(), name='set-password'),
+    path('check-user/', CheckUserView.as_view(), name='check-user'),
     path('user/', UserDetailView.as_view(), name='user_detail'),
     path('users/', AdminUserListView.as_view(), name='admin_user_list'),
     path('users/me/', CurrentUserView.as_view(), name='current-user'),

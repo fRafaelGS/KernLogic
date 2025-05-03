@@ -1,82 +1,106 @@
 import os
 import django
-import smtplib
-import ssl
 
 # Set up Django environment
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
 django.setup()
 
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.conf import settings
+from anymail.message import AnymailMessage
 
-def verify_smtp_connection():
-    """Test SMTP connection directly without Django's send_mail"""
-    host = settings.EMAIL_HOST
-    port = settings.EMAIL_PORT
-    username = settings.EMAIL_HOST_USER
-    password = settings.EMAIL_HOST_PASSWORD
-    use_tls = settings.EMAIL_USE_TLS
+def test_anymail_config():
+    """
+    Test email configuration with django-anymail
+    """
+    print(f"Testing django-anymail with backend: {settings.EMAIL_BACKEND}")
     
-    print(f"Verifying SMTP connection to {host}:{port}")
-    print(f"Username: {username}")
-    print(f"Password: {'*' * len(password)} (length: {len(password)})")
-    print(f"TLS Enabled: {use_tls}")
+    # Create an email message with Anymail features
+    msg = AnymailMessage(
+        subject='KernLogic Email Test with Anymail',
+        body='This is a test message to confirm Anymail configuration is working correctly.',
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[settings.DEFAULT_FROM_EMAIL],  # Sending to yourself for testing
+    )
+    
+    # Add Anymail-specific features (supported by your ESP)
+    msg.tags = ["test", "anymail"]
+    msg.track_opens = True
+    msg.track_clicks = True
+    msg.metadata = {
+        "test_id": "anymail_test_1",
+        "application": "KernLogic PIM"
+    }
+    
+    print(f"Attempting to send email from {msg.from_email} to {msg.to}")
+    print(f"With tags: {msg.tags}")
+    print(f"With metadata: {msg.metadata}")
+    print(f"Tracking opens: {msg.track_opens}")
+    print(f"Tracking clicks: {msg.track_clicks}")
     
     try:
-        if use_tls:
-            context = ssl.create_default_context()
-            server = smtplib.SMTP(host, port)
-            server.starttls(context=context)
-        else:
-            server = smtplib.SMTP(host, port)
-        
-        server.connect(host, port)
-        server.ehlo()
-        if use_tls:
-            server.starttls()
-            server.ehlo()
-        
-        # Try to login
-        server.login(username, password)
-        print("SMTP login successful!")
-        
-        # Close the connection
-        server.quit()
-        return True
-    except Exception as e:
-        print(f"SMTP Connection Error: {e}")
-        return False
-
-def test_email_config():
-    """
-    Test email configuration by sending a test email
-    """
-    # First verify the SMTP connection
-    if not verify_smtp_connection():
-        print("SMTP connection test failed, aborting email send test.")
-        return False
-    
-    subject = 'KernLogic Email Test'
-    message = 'This is a test message to confirm email configuration is working correctly.'
-    from_email = settings.DEFAULT_FROM_EMAIL
-    recipient_list = [settings.EMAIL_HOST_USER]  # Sending to yourself for testing
-    
-    print(f"Attempting to send email from {from_email} to {recipient_list}")
-    
-    try:
-        result = send_mail(
-            subject=subject,
-            message=message,
-            from_email=from_email,
-            recipient_list=recipient_list,
-            fail_silently=False,
-        )
-        print(f"Email sent successfully! Result: {result}")
+        # Send the message
+        result = msg.send()
+        print(f"Email sent successfully!")
+        print(f"ESP response: {result.status}")
+        print(f"Message ID: {result.message_id}")
+        print(f"All response data: {result.esp_response}")
         return True
     except Exception as e:
         print(f"Failed to send email: {e}")
         return False
 
+def test_html_email():
+    """
+    Test sending HTML email with inline attachments via Anymail
+    """
+    # Create a multipart message
+    msg = EmailMultiAlternatives(
+        subject="KernLogic HTML Email Test",
+        body="This is the plain text content of the message.",
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[settings.DEFAULT_FROM_EMAIL],
+    )
+    
+    # Add HTML content
+    html_content = """
+    <html>
+    <head>
+        <style>
+            body { font-family: Arial, sans-serif; color: #333; }
+            .button { background-color: #4CAF50; border: none; color: white; 
+                     padding: 15px 32px; text-align: center; text-decoration: none; 
+                     display: inline-block; font-size: 16px; margin: 4px 2px; cursor: pointer; }
+        </style>
+    </head>
+    <body>
+        <h1>Hello from KernLogic!</h1>
+        <p>This is a test email sent using <strong>django-anymail</strong>.</p>
+        <p>Anymail supports ESP-specific features like tracking and tags.</p>
+        <a href="https://example.com/test-click" class="button">Test Button</a>
+    </body>
+    </html>
+    """
+    msg.attach_alternative(html_content, "text/html")
+    
+    # Add Anymail features
+    msg.tags = ["html-test"]
+    msg.track_opens = True
+    msg.track_clicks = True
+    
+    try:
+        # Send the message
+        result = msg.send()
+        print(f"HTML email sent successfully!")
+        print(f"Message ID: {result.message_id if hasattr(result, 'message_id') else 'N/A'}")
+        return True
+    except Exception as e:
+        print(f"Failed to send HTML email: {e}")
+        return False
+
 if __name__ == "__main__":
-    test_email_config() 
+    print("Testing Anymail configuration...")
+    test_anymail_config()
+    
+    print("\nTesting HTML email...")
+    test_html_email() 

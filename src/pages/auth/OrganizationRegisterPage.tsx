@@ -7,6 +7,7 @@ import { BeakerIcon, User, Mail, LockKeyhole, ArrowRight, AlertCircle, Building 
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import api from '@/services/api';
+import axios from 'axios';
 
 export default function OrganizationRegisterPage() {
   const { orgId } = useParams<{ orgId: string }>();
@@ -40,6 +41,27 @@ export default function OrganizationRegisterPage() {
           const response = await api.get(`/api/orgs/${orgId}/`);
           if (response.data && response.data.name) {
             setOrgName(response.data.name);
+            
+            // If we have an email from the URL, check if this user already exists
+            if (emailFromUrl) {
+              try {
+                // Make a request to check if user exists but needs password
+                const checkResponse = await api.post('/api/check-user/', { 
+                  email: emailFromUrl,
+                  organization_id: orgId
+                });
+                
+                if (checkResponse.data.exists && checkResponse.data.needs_password) {
+                  // User exists but needs to set password - redirect
+                  console.log("User exists but needs password, redirecting to set-password page");
+                  navigate(`/set-password/${orgId}?token=${token}&email=${encodeURIComponent(emailFromUrl)}`);
+                  return;
+                }
+              } catch (checkError) {
+                console.error("Error checking user existence:", checkError);
+                // Continue with normal registration flow
+              }
+            }
           } else {
             setError('Could not fetch organization details.');
           }
@@ -55,7 +77,7 @@ export default function OrganizationRegisterPage() {
     };
 
     fetchOrgDetails();
-  }, [orgId]);
+  }, [orgId, emailFromUrl, token, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,12 +94,24 @@ export default function OrganizationRegisterPage() {
     }
     
     try {
+      console.log("Submitting registration form with data:", {
+        email,
+        password: "********",
+        name,
+        orgId,
+        token: token.substring(0, 5) + "..." // Only log part of the token for security
+      });
+      
       // Pass organization ID and token to register function
       await register(email, password, name, orgId, token);
       // If successful, navigate to app or success page
       toast.success(`Welcome to ${orgName}! Your account has been created.`);
     } catch (err) {
       console.error('Registration error:', err);
+      // Check for specific error messages
+      if (axios.isAxiosError(err) && err.response) {
+        console.error('Registration error data:', err.response.data);
+      }
       // Auth context should already show the error toast
     }
   };

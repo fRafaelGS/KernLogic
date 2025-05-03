@@ -32,6 +32,7 @@ import TeamPage from './pages/TeamPage';
 import SettingsPage from './pages/SettingsPage';
 import TeamHistoryPage from './pages/TeamHistoryPage';
 import AcceptInvitePage from './pages/AcceptInvitePage';
+import SetPasswordPage from './pages/auth/SetPasswordPage';
 
 const queryClient = new QueryClient();
 
@@ -249,6 +250,7 @@ export const App: React.FC = () => {
                                 }
                             />
                             <Route path="/accept-invite/:membershipId/:token" element={<AcceptInvitePage />} />
+                            <Route path="/set-password/:orgId" element={<SetPasswordPage />} />
                             <Route path="*" element={<Navigate to="/" replace />} />
                         </Routes>
                     </AuthProvider>

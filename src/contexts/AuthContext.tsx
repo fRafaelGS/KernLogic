@@ -86,6 +86,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Look for organization_id in different possible locations
       organization_id: data.organization_id 
         ?? data.organization?.id 
+        ?? data.profile?.organization?.id 
+        ?? (data.organizations && data.organizations.length > 0 ? data.organizations[0].id : null)
+        ?? (data.memberships && data.memberships.length > 0 && data.memberships[0].organization 
+            ? data.memberships[0].organization.id : null)
         ?? null,
     };
     
@@ -93,6 +97,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('Normalized user data with organization ID:', userData.organization_id || 'Not available');
       if (data.organization) {
         console.log('Organization data from API:', data.organization);
+      }
+      if (data.profile?.organization) {
+        console.log('Profile organization data from API:', data.profile.organization);
+      }
+      if (data.organizations && data.organizations.length > 0) {
+        console.log('First organization from organizations array:', data.organizations[0]);
+      }
+      if (data.memberships && data.memberships.length > 0) {
+        console.log('First membership from memberships array:', data.memberships[0]);
       }
     }
     
@@ -121,21 +134,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const meRes = await axiosInstance.get(API_ENDPOINTS.auth.user);
         console.log('User profile response:', meRes.data);
         
+        if (process.env.NODE_ENV === 'development') {
+          console.log('All keys on user data:', Object.keys(meRes.data));
+          console.log('Data.organizations:', meRes.data.organizations);
+          console.log('Data.memberships:', meRes.data.memberships);
+        }
+        
         if (!meRes.data || (Array.isArray(meRes.data) && meRes.data.length === 0)) {
           console.error('Empty user profile response');
           throw new Error('Failed to retrieve user profile');
         }
         
-        // 3) Normalize user data and handle organization ID for staff
+        // 3) Normalize user data
         const me = normalizeUserData(meRes.data);
         console.log('Normalized user data:', me);
-
-        // For staff users without an organization_id, default to organization 1
-        if (!me.organization_id && me.is_staff) {
-          console.log('Staff user with no organization ID, defaulting to org 1');
-          me.organization_id = "1";
-          me.role = "admin";
-        }
 
         // Set the user with available data
         setUser(me);
@@ -282,6 +294,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const userResponse = await axiosInstance.get(userEndpoint);
           console.log('User profile data:', userResponse.data);
           
+          if (process.env.NODE_ENV === 'development') {
+            console.log('All keys on user data (login):', Object.keys(userResponse.data));
+            console.log('Data.organizations (login):', userResponse.data.organizations);
+            console.log('Data.memberships (login):', userResponse.data.memberships);
+          }
+          
           if (!userResponse.data || (Array.isArray(userResponse.data) && userResponse.data.length === 0)) {
             throw new Error('Empty user profile response');
           }
@@ -304,12 +322,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 : null;
               
               if (membership) {
-                console.log('Found membership with role:', membership.role);
+                console.log('Found membership:', membership);
                 
-                // Set user with role
+                // Set user with organization ID and role from membership
                 setUser({
                   ...me,
-                  role: membership.role?.name?.toLowerCase(),
+                  organization_id: membership.organization.id,
+                  role: membership.role.name.toLowerCase(),
                 });
               } else {
                 console.warn('No matching membership found for user');
@@ -370,10 +389,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(null);
     try {
       // Prepare the registration data
-      const registrationData: any = { email, password, name };
+      const registrationData: any = { email, password, name, password_confirm: password };
       
       // Include organization ID and token if provided (for invited users)
-      // Always use UUID format for organization_id
       if (orgId) {
         console.log(`Registering with organization ID: ${orgId}`);
         registrationData.organization_id = orgId;
@@ -386,9 +404,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Log the registration data before sending
       console.log("Sending registration data:", JSON.stringify(registrationData));
       
-      // Use shared axiosInstance for registration
-      // Path is relative to axiosInstance baseURL ('/api')
-      const response = await axiosInstance.post('/accounts/register/', registrationData);
+      // Directly use axios for more detailed error handling
+      const registerUrl = `${API_URL}/api/register/`;
+      console.log("Register URL:", registerUrl);
+      
+      const response = await axios.post(registerUrl, registrationData, {
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      console.log("Registration response:", response.data);
       const { access, refresh, user: userData } = response.data;
 
       localStorage.setItem('access_token', access);
@@ -404,6 +430,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       toast.success('Registered!');
       navigate('/app');
     } catch (err: any) {
+      console.error('Registration error:', err);
+      
+      // Enhanced error logging for API validation errors
+      if (axios.isAxiosError(err) && err.response) {
+        console.error('Server response status:', err.response.status);
+        console.error('Server response data:', err.response.data);
+        
+        // Display specific field errors if available
+        if (err.response.data && typeof err.response.data === 'object') {
+          const errorData = err.response.data;
+          let errorMessage = 'Registration failed: ';
+          
+          // Handle nested error objects or arrays
+          Object.keys(errorData).forEach(key => {
+            const value = errorData[key];
+            if (Array.isArray(value)) {
+              errorMessage += `${key}: ${value.join(', ')}. `;
+            } else if (typeof value === 'object' && value !== null) {
+              errorMessage += `${key}: ${JSON.stringify(value)}. `;
+            } else {
+              errorMessage += `${key}: ${value}. `;
+            }
+          });
+          
+          setError({ message: errorMessage });
+          toast.error(errorMessage);
+          throw err;
+        }
+      }
+      
       const msg =
         err.response?.data?.detail ||
         err.response?.data?.error ||

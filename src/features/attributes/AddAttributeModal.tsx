@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Attribute, AttributeValue } from './AttributeValueRow';
 import { 
   Dialog, 
@@ -20,21 +20,44 @@ import {
   CommandItem, 
   CommandList 
 } from "@/components/ui/command";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Globe, Monitor } from 'lucide-react';
+import { 
+  Select, 
+  SelectContent, 
+  SelectGroup,
+  SelectItem, 
+  SelectLabel,
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
+import { Globe, Monitor, Loader2 } from 'lucide-react';
+import { 
+  makeAttributeKey, 
+  normalizeLocaleOrChannel, 
+  filterUnusedAttributes 
+} from '@/lib/attributeUtils';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Search, Filter, Info } from 'lucide-react';
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { 
+  Tooltip, 
+  TooltipContent, 
+  TooltipProvider, 
+  TooltipTrigger 
+} from "@/components/ui/tooltip";
 
 interface AddAttributeModalProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   availableAttributes: Attribute[];
-  onAddAttribute: (attribute: Attribute, locale?: string, channel?: string) => void;
+  onAddAttribute: (attribute: Attribute, locale?: string | null, channel?: string | null) => Promise<any>;
   isPending: boolean;
-  availableLocales?: Array<{ code: string, label: string }>;
-  availableChannels?: Array<{ code: string, label: string }>;
-  attributeValues?: Record<string, AttributeValue>;
-  selectedLocale?: string;
-  selectedChannel?: string;
+  availableLocales: Array<{ code: string, label: string }>;
+  availableChannels: Array<{ code: string, label: string }>;
+  selectedLocale: string;
+  selectedChannel: string;
   groupId?: number | null;
+  attributeValues: Record<string, any>;
 }
 
 /**
@@ -46,258 +69,351 @@ const AddAttributeModal: React.FC<AddAttributeModalProps> = ({
   availableAttributes,
   onAddAttribute,
   isPending,
-  availableLocales = [],
-  availableChannels = [],
-  attributeValues = {},
-  selectedLocale: propSelectedLocale = '',
-  selectedChannel: propSelectedChannel = '',
-  groupId = null
+  availableLocales,
+  availableChannels,
+  selectedLocale,
+  selectedChannel,
+  groupId,
+  attributeValues
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<'standard' | 'advanced'>('standard');
   const [selectedAttribute, setSelectedAttribute] = useState<Attribute | null>(null);
-  const [selectedLocale, setSelectedLocale] = useState<string>(propSelectedLocale || 'default');
-  const [selectedChannel, setSelectedChannel] = useState<string>(propSelectedChannel || 'default');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [attributeLocale, setAttributeLocale] = useState(selectedLocale);
+  const [attributeChannel, setAttributeChannel] = useState(selectedChannel);
+  const [filteredAttributes, setFilteredAttributes] = useState<Attribute[]>(availableAttributes);
+  const [filterType, setFilterType] = useState<string>('all');
   
-  // Initialize locale/channel from props when modal opens
+  // Reset selected attribute and search query when modal opens/closes
   useEffect(() => {
     if (isOpen) {
-      setSelectedLocale(propSelectedLocale || 'default');
-      setSelectedChannel(propSelectedChannel || 'default');
-    }
-  }, [isOpen, propSelectedLocale, propSelectedChannel]);
-  
-  // Debug props
-  React.useEffect(() => {
-    if (isOpen) {
-      console.log('AddAttributeModal opened with props:', { 
-        attributesCount: availableAttributes?.length,
-        localesCount: availableLocales?.length,
-        channelsCount: availableChannels?.length,
-        defaultLocale: propSelectedLocale,
-        defaultChannel: propSelectedChannel,
-        groupId
-      });
-    }
-  }, [isOpen, availableAttributes, availableLocales, availableChannels, propSelectedLocale, propSelectedChannel, groupId]);
-  
-  // Reset state when modal opens or closes
-  React.useEffect(() => {
-    if (!isOpen) {
       setSelectedAttribute(null);
-      setSelectedLocale(propSelectedLocale || 'default');
-      setSelectedChannel(propSelectedChannel || 'default');
       setSearchQuery('');
+      setAttributeLocale(selectedLocale);
+      setAttributeChannel(selectedChannel);
+      setFilterType('all');
     }
-  }, [isOpen, propSelectedLocale, propSelectedChannel]);
-  
-  // Filter attributes by search query
-  const filterAttributesByQuery = (attrs: Attribute[], query: string) => {
-    if (!query.trim()) return attrs;
+  }, [isOpen, selectedLocale, selectedChannel]);
+
+  // Update filtered attributes when availableAttributes changes or search query changes
+  useEffect(() => {
+    let filtered = [...availableAttributes];
     
-    const lowerQuery = query.toLowerCase();
-    return attrs.filter(attr => 
-      attr.code.toLowerCase().includes(lowerQuery) || 
-      attr.label.toLowerCase().includes(lowerQuery)
-    );
-  };
-  
-  const filteredAttributes = filterAttributesByQuery(availableAttributes, searchQuery);
-  
-  const handleSelectAttribute = (attribute: Attribute) => {
-    console.log('Selected attribute:', attribute);
-    setSelectedAttribute(attribute);
-  };
-  
-  const handleAddAttribute = () => {
-    if (selectedAttribute) {
-      console.log('Adding attribute with locale/channel:', {
-        attribute: selectedAttribute,
-        locale: selectedLocale === 'default' ? null : selectedLocale,
-        channel: selectedChannel === 'default' ? null : selectedChannel
-      });
-      
-      onAddAttribute(
-        selectedAttribute,
-        selectedLocale === 'default' ? null : selectedLocale,
-        selectedChannel === 'default' ? null : selectedChannel
+    // Apply search filter
+    if (searchQuery.trim() !== '') {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(attr => 
+        attr.label.toLowerCase().includes(query) ||
+        attr.code.toLowerCase().includes(query)
       );
     }
+    
+    // Apply type filter
+    if (filterType !== 'all') {
+      filtered = filtered.filter(attr => attr.data_type === filterType);
+    }
+    
+    setFilteredAttributes(filtered);
+  }, [availableAttributes, searchQuery, filterType]);
+
+  // Handle the attribute add action
+  const handleAddAttribute = async () => {
+    if (!selectedAttribute) return;
+    
+    // Get appropriate locale and channel values
+    const locale = attributeLocale === 'default' ? null : attributeLocale;
+    const channel = attributeChannel === 'default' ? null : attributeChannel;
+    
+    try {
+      await onAddAttribute(selectedAttribute, locale, channel);
+      onOpenChange(false);
+    } catch (error) {
+      console.error('Failed to add attribute:', error);
+    }
+  };
+
+  // Group attributes by type
+  const getAttributesByType = () => {
+    const grouped: Record<string, Attribute[]> = {
+      text: [],
+      number: [],
+      boolean: [],
+      date: []
+    };
+    
+    filteredAttributes.forEach(attr => {
+      if (grouped[attr.data_type]) {
+        grouped[attr.data_type].push(attr);
+      } else {
+        grouped.text.push(attr);
+      }
+    });
+    
+    return grouped;
   };
   
-  // Add validation for locale/channel requirements
-  const isAddButtonDisabled = React.useMemo(() => {
-    if (!selectedAttribute) return true;
-    if (isPending) return true;
-    
-    // Check if locale is required but not selected
-    if (selectedAttribute.is_localisable && selectedLocale === 'default') {
-      return true;
-    }
-    
-    // Check if channel is required but not selected
-    if (selectedAttribute.is_scopable && selectedChannel === 'default') {
-      return true;
-    }
-    
-    return false;
-  }, [selectedAttribute, selectedLocale, selectedChannel, isPending]);
+  const groupedAttributes = getAttributesByType();
   
+  // Get type label
+  const getTypeLabel = (type: string) => {
+    switch (type) {
+      case 'text': return 'Text';
+      case 'number': return 'Number';
+      case 'boolean': return 'Boolean';
+      case 'date': return 'Date';
+      default: return type;
+    }
+  };
+  
+  // Get type color
+  const getTypeColor = (type: string) => {
+    switch (type) {
+      case 'text': return 'bg-blue-50 text-blue-700 border-blue-200';
+      case 'number': return 'bg-amber-50 text-amber-700 border-amber-200';
+      case 'boolean': return 'bg-green-50 text-green-700 border-green-200';
+      case 'date': return 'bg-purple-50 text-purple-700 border-purple-200';
+      default: return 'bg-slate-50';
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>Add Attribute</DialogTitle>
+          <DialogTitle className="text-xl">Add Attribute</DialogTitle>
           <DialogDescription>
-            Add a new attribute to your product.
+            Select an attribute to add to {groupId ? 'this group' : 'this product'}.
           </DialogDescription>
         </DialogHeader>
-        
-        <div className="mt-4 space-y-4">
-          {/* Always show Locale and Channel selectors at the top */}
-          <div className="grid grid-cols-2 gap-4 p-4 bg-muted/20 rounded-lg border border-muted">
-            <div className="space-y-2">
-              <label className="text-sm font-medium flex items-center gap-1">
-                <Badge variant="outline" className="px-2 py-0 h-5">Locale</Badge>
-              </label>
-              <Select
-                value={selectedLocale}
-                onValueChange={setSelectedLocale}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All locales">
-                    {selectedLocale === 'default' 
-                      ? 'All locales' 
-                      : availableLocales.find(l => l.code === selectedLocale)?.label || selectedLocale}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="default">All locales</SelectItem>
-                  {availableLocales.map(locale => (
-                    <SelectItem key={locale.code} value={locale.code}>
-                      {locale.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium flex items-center gap-1">
-                <Badge variant="outline" className="px-2 py-0 h-5">Channel</Badge>
-              </label>
-              <Select
-                value={selectedChannel}
-                onValueChange={setSelectedChannel}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All channels">
-                    {selectedChannel === 'default' 
-                      ? 'All channels' 
-                      : availableChannels.find(c => c.code === selectedChannel)?.label || selectedChannel}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="default">All channels</SelectItem>
-                  {availableChannels.map(channel => (
-                    <SelectItem key={channel.code} value={channel.code}>
-                      {channel.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'standard' | 'advanced')}>
+          <TabsList className="mb-4 grid grid-cols-2 w-[300px] mx-auto">
+            <TabsTrigger value="standard">Standard View</TabsTrigger>
+            <TabsTrigger value="advanced">Advanced Options</TabsTrigger>
+          </TabsList>
           
-          {selectedAttribute ? (
+          <TabsContent value="standard">
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-medium">{selectedAttribute.label}</h3>
-                  <p className="text-sm text-gray-500">{selectedAttribute.code}</p>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search attributes..."
+                    className="pl-8"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
                 </div>
-                <Badge variant="outline">{selectedAttribute.data_type}</Badge>
+                
+                <Select value={filterType} onValueChange={setFilterType}>
+                  <SelectTrigger className="w-[140px]">
+                    <Filter className="h-4 w-4 mr-2" />
+                    <SelectValue placeholder="Filter by type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="text">Text</SelectItem>
+                    <SelectItem value="number">Number</SelectItem>
+                    <SelectItem value="boolean">Boolean</SelectItem>
+                    <SelectItem value="date">Date</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               
-              <div className="flex justify-between mt-6">
-                <Button 
-                  variant="outline" 
-                  onClick={() => setSelectedAttribute(null)}
-                  size="sm"
-                >
-                  Back
-                </Button>
-                <Button 
-                  onClick={handleAddAttribute}
-                  disabled={isAddButtonDisabled}
-                  size="sm"
-                >
-                  {isPending ? (
-                    <>
-                      <span className="mr-2">Adding...</span>
-                      <span className="animate-spin">⟳</span>
-                    </>
-                  ) : "Add Attribute"}
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <>
-              <div className="flex items-center space-x-2">
-                <Input
-                  type="text"
-                  placeholder="Search attributes..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="flex-1"
-                />
-              </div>
-              
-              <div className="border rounded-md overflow-hidden">
-                <ScrollArea className="h-[300px]">
-                  <Command>
-                    <CommandInput
-                      placeholder="Search attributes..."
-                      value={searchQuery}
-                      onValueChange={setSearchQuery}
-                      className="border-0"
-                    />
-                    <CommandList>
-                      {filteredAttributes.length === 0 ? (
-                        <CommandEmpty>No attributes found.</CommandEmpty>
-                      ) : (
-                        <CommandGroup>
-                          {filteredAttributes.map((attribute) => (
-                            <CommandItem
-                              key={attribute.id}
-                              onSelect={() => handleSelectAttribute(attribute)}
-                              className="flex items-center justify-between px-4 py-2 cursor-pointer"
-                              disabled={isPending}
-                            >
-                              <div>
-                                <div className="font-medium">{attribute.label}</div>
-                                <div className="text-sm text-enterprise-500">{attribute.code}</div>
+              {filteredAttributes.length === 0 ? (
+                <div className="py-8 text-center border rounded-md border-dashed">
+                  <Info className="mx-auto h-10 w-10 text-muted-foreground/60 mb-2" />
+                  <p className="text-muted-foreground">No matching attributes found</p>
+                  {searchQuery && (
+                    <Button 
+                      variant="link" 
+                      onClick={() => setSearchQuery('')}
+                      className="mt-2"
+                    >
+                      Clear search
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <ScrollArea className="h-[300px] border rounded-md">
+                  <div className="p-4 space-y-4">
+                    {Object.entries(groupedAttributes).map(([type, attrs]) => {
+                      if (attrs.length === 0) return null;
+                      
+                      return (
+                        <div key={type} className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className={getTypeColor(type)}>
+                              {getTypeLabel(type)}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">{attrs.length} attributes</span>
+                          </div>
+                          
+                          <div className="space-y-1">
+                            {attrs.map(attr => (
+                              <div 
+                                key={attr.id} 
+                                className={`p-3 rounded-md cursor-pointer flex items-center justify-between hover:bg-slate-50 transition-colors ${selectedAttribute?.id === attr.id ? 'bg-primary/10 border-primary border' : 'border'}`}
+                                onClick={() => setSelectedAttribute(attr)}
+                              >
+                                <div>
+                                  <h4 className="font-medium">{attr.label}</h4>
+                                  <code className="text-xs text-muted-foreground">{attr.code}</code>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {attr.is_localisable && (
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger>
+                                          <Badge variant="outline" className="flex items-center gap-1">
+                                            <Globe className="h-3 w-3" />
+                                          </Badge>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <p className="text-xs">This attribute is localisable</p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  )}
+                                  
+                                  {attr.is_scopable && (
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger>
+                                          <Badge variant="outline" className="flex items-center gap-1">
+                                            <Monitor className="h-3 w-3" />
+                                          </Badge>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <p className="text-xs">This attribute is channel-specific</p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  )}
+                                </div>
                               </div>
-                              <Badge variant="outline">{attribute.data_type}</Badge>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      )}
-                    </CommandList>
-                  </Command>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </ScrollArea>
-              </div>
+              )}
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="advanced">
+            <div className="space-y-4">
+              <Label htmlFor="attribute-select">Select Attribute</Label>
+              <Select 
+                value={selectedAttribute ? selectedAttribute.id.toString() : ''} 
+                onValueChange={(value) => {
+                  const attribute = availableAttributes.find(attr => attr.id.toString() === value);
+                  setSelectedAttribute(attribute || null);
+                }}
+              >
+                <SelectTrigger id="attribute-select">
+                  <SelectValue placeholder="Select an attribute" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectLabel>Available Attributes</SelectLabel>
+                    {availableAttributes.map((attr) => (
+                      <SelectItem key={attr.id} value={attr.id.toString()}>
+                        {attr.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
               
-              <DialogFooter className="mt-4">
-                <Button variant="outline" onClick={() => onOpenChange(false)}>
-                  Cancel
-                </Button>
-              </DialogFooter>
-            </>
-          )}
-        </div>
+              {selectedAttribute && (
+                <>
+                  <Separator className="my-4" />
+                  
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-medium">Selected Attribute</h3>
+                        <p className="text-sm text-muted-foreground mb-2">{selectedAttribute.label}</p>
+                      </div>
+                      <Badge variant="outline" className={getTypeColor(selectedAttribute.data_type)}>
+                        {getTypeLabel(selectedAttribute.data_type)}
+                      </Badge>
+                    </div>
+                    
+                    {selectedAttribute.is_localisable && (
+                      <div className="space-y-2">
+                        <Label htmlFor="locale-select">Locale</Label>
+                        <Select 
+                          value={attributeLocale} 
+                          onValueChange={setAttributeLocale}
+                          disabled={!selectedAttribute.is_localisable}
+                        >
+                          <SelectTrigger id="locale-select">
+                            <Globe className="h-4 w-4 mr-2 text-muted-foreground" />
+                            <SelectValue placeholder="Select locale" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="default">All locales</SelectItem>
+                            {availableLocales.map((locale) => (
+                              <SelectItem key={locale.code} value={locale.code}>
+                                {locale.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    
+                    {selectedAttribute.is_scopable && (
+                      <div className="space-y-2">
+                        <Label htmlFor="channel-select">Channel</Label>
+                        <Select 
+                          value={attributeChannel} 
+                          onValueChange={setAttributeChannel}
+                          disabled={!selectedAttribute.is_scopable}
+                        >
+                          <SelectTrigger id="channel-select">
+                            <Monitor className="h-4 w-4 mr-2 text-muted-foreground" />
+                            <SelectValue placeholder="Select channel" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="default">All channels</SelectItem>
+                            {availableChannels.map((channel) => (
+                              <SelectItem key={channel.code} value={channel.code}>
+                                {channel.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleAddAttribute}
+            disabled={!selectedAttribute || isPending}
+          >
+            {isPending ? 'Adding...' : 'Add Attribute'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 };
 
-export default React.memo(AddAttributeModal); 
+export default AddAttributeModal; 

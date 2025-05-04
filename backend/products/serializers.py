@@ -35,7 +35,7 @@ class ProductSerializer(serializers.ModelSerializer):
     price = serializers.FloatField()  # Explicitly use FloatField to ensure numeric values
     images = ProductImageSerializer(many=True, read_only=True)
     tags = serializers.ListField(child=serializers.CharField(), required=False)
-    attributes = serializers.JSONField(required=False)
+    attribute_values = serializers.SerializerMethodField(read_only=True)
     primary_image = serializers.ImageField(required=False, allow_null=True)
     primary_image_thumb = serializers.SerializerMethodField()
     primary_image_large = serializers.SerializerMethodField()
@@ -50,7 +50,7 @@ class ProductSerializer(serializers.ModelSerializer):
         model = Product
         fields = [
             'id', 'name', 'sku', 'description', 'price', 'category', 'brand',
-            'barcode', 'tags', 'attributes', 'is_active', 'is_archived', 'created_at',
+            'barcode', 'tags', 'attribute_values', 'is_active', 'is_archived', 'created_at',
             'updated_at', 'primary_image', 'completeness_percent', 'missing_fields',
             'assets', 'has_primary_image', 'primary_image_url', 'primary_asset', 'organization',
             'created_by', 'images', 'primary_image_thumb', 'primary_image_large'
@@ -58,7 +58,7 @@ class ProductSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at', 'completeness_percent', 
                            'missing_fields', 'assets', 'has_primary_image', 'primary_image_url',
                            'primary_asset', 'organization', 'created_by', 'images',
-                           'primary_image_thumb', 'primary_image_large']
+                           'primary_image_thumb', 'primary_image_large', 'attribute_values']
 
     def get_primary_image_thumb(self, obj):
         """
@@ -101,19 +101,6 @@ class ProductSerializer(serializers.ModelSerializer):
         else:
             ret['tags'] = []
         
-        # Handle attributes
-        if instance.attributes:
-            try:
-                # Check if attributes is already a dict (don't try to parse again)
-                if isinstance(instance.attributes, dict):
-                    ret['attributes'] = instance.attributes
-                else:
-                    ret['attributes'] = json.loads(instance.attributes)
-            except json.JSONDecodeError:
-                ret['attributes'] = {}
-        else:
-            ret['attributes'] = {}
-        
         return ret
 
     def to_internal_value(self, data):
@@ -126,10 +113,6 @@ class ProductSerializer(serializers.ModelSerializer):
         # Handle tags
         if 'tags' in data and not isinstance(data['tags'], str):
             validated_data['tags'] = json.dumps(data['tags'])
-        
-        # Handle attributes
-        if 'attributes' in data and not isinstance(data['attributes'], str):
-            validated_data['attributes'] = json.dumps(data['attributes'])
         
         return validated_data
 
@@ -185,39 +168,104 @@ class ProductSerializer(serializers.ModelSerializer):
 
     def get_completeness_percent(self, obj):
         """Return the completeness percentage of the product"""
-        # Implement the logic to calculate completeness percentage
-        # This is a placeholder and should be replaced with actual implementation
-        return 80  # Placeholder value, actual implementation needed
+        try:
+            return obj.get_completeness()
+        except Exception as e:
+            print(f"ERROR: Failed to calculate completeness for product {obj.id}: {str(e)}")
+            return 0
 
     def get_missing_fields(self, obj):
         """Return a list of missing fields for the product"""
-        # Implement the logic to identify missing fields
-        # This is a placeholder and should be replaced with actual implementation
-        return []  # Placeholder value, actual implementation needed
+        try:
+            return obj.get_missing_fields()
+        except Exception as e:
+            print(f"ERROR: Failed to get missing fields for product {obj.id}: {str(e)}")
+            return []
 
     def get_assets(self, obj):
         """Return a list of assets associated with the product"""
-        # Implement the logic to retrieve assets
-        # This is a placeholder and should be replaced with actual implementation
-        return []  # Placeholder value, actual implementation needed
+        try:
+            assets = obj.assets.all()
+            request = self.context.get('request')
+            
+            # Use the ProductAssetSerializer to serialize the assets
+            serializer = ProductAssetSerializer(
+                assets, 
+                many=True, 
+                context={'request': request} if request else {}
+            )
+            return serializer.data
+        except Exception as e:
+            print(f"ERROR: Failed to get assets for product {obj.id}: {str(e)}")
+            return []
 
     def get_has_primary_image(self, obj):
         """Return whether the product has a primary image"""
-        # Implement the logic to check if the product has a primary image
-        # This is a placeholder and should be replaced with actual implementation
-        return False  # Placeholder value, actual implementation needed
+        try:
+            # Check if there's a primary image in the images relation
+            has_primary = obj.images.filter(is_primary=True).exists()
+            
+            # If not, check if there's a primary asset
+            if not has_primary:
+                has_primary = obj.assets.filter(is_primary=True).exists()
+                
+            # If still not, check if there's a direct primary_image
+            if not has_primary:
+                has_primary = bool(obj.primary_image)
+                
+            return has_primary
+        except Exception as e:
+            print(f"ERROR: Failed to check primary image for product {obj.id}: {str(e)}")
+            return False
 
     def get_primary_image_url(self, obj):
         """Return the URL of the primary image"""
-        # Implement the logic to retrieve the URL of the primary image
-        # This is a placeholder and should be replaced with actual implementation
-        return None  # Placeholder value, actual implementation needed
+        try:
+            # First check for a primary image in the images relation
+            primary_image = obj.images.filter(is_primary=True).first()
+            if primary_image and primary_image.image:
+                return primary_image.image.url
+                
+            # Then check for a primary asset
+            primary_asset = obj.assets.filter(is_primary=True, asset_type='image').first()
+            if primary_asset and primary_asset.file:
+                return primary_asset.file.url
+                
+            # Finally, check for a direct primary_image
+            if obj.primary_image:
+                return obj.primary_image.url
+                
+            return None
+        except Exception as e:
+            print(f"ERROR: Failed to get primary image URL for product {obj.id}: {str(e)}")
+            return None
 
     def get_primary_asset(self, obj):
         """Return the primary asset associated with the product"""
-        # Implement the logic to retrieve the primary asset
-        # This is a placeholder and should be replaced with actual implementation
-        return None  # Placeholder value, actual implementation needed
+        try:
+            primary_asset = obj.assets.filter(is_primary=True).first()
+            if primary_asset:
+                request = self.context.get('request')
+                serializer = ProductAssetSerializer(
+                    primary_asset, 
+                    context={'request': request} if request else {}
+                )
+                return serializer.data
+            return None
+        except Exception as e:
+            print(f"ERROR: Failed to get primary asset for product {obj.id}: {str(e)}")
+            return None
+
+    def get_attribute_values(self, obj):
+        """Return the attribute values for this product"""
+        try:
+            from products.serializers import AttributeValueDetailSerializer
+            attribute_values = obj.attribute_values.all()
+            serializer = AttributeValueDetailSerializer(attribute_values, many=True)
+            return serializer.data
+        except Exception as e:
+            print(f"ERROR: Failed to get attribute values for product {obj.id}: {str(e)}")
+            return []
 
 class ProductRelationSerializer(serializers.ModelSerializer):
     """Serializer for product relations"""

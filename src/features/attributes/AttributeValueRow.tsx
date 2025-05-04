@@ -5,11 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Check, X, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Check, X, Loader2, CheckCircle2, AlertCircle, Trash2, LayoutGrid } from 'lucide-react';
 import { format } from 'date-fns';
 import { useDebouncedCallback } from '@/hooks/useDebouncedCallback';
 import { Edit, Calendar as CalendarIcon, Globe, Monitor } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // Types
 export interface Attribute {
@@ -44,6 +45,11 @@ interface AttributeValueRowProps {
   isStaff: boolean;
   availableLocales?: Array<{ code: string, label: string }>;
   availableChannels?: Array<{ code: string, label: string }>;
+  onRemove?: () => void;
+  isSettingsContext?: boolean;
+  groupName?: string;
+  selectedLocale?: string;
+  selectedChannel?: string;
 }
 
 /**
@@ -61,7 +67,12 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
   savingState,
   isStaff,
   availableLocales = [],
-  availableChannels = []
+  availableChannels = [],
+  onRemove,
+  isSettingsContext = false,
+  groupName = "",
+  selectedLocale = "default",
+  selectedChannel = "default"
 }) => {
   // Keep a local value for editing
   const [localValue, setLocalValue] = useState<any>(
@@ -357,96 +368,159 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
   };
   
   return (
-    <div className="border rounded-md overflow-hidden">
-      <div className="bg-slate-50 px-4 py-2 border-b flex items-center justify-between">
-        <div className="flex items-center">
-          <span className="font-medium">{attribute.label}</span>
-          <Badge variant="outline" className="ml-2 text-xs">
-            {attribute.data_type}
+    <div className={`p-4 border rounded-md transition-all duration-200 ${isEditable ? 'border-primary shadow-sm bg-primary/5' : 'hover:border-slate-300'}`}>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-slate-800">{attribute.label}</span>
+          
+          {/* Data type indicator */}
+          <Badge variant="outline" className="text-xs bg-amber-50 text-amber-800 border-amber-200">
+            {attribute.data_type === 'text' && 'Text'}
+            {attribute.data_type === 'number' && 'Number'}
+            {attribute.data_type === 'date' && 'Date'}
+            {attribute.data_type === 'boolean' && 'Boolean'}
           </Badge>
           
-          {/* Display badges for locale and channel when not editing */}
-          {!isEditable && (
-            <>
-              {value?.locale && (
-                <Badge variant="outline" className="ml-2 text-xs bg-blue-50">
-                  <Globe className="h-3 w-3 mr-1" />
-                  {value.locale || 'All'}
-                </Badge>
-              )}
-              {value?.channel && (
-                <Badge variant="outline" className="ml-2 text-xs bg-purple-50">
-                  <Monitor className="h-3 w-3 mr-1" />
-                  {value.channel || 'All'}
-                </Badge>
-              )}
-            </>
+          {/* Group indicator if provided */}
+          {groupName && (
+            <Badge variant="outline" className="text-xs bg-indigo-50 text-indigo-700 border-indigo-200">
+              <LayoutGrid className="w-3 h-3 mr-1" />
+              {groupName}
+            </Badge>
           )}
         </div>
         
-        {isStaff && !isEditable && (
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => onEdit(attribute.id)}
-            className="h-7 px-2"
-          >
-            <Edit className="h-3.5 w-3.5 mr-1" />
-            Edit
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {isEditable ? (
+            <div className="flex items-center space-x-2">
+              <Button 
+                size="sm" 
+                variant="ghost" 
+                onClick={() => onCancel(attribute.id)}
+                disabled={savingState === 'saving'}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : isStaff ? (
+            <div className="flex items-center gap-1">
+              {/* Only show the trash button if there's a value to remove or we're in settings context */}
+              {onRemove && (
+                (value && value.value !== null && value.value !== undefined) || isSettingsContext ? (
+                  <TooltipProvider>
+                    <Tooltip delayDuration={300}>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={onRemove}
+                          className="text-danger-500 hover:text-danger-600 hover:bg-danger-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" align="center" className="max-w-[280px] text-xs">
+                        {isSettingsContext 
+                          ? 'Remove this attribute from the group. This will not delete the attribute itself.' 
+                          : 'Remove this value from the product. This will only affect this specific product.'}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ) : null
+              )}
+              <TooltipProvider>
+                <Tooltip delayDuration={300}>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onEdit(attribute.id)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" align="center" className="text-xs">
+                    Edit this attribute value
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+          ) : null}
+        </div>
       </div>
       
-      <div className="p-4">
-        {isEditable ? (
-          <div className="space-y-4">
-            {/* Add locale/channel selectors */}
-            {renderLocaleChannelSelectors()}
-            
-            {renderAttributeEditor()}
-            
-            <div className="flex items-center justify-between">
-              <div>
-                {renderSavingState()}
-              </div>
-              
-              <div className="flex space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onCancel(attribute.id)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  disabled={savingState === 'saving'}
-                  onClick={() => {
-                    if (isNew) {
-                      onSaveNew(
-                        attribute.id, 
-                        localValue
-                      );
-                    } else if (value?.id) {
-                      onUpdate(
-                        value.id, 
-                        localValue
-                      );
-                    }
-                  }}
-                >
-                  <Check className="h-3.5 w-3.5 mr-1" />
-                  Save
-                </Button>
-              </div>
-            </div>
+      {/* Context information bar showing locale and channel */}
+      <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground">
+        <div className="flex items-center">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center">
+                  <Globe className="w-3 h-3 mr-1 text-blue-500" />
+                  <span>
+                    {value?.locale 
+                      ? availableLocales.find(l => l.code === value.locale)?.label || value.locale
+                      : attribute.is_localisable ? 'All locales' : selectedLocale === 'default' ? 'Default locale' : availableLocales.find(l => l.code === selectedLocale)?.label || selectedLocale}
+                  </span>
+                  {attribute.is_localisable && (
+                    <Badge variant="outline" className="ml-1 h-4 px-1 bg-blue-50 border-blue-200">
+                      <span className="text-[9px]">Localisable</span>
+                    </Badge>
+                  )}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                {attribute.is_localisable 
+                  ? 'This attribute can have different values per language'
+                  : 'This attribute has the same value in all languages'}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+        
+        <span className="text-slate-300">|</span>
+        
+        <div className="flex items-center">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center">
+                  <Monitor className="w-3 h-3 mr-1 text-purple-500" />
+                  <span>
+                    {value?.channel 
+                      ? availableChannels.find(c => c.code === value.channel)?.label || value.channel
+                      : attribute.is_scopable ? 'All channels' : selectedChannel === 'default' ? 'Default channel' : availableChannels.find(c => c.code === selectedChannel)?.label || selectedChannel}
+                  </span>
+                  {attribute.is_scopable && (
+                    <Badge variant="outline" className="ml-1 h-4 px-1 bg-purple-50 border-purple-200">
+                      <span className="text-[9px]">Scopable</span>
+                    </Badge>
+                  )}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                {attribute.is_scopable 
+                  ? 'This attribute can have different values per sales channel'
+                  : 'This attribute has the same value in all sales channels'}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+        
+        {/* Show attribute code for technical users */}
+        <span className="text-slate-300">|</span>
+        <code className="text-xs bg-slate-100 px-1 py-0.5 rounded">{attribute.code}</code>
+      </div>
+      
+      <div className="space-y-4">
+        {isEditable && renderLocaleChannelSelectors()}
+        
+        <div className="relative">
+          <div className={value?.value === null || value?.value === undefined ? 'opacity-60' : ''}>
+            {isEditable ? renderAttributeEditor() : renderValue()}
           </div>
-        ) : (
-          <div className="py-1.5">
-            {renderValue()}
-          </div>
-        )}
+          {renderSavingState()}
+        </div>
       </div>
     </div>
   );

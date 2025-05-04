@@ -110,7 +110,7 @@ class Product(models.Model):
             'barcode': {'weight': 1, 'check': lambda: self.barcode is not None and self.barcode.strip() != ''},
             'primary_image': {'weight': 1, 'check': lambda: bool(self.primary_image)},
             'tags': {'weight': 1, 'check': lambda: self._check_tags_not_empty()},
-            'attributes': {'weight': 1, 'check': lambda: self._check_attributes_not_empty()}
+            'attributes': {'weight': 1, 'check': lambda: self._check_attribute_values_complete()},
         }
         
         # Calculate weighted completeness
@@ -145,18 +145,45 @@ class Product(models.Model):
         except Exception:
             return False
             
-    def _check_attributes_not_empty(self):
-        """Helper to safely check if attributes are not empty"""
+    def _check_attribute_values_not_empty(self):
+        """Helper to check if attribute values exist for this product"""
         try:
-            if not self.attributes:
-                return False
-            attrs = json.loads(self.attributes)
-            return bool(attrs and len(attrs) > 0)
-        except json.JSONDecodeError:
+            # Focus exclusively on the AttributeValue entries in the database 
+            # instead of checking the legacy attributes JSON field
+            from django.db.models import Count
+            attr_count = self.attribute_values.count()
+            return attr_count > 0
+        except Exception as e:
+            print(f"ERROR: Attribute values check failed for product {self.id}: {e}")
             return False
-        except Exception:
+
+    def _check_attribute_values_complete(self):
+        """
+        Check if the product has values for all attributes defined for its organization.
+        Returns True if all attributes have values, False otherwise.
+        """
+        try:
+            # Get all attribute IDs that should exist for this organization
+            all_attr_ids = set(Attribute.objects
+                .filter(organization=self.organization)
+                .values_list('id', flat=True)
+            )
+            
+            # If there are no attributes defined, consider it complete
+            if not all_attr_ids:
+                return True
+            
+            # Get the attribute IDs that actually have values for this product
+            filled_ids = set(self.attribute_values
+                .values_list('attribute_id', flat=True)
+            )
+            
+            # If the sets are equal, all attributes have values
+            return all_attr_ids == filled_ids
+        except Exception as e:
+            print(f"ERROR: Attribute completeness check failed for product {self.id}: {e}")
             return False
-    
+
     def get_missing_fields(self):
         """
         Return a list of field names that are missing data along with their weights
@@ -190,12 +217,36 @@ class Product(models.Model):
         except Exception:
             missing.append({'field': 'Tags', 'weight': 1})
             
+        # Check attribute values for completeness
         try:
-            if not self.attributes or not json.loads(self.attributes or '{}'):
-                missing.append({'field': 'Attributes', 'weight': 1})
-        except json.JSONDecodeError:
-            missing.append({'field': 'Attributes', 'weight': 1})
-        except Exception:
+            # Get all attribute IDs that should exist for this organization
+            all_attr_ids = set(Attribute.objects
+                .filter(organization=self.organization)
+                .values_list('id', flat=True)
+            )
+            
+            # If there are attributes defined
+            if all_attr_ids:
+                # Get the attribute IDs that actually have values for this product
+                filled_ids = set(self.attribute_values
+                    .values_list('attribute_id', flat=True)
+                )
+                
+                # Find missing attribute IDs
+                missing_attr_ids = all_attr_ids - filled_ids
+                
+                # If there are missing attributes, add them to the missing fields list
+                if missing_attr_ids:
+                    # Get details of the missing attributes
+                    missing_attrs = Attribute.objects.filter(id__in=missing_attr_ids)
+                    for attr in missing_attrs:
+                        missing.append({
+                            'field': f'Attribute: {attr.label}', 
+                            'weight': 1,
+                            'attribute_id': attr.id
+                        })
+        except Exception as e:
+            print(f"ERROR: Failed to check missing attributes for product {self.id}: {e}")
             missing.append({'field': 'Attributes', 'weight': 1})
             
         return missing
@@ -212,6 +263,9 @@ class Product(models.Model):
             except (json.JSONDecodeError, TypeError, Exception):
                 return False
                 
+        # Check attribute completeness using the new method
+        attributes_complete = self._check_attribute_values_complete()
+            
         all_fields = [
             {'field': 'Name', 'weight': 2, 'complete': bool(self.name and self.name.strip())},
             {'field': 'SKU', 'weight': 2, 'complete': bool(self.sku and self.sku.strip())},
@@ -222,8 +276,40 @@ class Product(models.Model):
             {'field': 'GTIN/Barcode', 'weight': 1, 'complete': bool(self.barcode and self.barcode.strip())},
             {'field': 'Product Image', 'weight': 1, 'complete': bool(self.primary_image)},
             {'field': 'Tags', 'weight': 1, 'complete': safe_json_length(self.tags, '[]')},
-            {'field': 'Attributes', 'weight': 1, 'complete': safe_json_length(self.attributes, '{}')}
+            {'field': 'Attributes', 'weight': 1, 'complete': attributes_complete}
         ]
+        
+        # Add detailed attribute completeness information
+        try:
+            # Get all attribute IDs that should exist for this organization
+            all_attr_ids = set(Attribute.objects
+                .filter(organization=self.organization)
+                .values_list('id', flat=True)
+            )
+            
+            # If there are attributes defined
+            if all_attr_ids:
+                # Get the attribute IDs that actually have values for this product
+                filled_ids = set(self.attribute_values
+                    .values_list('attribute_id', flat=True)
+                )
+                
+                # Get details of all attributes
+                all_attributes = Attribute.objects.filter(id__in=all_attr_ids)
+                
+                # Add each individual attribute as a separate item in the field completeness list
+                for attr in all_attributes:
+                    is_complete = attr.id in filled_ids
+                    all_fields.append({
+                        'field': f'Attribute: {attr.label}',
+                        'weight': 1,
+                        'complete': is_complete,
+                        'attribute_id': attr.id,
+                        'attribute_code': attr.code,
+                        'attribute_type': attr.data_type
+                    })
+        except Exception as e:
+            print(f"ERROR: Failed to add attribute details to field completeness for product {self.id}: {str(e)}")
         
         return all_fields
 

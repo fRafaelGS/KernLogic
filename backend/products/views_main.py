@@ -1168,40 +1168,35 @@ class DashboardViewSet(viewsets.ViewSet):
             
             # Get attribute-related completeness data
             try:
-                from attributes.models import Attribute, AttributeValue
+                # Import the models directly from products
+                from products.models import Attribute
                 
-                # Get mandatory attributes
-                mandatory_attributes = Attribute.objects.filter(is_mandatory=True)
-                mandatory_attribute_names = [f"{attr.group.name}: {attr.name}" if attr.group else attr.name 
-                                           for attr in mandatory_attributes]
+                # Get organization from the utility function
+                organization = get_user_organization(request.user)
                 
-                # Count products with missing mandatory attributes
-                attributes_missing_count = 0
-                
-                for product in queryset:
-                    # Get attribute values for this product
-                    attribute_values = AttributeValue.objects.filter(
-                        product_id=product.id,
-                        attribute__is_mandatory=True
-                    )
+                if organization:
+                    # Get all attributes for this organization
+                    attributes = Attribute.objects.filter(organization=organization)
+                    attribute_names = [f"{attr.label} ({attr.code})" for attr in attributes]
                     
-                    # Get attribute IDs with values
-                    filled_attribute_ids = set(av.attribute_id for av in attribute_values 
-                                             if av.value and str(av.value).strip())
+                    # Count products with missing attribute values
+                    attributes_missing_count = 0
                     
-                    # Get all mandatory attribute IDs
-                    mandatory_attribute_ids = set(attr.id for attr in mandatory_attributes)
+                    for product in queryset:
+                        # Use the new method to check attribute completeness
+                        if not product._check_attribute_values_complete():
+                            attributes_missing_count += 1
                     
-                    # If any mandatory attributes are missing, increment the count
-                    if filled_attribute_ids != mandatory_attribute_ids and mandatory_attribute_ids:
-                        attributes_missing_count += 1
-                
-                # Add attribute data to the response
-                data['attributes_missing_count'] = attributes_missing_count
-                data['mandatory_attributes'] = mandatory_attribute_names
+                    # Add attribute data to the response
+                    data['attributes_missing_count'] = attributes_missing_count
+                    data['mandatory_attributes'] = attribute_names
+                else:
+                    # No organization found
+                    data['attributes_missing_count'] = 0
+                    data['mandatory_attributes'] = []
                 
             except ImportError:
-                # Attributes app might not be installed
+                # Attributes might not be properly configured
                 data['attributes_missing_count'] = 0
                 data['mandatory_attributes'] = []
             except Exception as e:
@@ -1370,6 +1365,17 @@ class DashboardViewSet(viewsets.ViewSet):
                 else:
                     queryset = Product.objects.filter(created_by=request.user)
             
+            # Get all attributes for this organization for detailed missing attribute information
+            try:
+                from products.models import Attribute
+                if organization:
+                    all_attributes = {attr.id: attr for attr in Attribute.objects.filter(organization=organization)}
+                else:
+                    all_attributes = {}
+            except Exception as e:
+                print(f"ERROR: Failed to get attributes: {str(e)}")
+                all_attributes = {}
+            
             # Calculate completeness for each product
             products_with_completeness = []
             for product in queryset:
@@ -1378,6 +1384,14 @@ class DashboardViewSet(viewsets.ViewSet):
                     if completeness < 100:  # Only include incomplete products
                         try:
                             missing_fields = product.get_missing_fields()
+                            
+                            # Add attribute details to missing fields
+                            for field in missing_fields:
+                                if 'attribute_id' in field and field['attribute_id'] in all_attributes:
+                                    attr = all_attributes[field['attribute_id']]
+                                    field['attribute_code'] = attr.code
+                                    field['attribute_type'] = attr.data_type
+                            
                             field_completeness = product.get_field_completeness()
                             products_with_completeness.append({
                                 'product': product,

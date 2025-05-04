@@ -90,6 +90,16 @@ interface GroupFormValues {
   items: AttributeGroupItem[];
 }
 
+// Import our utility functions at the top of the file
+import {
+  updateAttributeGroup,
+  reorderAttributeGroupItems,
+  addAttributeToGroup,
+  removeAttributeFromGroup,
+  createAttributeGroup,
+  deleteAttributeGroup,
+} from '../api/attributeGroupsApi';
+
 // Sortable item wrapper for drag-and-drop
 const SortableAttributeItem = ({ item, attributes, onRemove }: { 
   item: AttributeGroupItem; 
@@ -201,44 +211,14 @@ const AttributeGroupsPage: React.FC = () => {
     enabled: ENABLE_ATTRIBUTE_GROUPS,
   });
 
-  // Create group mutation
-  const createMutation = useMutation({
-    mutationFn: async (data: GroupFormValues) => {
-      const response = await axiosInstance.post(paths.attributeGroups.root(), data, {
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        }
-      });
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['attributeGroups'] });
-      toast.success('Attribute group created successfully');
-      setIsAddModalOpen(false);
-      resetForm();
-    },
-    onError: (error: any) => {
-      console.error('Error creating attribute group:', error);
-      const errorMessage = error.response?.data?.detail || 'Failed to create attribute group';
-      toast.error(errorMessage);
-      
-      if (error.response?.data) {
-        setFormErrors(error.response.data);
-      }
-    },
-  });
-
-  // Update group mutation
+  // Modify the update mutation to only handle group properties, not items
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: GroupFormValues }) => {
-      const response = await axiosInstance.patch(paths.attributeGroups.byId(id), data, {
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        }
+    mutationFn: async ({ id, data }: { id: number; data: Omit<GroupFormValues, 'items'> }) => {
+      // Only send name and order to update group properties
+      return await updateAttributeGroup(id, {
+        name: data.name,
+        order: data.order
       });
-      return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['attributeGroups'] });
@@ -257,7 +237,93 @@ const AttributeGroupsPage: React.FC = () => {
     },
   });
 
-  // Delete group mutation
+  // Create a new mutation for adding attributes to a group
+  const addAttributeMutation = useMutation({
+    mutationFn: async ({ groupId, attributeId }: { groupId: number; attributeId: number }) => {
+      return await addAttributeToGroup(groupId, attributeId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['attributeGroups'] });
+    },
+    onError: (error: any) => {
+      console.error('Error adding attribute to group:', error);
+      const errorMessage = error.response?.data?.detail || 'Failed to add attribute to group';
+      toast.error(errorMessage);
+    }
+  });
+
+  // Create a new mutation for removing attributes from a group
+  const removeAttributeMutation = useMutation({
+    mutationFn: async ({ groupId, itemId }: { groupId: number; itemId: number }) => {
+      return await removeAttributeFromGroup(groupId, itemId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['attributeGroups'] });
+    },
+    onError: (error: any) => {
+      console.error('Error removing attribute from group:', error);
+      const errorMessage = error.response?.data?.detail || 'Failed to remove attribute from group';
+      toast.error(errorMessage);
+    }
+  });
+
+  // Create a new mutation for reordering items
+  const reorderItemsMutation = useMutation({
+    mutationFn: async ({ groupId, itemIds }: { groupId: number; itemIds: number[] }) => {
+      return await reorderAttributeGroupItems(groupId, itemIds);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['attributeGroups'] });
+    },
+    onError: (error: any) => {
+      console.error('Error reordering attributes in group:', error);
+      const errorMessage = error.response?.data?.detail || 'Failed to reorder attributes';
+      toast.error(errorMessage);
+    }
+  });
+
+  // Update the createMutation to use our utility
+  const createMutation = useMutation({
+    mutationFn: async (data: GroupFormValues) => {
+      // First create the group without items
+      const { name, order } = data;
+      return await createAttributeGroup({ name, order });
+    },
+    onSuccess: (newGroup) => {
+      // If there are items to add, add them one by one
+      if (formValues.items && formValues.items.length > 0) {
+        Promise.all(
+          formValues.items.map((item, index) => 
+            addAttributeToGroup(newGroup.id, item.attribute)
+          )
+        ).then(() => {
+          // After adding all attributes, reorder them if needed
+          if (formValues.items.length > 1) {
+            const itemIds = formValues.items.map(item => item.id).filter(id => id !== undefined) as number[];
+            if (itemIds.length > 1) {
+              reorderAttributeGroupItems(newGroup.id, itemIds);
+            }
+          }
+        });
+      }
+      
+      queryClient.invalidateQueries({ queryKey: ['attributeGroups'] });
+      toast.success('Attribute group created successfully');
+      setIsAddModalOpen(false);
+      resetForm();
+    },
+    onError: (error: any) => {
+      console.error('Error creating attribute group:', error);
+      const errorMessage = error.response?.data?.detail || 'Failed to create attribute group';
+      toast.error(errorMessage);
+      
+      if (error.response?.data) {
+        setFormErrors(error.response.data);
+      }
+    },
+  });
+
+  // Update the deleteMutation to use our utility
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
       if (!isStaff) {
@@ -265,9 +331,7 @@ const AttributeGroupsPage: React.FC = () => {
         throw new Error('Permission denied');
       }
       
-      await axiosInstance.delete(paths.attributeGroups.byId(id), {
-        headers: { 'Accept': 'application/json' }
-      });
+      return await deleteAttributeGroup(id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['attributeGroups'] });
@@ -422,16 +486,82 @@ const AttributeGroupsPage: React.FC = () => {
       return;
     }
     
-    // Create payload with ordered items
-    const payload = {
-      ...formValues,
-      items: formValues.items.map((it, idx) => ({ ...it, order: idx }))
-    };
-    
     if (selectedGroup && isEditModalOpen) {
-      updateMutation.mutate({ id: selectedGroup.id, data: payload });
+      // First update the basic group properties
+      updateMutation.mutate({ 
+        id: selectedGroup.id, 
+        data: { 
+          name: formValues.name, 
+          order: formValues.order 
+        } 
+      });
+      
+      // Track which items were added, removed, or reordered
+      const originalItemIds = new Set(selectedGroup.items.map(item => item.attribute));
+      const newItemIds = new Set(formValues.items.map(item => item.attribute));
+      
+      // Find items to add (in new but not in original)
+      const itemsToAdd = formValues.items.filter(item => 
+        !originalItemIds.has(item.attribute)
+      );
+      
+      // Find items to remove (in original but not in new)
+      const itemsToRemove = selectedGroup.items.filter(item => 
+        !newItemIds.has(item.attribute)
+      );
+      
+      // Handle removals
+      itemsToRemove.forEach(item => {
+        if (item.id) {
+          removeAttributeMutation.mutate({ 
+            groupId: selectedGroup.id, 
+            itemId: item.id 
+          });
+        }
+      });
+      
+      // Handle additions
+      itemsToAdd.forEach(item => {
+        addAttributeMutation.mutate({ 
+          groupId: selectedGroup.id, 
+          attributeId: item.attribute 
+        });
+      });
+      
+      // If we have existing items that need reordering
+      const existingItems = selectedGroup.items.filter(item => 
+        newItemIds.has(item.attribute) && item.id
+      );
+      
+      if (existingItems.length > 0) {
+        // Get the new order from formValues
+        const newOrderMap = new Map(
+          formValues.items.map((item, index) => [item.attribute, index])
+        );
+        
+        // Sort existing items according to the new order
+        const sortedItems = [...existingItems].sort((a, b) => {
+          const orderA = newOrderMap.get(a.attribute) ?? 0;
+          const orderB = newOrderMap.get(b.attribute) ?? 0;
+          return orderA - orderB;
+        });
+        
+        // If the order has changed, reorder
+        const itemIds = sortedItems.map(item => item.id).filter(Boolean) as number[];
+        if (itemIds.length > 1) {
+          reorderItemsMutation.mutate({ 
+            groupId: selectedGroup.id, 
+            itemIds 
+          });
+        }
+      }
     } else {
-      createMutation.mutate(payload);
+      // For creation, we can just use our existing mutation
+      createMutation.mutate({ 
+        name: formValues.name, 
+        order: formValues.order,
+        items: formValues.items
+      });
     }
   };
 

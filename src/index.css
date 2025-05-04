@@ -117,3 +117,25 @@
     scrollbar-width: none;
   }
 }
+
+/* Fix for collapsible sections to prevent ghost bars */
+@layer components {
+  /* Force proper collapsing behavior, but only for the specific CollapsibleContent */
+  [data-radix-collapsible-content][data-state="closed"] {
+    overflow: hidden;
+    height: 0;
+    min-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Fix for flex containers */
+  .flex > * {
+    min-height: 0;
+  }
+
+  /* Only hide the content inside CollapsibleContent */
+  [data-radix-collapsible-content][data-state="closed"] > div {
+    visibility: hidden;
+  }
+}

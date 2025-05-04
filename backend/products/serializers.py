@@ -271,7 +271,7 @@ class ProductRelationSerializer(serializers.ModelSerializer):
     """Serializer for product relations"""
     class Meta:
         model = ProductRelation
-        fields = ['id', 'product', 'related_product', 'relationship_type', 'is_pinned', 'created_at']
+        fields = ['id', 'product', 'related_product', 'relationship_type', 'is_pinned', 'notes', 'created_at']
         read_only_fields = ['created_at', 'created_by']
 
     def validate(self, data):

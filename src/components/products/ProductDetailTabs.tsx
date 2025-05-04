@@ -60,7 +60,7 @@ import { CompletenessDrilldown } from './CompletenessDrilldown';
 import { Carousel, CarouselContent, CarouselItem, CarouselPrevious, CarouselNext } from '@/components/ui/carousel';
 import { Link } from 'react-router-dom';
 import { debounce } from 'lodash';
-import RelatedProductsCarousel from './RelatedProductsCarousel';
+import RelatedProductsPanel from './RelatedProductsPanel';
 // Import the AssetsTab component
 import { AssetsTab } from './AssetsTab';
 import { Skeleton } from "@/components/ui/skeleton";
@@ -1930,7 +1930,7 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
         </Card>
         
         {/* Related Products */}
-        <RelatedProductsCarousel 
+        <RelatedProductsPanel 
           productId={product.id} 
           onRefresh={() => {/* handle refresh if needed */}}
         />

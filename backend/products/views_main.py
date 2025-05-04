@@ -903,6 +903,7 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         related_product_id = request.data.get('related_product_id')
         is_pinned = request.data.get('is_pinned', False)
         relationship_type = request.data.get('relationship_type', 'related')
+        notes = request.data.get('notes', '')
         
         if not related_product_id:
             return Response(
@@ -932,6 +933,7 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             defaults={
                 'is_pinned': is_pinned,
                 'relationship_type': relationship_type,
+                'notes': notes,
                 'created_by': request.user
             }
         )
@@ -1003,7 +1005,7 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         class RelationSerializer(serializers.ModelSerializer):
             class Meta:
                 model = ProductRelation
-                fields = ['id', 'related_product_id', 'relationship_type', 'is_pinned', 'created_at']
+                fields = ['id', 'related_product_id', 'relationship_type', 'is_pinned', 'notes', 'created_at']
                 
         serializer = RelationSerializer(relations, many=True)
         return Response(serializer.data)

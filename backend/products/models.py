@@ -363,6 +363,11 @@ class ProductRelation(models.Model):
         default=False,
         help_text="Whether this related product should be highlighted"
     )
+    notes = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Additional notes about the relationship between these products"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(
         User,

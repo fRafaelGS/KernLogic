@@ -141,10 +141,15 @@
     id: number;
     product_id: number;
     related_product_id: number;
-    relationship_type: string;
+    relationship_type: RelationshipType;
     is_pinned: boolean;
     created_at: string;
+    created_by?: string;
+    source: 'manual' | 'algorithm';
+    notes?: string;
     }
+
+    export type RelationshipType = 'accessory' | 'variant' | 'frequently_bought_together' | 'replacement' | 'similar' | 'general';
 
     // Fetch available attributes for an attribute set (by setId)
     const getAttributeSet = async (setId: number) => {
@@ -784,18 +789,26 @@
         },
 
         // Add or update related product relationship
-        toggleRelatedProduct: async (productId: number, relatedProductId: number, isPinned: boolean): Promise<boolean> => {
+        toggleRelatedProduct: async (
+            productId: number, 
+            relatedProductId: number, 
+            isPinned: boolean,
+            relationshipType: RelationshipType = 'general',
+            notes: string = ''
+        ): Promise<boolean> => {
             try {
                 const url = `${PRODUCTS_API_URL}/${productId}/related-add/`;
                 
                 const response = await axiosInstance.post(url, {
                     related_product_id: relatedProductId,
-                    is_pinned: isPinned
+                    is_pinned: isPinned,
+                    relationship_type: relationshipType,
+                    notes: notes
                 });
                 
                 return true;
             } catch (error) {
-                // If it's already related and we're trying to update the is_pinned status,
+                // If it's already related and we're trying to update the status,
                 // we should use PATCH instead
                 if (axios.isAxiosError(error) && 
                     error.response?.status === 400 && 
@@ -804,7 +817,11 @@
                     try {
                         // Try updating the existing relationship
                         const updateUrl = `${PRODUCTS_API_URL}/${productId}/related/${relatedProductId}/`;
-                        await axiosInstance.patch(updateUrl, { is_pinned: isPinned });
+                        await axiosInstance.patch(updateUrl, { 
+                            is_pinned: isPinned,
+                            relationship_type: relationshipType,
+                            notes: notes
+                        });
                         return true;
                     } catch (updateError) {
                         console.error('Error updating related product:', updateError);
@@ -867,6 +884,86 @@
             } catch (error) {
                 console.error('Error fetching explicit relations:', error);
                 return [];
+            }
+        },
+
+        // Update relationship type and notes
+        updateRelationship: async (
+            productId: number, 
+            relatedProductId: number, 
+            updates: {
+                relationship_type?: RelationshipType;
+                notes?: string;
+                is_pinned?: boolean;
+            }
+        ): Promise<boolean> => {
+            try {
+                const url = `${PRODUCTS_API_URL}/${productId}/related/${relatedProductId}/`;
+                // Include product and related_product fields to match backend serializer expectations
+                await axiosInstance.patch(url, { 
+                    ...updates,
+                    product: productId,
+                    related_product: relatedProductId
+                });
+                return true;
+            } catch (error) {
+                console.error('Error updating relationship:', error);
+                return false;
+            }
+        },
+        
+        // Add multiple products as related
+        addMultipleRelatedProducts: async (
+            productId: number,
+            relatedIds: number[],
+            relationship_type: RelationshipType = 'general',
+            notes: string = ''
+        ): Promise<{
+            success: boolean;
+            processed: number;
+            failed: number;
+        }> => {
+            if (!productId || !relatedIds.length) {
+                return { success: false, processed: 0, failed: 0 };
+            }
+            
+            try {
+                // Instead of using the bulk endpoint, we'll use individual requests
+                // to the working endpoint we already have
+                let processed = 0;
+                let failed = 0;
+                
+                // Process each related product ID one by one
+                for (const relatedId of relatedIds) {
+                    try {
+                        // Add the relationship with the proper relationship type in a single call
+                        const success = await productService.toggleRelatedProduct(
+                            productId,
+                            relatedId,
+                            false, // Not pinned by default
+                            relationship_type, // Pass relationship type
+                            notes // Pass notes
+                        );
+                        
+                        if (success) {
+                            processed++;
+                        } else {
+                            failed++;
+                        }
+                    } catch (err) {
+                        console.error(`Error adding related product ${relatedId}:`, err);
+                        failed++;
+                    }
+                }
+                
+                return {
+                    success: processed > 0,
+                    processed,
+                    failed
+                };
+            } catch (error) {
+                console.error('Error adding multiple related products:', error);
+                return { success: false, processed: 0, failed: relatedIds.length };
             }
         },
 

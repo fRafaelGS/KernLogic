@@ -8,12 +8,13 @@ import { Product } from '@/services/productService';
 import { productService } from '@/services/productService';
 import { useAuth } from '@/contexts/AuthContext';
 
-import { Card, CardHeader, CardContent, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { RichTextEditor } from '@/components/ui/RichTextEditor';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { AnimatePresence, motion } from 'framer-motion';
+import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 
 interface ProductDetailDescriptionProps {
   product: Product;
@@ -127,173 +128,164 @@ export const ProductDetailDescription: React.FC<ProductDetailDescriptionProps> =
   
   const lastEdit = getLastEditInfo();
   
+  // Action button for the section header
+  const actionButton = !editing && hasEditPermission && product.description && (
+    <Button 
+      variant="ghost" 
+      size="sm" 
+      onClick={() => setEditing(true)}
+      className="h-8 px-2"
+      aria-label="Edit product description"
+    >
+      <PencilIcon className="h-4 w-4 mr-2" />
+      Edit
+    </Button>
+  );
+  
+  // Section description with last edit info
+  const sectionDescription = product.description ? (
+    <div className="flex items-center mt-1 text-sm text-muted-foreground">
+      <ClockIcon className="h-3 w-3 mr-1" />
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span>Last edited by {lastEdit.name} {lastEdit.timeAgo}</span>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{format(lastEdit.date, 'PPpp')}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  ) : undefined;
+
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-start justify-between">
-        <div>
-          <CardTitle>Description</CardTitle>
-          {product.description && (
-            <CardDescription className="flex items-center mt-1 text-sm text-muted-foreground">
-              <ClockIcon className="h-3 w-3 mr-1" />
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span>Last edited by {lastEdit.name} {lastEdit.timeAgo}</span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{format(lastEdit.date, 'PPpp')}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </CardDescription>
-          )}
-        </div>
-        {!editing && hasEditPermission && product.description && (
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => setEditing(true)}
-            className="h-8 px-2"
-            aria-label="Edit product description"
+    <CollapsibleSection
+      title="Description"
+      description={sectionDescription}
+      actions={actionButton}
+      defaultOpen={true}
+      id="product-description-section"
+    >
+      <AnimatePresence mode="wait">
+        {saveError && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
           >
-            <PencilIcon className="h-4 w-4 mr-2" />
-            Edit
-          </Button>
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="flex items-center justify-between">
+                <span>{saveError}</span>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleRetrySave}
+                  className="ml-2"
+                  aria-label="Retry saving description"
+                  disabled={saving}
+                >
+                  {saving ? (
+                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                  ) : (
+                    <RefreshCcw className="h-3 w-3 mr-1" />
+                  )}
+                  Retry
+                </Button>
+              </AlertDescription>
+            </Alert>
+          </motion.div>
         )}
-      </CardHeader>
-      <CardContent>
-        <AnimatePresence mode="wait">
-          {saveError && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <Alert variant="destructive" className="mb-4">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription className="flex items-center justify-between">
-                  <span>{saveError}</span>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={handleRetrySave}
-                    className="ml-2"
-                    aria-label="Retry saving description"
-                    disabled={saving}
-                  >
-                    {saving ? (
-                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                    ) : (
-                      <RefreshCcw className="h-3 w-3 mr-1" />
-                    )}
-                    Retry
-                  </Button>
-                </AlertDescription>
-              </Alert>
-            </motion.div>
-          )}
-          
-          {editing ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="space-y-4"
-            >
-              <RichTextEditor 
-                value={editedDescription} 
-                onChange={handleContentChange}
-                placeholder="Enter product description using Markdown formatting..."
-                aria-label="Product description editor"
-                aria-required="false"
-                aria-invalid={charCount > 10000}
-              />
-              <div className="flex justify-between items-center">
-                <span 
-                  className={`text-xs ${charCount > 10000 ? 'text-red-500 font-medium' : (charCount > 8000 ? 'text-amber-500' : 'text-slate-500')}`}
-                  aria-live="polite"
+        
+        {editing ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="space-y-4"
+          >
+            <RichTextEditor 
+              value={editedDescription} 
+              onChange={handleContentChange}
+              placeholder="Enter product description using Markdown formatting..."
+              aria-label="Product description editor"
+              aria-required="false"
+              aria-invalid={charCount > 10000}
+            />
+            <div className="flex justify-between items-center">
+              <span 
+                className={`text-xs ${charCount > 10000 ? 'text-red-500 font-medium' : (charCount > 8000 ? 'text-amber-500' : 'text-slate-500')}`}
+                aria-live="polite"
+              >
+                {charCount}/10,000 characters
+                {charCount > 10000 && (
+                  <span className="ml-2 text-red-500">
+                    ({charCount - 10000} over limit)
+                  </span>
+                )}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  onClick={handleCancelEdit} 
+                  disabled={saving}
+                  aria-label="Cancel editing"
                 >
-                  {charCount}/10,000 characters
-                  {charCount > 10000 && (
-                    <span className="ml-2 text-red-500">
-                      ({charCount - 10000} over limit)
-                    </span>
+                  <XIcon className="h-4 w-4 mr-2" />
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleSaveDescription} 
+                  disabled={saving || charCount > 10000}
+                  aria-label="Save description"
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <CheckIcon className="h-4 w-4 mr-2" />
+                      Save
+                    </>
                   )}
-                </span>
-                <div className="flex items-center gap-2">
-                  <Button 
-                    variant="outline" 
-                    onClick={handleCancelEdit} 
-                    disabled={saving}
-                    aria-label="Cancel editing"
-                  >
-                    <XIcon className="h-4 w-4 mr-2" />
-                    Cancel
-                  </Button>
-                  <Button 
-                    onClick={handleSaveDescription} 
-                    disabled={saving || charCount > 10000}
-                    aria-label="Save description"
-                  >
-                    {saving ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <CheckIcon className="h-4 w-4 mr-2" />
-                        Save
-                      </>
-                    )}
-                  </Button>
-                </div>
+                </Button>
               </div>
-            </motion.div>
-          ) : (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            >
-              {product.description ? (
-                <div className="prose max-w-none">
-                  <ReactMarkdown>{product.description}</ReactMarkdown>
+            </div>
+          </motion.div>
+        ) : (
+          <div className="prose dark:prose-invert max-w-none">
+            {product.description ? (
+              <ReactMarkdown>{product.description}</ReactMarkdown>
+            ) : (
+              <div className="flex flex-col items-center justify-center p-12 text-center bg-muted/20 border border-dashed rounded-md">
+                <div className="p-3 rounded-full bg-primary/10">
+                  <PlusIcon className="h-6 w-6 text-primary" />
                 </div>
-              ) : (
-                <div 
-                  className="text-center py-10 text-slate-400 border border-dashed border-slate-200 rounded-md" 
-                  data-testid="empty-description"
-                >
-                  <p>No description available for this product.</p>
-                  {hasEditPermission && (
-                    <Button 
-                      variant="outline" 
-                      className="mt-4"
-                      onClick={() => setEditing(true)}
-                      aria-label="Add product description"
-                    >
-                      <PlusIcon className="h-4 w-4 mr-2" />
-                      Add description
-                    </Button>
-                  )}
-                </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </CardContent>
-      {product.description && !editing && (
-        <CardFooter className="border-t px-6 py-3 text-xs text-slate-500">
-          <div className="flex items-center">
-            <span>
-              {charCount} characters
-            </span>
+                <h3 className="mt-4 text-lg font-medium">Add a description</h3>
+                <p className="mt-2 text-sm text-muted-foreground max-w-md">
+                  Detailed product descriptions help customers understand your product and improve search visibility.
+                </p>
+                
+                {hasEditPermission && (
+                  <Button 
+                    onClick={() => setEditing(true)} 
+                    className="mt-4"
+                    aria-label="Add description"
+                  >
+                    <PencilIcon className="h-4 w-4 mr-2" />
+                    Add Description
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
-        </CardFooter>
-      )}
-    </Card>
+        )}
+      </AnimatePresence>
+    </CollapsibleSection>
   );
 };
 

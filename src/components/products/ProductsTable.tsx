@@ -402,8 +402,68 @@ export function ProductsTable() {
         fetchedCategories = [];
       }
       
-      // Update state with whatever data we managed to get
-      setProducts(fetchedProducts);
+      // ------------------------------------------------------------------
+      // NEW: Enrich products with their primary image if not already present
+      // ------------------------------------------------------------------
+      const enrichedProducts = await Promise.all(
+        fetchedProducts.map(async (prod) => {
+          // If we already have a thumbnail or images, keep it as-is
+          if (
+            prod.primary_image_thumb ||
+            (Array.isArray(prod.images) && prod.images.length > 0)
+          ) {
+            return prod;
+          }
+
+          // Otherwise try to fetch assets to derive a thumbnail
+          try {
+            if (!prod.id) return prod;
+            const assets = await productService.getProductAssets(prod.id);
+            if (Array.isArray(assets) && assets.length > 0) {
+              // Find primary image first, else first image
+              const primaryAsset =
+                assets.find(
+                  (a) =>
+                    (a.is_primary &&
+                      ((a.type || a.asset_type) || '').toLowerCase().includes('image'))
+                ) ||
+                assets.find((a) =>
+                  ((a.type || a.asset_type) || '').toLowerCase().includes('image')
+                );
+
+              if (primaryAsset?.url) {
+                // Build images array for consistency
+                const images = assets
+                  .filter((a) =>
+                    ((a.type || a.asset_type) || '')
+                      .toLowerCase()
+                      .includes('image')
+                  )
+                  .map((a, idx) => ({
+                    id: typeof a.id === 'string' ? parseInt(a.id, 10) : Number(a.id),
+                    url: a.url,
+                    order: idx,
+                    is_primary: a.id === primaryAsset.id,
+                  }));
+
+                return {
+                  ...prod,
+                  assets,
+                  images,
+                  primary_image_thumb: primaryAsset.url,
+                  primary_image_large: primaryAsset.url,
+                } as Product;
+              }
+            }
+          } catch (assetErr) {
+            console.warn('[ProductsTable] Could not fetch assets for product', prod.id, assetErr);
+          }
+
+          return prod; // return original if enrichment fails
+        })
+      );
+
+      setProducts(enrichedProducts);
       const categoryOpts = fetchedCategories.map(c => ({ 
         label: typeof c === 'object' ? c.name : c,
         value: typeof c === 'object' ? c.id : c
@@ -556,7 +616,7 @@ export function ProductsTable() {
   // --- ADD Bulk Action Handlers (Placeholder/Assumed API) ---
   const handleBulkDelete = async () => {
     const selectedIds = Object.keys(rowSelection)
-      .map(index => productRowMap[parseInt(index)])
+      .map(index => productRowMap[parseInt(index, 10)])
       .filter((id): id is number => typeof id === 'number');
       
     if (selectedIds.length === 0) {
@@ -583,7 +643,7 @@ export function ProductsTable() {
 
   const handleBulkSetStatus = async (isActive: boolean) => {
     const selectedIds = Object.keys(rowSelection)
-      .map(index => productRowMap[parseInt(index)])
+      .map(index => productRowMap[parseInt(index, 10)])
       .filter((id): id is number => typeof id === 'number');
 
     if (selectedIds.length === 0) {
@@ -1826,7 +1886,7 @@ export function ProductsTable() {
   // Get selected product IDs helper
   const getSelectedProductIds = useCallback(() => {
     return Object.keys(rowSelection)
-      .map(index => productRowMap[parseInt(index)])
+      .map(index => productRowMap[parseInt(index, 10)])
       .filter((id): id is number => typeof id === 'number');
   }, [rowSelection, productRowMap]);
 

@@ -199,10 +199,58 @@ const RelatedProductsPanel: React.FC<RelatedProductsPanelProps> = ({
       });
       
       // 3. Mark products with their relation info
-      const enhancedProducts: EnhancedProduct[] = products.map(product => ({
-        ...product,
-        relation: relationsMap.get(product.id as number)
+      let enhancedProducts: EnhancedProduct[] = products.map(prod => ({
+        ...prod,
+        relation: relationsMap.get(prod.id as number)
       }));
+      
+      // ---------------------------------------------------------------
+      // NEW: If a related product has no thumbnail or images, attempt
+      // to fetch its assets so we can display at least the primary
+      // image in the card.
+      // ---------------------------------------------------------------
+      enhancedProducts = await Promise.all(
+        enhancedProducts.map(async (p) => {
+          if (
+            p.primary_image_thumb ||
+            (Array.isArray(p.images) && p.images.length > 0)
+          ) {
+            return p;
+          }
+          try {
+            if (!p.id) return p;
+            const assets = await productService.getProductAssets(p.id);
+            if (Array.isArray(assets) && assets.length > 0) {
+              const primary =
+                assets.find(
+                  (a) =>
+                    a.is_primary && ((a.type || a.asset_type) || '').toLowerCase().includes('image')
+                ) ||
+                assets.find((a) => ((a.type || a.asset_type) || '').toLowerCase().includes('image'));
+              if (primary?.url) {
+                const images = assets
+                  .filter((a) => ((a.type || a.asset_type) || '').toLowerCase().includes('image'))
+                  .map((a, idx) => ({
+                    id: typeof a.id === 'string' ? parseInt(a.id, 10) : Number(a.id),
+                    url: a.url,
+                    order: idx,
+                    is_primary: a.id === primary.id,
+                  }));
+                return {
+                  ...p,
+                  assets,
+                  images,
+                  primary_image_thumb: primary.url,
+                  primary_image_large: primary.url,
+                } as EnhancedProduct;
+              }
+            }
+          } catch (assetErr) {
+            console.warn('[RelatedProductsPanel] Could not fetch assets for related product', p.id, assetErr);
+          }
+          return p;
+        })
+      );
       
       // Sort: pinned first, then explicitly related (manual), then algorithmic
       enhancedProducts.sort((a, b) => {

@@ -51,11 +51,23 @@ export const ProductDetail = () => {
           setError('Product not found or returned empty data');
           setProduct(null);
         } else {
-          setProduct(data);
+          let productWithAssets: Product = data;
+          try {
+            const fetchedAssets = await productService.getProductAssets(data.id as number);
+            if (Array.isArray(fetchedAssets) && fetchedAssets.length > 0) {
+              productWithAssets = {
+                ...data,
+                assets: fetchedAssets,
+              };
+            }
+          } catch (assetErr) {
+            console.error('[ProductDetail] Failed to pre-fetch assets:', assetErr);
+          }
+          
+          setProduct(productWithAssets);
           setError(null);
           
-          // Set page title for accessibility
-          document.title = `${data.name || 'Product'} - KernLogic PIM`;
+          document.title = `${productWithAssets.name || 'Product'} - KernLogic PIM`;
         }
       } catch (err: any) {
         const errorMessage = err.response?.status === 404 
@@ -135,7 +147,9 @@ export const ProductDetail = () => {
 
   // Handle product update from description component
   const handleProductUpdate = (updatedProduct: Product) => {
-    setProduct(updatedProduct);
+    console.log('ProductDetail: Updating product state with:', updatedProduct);
+    // Create a new object to ensure React detects the change
+    setProduct({...updatedProduct});
   };
 
   const handleRetry = () => {

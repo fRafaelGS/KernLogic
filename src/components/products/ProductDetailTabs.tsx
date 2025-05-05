@@ -834,9 +834,9 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
           .filter(attr => attr.isMandatory)
           .map(attrDef => {
             // Find if this attribute has a value for this product
-            const attrValue = attributes.find(attr => 
-              attr.attributeId === attrDef.id && 
-              attr.locale === selectedLocale
+            const attrValue = attributeValues.find(v => 
+              v.attributeId === attrDef.id && 
+              v.locale === selectedLocale
             );
             
             return {
@@ -1607,14 +1607,14 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
     });
     
     // Find primary image to update product
-    const primaryAsset = sortedAssets.find(asset => asset.is_primary && asset.type?.toLowerCase() === 'image');
+    const primaryAsset = sortedAssets.find(asset => asset.is_primary && (asset.type?.toLowerCase() === 'image' || asset.asset_type?.toLowerCase() === 'image'));
     
     if (primaryAsset) {
       console.log('Setting primary image:', primaryAsset.url);
       
       // Create product images array with proper typing for ProductImage
       const updatedImages = sortedAssets
-        .filter(asset => asset.type?.toLowerCase() === 'image')
+        .filter(asset => asset.type?.toLowerCase() === 'image' || asset.asset_type?.toLowerCase() === 'image')
         .map((asset, index) => ({
           id: typeof asset.id === 'string' ? parseInt(asset.id, 10) : Number(asset.id), // Convert to number
           url: asset.url,
@@ -1627,8 +1627,12 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
         ...product,
         primary_image_thumb: primaryAsset.url,
         primary_image_large: primaryAsset.url,
-        images: updatedImages
+        images: updatedImages,
+        assets: sortedAssets // Add the full assets array to the product
       };
+      
+      // Log what we're passing to the parent
+      console.log('Updating product with primary image:', updatedProduct.primary_image_thumb);
       
       // Update localStorage if needed
       if (product.id) {
@@ -1665,8 +1669,11 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
         }
       }
       
-      // Update local state
-      onProductUpdate(updatedProduct);
+      // Ensure we pass the updated product to the parent
+      if (onProductUpdate) {
+        console.log('Calling onProductUpdate with updated product');
+        onProductUpdate(updatedProduct);
+      }
     }
     
     // Always update assets even if no primary image found

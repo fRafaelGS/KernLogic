@@ -672,12 +672,23 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             return Response(status=status.HTTP_204_NO_CONTENT)
 
         if request.method == 'PATCH':
-            # Only handle setting primary for now via PATCH
+            # Handle setting primary image via PATCH
             if 'is_primary' in request.data and request.data['is_primary'] is True:
                 with transaction.atomic():
-                    product.images.update(is_primary=False) # Unset others first
+                    # Unset primary flag on all other images
+                    product.images.update(is_primary=False)
+                    
+                    # Set this image as primary
                     image_instance.is_primary = True
                     image_instance.save(update_fields=['is_primary'])
+                    
+                    # Update the product's primary image fields
+                    product.primary_image_thumb = image_instance.url
+                    product.primary_image_large = image_instance.url
+                    
+                    # Save the product to persist changes
+                    product.save(update_fields=['primary_image_thumb', 'primary_image_large'])
+                    
                 # Return updated product data
                 product_serializer = self.get_serializer(product)
                 return Response(product_serializer.data)
@@ -1010,39 +1021,46 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         serializer = RelationSerializer(relations, many=True)
         return Response(serializer.data)
 
-    @action(detail=True, methods=['post'], url_path='set-primary')
-    def set_asset_primary(self, request, pk=None, product_pk=None):
-        """
-        Set an asset as primary
-        """
+    @action(detail=True, methods=['post'])
+    def set_primary(self, request, pk=None, product_pk=None):
+        # First update the is_primary status in all assets
+        ProductAsset.objects.filter(product_id=product_pk).update(is_primary=False)
+        
+        # Get the asset that's being set as primary
         try:
-            product = Product.objects.get(pk=product_pk)
+            asset = ProductAsset.objects.get(pk=pk, product_id=product_pk)
             
-            try:
-                asset_id = request.data.get('asset_id')
-                if not asset_id:
-                    return Response({'detail': 'Asset ID is required'}, status=status.HTTP_400_BAD_REQUEST)
-                
-                asset = ProductAsset.objects.get(pk=asset_id, product=product)
-                
-                # First, unset primary for all other assets
-                ProductAsset.objects.filter(product=product, is_primary=True).update(is_primary=False)
-                
-                # Set this asset as primary
-                asset.is_primary = True
-                asset.save()
-                
-                return Response({'detail': 'Asset set as primary successfully'}, status=status.HTTP_200_OK)
-                
-            except ProductAsset.DoesNotExist:
-                return Response({'detail': 'Asset not found'}, status=status.HTTP_404_NOT_FOUND)
-            except ValueError:
-                return Response({'detail': 'Invalid asset ID format'}, status=status.HTTP_400_BAD_REQUEST)
+            # Update this asset as primary
+            asset.is_primary = True
+            asset.save()
             
-        except Product.DoesNotExist:
-            return Response({'detail': 'Product not found'}, status=status.HTTP_404_NOT_FOUND)
+            # Now update the parent Product model with this asset's file
+            if asset.file:
+                product = Product.objects.get(pk=product_pk)
+                
+                # Update primary_image field and also primary_image_thumb and primary_image_large fields
+                # First get the full URL for the file
+                file_url = asset.file.url if hasattr(asset.file, 'url') else str(asset.file)
+                
+                product.primary_image = asset.file
+                product.primary_image_thumb = file_url  # Use URL directly for frontend
+                product.primary_image_large = file_url  # Use URL directly for frontend
+                product.save(update_fields=['primary_image', 'primary_image_thumb', 'primary_image_large'])
+                
+                return Response({'success': True, 'message': 'Asset set as primary successfully'}, status=status.HTTP_200_OK)
+            
+            return Response({'success': True, 'message': 'Asset set as primary, but no file was found'}, status=status.HTTP_200_OK)
+            
+        except ProductAsset.DoesNotExist:
+            return Response(
+                {"error": "Asset not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
         except Exception as e:
-            return Response({'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 # Add endpoints for dashboard data
 class DashboardViewSet(viewsets.ViewSet):
@@ -1478,42 +1496,63 @@ class AssetViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         try:
-            product = Product.objects.get(pk=self.kwargs["product_pk"])
-            
-            # Check if file field exists in request
-            if 'file' not in self.request.data and 'file' not in self.request.FILES:
-                raise ValidationError({"file": "No file was submitted"})
+            # Get the product
+            product = Product.objects.get(pk=self.kwargs.get('product_pk'))
             
             # Check if file is empty
             file_data = self.request.data.get('file') or self.request.FILES.get('file')
             if not file_data:
                 raise ValidationError({"file": "The submitted file is empty"})
             
-            # Save the asset without organization reference
-            asset = serializer.save(
-                product=product,
-                uploaded_by=self.request.user
+            # Check asset type (auto-detect from mime type if not provided)
+            asset_type = self.request.data.get('asset_type')
+            if not asset_type and hasattr(file_data, 'content_type'):
+                # Auto-detect asset type from mime type
+                content_type = file_data.content_type.lower()
+                if content_type.startswith('image/'):
+                    asset_type = 'image'
+                elif content_type == 'application/pdf':
+                    asset_type = 'pdf'
+                elif content_type.startswith('video/'):
+                    asset_type = 'video'
+                elif content_type.startswith('audio/'):
+                    asset_type = 'audio'
+                elif content_type.startswith('model/') or content_type.startswith('application/octet-stream'):
+                    asset_type = '3d'
+                else:
+                    asset_type = 'document'
+            
+            # Save Asset with user
+            instance = serializer.save(
+                product=product, 
+                uploaded_by=self.request.user,
+                asset_type=asset_type
             )
             
-            # Record asset creation event
-            record(
-                product=product,
-                user=self.request.user,
-                event_type="asset_added",
-                summary=f"Asset '{file_data.name if hasattr(file_data, 'name') else 'file'}' was added to product '{product.name}'",
-                payload={
-                    "asset_id": asset.id,
-                    "asset_type": asset.asset_type,
-                    "file_name": file_data.name if hasattr(file_data, 'name') else "unknown"
-                }
-            )
-            
-        except Product.DoesNotExist:
-            raise ValidationError({"product": f"Product with ID {self.kwargs.get('product_pk')} does not exist"})
+            # Check if this is the first image asset for this product
+            # If so, automatically set it as primary
+            if asset_type == 'image':
+                # Check if any primary images exist
+                has_primary = ProductAsset.objects.filter(
+                    product=product, 
+                    asset_type='image',
+                    is_primary=True
+                ).exists()
+                
+                # If no primary image exists, set this one as primary
+                if not has_primary:
+                    instance.is_primary = True
+                    instance.save()
+                    
+                    # Also update the product's primary_image fields
+                    if instance.file:
+                        product.primary_image_large = instance.file.url
+                        product.primary_image_thumb = instance.file.url  # In a real system, you'd create a thumbnail
+                        product.save()
+                
+            return instance
         except Exception as e:
-            if hasattr(e, '__class__') and e.__class__.__name__ == 'ValidationError':
-                raise  # Re-raise ValidationError as is
-            raise ValidationError({"detail": str(e)})
+            raise ValidationError({"error": str(e)})
 
     # -------- custom actions ---------------------------------
 
@@ -1542,28 +1581,27 @@ class AssetViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             if asset.file:
                 product = Product.objects.get(pk=product_pk)
                 
-                # Update just the primary_image field
-                product.primary_image = asset.file
-                product.save()
+                # Update primary_image field and also primary_image_thumb and primary_image_large fields
+                # First get the full URL for the file
+                file_url = asset.file.url if hasattr(asset.file, 'url') else str(asset.file)
                 
-                # Log success message
-                print(f"Updated product {product_pk} primary image to: {asset.file.url if hasattr(asset.file, 'url') else str(asset.file)}")
+                product.primary_image = asset.file
+                product.primary_image_thumb = file_url  # Use URL directly for frontend
+                product.primary_image_large = file_url  # Use URL directly for frontend
+                product.save(update_fields=['primary_image', 'primary_image_thumb', 'primary_image_large'])
+                
+                return Response({'success': True, 'message': 'Asset set as primary successfully'}, status=status.HTTP_200_OK)
             
-            return Response(status=status.HTTP_204_NO_CONTENT)
+            return Response({'success': True, 'message': 'Asset set as primary, but no file was found'}, status=status.HTTP_200_OK)
             
         except ProductAsset.DoesNotExist:
             return Response(
-                {"error": f"Asset with ID {pk} does not exist for product {product_pk}"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        except Product.DoesNotExist:
-            return Response(
-                {"error": f"Product with ID {product_pk} does not exist"},
+                {"error": "Asset not found"},
                 status=status.HTTP_404_NOT_FOUND
             )
         except Exception as e:
             return Response(
-                {"error": f"Failed to set primary asset: {str(e)}"},
+                {"error": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 

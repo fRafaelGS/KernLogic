@@ -424,3 +424,135 @@ npm test
 
 **Documentation version:** 1.0.0  
 **Last updated:** April 24, 2023
+
+## PDF Export Feature
+
+KernLogic includes a robust PDF export feature for generating print-quality product specification sheets.
+
+### Usage
+
+The PDF export button is available on the Product Detail > Overview page. When clicked, it generates and downloads a PDF file containing the complete product information, including:
+
+- Core product details (SKU, name, category, brand, etc.)
+- Primary product image
+- Description
+- Data completeness score
+- All attribute groups and values
+
+### Technical Implementation
+
+#### Frontend
+
+The Export to PDF button sends a GET request to `/api/products/:id/pdf` and handles the file download upon successful response.
+
+```typescript
+// Example usage in a React component
+import ExportToPdfButton from '@/components/product/ExportToPdfButton';
+
+function ProductDetailPage({ product }) {
+  return (
+    <div>
+      <ExportToPdfButton productId={product.id} sku={product.sku} />
+    </div>
+  );
+}
+```
+
+#### Backend
+
+The PDF generation endpoint uses Puppeteer to render a headless print-optimized version of the product and convert it to a PDF.
+
+```bash
+# API Example with curl
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+     -o product-ABC123.pdf \
+     https://kernlogic.com/api/products/123/pdf
+```
+
+### Setup Requirements
+
+The PDF export feature requires Puppeteer, which needs additional system dependencies when running in Docker:
+
+```dockerfile
+# In your Dockerfile
+RUN apt-get update && apt-get install -y \
+    wget \
+    ca-certificates \
+    fonts-liberation \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libatk1.0-0 \
+    libcups2 \
+    libdbus-1-3 \
+    libgdk-pixbuf2.0-0 \
+    libnspr4 \
+    libnss3 \
+    libx11-xcb1 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    libxss1 \
+    libxtst6 \
+    xdg-utils \
+    --no-install-recommends
+```
+
+### Performance Considerations
+
+- The PDF generation is performed on the server to ensure consistent results
+- A 10-second timeout is implemented to prevent hanging requests
+- Error handling ensures a graceful degradation if PDF generation fails
+
+## Setup and Installation
+
+### Prerequisites
+
+- Node.js 16+
+- npm or yarn
+- PostgreSQL database
+
+### Installation Steps
+
+1. Clone the repository
+   ```bash
+   git clone https://github.com/yourusername/kernlogic-pim.git
+   cd kernlogic-pim
+   ```
+
+2. Install dependencies
+   ```bash
+   npm install
+   ```
+
+3. Configure environment variables
+   ```bash
+   cp .env.example .env
+   # Edit .env with your database and other configuration
+   ```
+
+4. Run database migrations
+   ```bash
+   npm run migrate
+   ```
+
+5. Start the development server
+   ```bash
+   npm run dev
+   ```
+
+## Testing
+
+```bash
+# Run unit tests
+npm test
+
+# Run integration tests
+npm run test:integration
+
+# Run end-to-end tests
+npm run test:e2e
+```
+
+## License
+
+[MIT](LICENSE)

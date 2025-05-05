@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Product Specification: {{ sku }}</title>
+
+  <style>
+    /* Global */
+    @page { margin: 1in; }
+    body { font-family: "Helvetica Neue", Arial, sans-serif; color: #333; margin: 0; padding: 0; }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      border-bottom: 2px solid #4A90E2;
+      padding-bottom: 10px;
+      margin-bottom: 20px;
+    }
+    .company-logo {
+      font-size: 18pt;
+      font-weight: bold;
+      color: #4A90E2;
+      width: 30%;
+    }
+    .document-title {
+      font-size: 16pt;
+      font-weight: bold;
+      text-align: center;
+      width: 40%;
+    }
+    .meta {
+      font-size: 9pt;
+      text-align: right;
+      width: 30%;
+      color: #666;
+    }
+
+    /* Footer */
+    .footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      border-top: 1px solid #ddd;
+      font-size: 8pt;
+      color: #666;
+      padding-top: 5px;
+    }
+    .footer .pagenum {
+      float: right;
+    }
+
+    /* Section Titles */
+    h1 { font-size: 18pt; margin: 0 0 5px; }
+    h2 { font-size: 14pt; border-bottom: 1px solid #ccc; padding-bottom: 4px; margin-top: 20px; }
+    h3 { font-size: 12pt; margin-top: 12px; }
+
+    /* Core Info Table */
+    .info-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+    }
+    .info-table th, .info-table td {
+      border: 1px solid #ddd;
+      padding: 6px 8px;
+    }
+    .info-table th {
+      background: #f5f5f5;
+      text-align: left;
+      width: 25%;
+    }
+
+    /* Core Info Items (div-based layout) */
+    .core-info {
+      display: flex;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .info-item {
+      width: 50%;
+      padding: 6px 0;
+      display: flex;
+    }
+    .info-label {
+      font-weight: bold;
+      width: 40%;
+    }
+    .info-value {
+      width: 60%;
+    }
+
+    /* Attribute Tables */
+    .attr-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+    }
+    .attr-table th, .attr-table td {
+      border: 1px solid #ddd;
+      padding: 6px 8px;
+    }
+    .attr-table th {
+      background: #4A90E2;
+      color: #fff;
+      text-align: left;
+    }
+    .attr-table tr:nth-child(even) {
+      background: #f9f9f9;
+    }
+
+    /* Progress Bar */
+    .progress-container {
+      width: 100%;
+      background: #eee;
+      border-radius: 3px;
+      overflow: hidden;
+      margin: 5px 0;
+    }
+    .progress-bar {
+      background: #4caf50;
+      height: 10px;
+    }
+    .progress-text {
+      font-size: 9pt;
+      color: #333;
+      text-align: right;
+      margin-top: 2px;
+    }
+
+    /* Missing Fields */
+    .missing-fields {
+      margin-top: 10px;
+    }
+    .missing-fields-header {
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+    .missing-fields ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+    .missing-fields li {
+      font-size: 9pt;
+    }
+
+    /* Images */
+    .product-image-container {
+      text-align: center;
+      margin: 15px 0;
+    }
+    .product-image {
+      max-width: 200px;
+      max-height: 200px;
+      border: 1px solid #ccc;
+      padding: 4px;
+      background: #fff;
+    }
+
+    /* Tags */
+    .tags .tag {
+      display: inline-block;
+      background: #e0f0ff;
+      color: #4a90e2;
+      padding: 2px 6px;
+      margin: 2px;
+      border-radius: 3px;
+      font-size: 9pt;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="company-logo">{{ company_name }}</div>
+    <div class="document-title">Product Specification</div>
+    <div class="meta">
+      SKU: {{ sku }}<br>
+      Generated: {{ generation_date }}
+    </div>
+  </div>
+
+  <h1>{{ name }}</h1>
+
+  {% if primary_image_url %}
+    <div class="product-image-container">
+      <img src="{{ primary_image_url }}" alt="{{ name }}" class="product-image">
+    </div>
+  {% endif %}
+
+  <h2>Core Information</h2>
+  <div class="core-info">
+    <div class="info-item">
+      <div class="info-label">SKU</div>
+      <div class="info-value">{{ sku }}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">Category</div>
+      <div class="info-value">{{ category }}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">Brand</div>
+      <div class="info-value">{{ brand }}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">GTIN/Barcode</div>
+      <div class="info-value">{{ gtin }}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">Price</div>
+      <div class="info-value">${{ price }}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">Status</div>
+      <div class="info-value">{{ status }}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">Created</div>
+      <div class="info-value">{{ created_at }}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">Last Modified</div>
+      <div class="info-value">{{ updated_at }}</div>
+    </div>
+  </div>
+
+  {% if description %}
+    <h2>Description</h2>
+    <div class="description">{{ description }}</div>
+  {% endif %}
+
+  {% if tags %}
+    <h2>Tags</h2>
+    <div class="tags">
+      {% for tag in tags %}
+        <span class="tag">{{ tag }}</span>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if data_completeness %}
+    <h2>Data Completeness</h2>
+    <div class="completeness">
+      <div class="progress-container">
+        <div class="progress-bar" style="width: {{ data_completeness.score }}%"></div>
+      </div>
+      <div class="progress-text">{{ data_completeness.score }}%</div>
+      
+      {% if data_completeness.missing_fields %}
+        <div class="missing-fields">
+          <p class="missing-fields-header">Missing Fields:</p>
+          <ul>
+            {% for field in data_completeness.missing_fields %}
+              <li>{{ field }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {% if attribute_groups %}
+    <h2>Attributes</h2>
+    {% for group_name, attributes in attribute_groups.items %}
+      <div class="attributes-section">
+        <h3>{{ group_name }}</h3>
+        <table class="attr-table">
+          <thead>
+            <tr>
+              <th>Attribute</th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for attribute in attributes %}
+              <tr>
+                <td>{{ attribute.name }}</td>
+                <td>{{ attribute.value }}{% if attribute.unit %} {{ attribute.unit }}{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="footer">
+    © {{ company_name }} • {{ generation_date }}
+    <span class="pagenum">Page <pdf:pagenumber/> of <pdf:pagecount/></span>
+  </div>
+
+</body>
+</html>

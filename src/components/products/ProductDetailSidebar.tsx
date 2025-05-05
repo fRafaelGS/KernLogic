@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { Product, productService, ProductAsset } from '@/services/productService';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -65,10 +65,63 @@ export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
   const createdDate = formatDate(product.created_at);
   const modifiedDate = formatDate(product.updated_at);
   
-  // Handle thumbnail display
-  const thumbUrl = product.primary_image_thumb || 
-    product.images?.find(img => img.is_primary)?.url || 
-    product.images?.[0]?.url;
+  // Handle thumbnail display with improved priority for primary assets
+  const thumbUrl = useMemo(() => {
+    console.log('[ProductDetailSidebar] Recalculating thumbUrl, assets count:', product.assets?.length);
+    
+    // Check sources in priority order
+    // 1. First check assets for primary image
+    const primaryAsset = product.assets?.find(img => 
+      img.is_primary && (img.type === 'image' || img.asset_type === 'image')
+    );
+    
+    if (primaryAsset?.url) {
+      console.log('[ProductDetailSidebar] Using primary asset URL:', primaryAsset.url);
+      return primaryAsset.url;
+    }
+    
+    // 2. Check primary_image fields (set via backend)
+    if (product.primary_image_thumb) {
+      console.log('[ProductDetailSidebar] Using primary_image_thumb:', product.primary_image_thumb);
+      return product.primary_image_thumb;
+    }
+    
+    if (product.primary_image_large) {
+      console.log('[ProductDetailSidebar] Using primary_image_large:', product.primary_image_large);
+      return product.primary_image_large;
+    }
+    
+    // 3. Check assets for ANY image (not just primary)
+    const anyImageAsset = product.assets?.find(img => 
+      img.type === 'image' || img.asset_type === 'image'
+    );
+    
+    if (anyImageAsset?.url) {
+      console.log('[ProductDetailSidebar] Using first available image asset:', anyImageAsset.url);
+      return anyImageAsset.url;
+    }
+    
+    // 4. Check images array for primary or first image
+    const primaryImage = product.images?.find(img => img.is_primary);
+    
+    if (primaryImage?.url) {
+      console.log('[ProductDetailSidebar] Using primary image from images array:', primaryImage.url);
+      return primaryImage.url;
+    }
+    
+    if (product.images?.[0]?.url) {
+      console.log('[ProductDetailSidebar] Using first image from images array:', product.images[0].url);
+      return product.images[0].url;
+    }
+    
+    console.log('[ProductDetailSidebar] No image found for product, product data:', {
+      hasAssets: !!product.assets?.length,
+      hasPrimaryImageThumb: !!product.primary_image_thumb,
+      hasPrimaryImageLarge: !!product.primary_image_large,
+      hasImages: !!product.images?.length
+    });
+    return undefined;
+  }, [product]);
   
   const largeImageUrl = product.primary_image_large || 
     product.images?.find(img => img.is_primary)?.url || 

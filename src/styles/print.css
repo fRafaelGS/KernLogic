@@ -1,0 +1,146 @@
+/* Print-specific styles for PDF generation */
+
+@media print {
+  /* Global print settings */
+  @page {
+    size: A4 portrait;
+    margin: 1cm;
+  }
+  
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    line-height: 1.5;
+    color: #333;
+    background: white;
+  }
+  
+  /* Hide non-printable elements */
+  nav, 
+  button:not(.print-visible),
+  .non-printable,
+  .sidebar {
+    display: none !important;
+  }
+  
+  /* Make sure our content takes up all available space */
+  .printable-product-view {
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100%;
+    page-break-inside: avoid;
+  }
+  
+  /* Ensure page breaks don't disrupt important content */
+  h1, h2, h3, h4 {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+  
+  section {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  
+  /* Ensure images don't exceed maximum height */
+  .printable-product-view img {
+    max-height: 200px !important;
+    max-width: 100%;
+    object-fit: contain;
+  }
+  
+  /* Two-column layout for attributes */
+  .attribute-grid {
+    column-count: 2;
+    column-gap: 1.5rem;
+  }
+  
+  /* Make collapsible sections expanded by default in print */
+  .collapsible-content {
+    display: block !important;
+    height: auto !important;
+  }
+  
+  /* Hide collapse/expand buttons in print */
+  .collapsible-trigger {
+    display: none !important;
+  }
+  
+  /* Clear background colors and use borders for contrast */
+  .bg-muted, 
+  .bg-secondary,
+  .bg-card {
+    background-color: transparent !important;
+    border: 1px solid #ddd;
+  }
+  
+  /* Improve contrast for text colors */
+  .text-muted-foreground {
+    color: #666 !important;
+  }
+  
+  /* Ensure long text wraps properly */
+  p, span, div {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+  }
+  
+  /* Special handling for description text to ensure clean pagination */
+  .description-text {
+    white-space: pre-wrap;
+    page-break-inside: auto;
+    break-inside: auto;
+  }
+  
+  /* Footer styling */
+  .pdf-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 9pt;
+    color: #666;
+    border-top: 1px solid #eee;
+    padding-top: 0.5cm;
+  }
+  
+  /* Header styling */
+  .pdf-header {
+    border-bottom: 1px solid #eee;
+    margin-bottom: 1cm;
+    padding-bottom: 0.5cm;
+  }
+  
+  /* Table styles */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  table th,
+  table td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+  }
+  
+  table th {
+    background-color: #f8f8f8;
+    font-weight: bold;
+  }
+  
+  /* Ensure ordered list numbering prints correctly */
+  ol {
+    list-style: decimal outside;
+    padding-left: 1.5em;
+  }
+  
+  /* Ensure unordered list bullets print correctly */
+  ul {
+    list-style: disc outside;
+    padding-left: 1.5em;
+  }
+} 

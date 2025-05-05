@@ -339,9 +339,10 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     try {
       // Update progress to indicate we're starting
       updateUploadProgress(upload.id, 10);
+      console.log(`[uploadFile] Uploading ${upload.file.name} (${upload.file.type}) to product ${productId}`);
       
       // Upload the file to the assets endpoint
-      const response = await productService.uploadAsset(
+      const asset = await productService.uploadAsset(
         productId,
         upload.file,
         (progressEvent) => {
@@ -354,65 +355,44 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
       
       // Handle successful upload
       updateUploadStatus(upload.id, 'success');
+      console.log(`[uploadFile] Successful upload: Asset ID ${asset.id}, is_primary: ${asset.is_primary}`);
       
       // Add the new asset to the list
       setAssets(prev => {
         // If this is primary, make sure other assets are not primary
-        const updatedAssets = response.is_primary 
-          ? prev.map(asset => ({...asset, is_primary: false}))
+        const updatedAssets = asset.is_primary 
+          ? prev.map(a => ({...a, is_primary: false}))
           : prev;
           
-        const newAssets = [response, ...updatedAssets];
+        const newAssets = [asset, ...updatedAssets];
         
-        // Update localStorage with new assets
-        if (product?.id) {
-          try {
-            localStorage.setItem(`product_assets_${productId}`, JSON.stringify(newAssets));
-          } catch (err) {
-            console.error('Failed to save assets to localStorage:', err);
-          }
+        // Notify parent component if callback exists
+        if (onAssetUpdate) {
+          console.log(`[uploadFile] Notifying parent with ${newAssets.length} assets`);
+          onAssetUpdate(newAssets);
         }
         
         return newAssets;
       });
       
-      // Notify parent component if callback exists
-      if (onAssetUpdate) {
-        onAssetUpdate([response, ...assets]);
-      }
+      toast.success(`${asset.name} uploaded successfully`);
       
-      toast.success('File uploaded successfully');
-      
-      // Remove upload item after a delay
-      setTimeout(() => {
-        setUploading(prev => prev.filter(item => item.id !== upload.id));
-      }, 2000);
+      // Remove upload item immediately on success
+      setUploading(prev => prev.filter(item => item.id !== upload.id));
       
     } catch (error: any) {
-      console.error('Error uploading file:', error);
+      console.error('[uploadFile] Error uploading file:', error);
       
-      // Enhanced error logging
-      if (error.response) {
-        console.error('Upload error response:', {
-          status: error.response.status,
-          data: error.response.data,
-          headers: error.response.headers
-        });
+      // Format error message for toast
+      let errorMessage = 'Upload failed';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
       }
       
-      // Handle different error cases
-      if (error?.response?.status === 413) {
-        updateUploadStatus(upload.id, 'error', 'File too large');
-        toast.error('This file is too large to upload');
-      } 
-      else if (error?.response?.status === 415) {
-        updateUploadStatus(upload.id, 'error', 'File type not supported');
-        toast.error('This file type is not supported');
-      }
-      else {
-        updateUploadStatus(upload.id, 'error', 'Upload failed');
-        toast.error('Failed to upload file');
-      }
+      updateUploadStatus(upload.id, 'error', errorMessage);
+      toast.error(errorMessage);
     }
   };
 
@@ -522,22 +502,33 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
   const isImageAsset = (asset?: ProductAsset): boolean => {
     if (!asset) return false;
     
+    // Check both type fields to handle all cases
+    const assetType = asset.type || '';
+    
+    // Use getFileType for more robust detection
     const fileType = getFileType(asset);
     console.log(`Asset ${asset.name} has file type: ${fileType}`);
     
-    // Only return true if it's actually an image
-    return fileType === 'image';
+    // If either check confirms it's an image, return true
+    return assetType.toLowerCase() === 'image' || fileType === 'image';
   };
 
   // Make an asset primary (only for images)
   const makeAssetPrimary = async (asset: ProductAsset) => {
-    if (asset.is_primary) return; // Already primary
+    if (asset.is_primary) {
+      console.log(`[makeAssetPrimary] Asset ${asset.id} is already primary`);
+      return; // Already primary
+    }
     
     // Only allow images to be set as primary
     if (!isImageAsset(asset)) {
       toast.error('Only image files can be set as primary');
       return;
     }
+    
+    // Set loading state
+    setIsMakingPrimary(asset.id);
+    console.log(`[makeAssetPrimary] Setting asset ${asset.id} as primary for product ${product.id}`);
 
     // Optimistically update UI
     const oldAssets = [...assets];
@@ -546,73 +537,54 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
       is_primary: a.id === asset.id
     }));
     
+    // Update the UI immediately
     setAssets(newAssets);
     
-    console.log(`Setting asset ${asset.id} as primary for product ${product.id}`);
+    // Clear localStorage cache to force a refresh from server on next load
+    localStorage.removeItem(`product_assets_${product.id}`);
     
     try {
+      // Call the service to set the asset as primary
       const success = await productService.setAssetPrimary(product.id, asset.id);
+      console.log(`[makeAssetPrimary] setAssetPrimary result: ${success ? 'success' : 'failure'}`);
       
       if (success) {
         toast.success('Primary image updated');
         
-        // Create updated product with new primary image
-        const updatedProduct = {
-          ...product,
-          primary_image_thumb: asset.url,
-          primary_image_large: asset.url,
-          images: newAssets.filter(a => a.type.toLowerCase() === 'image').map(a => ({
-            id: typeof a.id === 'string' ? parseInt(a.id, 10) : Number(a.id),
-            url: a.url,
-            is_primary: a.is_primary,
-            order: a.order || 0
-          }))
-        };
-        
-        // Ensure parent components know about the change
+        // If onAssetUpdate is provided, pass the updated assets to the parent component
         if (onAssetUpdate) {
+          console.log('[makeAssetPrimary] Calling onAssetUpdate with updated assets');
           onAssetUpdate(newAssets);
         }
         
-        // Instead of reloading, update the parent component with the new product details
-        if (product?.id) {
-          try {
-            // Update the product in the backend to make sure changes persist
-            await productService.updateProduct(product.id, {
-              primary_image_thumb: asset.url,
-              primary_image_large: asset.url
-            });
-            console.log('Product updated with new primary image:', asset.url);
-            
-            // Fetch the product data again to ensure we have the latest version
-            const refreshedProduct = await productService.getProduct(product.id);
-            console.log('Product refreshed:', refreshedProduct);
-            
-            // Update the product in the parent component if a callback is provided
-            if (window.parent) {
-              try {
-                // Use safer approach with type assertion
-                const parentWindow = window.parent as any;
-                if (typeof parentWindow.onProductUpdated === 'function') {
-                  parentWindow.onProductUpdated(refreshedProduct);
-                }
-              } catch (error) {
-                console.error('Error calling parent window function:', error);
-              }
-            }
-          } catch (err) {
-            console.error('Error updating product:', err);
+        // Force a refresh of the assets to ensure we have the latest data from the server
+        try {
+          const refreshedAssets = await productService.getProductAssets(product.id);
+          console.log(`[makeAssetPrimary] Refreshed ${refreshedAssets.length} assets from server`);
+          setAssets(refreshedAssets);
+          
+          // Pass the refreshed assets to parent if needed
+          if (onAssetUpdate) {
+            onAssetUpdate(refreshedAssets);
           }
+        } catch (refreshError) {
+          console.error('[makeAssetPrimary] Error refreshing assets:', refreshError);
+          // Already updated optimistically, so no UI rollback needed
         }
       } else {
-        // Revert if API call failed
+        console.error('[makeAssetPrimary] Failed to set asset as primary');
+        toast.error('Failed to set as primary image');
+        // Revert optimistic update
         setAssets(oldAssets);
-        toast.error('Failed to update primary asset');
       }
     } catch (error) {
-      console.error('Error making asset primary:', error);
+      console.error('[makeAssetPrimary] Error setting asset as primary:', error);
+      toast.error('An error occurred while setting the primary image');
+      // Revert optimistic update
       setAssets(oldAssets);
-      toast.error('Failed to update primary asset');
+    } finally {
+      // Clear loading state
+      setIsMakingPrimary(null);
     }
   };
 

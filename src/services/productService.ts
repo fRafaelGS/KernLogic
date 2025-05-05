@@ -82,6 +82,9 @@
         
         // Technical Specifications (Optional)
         attributes?: Record<string, string>;
+        
+        // Assets
+        assets?: ProductAsset[];
     }
 
     export const PRODUCTS_API_URL = `/api/products`;
@@ -100,6 +103,7 @@
         id: number;
         name: string;
         type: string;
+        asset_type?: string; // Added for compatibility with backend responses
         url: string;
         size: string;
         resolution?: string;
@@ -635,15 +639,24 @@
                 const response = await axiosInstance.get(url);
                 
                 if (isHtmlResponse(response.data)) {
-                    console.error('Received HTML response instead of JSON');
+                    console.error('[getProductAssets] Received HTML response instead of JSON');
                     return [];
                 }
                 
                 // Handle different response formats
-                const data = Array.isArray(response.data) ? response.data : 
-                    (response.data.results ? response.data.results : []);
+                let data: any[] = [];
+                if (Array.isArray(response.data)) {
+                    data = response.data;
+                } else if (response.data && response.data.results && Array.isArray(response.data.results)) {
+                    data = response.data.results;
+                } else {
+                    console.error('[getProductAssets] Unexpected response format:', typeof response.data);
+                    console.log('[getProductAssets] Response data sample:', 
+                        typeof response.data === 'object' ? JSON.stringify(response.data).substring(0, 100) : response.data);
+                    return [];
+                }
                 
-                console.log('[getProductAssets] Raw response data:', data);
+                console.log(`[getProductAssets] Successfully fetched ${data.length} assets`);
                 
                 // Helper function to ensure URL is absolute
                 const ensureAbsoluteUrl = (fileUrl: string) => {
@@ -657,20 +670,44 @@
                     return `http://localhost:8000${fileUrl}`;
                 };
                 
-                return data.map((asset: any) => ({
+                // Transform the data to match our expected format
+                const assets = data.map((asset: any) => ({
                     id: asset.id,
                     name: asset.name || (asset.file ? asset.file.split('/').pop() : 'Unknown'),
-                    type: asset.asset_type || 'image',
-                    url: ensureAbsoluteUrl(asset.file),
+                    type: asset.asset_type || asset.type || 'image',
+                    asset_type: asset.asset_type || asset.type || 'image', // Add both fields for consistency
+                    url: ensureAbsoluteUrl(asset.file || asset.url || ''),
                     size: asset.file_size || '0',  // Ensure size is always a string for consistent handling
-                    uploaded_by: asset.uploaded_by_name || 'System',
+                    uploaded_by: asset.uploaded_by_name || asset.uploaded_by || 'System',
                     uploaded_at: asset.uploaded_at || new Date().toISOString(),
-                    is_primary: asset.is_primary || false,
+                    is_primary: !!asset.is_primary, // Ensure boolean type
                     order: asset.order || 0,
                     archived: asset.archived || false
                 }));
+                
+                // Save the fetched assets to localStorage for caching
+                try {
+                    localStorage.setItem(`product_assets_${productId}`, JSON.stringify(assets));
+                } catch (cacheError) {
+                    console.error('[getProductAssets] Error caching assets to localStorage:', cacheError);
+                }
+                
+                return assets;
             } catch (error) {
-                console.error('Error fetching product assets:', error);
+                console.error('[getProductAssets] Error fetching product assets:', error);
+                
+                // Try to get cached assets from localStorage if API fails
+                try {
+                    const cachedAssetsJSON = localStorage.getItem(`product_assets_${productId}`);
+                    if (cachedAssetsJSON) {
+                        const cachedAssets = JSON.parse(cachedAssetsJSON);
+                        console.log(`[getProductAssets] Using ${cachedAssets.length} cached assets from localStorage`);
+                        return cachedAssets;
+                    }
+                } catch (cacheError) {
+                    console.error('[getProductAssets] Error reading from localStorage:', cacheError);
+                }
+                
                 return [];
             }
         },
@@ -974,8 +1011,9 @@
             onUploadProgress?: (progressEvent: AxiosProgressEvent) => void
         ): Promise<ProductAsset> => {
             const url = `${PRODUCTS_API_URL}/${productId}/assets/`;
-            console.log(`[uploadAsset] Uploading asset to ${url}`);
+            console.log(`[uploadAsset] Uploading asset to ${url}`, { fileName: file.name, fileType: file.type, fileSize: file.size });
             
+            // Create FormData object for multipart upload
             const formData = new FormData();
             formData.append('file', file);
             formData.append('name', file.name);  // Add name explicitly to match backend expectation
@@ -991,33 +1029,85 @@
             else if (mime.match(/(doc|docx|text|word)/))  assetType = 'document';
 
             formData.append('asset_type', assetType);
+            console.log(`[uploadAsset] Determined asset_type: ${assetType} for file type: ${mime}`);
             
-            const response = await axiosInstance.post(url, formData, { onUploadProgress });
-            
-            if (response.status !== 201 && response.status !== 200) {
-                throw new Error(`Unexpected response status: ${response.status}`);
+            try {
+                // Let Axios set the correct boundary in the Content-Type header automatically
+                const response = await axiosInstance.post(url, formData, { 
+                    headers: {
+                        'Content-Type': 'multipart/form-data',
+                    },
+                    onUploadProgress 
+                });
+                
+                if (response.status !== 201 && response.status !== 200) {
+                    throw new Error(`Unexpected response status: ${response.status}`);
+                }
+                
+                const data = response.data;
+                console.log('[uploadAsset] Successful upload response:', data);
+                
+                // Ensure URL is absolute
+                let fileUrl = data.file || '';
+                if (fileUrl && !fileUrl.startsWith('http://') && !fileUrl.startsWith('https://')) {
+                    fileUrl = `http://localhost:8000${fileUrl}`;
+                }
+                
+                return {
+                    id: data.id,
+                    name: data.name || file.name,
+                    type: data.asset_type || assetType,
+                    url: fileUrl,
+                    size: data.file_size || file.size.toString(),
+                    uploaded_by: data.uploaded_by_name || 'You',
+                    uploaded_at: data.uploaded_at || new Date().toISOString(),
+                    is_primary: data.is_primary || false,
+                    order: data.order || 0
+                };
+            } catch (error) {
+                console.error('[uploadAsset] Error uploading file:', error);
+                
+                // Enhanced error handling with specific messages
+                if (axios.isAxiosError(error)) {
+                    const response = error.response;
+                    
+                    // Log detailed error information
+                    console.error('[uploadAsset] Error response:', {
+                        status: response?.status,
+                        statusText: response?.statusText,
+                        data: response?.data
+                    });
+
+                    // Handle specific error cases
+                    if (response?.status === 400) {
+                        const errorMsg = typeof response.data === 'object' 
+                            ? (response.data.file || response.data.error || JSON.stringify(response.data))
+                            : 'Invalid file format';
+                        throw new Error(`Upload failed: ${errorMsg}`);
+                    }
+                    else if (response?.status === 413) {
+                        throw new Error('File too large: The server rejected this file due to its size');
+                    }
+                    else if (response?.status === 415) {
+                        throw new Error('Unsupported file type');
+                    }
+                    else if (response?.status === 401 || response?.status === 403) {
+                        // Authentication/authorization issue
+                        localStorage.removeItem('access_token');
+                        localStorage.removeItem('refresh_token');
+                        throw new Error('Authentication error: Please log in again');
+                    }
+                    // Detect HTML response instead of JSON (often means server error page)
+                    else if (response?.data && typeof response.data === 'string' && 
+                             response.data.includes('<!DOCTYPE html>')) {
+                        localStorage.removeItem('access_token');
+                        localStorage.removeItem('refresh_token');
+                        throw new Error('Invalid server response: Session may have expired');
+                    }
+                }
+                // Re-throw the error after logging
+                throw error;
             }
-            
-            const data = response.data;
-            console.log('[uploadAsset] Response data:', data);
-            
-            // Ensure URL is absolute
-            let fileUrl = data.file || '';
-            if (fileUrl && !fileUrl.startsWith('http://') && !fileUrl.startsWith('https://')) {
-                fileUrl = `http://localhost:8000${fileUrl}`;
-            }
-            
-            return {
-                id: data.id,
-                name: data.name || file.name,
-                type: data.asset_type || 'image',
-                url: fileUrl,
-                size: data.file_size || file.size.toString(),
-                uploaded_by: data.uploaded_by || 'You',
-                uploaded_at: data.uploaded_at || new Date().toISOString(),
-                is_primary: data.is_primary || false,
-                order: data.order || 0
-            };
         },
 
         // Delete an asset
@@ -1036,38 +1126,94 @@
         // Set an asset as primary
         setAssetPrimary: async (productId: number, assetId: number): Promise<boolean> => {
             try {
-                const url = `${PRODUCTS_API_URL}/${productId}/assets/${assetId}/set_primary/`;
-                console.log(`[setAssetPrimary] Setting asset ${assetId} as primary at ${url}`);
+                console.log(`[setAssetPrimary] Setting asset ${assetId} as primary for product ${productId}`);
                 
-                // First set the asset as primary
-                const response = await axiosInstance.post(url);
-                const success = response.status === 200 || response.status === 204;
+                // First get the asset details to get its URL
+                const assetUrl = `${PRODUCTS_API_URL}/${productId}/assets/${assetId}/`;
+                const assetResponse = await axiosInstance.get(assetUrl);
+                const asset = assetResponse.data;
                 
-                if (success) {
-                    // Now we need to get the asset URL to update product's primary image fields
-                    try {
-                        // Fetch the asset details
-                        const assetUrl = `${PRODUCTS_API_URL}/${productId}/assets/${assetId}/`;
-                        const assetResponse = await axiosInstance.get(assetUrl);
-                        const asset = assetResponse.data;
-                        
-                        if (asset && asset.file) {
-                            // Update the product with the new primary image
-                            await axiosInstance.patch(`${PRODUCTS_API_URL}/${productId}/`, {
-                                primary_image_thumb: asset.file,
-                                primary_image_large: asset.file
-                            });
-                            console.log(`[setAssetPrimary] Updated product ${productId} with primary image: ${asset.file}`);
-                        }
-                    } catch (updateError) {
-                        console.error('Error updating product with primary image:', updateError);
-                        // We still return true since the primary asset was set successfully
-                    }
+                if (!asset) {
+                    console.error('[setAssetPrimary] Asset not found');
+                    return false;
                 }
                 
-                return success;
+                // Get the image URL from the asset
+                const imageUrl = asset.file || asset.url;
+                if (!imageUrl) {
+                    console.error('[setAssetPrimary] Asset has no URL');
+                    return false;
+                }
+                
+                console.log(`[setAssetPrimary] Using image URL: ${imageUrl}`);
+                
+                // Update all assets to set this one as primary
+                try {
+                    // 1. Get all assets for this product
+                    const allAssetsResponse = await axiosInstance.get(`${PRODUCTS_API_URL}/${productId}/assets/`);
+                    let allAssets = allAssetsResponse.data;
+                    
+                    // Handle both array and paginated response formats
+                    if (allAssets && allAssets.results) {
+                        allAssets = allAssets.results;
+                    }
+                    
+                    if (!Array.isArray(allAssets)) {
+                        console.error('[setAssetPrimary] Unexpected assets response format', allAssets);
+                        allAssets = [];
+                    }
+                    
+                    console.log(`[setAssetPrimary] Found ${allAssets.length} assets for product ${productId}`);
+                    
+                    // 2. Update each asset's is_primary status
+                    let updatedCount = 0;
+                    for (const assetItem of allAssets) {
+                        if (assetItem.id === assetId) {
+                            // This is the one we want to make primary
+                            if (!assetItem.is_primary) {
+                                console.log(`[setAssetPrimary] Setting asset ${assetId} to primary=true`);
+                                await axiosInstance.patch(
+                                    `${PRODUCTS_API_URL}/${productId}/assets/${assetItem.id}/`, 
+                                    { is_primary: true }
+                                );
+                                updatedCount++;
+                            }
+                        } else if (assetItem.is_primary) {
+                            // Set any other primary assets to non-primary
+                            console.log(`[setAssetPrimary] Setting asset ${assetItem.id} to primary=false`);
+                            await axiosInstance.patch(
+                                `${PRODUCTS_API_URL}/${productId}/assets/${assetItem.id}/`, 
+                                { is_primary: false }
+                            );
+                            updatedCount++;
+                        }
+                    }
+                    
+                    console.log(`[setAssetPrimary] Updated ${updatedCount} assets' primary status`);
+                    
+                    // Clear the cached assets to force a refresh from server next time
+                    localStorage.removeItem(`product_assets_${productId}`);
+                    
+                } catch (assetUpdateError) {
+                    console.error('[setAssetPrimary] Error updating asset primary status:', assetUpdateError);
+                    // Continue anyway to update the product
+                }
+                
+                // 3. Update the product's primary_image fields directly
+                try {
+                    await productService.updateProduct(productId, {
+                        primary_image_thumb: imageUrl,
+                        primary_image_large: imageUrl
+                    });
+                    console.log(`[setAssetPrimary] Updated product ${productId} with primary image: ${imageUrl}`);
+                    return true;
+                } catch (productUpdateError) {
+                    console.error('[setAssetPrimary] Error updating product with primary image:', productUpdateError);
+                    return false;
+                }
+                
             } catch (error) {
-                console.error('Error setting asset as primary:', error);
+                console.error('[setAssetPrimary] Error setting asset as primary:', error);
                 return false;
             }
         },

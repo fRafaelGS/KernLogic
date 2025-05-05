@@ -36,6 +36,47 @@ def generate_error_report(in_file_dupes, existing_skus):
             
     return ContentFile("\n".join(error_lines).encode('utf-8'))
 
+def process_tags(tags_value):
+    """
+    Process tags from different formats into a list.
+    
+    Args:
+        tags_value: Tags value from CSV (string or other)
+    
+    Returns:
+        List of tags
+    """
+    if tags_value is None or pd.isna(tags_value):
+        return []
+        
+    # If it's already a list, return it
+    if isinstance(tags_value, list):
+        return tags_value
+        
+    # If it's a string, try different formats
+    if isinstance(tags_value, str):
+        # Try JSON format first
+        if (tags_value.startswith('[') and tags_value.endswith(']')) or \
+           (tags_value.startswith('{') and tags_value.endswith('}')):
+            try:
+                return json.loads(tags_value)
+            except json.JSONDecodeError:
+                pass
+                
+        # Try pipe-separated format
+        if '|' in tags_value:
+            return [tag.strip() for tag in tags_value.split('|') if tag.strip()]
+            
+        # Try comma-separated format
+        if ',' in tags_value:
+            return [tag.strip() for tag in tags_value.split(',') if tag.strip()]
+            
+        # Single tag
+        if tags_value.strip():
+            return [tags_value.strip()]
+            
+    return []
+
 @shared_task
 def import_csv_task(task_id: int):
     """
@@ -183,7 +224,11 @@ def import_csv_task(task_id: int):
                         value = row[src]
                         # Skip empty values
                         if pd.notna(value):
-                            data[dst] = value
+                            # Process tags field differently
+                            if dst == 'tags':
+                                data[dst] = process_tags(value)
+                            else:
+                                data[dst] = value
                 
                 # Skip rows with no SKU
                 if "sku" not in data or not data["sku"]:

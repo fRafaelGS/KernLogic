@@ -20,4 +20,6 @@ from .attribute_group import AttributeGroupViewSet, ProductAttributeGroupViewSet
 __all__ = [
     'ProductViewSet', 'DashboardViewSet', 'AssetViewSet', 'ProductEventViewSet', 'SkuCheckAPIView',
     'AttributeViewSet', 'AttributeValueViewSet', 'AttributeGroupViewSet', 'ProductAttributeGroupViewSet',
-] 
+]
+
+# This file ensures the views directory is recognized as a Python package 

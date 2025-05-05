@@ -14,6 +14,8 @@ from products.views_readonly import (
     VersionViewSet,
     AttributeSetViewSet,
 )
+# Import the PDF export view
+from products.views.pdf_export import generate_product_pdf
 
 # /api/products/…
 router = DefaultRouter()
@@ -43,4 +45,6 @@ urlpatterns = [
     path("", include(assets_router.urls)),
     path("", include(details_router.urls)),
     path("products/sku-check/", SkuCheckAPIView.as_view(), name="products-sku-check"),
+    # Add PDF export endpoint
+    path("products/<int:product_id>/pdf/", generate_product_pdf, name="product-pdf-export"),
 ] 

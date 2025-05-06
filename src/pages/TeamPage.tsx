@@ -93,7 +93,6 @@ export const TeamPage: React.FC = () => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [orgError, setOrgError] = useState(false);
-  const [teamMembers, setTeamMembers] = useState<Membership[]>([]);
   
   // Get auth context and navigation
   const { user, loading: authLoading } = useAuth();
@@ -187,7 +186,7 @@ export const TeamPage: React.FC = () => {
         params.append('page_size', pageSize.toString());
         
         // Make the API request
-        const response = await api.get(`/api/orgs/${orgID}/memberships?${params.toString()}`);
+        const response = await api.get(`/orgs/${orgID}/memberships?${params.toString()}`);
         
         // Handle different response shapes (array or paginated object)
         const raw = response.data;
@@ -210,27 +209,10 @@ export const TeamPage: React.FC = () => {
     placeholderData: (prev) => prev, // Use previous data while new data is loading
   });
 
-  // Update local members state when membersData changes
-  useEffect(() => {
-    if (membersData && Array.isArray(membersData.results)) {
-      setTeamMembers(membersData.results);
-    }
-  }, [membersData]);
-
   // Handle avatar update for a team member
   const handleAvatarUpdate = (memberId: string, newAvatarUrl: string) => {
-    // Update the local state
-    setTeamMembers(prevMembers => 
-      prevMembers.map(member => 
-        member.id === memberId 
-          ? { ...member, avatar_url: newAvatarUrl } 
-          : member
-      )
-    );
-    
-    // After updating locally, refetch to ensure consistency
+    // Skip local state updates and just refetch data
     refetch();
-    
     toast.success('Avatar updated successfully');
   };
 
@@ -464,7 +446,7 @@ export const TeamPage: React.FC = () => {
               </div>
 
               {/* Empty State */}
-              {teamMembers.length === 0 && (
+              {membersData.results.length === 0 && (
                 <div className="p-8">
                   <EmptyState
                     title="No team members found"
@@ -477,7 +459,7 @@ export const TeamPage: React.FC = () => {
               )}
 
               {/* Member List */}
-              {Array.isArray(teamMembers) && teamMembers.length > 0 && (
+              {Array.isArray(membersData.results) && membersData.results.length > 0 && (
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
@@ -489,7 +471,7 @@ export const TeamPage: React.FC = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {teamMembers.map(member => {
+                      {membersData.results.map(member => {
                         // Handle both formats - nested user object or flattened properties
                         const email = member.user_email || (member.user && typeof member.user === 'object' ? member.user.email : '');
                         const name = member.user_name || (member.user && typeof member.user === 'object' ? member.user.name : 'User');
@@ -517,10 +499,9 @@ export const TeamPage: React.FC = () => {
                             <TableCell className="font-medium">
                               <div className="flex items-center space-x-3">
                                 <div className="relative">
-                                  <Avatar
-                                    size="md"
+                                  <Avatar 
                                     name={name}
-                                    avatarUrl={avatar}
+                                    avatarUrl={avatar} 
                                     userId={userId}
                                     showUploadButton={String(user?.id) === String(userId)}
                                     onAvatarUpdated={(newUrl) => handleAvatarUpdate(member.id, newUrl)}

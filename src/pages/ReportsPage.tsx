@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import axiosInstance from '@/lib/axiosInstance';
 import { paths } from '@/lib/apiPaths';
@@ -59,7 +59,20 @@ interface ReadinessReportProps {
 const CompletenessReport: React.FC = () => {
   const [filters, setFilters] = useState<ReportFiltersState>({});
   
-  const { data, isLoading, error } = useQuery({
+  // Define fallback data structure that fully matches the expected API response
+  const fallbackData = {
+    overall: 0,
+    byAttribute: [
+      {name: 'Name', completed: 0, total: 0},
+      {name: 'Description', completed: 0, total: 0},
+      {name: 'Price', completed: 0, total: 0}
+    ],
+    byCategory: [
+      {name: 'Default', value: 0}
+    ]
+  };
+
+  const { data: apiData, isLoading, error } = useQuery({
     queryKey: [...qkCompleteness(), filters],
     queryFn: () => {
       // Build query string from filters
@@ -79,6 +92,30 @@ const CompletenessReport: React.FC = () => {
     }
   });
 
+  // Process the data to ensure it matches the expected structure
+  const data = useMemo(() => {
+    // If no data, return the fallback
+    if (!apiData) return fallbackData;
+    
+    // Ensure all expected properties exist with proper fallbacks
+    return {
+      overall: typeof apiData.overall === 'number' ? apiData.overall : 0,
+      byAttribute: Array.isArray(apiData.byAttribute) && apiData.byAttribute.length > 0 
+        ? apiData.byAttribute.map(attr => ({
+            name: attr?.name || 'Unknown',
+            completed: typeof attr?.completed === 'number' ? attr.completed : 0,
+            total: typeof attr?.total === 'number' ? attr.total : 0
+          }))
+        : fallbackData.byAttribute,
+      byCategory: Array.isArray(apiData.byCategory) && apiData.byCategory.length > 0
+        ? apiData.byCategory.map(cat => ({
+            name: cat?.name || 'Unknown',
+            value: typeof cat?.value === 'number' ? cat.value : 0
+          }))
+        : fallbackData.byCategory
+    };
+  }, [apiData]);
+
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -92,7 +129,10 @@ const CompletenessReport: React.FC = () => {
   if (error) {
     return (
       <div className="text-red-500 p-4 border rounded">
-        Error loading completeness data. Please try again later.
+        <h3 className="font-semibold mb-2">Error loading completeness data</h3>
+        <p>The analytics data may not be available yet after the database migration.</p>
+        <p className="text-sm mt-2">Please run the analytics data population commands to fix this issue or try running them with the --reset flag.</p>
+        <p className="text-sm mt-2">Command: python manage.py populate_facts --reset</p>
       </div>
     );
   }
@@ -144,19 +184,25 @@ const CompletenessReport: React.FC = () => {
         </CardHeader>
         <CardContent>
           <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={data.byAttribute}
-                layout="vertical"
-                margin={{ top: 5, right: 30, left: 80, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" domain={[0, 100]} unit="%" />
-                <YAxis dataKey="name" type="category" width={80} />
-                <Tooltip formatter={(value) => [`${value}%`, 'Completed']} />
-                <Bar dataKey="completed" fill="#0088FE" />
-              </BarChart>
-            </ResponsiveContainer>
+            {data.byAttribute.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={data.byAttribute}
+                  layout="vertical"
+                  margin={{ top: 5, right: 30, left: 80, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis type="number" domain={[0, 100]} unit="%" />
+                  <YAxis dataKey="name" type="category" width={80} />
+                  <Tooltip formatter={(value) => [`${value}%`, 'Completed']} />
+                  <Bar dataKey="completed" fill="#0088FE" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center text-gray-500">
+                No attribute data available
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -169,38 +215,48 @@ const CompletenessReport: React.FC = () => {
         <CardContent>
           <div className="flex flex-wrap justify-around">
             <div className="h-[300px] w-full max-w-xs">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={data.byCategory}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={80}
-                    label={({ name, value }) => `${name}: ${value}%`}
-                  >
-                    {data.byCategory.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value) => [`${value}%`, 'Completeness']} />
-                </PieChart>
-              </ResponsiveContainer>
+              {data.byCategory.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={data.byCategory}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      label={({name, value}) => `${name || 'Unknown'}: ${value || 0}%`}
+                    >
+                      {data.byCategory.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value) => [`${value}%`, 'Completeness']} />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center text-gray-500">
+                  No category data available
+                </div>
+              )}
             </div>
             <div className="w-full max-w-xs mt-4 md:mt-0">
               <h3 className="text-md font-medium mb-2">Category Breakdown</h3>
-              <ul className="space-y-2">
-                {data.byCategory.map((category, index) => (
-                  <li key={index} className="flex items-center space-x-2">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                    <span className="text-sm">{category.name}</span>
-                    <Badge variant={category.value >= 70 ? "success" : category.value >= 50 ? "outline" : "destructive"}>
-                      {category.value}%
-                    </Badge>
-                  </li>
-                ))}
-              </ul>
+              {data.byCategory.length > 0 ? (
+                <ul className="space-y-2">
+                  {data.byCategory.map((category, index) => (
+                    <li key={index} className="flex items-center space-x-2">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                      <span className="text-sm">{category.name || 'Unknown'}</span>
+                      <Badge variant={category.value >= 70 ? "success" : category.value >= 50 ? "outline" : "destructive"}>
+                        {category.value || 0}%
+                      </Badge>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-gray-500">No category data available</p>
+              )}
             </div>
           </div>
         </CardContent>
@@ -212,7 +268,20 @@ const CompletenessReport: React.FC = () => {
 const ReadinessReport: React.FC = () => {
   const [filters, setFilters] = useState<ReportFiltersState>({});
   
-  const { data, isLoading, error } = useQuery({
+  // Define fallback data structure that fully matches the expected API response
+  const fallbackData = {
+    overall: 0,
+    byChannel: [
+      {name: 'Web', value: 0},
+      {name: 'Mobile', value: 0},
+    ],
+    byRequiredField: [
+      {name: 'Basic Info', completed: 0, missing: 0},
+      {name: 'Images', completed: 0, missing: 0},
+    ]
+  };
+  
+  const { data: apiData, isLoading, error } = useQuery({
     queryKey: [...qkReadiness(), filters],
     queryFn: () => {
       // Build query string from filters
@@ -232,6 +301,30 @@ const ReadinessReport: React.FC = () => {
     }
   });
 
+  // Process the data to ensure it matches the expected structure
+  const data = useMemo(() => {
+    // If no data, return the fallback
+    if (!apiData) return fallbackData;
+    
+    // Ensure all expected properties exist with proper fallbacks
+    return {
+      overall: typeof apiData.overall === 'number' ? apiData.overall : 0,
+      byChannel: Array.isArray(apiData.byChannel) && apiData.byChannel.length > 0
+        ? apiData.byChannel.map(channel => ({
+            name: channel?.name || 'Unknown',
+            value: typeof channel?.value === 'number' ? channel.value : 0
+          }))
+        : fallbackData.byChannel,
+      byRequiredField: Array.isArray(apiData.byRequiredField) && apiData.byRequiredField.length > 0
+        ? apiData.byRequiredField.map(field => ({
+            name: field?.name || 'Unknown',
+            completed: typeof field?.completed === 'number' ? field.completed : 0,
+            missing: typeof field?.missing === 'number' ? field.missing : 0
+          }))
+        : fallbackData.byRequiredField
+    };
+  }, [apiData]);
+
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -245,7 +338,10 @@ const ReadinessReport: React.FC = () => {
   if (error) {
     return (
       <div className="text-red-500 p-4 border rounded">
-        Error loading readiness data. Please try again later.
+        <h3 className="font-semibold mb-2">Error loading readiness data</h3>
+        <p>The analytics data may not be available yet after the database migration.</p>
+        <p className="text-sm mt-2">Please run the analytics data population commands to fix this issue or try running them with the --reset flag.</p>
+        <p className="text-sm mt-2">Command: python manage.py populate_facts --reset</p>
       </div>
     );
   }
@@ -297,18 +393,24 @@ const ReadinessReport: React.FC = () => {
         </CardHeader>
         <CardContent>
           <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={data.byChannel}
-                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis domain={[0, 100]} unit="%" />
-                <Tooltip formatter={(value) => [`${value}%`, 'Readiness']} />
-                <Bar dataKey="value" fill="#00C49F" />
-              </BarChart>
-            </ResponsiveContainer>
+            {data.byChannel.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={data.byChannel}
+                  margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis domain={[0, 100]} unit="%" />
+                  <Tooltip formatter={(value) => [`${value}%`, 'Readiness']} />
+                  <Bar dataKey="value" fill="#00C49F" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center text-gray-500">
+                No channel data available
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -320,20 +422,26 @@ const ReadinessReport: React.FC = () => {
         </CardHeader>
         <CardContent>
           <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={data.byRequiredField}
-                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                stackOffset="sign"
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis domain={[0, 100]} unit="%" />
-                <Tooltip formatter={(value) => [`${value}%`, 'Percentage']} />
-                <Bar dataKey="completed" stackId="stack" fill="#0088FE" name="Completed" />
-                <Bar dataKey="missing" stackId="stack" fill="#FF8042" name="Missing" />
-              </BarChart>
-            </ResponsiveContainer>
+            {data.byRequiredField.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={data.byRequiredField}
+                  margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                  stackOffset="sign"
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis domain={[0, 100]} unit="%" />
+                  <Tooltip formatter={(value) => [`${value}%`, 'Percentage']} />
+                  <Bar dataKey="completed" stackId="stack" fill="#0088FE" name="Completed" />
+                  <Bar dataKey="missing" stackId="stack" fill="#FF8042" name="Missing" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center text-gray-500">
+                No required field data available
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -453,4 +561,4 @@ const ReportsPage: React.FC = () => {
   );
 };
 
-export default ReportsPage; 
+export default ReportsPage;

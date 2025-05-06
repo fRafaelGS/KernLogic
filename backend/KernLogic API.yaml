@@ -58,6 +58,101 @@ paths:
               schema:
                 $ref: '#/components/schemas/TokenRefresh'
           description: ''
+  /orgs/{org_id}/:
+    get:
+      operationId: orgs_retrieve
+      parameters:
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /orgs/{org_id}/memberships/{id}/avatar/:
+    post:
+      operationId: orgs_memberships_avatar_create
+      description: |-
+        Handle membership avatar uploads, viewing, and deletion.
+
+        - GET: Return the avatar URL
+        - POST: Upload a new avatar
+        - DELETE: Remove the existing avatar
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: orgs_memberships_avatar_destroy
+      description: |-
+        Handle membership avatar uploads, viewing, and deletion.
+
+        - GET: Return the avatar URL
+        - POST: Upload a new avatar
+        - DELETE: Remove the existing avatar
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+    get:
+      operationId: orgs_memberships_avatar_retrieve
+      description: |-
+        Handle membership avatar uploads, viewing, and deletion.
+
+        - GET: Return the avatar URL
+        - POST: Upload a new avatar
+        - DELETE: Remove the existing avatar
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
   /analytics/completeness-export/:
     get:
       operationId: analytics_completeness_export_retrieve
@@ -119,6 +214,32 @@ paths:
         '200':
           description: No response body
   /products/:
+    post:
+      operationId: products_create
+      description: Create a new product
+      tags:
+      - products
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
     get:
       operationId: products_list
       description: API endpoint for managing product data.
@@ -157,32 +278,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedProductList'
-          description: ''
-    post:
-      operationId: products_create
-      description: Create a new product
-      tags:
-      - products
-      requestBody:
-        content:
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/ProductRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/ProductRequest'
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ProductRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Product'
           description: ''
   /products/brands/:
     get:
@@ -286,22 +381,6 @@ paths:
                 $ref: '#/components/schemas/Product'
           description: ''
   /products/categories/:
-    get:
-      operationId: products_categories_retrieve
-      description: |-
-        GET: Return a list of unique categories for dropdown menus.
-        POST: Create a new category by adding a product with that category.
-      tags:
-      - products
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Product'
-          description: ''
     post:
       operationId: products_categories_create
       description: |-
@@ -321,6 +400,22 @@ paths:
             schema:
               $ref: '#/components/schemas/ProductRequest'
         required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
+    get:
+      operationId: products_categories_retrieve
+      description: |-
+        GET: Return a list of unique categories for dropdown menus.
+        POST: Create a new category by adding a product with that category.
+      tags:
+      - products
       security:
       - jwtAuth: []
       responses:
@@ -373,22 +468,6 @@ paths:
                 $ref: '#/components/schemas/Product'
           description: ''
   /products/tags/:
-    get:
-      operationId: products_tags_retrieve
-      description: |-
-        GET: Return a list of unique tags from all products.
-        POST: Create a new tag by adding it to a "tag repository" product or returning an existing tag.
-      tags:
-      - products
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Product'
-          description: ''
     post:
       operationId: products_tags_create
       description: |-
@@ -417,17 +496,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/Product'
           description: ''
-  /products/{id}/:
     get:
-      operationId: products_retrieve
-      description: API endpoint for managing product data.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Product.
-        required: true
+      operationId: products_tags_retrieve
+      description: |-
+        GET: Return a list of unique tags from all products.
+        POST: Create a new tag by adding it to a "tag repository" product or returning an existing tag.
       tags:
       - products
       security:
@@ -439,6 +512,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Product'
           description: ''
+  /products/{id}/:
     patch:
       operationId: products_partial_update
       description: API endpoint for managing product data.
@@ -489,6 +563,27 @@ paths:
       responses:
         '204':
           description: No response body
+    get:
+      operationId: products_retrieve
+      description: API endpoint for managing product data.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Product.
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
   /products/{id}/related-add/:
     post:
       operationId: products_related_add_create
@@ -724,10 +819,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/Product'
           description: ''
-  /products/{id}/set-primary/:
+  /products/{id}/set_primary/:
     post:
       operationId: products_set_primary_create
-      description: Set an asset as primary
+      description: API endpoint for managing product data.
       parameters:
       - in: path
         name: id
@@ -800,7 +895,7 @@ paths:
       responses:
         '200':
           description: No response body
-  /dashboard/incomplete_products/:
+  /dashboard/incomplete-products/:
     get:
       operationId: dashboard_incomplete_products_retrieve
       description: Return the top 5 incomplete products
@@ -811,10 +906,10 @@ paths:
       responses:
         '200':
           description: No response body
-  /dashboard/inventory_trend/:
+  /dashboard/inventory-trend/:
     get:
       operationId: dashboard_inventory_trend_retrieve
-      description: Return inventory value trend data for a given time range
+      description: Return inventory value trend data for the specified time range
       tags:
       - dashboard
       security:
@@ -894,30 +989,6 @@ paths:
         '200':
           description: No response body
   /attributes/:
-    get:
-      operationId: attributes_list
-      description: Returns attributes for the current organization.
-      summary: List all attributes
-      parameters:
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      tags:
-      - attributes
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Attribute'
-          description: ''
     post:
       operationId: attributes_create
       description: Create a new attribute for the current organization. Staff only.
@@ -945,7 +1016,82 @@ paths:
               schema:
                 $ref: '#/components/schemas/Attribute'
           description: ''
+    get:
+      operationId: attributes_list
+      description: Returns attributes for the current organization.
+      summary: List all attributes
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      tags:
+      - attributes
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Attribute'
+          description: ''
   /attributes/{id}/:
+    patch:
+      operationId: attributes_partial_update
+      description: Partially update an existing attribute. Staff only.
+      summary: Partially update an attribute
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this attribute.
+        required: true
+      tags:
+      - attributes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAttributeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAttributeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAttributeRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Attribute'
+          description: ''
+    delete:
+      operationId: attributes_destroy
+      description: Delete an attribute. Staff only.
+      summary: Delete an attribute
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this attribute.
+        required: true
+      tags:
+      - attributes
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
     get:
       operationId: attributes_retrieve
       description: Returns details of a specific attribute.
@@ -1002,89 +1148,14 @@ paths:
               schema:
                 $ref: '#/components/schemas/Attribute'
           description: ''
-    patch:
-      operationId: attributes_partial_update
-      description: Partially update an existing attribute. Staff only.
-      summary: Partially update an attribute
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this attribute.
-        required: true
-      tags:
-      - attributes
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedAttributeRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedAttributeRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedAttributeRequest'
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Attribute'
-          description: ''
-    delete:
-      operationId: attributes_destroy
-      description: Delete an attribute. Staff only.
-      summary: Delete an attribute
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this attribute.
-        required: true
-      tags:
-      - attributes
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
   /attribute-groups/:
-    get:
-      operationId: attribute_groups_list
-      description: Returns attribute groups for the current organization.
-      summary: List all attribute groups
-      parameters:
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      tags:
-      - Attributes - Groups
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/AttributeGroup'
-          description: ''
     post:
       operationId: attribute_groups_create
       description: Create a new attribute group for the current organization. Staff
         only.
       summary: Create a new attribute group
       tags:
-      - Attributes - Groups
+      - attribute-groups
       requestBody:
         content:
           application/json:
@@ -1106,20 +1177,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/AttributeGroup'
           description: ''
-  /attribute-groups/{id}/:
     get:
-      operationId: attribute_groups_retrieve
-      description: Returns details of a specific attribute group.
-      summary: Get a specific attribute group
+      operationId: attribute_groups_list
+      description: Returns attribute groups for the current organization.
+      summary: List attribute groups
       parameters:
-      - in: path
-        name: id
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
         schema:
-          type: integer
-        description: A unique integer value identifying this attribute group.
-        required: true
+          type: string
       tags:
-      - Attributes - Groups
+      - attribute-groups
       security:
       - jwtAuth: []
       responses:
@@ -1127,21 +1197,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AttributeGroup'
+                type: array
+                items:
+                  $ref: '#/components/schemas/AttributeGroup'
           description: ''
-    put:
-      operationId: attribute_groups_update
-      description: Update an existing attribute group. Staff only.
-      summary: Update an attribute group
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this attribute group.
-        required: true
+  /attribute-groups/reorder/:
+    post:
+      operationId: attribute_groups_reorder_create
+      description: |-
+        Reorder all attribute groups
+        Request body should contain a list of group IDs in the desired order.
+        Example: {"group_ids": [5, 1, 3, 2, 4]}
       tags:
-      - Attributes - Groups
+      - attribute-groups
       requestBody:
         content:
           application/json:
@@ -1163,6 +1231,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/AttributeGroup'
           description: ''
+  /attribute-groups/{id}/:
     patch:
       operationId: attribute_groups_partial_update
       description: Partially update an existing attribute group. Staff only.
@@ -1175,7 +1244,7 @@ paths:
         description: A unique integer value identifying this attribute group.
         required: true
       tags:
-      - Attributes - Groups
+      - attribute-groups
       requestBody:
         content:
           application/json:
@@ -1208,12 +1277,68 @@ paths:
         description: A unique integer value identifying this attribute group.
         required: true
       tags:
-      - Attributes - Groups
+      - attribute-groups
       security:
       - jwtAuth: []
       responses:
         '204':
           description: No response body
+    get:
+      operationId: attribute_groups_retrieve
+      description: Returns details of a specific attribute group.
+      summary: Get a specific attribute group
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this attribute group.
+        required: true
+      tags:
+      - attribute-groups
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeGroup'
+          description: ''
+    put:
+      operationId: attribute_groups_update
+      description: Update an existing attribute group. Staff only.
+      summary: Update an attribute group
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this attribute group.
+        required: true
+      tags:
+      - attribute-groups
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttributeGroupRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AttributeGroupRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AttributeGroupRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeGroup'
+          description: ''
   /attribute-groups/{id}/add-item/:
     post:
       operationId: attribute_groups_add_item_create
@@ -1274,26 +1399,34 @@ paths:
       responses:
         '204':
           description: No response body
-  /products/{product_pk}/assets/:
-    get:
-      operationId: products_assets_list
+  /attribute-groups/{id}/reorder_items/:
+    post:
+      operationId: attribute_groups_reorder_items_create
       description: |-
-        Nested under /products/<product_pk>/assets/.
-        Handles upload, delete, reorder and set-primary.
+        Reorder items within an attribute group
+        Request body should contain a list of item IDs in the desired order.
+        Example: {"item_ids": [5, 1, 3, 2, 4]}
       parameters:
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
       - in: path
-        name: product_pk
+        name: id
         schema:
           type: integer
+        description: A unique integer value identifying this attribute group.
         required: true
       tags:
-      - products
+      - attribute-groups
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttributeGroupRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AttributeGroupRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AttributeGroupRequest'
+        required: true
       security:
       - jwtAuth: []
       responses:
@@ -1301,10 +1434,9 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ProductAsset'
+                $ref: '#/components/schemas/AttributeGroup'
           description: ''
+  /products/{product_pk}/assets/:
     post:
       operationId: products_assets_create
       description: |-
@@ -1338,6 +1470,36 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProductAsset'
+          description: ''
+    get:
+      operationId: products_assets_list
+      description: |-
+        Nested under /products/<product_pk>/assets/.
+        Handles upload, delete, reorder and set-primary.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - in: path
+        name: product_pk
+        schema:
+          type: integer
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProductAsset'
           description: ''
   /products/{product_pk}/assets/reorder/:
     post:
@@ -1373,6 +1535,69 @@ paths:
                 $ref: '#/components/schemas/ProductAsset'
           description: ''
   /products/{product_pk}/assets/{id}/:
+    patch:
+      operationId: products_assets_partial_update
+      description: |-
+        Nested under /products/<product_pk>/assets/.
+        Handles upload, delete, reorder and set-primary.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this product asset.
+        required: true
+      - in: path
+        name: product_pk
+        schema:
+          type: integer
+        required: true
+      tags:
+      - products
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProductAssetRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProductAssetRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProductAssetRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductAsset'
+          description: ''
+    delete:
+      operationId: products_assets_destroy
+      description: |-
+        Nested under /products/<product_pk>/assets/.
+        Handles upload, delete, reorder and set-primary.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this product asset.
+        required: true
+      - in: path
+        name: product_pk
+        schema:
+          type: integer
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
     get:
       operationId: products_assets_retrieve
       description: |-
@@ -1441,69 +1666,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProductAsset'
           description: ''
-    patch:
-      operationId: products_assets_partial_update
-      description: |-
-        Nested under /products/<product_pk>/assets/.
-        Handles upload, delete, reorder and set-primary.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this product asset.
-        required: true
-      - in: path
-        name: product_pk
-        schema:
-          type: integer
-        required: true
-      tags:
-      - products
-      requestBody:
-        content:
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedProductAssetRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedProductAssetRequest'
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedProductAssetRequest'
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProductAsset'
-          description: ''
-    delete:
-      operationId: products_assets_destroy
-      description: |-
-        Nested under /products/<product_pk>/assets/.
-        Handles upload, delete, reorder and set-primary.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this product asset.
-        required: true
-      - in: path
-        name: product_pk
-        schema:
-          type: integer
-        required: true
-      tags:
-      - products
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
   /products/{product_pk}/assets/{id}/set_primary/:
     post:
       operationId: products_assets_set_primary_create
@@ -1546,44 +1708,16 @@ paths:
                 $ref: '#/components/schemas/ProductAsset'
           description: ''
   /products/{product_pk}/attributes/:
-    get:
-      operationId: products_attributes_list
-      description: Returns all attribute values for a specific product.
-      summary: List attribute values for a product
-      parameters:
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - in: path
-        name: product_pk
-        schema:
-          type: string
-        required: true
-      tags:
-      - products
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/AttributeValue'
-          description: ''
     post:
       operationId: products_attributes_create
-      description: Create a new attribute value for a product.
+      description: Create a new attribute value for the current organization. Staff
+        only.
       summary: Create a new attribute value
       parameters:
       - in: path
         name: product_pk
         schema:
-          type: string
+          type: integer
         required: true
       tags:
       - products
@@ -1608,21 +1742,21 @@ paths:
               schema:
                 $ref: '#/components/schemas/AttributeValue'
           description: ''
-  /products/{product_pk}/attributes/{id}/:
     get:
-      operationId: products_attributes_retrieve
-      description: Returns details of a specific attribute value for a product.
-      summary: Get a specific attribute value
+      operationId: products_attributes_list
+      description: Returns attribute values for the current organization.
+      summary: List all attribute values
       parameters:
-      - in: path
-        name: id
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
         schema:
           type: string
-        required: true
       - in: path
         name: product_pk
         schema:
-          type: string
+          type: integer
         required: true
       tags:
       - products
@@ -1633,22 +1767,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AttributeValue'
+                type: array
+                items:
+                  $ref: '#/components/schemas/AttributeValueDetail'
           description: ''
-    put:
-      operationId: products_attributes_update
-      description: Update an existing attribute value.
-      summary: Update an attribute value
+  /products/{product_pk}/attributes/bulk_create/:
+    post:
+      operationId: products_attributes_bulk_create_create
+      description: Create multiple attribute values at once
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
       - in: path
         name: product_pk
         schema:
-          type: string
+          type: integer
         required: true
       tags:
       - products
@@ -1673,20 +1804,22 @@ paths:
               schema:
                 $ref: '#/components/schemas/AttributeValue'
           description: ''
+  /products/{product_pk}/attributes/{id}/:
     patch:
       operationId: products_attributes_partial_update
-      description: Partially update an existing attribute value.
+      description: Partially update an existing attribute value. Staff only.
       summary: Partially update an attribute value
       parameters:
       - in: path
         name: id
         schema:
-          type: string
+          type: integer
+        description: A unique integer value identifying this attribute value.
         required: true
       - in: path
         name: product_pk
         schema:
-          type: string
+          type: integer
         required: true
       tags:
       - products
@@ -1712,18 +1845,19 @@ paths:
           description: ''
     delete:
       operationId: products_attributes_destroy
-      description: Delete an attribute value from a product.
+      description: Delete an attribute value. Staff only.
       summary: Delete an attribute value
       parameters:
       - in: path
         name: id
         schema:
-          type: string
+          type: integer
+        description: A unique integer value identifying this attribute value.
         required: true
       - in: path
         name: product_pk
         schema:
-          type: string
+          type: integer
         required: true
       tags:
       - products
@@ -1732,6 +1866,72 @@ paths:
       responses:
         '204':
           description: No response body
+    get:
+      operationId: products_attributes_retrieve
+      description: Returns details of a specific attribute value.
+      summary: Get a specific attribute value
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this attribute value.
+        required: true
+      - in: path
+        name: product_pk
+        schema:
+          type: integer
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeValueDetail'
+          description: ''
+    put:
+      operationId: products_attributes_update
+      description: Update an existing attribute value. Staff only.
+      summary: Update an attribute value
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this attribute value.
+        required: true
+      - in: path
+        name: product_pk
+        schema:
+          type: integer
+        required: true
+      tags:
+      - products
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttributeValueRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AttributeValueRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AttributeValueRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeValue'
+          description: ''
   /products/{product_pk}/attribute-groups/:
     get:
       operationId: products_attribute_groups_list
@@ -1772,7 +1972,8 @@ paths:
       - in: path
         name: id
         schema:
-          type: string
+          type: integer
+        description: A unique integer value identifying this attribute group.
         required: true
       - in: path
         name: product_pk
@@ -1887,34 +2088,24 @@ paths:
       responses:
         '200':
           description: No response body
-  /imports/:
+  /products/{product_id}/pdf/:
     get:
-      operationId: imports_list
-      description: |-
-        ViewSet for managing product import tasks.
-
-        Supports creating new import tasks, retrieving status, listing all tasks,
-        canceling tasks, and generating reports of imported data.
+      operationId: products_pdf_retrieve
+      description: Generate a PDF for a product specification
       parameters:
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
+      - in: path
+        name: product_id
         schema:
-          type: string
+          type: integer
+        required: true
       tags:
-      - imports
+      - products
       security:
       - jwtAuth: []
       responses:
         '200':
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ImportTask'
-          description: ''
+          description: No response body
+  /imports/:
     post:
       operationId: imports_create
       description: |-
@@ -1944,6 +2135,33 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ImportTask'
+          description: ''
+    get:
+      operationId: imports_list
+      description: |-
+        ViewSet for managing product import tasks.
+
+        Supports creating new import tasks, retrieving status, listing all tasks,
+        canceling tasks, and generating reports of imported data.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      tags:
+      - imports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ImportTask'
           description: ''
   /imports/{id}/:
     get:
@@ -2306,6 +2524,63 @@ paths:
                   $ref: '#/components/schemas/Role'
           description: ''
   /orgs/{org_id}/roles/{id}/:
+    patch:
+      operationId: orgs_roles_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this role.
+        required: true
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedRoleRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedRoleRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedRoleRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+          description: ''
+    delete:
+      operationId: orgs_roles_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this role.
+        required: true
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
     get:
       operationId: orgs_roles_retrieve
       parameters:
@@ -2368,63 +2643,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Role'
           description: ''
-    patch:
-      operationId: orgs_roles_partial_update
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this role.
-        required: true
-      - in: path
-        name: org_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - orgs
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedRoleRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedRoleRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedRoleRequest'
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Role'
-          description: ''
-    delete:
-      operationId: orgs_roles_destroy
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this role.
-        required: true
-      - in: path
-        name: org_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - orgs
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
   /orgs/{org_id}/memberships/:
     post:
       operationId: orgs_memberships_create
@@ -2513,6 +2731,65 @@ paths:
                 $ref: '#/components/schemas/Membership'
           description: ''
   /orgs/{org_id}/memberships/{id}/:
+    patch:
+      operationId: orgs_memberships_partial_update
+      description: Update a membership (e.g., change role) and log the change
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this membership.
+        required: true
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedMembershipRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedMembershipRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedMembershipRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Membership'
+          description: ''
+    delete:
+      operationId: orgs_memberships_destroy
+      description: Remove a membership and log the action
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this membership.
+        required: true
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
     get:
       operationId: orgs_memberships_retrieve
       parameters:
@@ -2575,71 +2852,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/Membership'
           description: ''
-    patch:
-      operationId: orgs_memberships_partial_update
-      description: Update a membership (e.g., change role) and log the change
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this membership.
-        required: true
-      - in: path
-        name: org_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - orgs
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedMembershipRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedMembershipRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedMembershipRequest'
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Membership'
-          description: ''
-    delete:
-      operationId: orgs_memberships_destroy
-      description: Remove a membership and log the action
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this membership.
-        required: true
-      - in: path
-        name: org_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - orgs
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
   /orgs/{org_id}/memberships/{id}/accept/:
     post:
       operationId: orgs_memberships_accept_create
       description: |-
-        Accept an invitation.
-        This would typically be called after a user clicks a link in an invitation email.
+        Accept an invitation to join an organization.
+
+        Expected payload:
+        {
+            "name": "Full Name",
+            "password": "securepassword",
+            "password_confirm": "securepassword",
+            "invitation_token": "token"
+        }
       parameters:
       - in: path
         name: id
@@ -2668,6 +2893,7 @@ paths:
         required: true
       security:
       - jwtAuth: []
+      - {}
       responses:
         '200':
           content:
@@ -2856,6 +3082,31 @@ paths:
       responses:
         '200':
           description: No response body
+  /set-password/:
+    post:
+      operationId: set_password_create
+      description: API View for setting password for existing users (typically from
+        invitation)
+      tags:
+      - set-password
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /check-user/:
+    post:
+      operationId: check_user_create
+      description: API View to check if a user exists and needs to set a password
+      tags:
+      - check-user
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
   /user/:
     get:
       operationId: user_retrieve
@@ -2972,6 +3223,8 @@ components:
           maxLength: 80
         order:
           type: integer
+          maximum: 32767
+          minimum: 0
         items:
           type: array
           items:
@@ -2989,6 +3242,8 @@ components:
           type: integer
         order:
           type: integer
+          maximum: 32767
+          minimum: 0
       required:
       - attribute
       - id
@@ -2999,6 +3254,8 @@ components:
           type: integer
         order:
           type: integer
+          maximum: 32767
+          minimum: 0
       required:
       - attribute
     AttributeGroupRequest:
@@ -3010,6 +3267,8 @@ components:
           maxLength: 80
         order:
           type: integer
+          maximum: 32767
+          minimum: 0
         items:
           type: array
           items:
@@ -3052,18 +3311,68 @@ components:
           type: string
           nullable: true
           maxLength: 32
-        value: {}
+        value:
+          type: object
+          additionalProperties: {}
         organization:
           type: integer
           readOnly: true
         product:
           type: integer
+        attribute:
+          type: integer
+        created_by:
+          type: integer
+          readOnly: true
+          nullable: true
+      required:
+      - attribute
+      - created_by
+      - id
+      - organization
+      - product
+      - value
+    AttributeValueDetail:
+      type: object
+      description: |-
+        Serializer for attribute values with more detailed attribute information.
+        Used for list and retrieve actions.
+      properties:
+        id:
+          type: integer
           readOnly: true
         attribute:
           type: integer
+        product:
+          type: integer
+        organization:
+          type: integer
+          readOnly: true
+        value:
+          type: object
+          additionalProperties: {}
+        locale:
+          type: string
+          nullable: true
+          maxLength: 10
+        channel:
+          type: string
+          nullable: true
+          maxLength: 32
+        attribute_code:
+          type: string
+          readOnly: true
+        attribute_label:
+          type: string
+          readOnly: true
+        attribute_type:
+          type: string
           readOnly: true
       required:
       - attribute
+      - attribute_code
+      - attribute_label
+      - attribute_type
       - id
       - organization
       - product
@@ -3079,8 +3388,16 @@ components:
           type: string
           nullable: true
           maxLength: 32
-        value: {}
+        value:
+          type: object
+          additionalProperties: {}
+        product:
+          type: integer
+        attribute:
+          type: integer
       required:
+      - attribute
+      - product
       - value
     AuditLog:
       type: object
@@ -3093,9 +3410,9 @@ components:
         user:
           type: integer
           nullable: true
-        org_id:
-          type: string
-          format: uuid
+        organization:
+          type: integer
+          nullable: true
         target_type:
           type: string
           maxLength: 50
@@ -3106,11 +3423,12 @@ components:
           type: string
           format: date-time
           readOnly: true
-        details: {}
+        details:
+          type: object
+          additionalProperties: {}
       required:
       - action
       - id
-      - org_id
       - target_id
       - target_type
       - timestamp
@@ -3150,7 +3468,9 @@ components:
         csv_file:
           type: string
           format: uri
-        mapping: {}
+        mapping:
+          type: object
+          additionalProperties: {}
         duplicate_strategy:
           allOf:
           - $ref: '#/components/schemas/DuplicateStrategyEnum'
@@ -3217,7 +3537,9 @@ components:
         csv_file:
           type: string
           format: binary
-        mapping: {}
+        mapping:
+          type: object
+          additionalProperties: {}
         duplicate_strategy:
           allOf:
           - $ref: '#/components/schemas/DuplicateStrategyEnum'
@@ -3250,16 +3572,19 @@ components:
         id:
           type: integer
           readOnly: true
+        user:
+          type: string
+          readOnly: true
         user_email:
           type: string
           format: email
           readOnly: true
-        user:
-          type: integer
-        org_id:
+        user_name:
           type: string
-          format: uuid
-          nullable: true
+          readOnly: true
+        avatar_url:
+          type: string
+          readOnly: true
         role:
           allOf:
           - $ref: '#/components/schemas/Role'
@@ -3272,29 +3597,28 @@ components:
           type: string
           format: date-time
           readOnly: true
+        organization:
+          type: integer
       required:
+      - avatar_url
       - id
       - invited_at
       - role
       - role_id
       - user
       - user_email
+      - user_name
     MembershipRequest:
       type: object
       properties:
-        user:
-          type: integer
-        org_id:
-          type: string
-          format: uuid
-          nullable: true
         role_id:
           type: integer
         status:
           $ref: '#/components/schemas/MembershipStatusEnum'
+        organization:
+          type: integer
       required:
       - role_id
-      - user
     MembershipStatusEnum:
       enum:
       - pending
@@ -3352,6 +3676,8 @@ components:
           maxLength: 80
         order:
           type: integer
+          maximum: 32767
+          minimum: 0
         items:
           type: array
           items:
@@ -3385,20 +3711,22 @@ components:
           type: string
           nullable: true
           maxLength: 32
-        value: {}
+        value:
+          type: object
+          additionalProperties: {}
+        product:
+          type: integer
+        attribute:
+          type: integer
     PatchedMembershipRequest:
       type: object
       properties:
-        user:
-          type: integer
-        org_id:
-          type: string
-          format: uuid
-          nullable: true
         role_id:
           type: integer
         status:
           $ref: '#/components/schemas/MembershipStatusEnum'
+        organization:
+          type: integer
     PatchedProductAssetRequest:
       type: object
       properties:
@@ -3416,6 +3744,8 @@ components:
           maxLength: 255
         order:
           type: integer
+          maximum: 2147483647
+          minimum: 0
           description: Order in which assets are displayed
         is_primary:
           type: boolean
@@ -3427,6 +3757,8 @@ components:
           maxLength: 100
         file_size:
           type: integer
+          maximum: 2147483647
+          minimum: 0
           description: Size of the file in bytes
         uploaded_by:
           type: integer
@@ -3466,7 +3798,6 @@ components:
           items:
             type: string
             minLength: 1
-        attributes: {}
         is_active:
           type: boolean
         is_archived:
@@ -3484,7 +3815,9 @@ components:
           maxLength: 50
         description:
           type: string
-        permissions: {}
+        permissions:
+          type: object
+          additionalProperties: {}
     Product:
       type: object
       description: Serializer for Product model
@@ -3520,7 +3853,9 @@ components:
           type: array
           items:
             type: string
-        attributes: {}
+        attribute_values:
+          type: string
+          readOnly: true
         is_active:
           type: boolean
         is_archived:
@@ -3576,6 +3911,7 @@ components:
           readOnly: true
       required:
       - assets
+      - attribute_values
       - completeness_percent
       - created_at
       - created_by
@@ -3635,6 +3971,8 @@ components:
           maxLength: 255
         order:
           type: integer
+          maximum: 2147483647
+          minimum: 0
           description: Order in which assets are displayed
         is_primary:
           type: boolean
@@ -3646,6 +3984,8 @@ components:
           maxLength: 100
         file_size:
           type: integer
+          maximum: 2147483647
+          minimum: 0
           description: Size of the file in bytes
         file_size_formatted:
           type: string
@@ -3688,6 +4028,8 @@ components:
           maxLength: 255
         order:
           type: integer
+          maximum: 2147483647
+          minimum: 0
           description: Order in which assets are displayed
         is_primary:
           type: boolean
@@ -3699,6 +4041,8 @@ components:
           maxLength: 100
         file_size:
           type: integer
+          maximum: 2147483647
+          minimum: 0
           description: Size of the file in bytes
         uploaded_by:
           type: integer
@@ -3718,6 +4062,8 @@ components:
           type: string
           maxLength: 255
         payload:
+          type: object
+          additionalProperties: {}
           nullable: true
         created_at:
           type: string
@@ -3744,6 +4090,8 @@ components:
           readOnly: true
         order:
           type: integer
+          maximum: 2147483647
+          minimum: 0
           description: Order in which images are displayed
         is_primary:
           type: boolean
@@ -3757,6 +4105,8 @@ components:
       properties:
         order:
           type: integer
+          maximum: 2147483647
+          minimum: 0
           description: Order in which images are displayed
         is_primary:
           type: boolean
@@ -3811,7 +4161,6 @@ components:
           items:
             type: string
             minLength: 1
-        attributes: {}
         is_active:
           type: boolean
         is_archived:
@@ -3871,7 +4220,9 @@ components:
           maxLength: 50
         description:
           type: string
-        permissions: {}
+        permissions:
+          type: object
+          additionalProperties: {}
       required:
       - id
       - name
@@ -3884,7 +4235,9 @@ components:
           maxLength: 50
         description:
           type: string
-        permissions: {}
+        permissions:
+          type: object
+          additionalProperties: {}
       required:
       - name
     TokenObtainPair:
@@ -3959,13 +4312,25 @@ components:
           title: Superuser status
           description: Designates that this user has all permissions without explicitly
             assigning them.
+        organization_id:
+          type: string
+          readOnly: true
+        role:
+          type: string
+          readOnly: true
+        avatar_url:
+          type: string
+          readOnly: true
       required:
+      - avatar_url
       - email
       - id
       - is_active
       - is_staff
       - is_superuser
       - name
+      - organization_id
+      - role
   securitySchemes:
     jwtAuth:
       type: http

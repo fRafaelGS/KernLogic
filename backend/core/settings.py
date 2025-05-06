@@ -15,13 +15,6 @@ import logging
 from pathlib import Path
 from datetime import timedelta
 
-# Initialize New Relic
-try:
-    import newrelic.agent
-    newrelic.agent.initialize('newrelic.ini', 'development')
-except Exception as e:
-    print(f"Warning: Could not initialize New Relic: {e}")
-
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -62,7 +55,6 @@ INSTALLED_APPS = [
     "analytics",
     "django_filters",
     "teams",
-    "anymail",
     "orgs",
 ]
 
@@ -99,7 +91,6 @@ TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
         "DIRS": [
-            BASE_DIR.parent / "dist",
             BASE_DIR / "templates",  # Add our templates directory
         ],
         "APP_DIRS": True,
@@ -119,11 +110,16 @@ WSGI_APPLICATION = "core.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+  'default': {
+    'ENGINE': 'django.db.backends.postgresql',
+    'NAME': 'kernlogic_dev',
+    'USER': 'kiwon',
+    'PASSWORD': 'Nadaaver93!',
+    'HOST': 'localhost',
+    'PORT': '8001',         
+  }
 }
+
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
@@ -160,7 +156,6 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [
-    BASE_DIR.parent / "dist",
 ]
 
 # Media files (User uploaded content)
@@ -298,11 +293,6 @@ LOGGING = {
         'django': {
             'handlers': ['console'],
             'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
-            'propagate': False,
-        },
-        'newrelic': {
-            'handlers': ['console'],
-            'level': 'INFO',
             'propagate': False,
         },
     },

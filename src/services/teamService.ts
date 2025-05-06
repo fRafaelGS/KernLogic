@@ -70,7 +70,7 @@ export const fetchTeamMembers = async (
   devLog('Fetching team members with params:', params);
   
   try {
-    const response = await axiosInstance.get(`/api/orgs/${orgId}/memberships/`, { params });
+    const response = await axiosInstance.get(`/orgs/${orgId}/memberships/`, { params });
     return response.data;
   } catch (error) {
     console.error('Error fetching team members:', error);
@@ -95,10 +95,10 @@ export const inviteMember = async (
     devLog(`Inviting member to organization: ${orgId}`, {
       email,
       role_id: roleId,
-      endpoint: `/api/orgs/${orgId}/memberships/`
+      endpoint: `/orgs/${orgId}/memberships/`
     });
     
-    const response = await axiosInstance.post(`/api/orgs/${String(orgId)}/memberships/`, {
+    const response = await axiosInstance.post(`/orgs/${String(orgId)}/memberships/`, {
       email,
       role_id: roleId
     });
@@ -125,10 +125,10 @@ export const bulkInviteMembers = async (
   try {
     devLog(`Bulk inviting members to organization: ${orgId}`, {
       inviteCount: invites.length,
-      endpoint: `/api/orgs/${orgId}/memberships/bulk/`
+      endpoint: `/orgs/${orgId}/memberships/bulk/`
     });
 
-    const response = await axiosInstance.post(`/api/orgs/${String(orgId)}/memberships/bulk/`, {
+    const response = await axiosInstance.post(`/orgs/${String(orgId)}/memberships/bulk/`, {
       invites
     });
     
@@ -149,7 +149,7 @@ export const exportTeamToCSV = async (orgId: string): Promise<void> => {
 
   try {
     // Get all team members including active and pending
-    const response = await axiosInstance.get(`/api/orgs/${orgId}/memberships/export/`, {
+    const response = await axiosInstance.get(`/orgs/${orgId}/memberships/export/`, {
       responseType: 'blob'
     });
 
@@ -183,10 +183,10 @@ export const resendInvite = async (membershipId: string | number, orgId?: string
 
   try {
     devLog(`Resending invite for membership: ${membershipId}`, {
-      endpoint: `/api/orgs/${orgId}/memberships/${membershipId}/resend_invite/`
+      endpoint: `/orgs/${orgId}/memberships/${membershipId}/resend_invite/`
     });
     
-    await axiosInstance.post(`/api/orgs/${orgId}/memberships/${membershipId}/resend_invite/`);
+    await axiosInstance.post(`/orgs/${orgId}/memberships/${membershipId}/resend_invite/`);
   } catch (error) {
     console.error('Error resending invite:', error);
     throw error;
@@ -202,7 +202,7 @@ export const cancelInvite = async (membershipId: number, orgId?: string): Promis
   }
 
   try {
-    await axiosInstance.delete(`/api/orgs/${orgId}/memberships/${membershipId}/`);
+    await axiosInstance.delete(`/orgs/${orgId}/memberships/${membershipId}/`);
   } catch (error) {
     console.error('Error canceling invite:', error);
     throw error;
@@ -219,10 +219,10 @@ export const fetchRoles = async (orgId?: string | number): Promise<Role[]> => {
 
   try {
     devLog(`Fetching roles for organization: ${orgId}`, {
-      endpoint: `/api/orgs/${orgId}/roles/`
+      endpoint: `/orgs/${orgId}/roles/`
     });
     
-    const response = await axiosInstance.get(`/api/orgs/${orgId}/roles/`);
+    const response = await axiosInstance.get(`/orgs/${orgId}/roles/`);
     return response.data;
   } catch (error) {
     console.error('Error fetching roles:', error);
@@ -240,10 +240,10 @@ export const updateMemberRole = async (membershipId: number | string, roleId: nu
 
   try {
     devLog(`Updating role for membership ${membershipId} to role ${roleId}`, {
-      endpoint: `/api/orgs/${orgId}/memberships/${membershipId}/`
+      endpoint: `/orgs/${orgId}/memberships/${membershipId}/`
     });
     
-    const response = await axiosInstance.patch(`/api/orgs/${String(orgId)}/memberships/${membershipId}/`, {
+    const response = await axiosInstance.patch(`/orgs/${String(orgId)}/memberships/${membershipId}/`, {
       role_id: roleId
     });
     
@@ -264,10 +264,10 @@ export const removeMember = async (membershipId: string | number, orgId?: string
 
   try {
     devLog(`Removing member with membership ID: ${membershipId}`, {
-      endpoint: `/api/orgs/${orgId}/memberships/${membershipId}/`
+      endpoint: `/orgs/${orgId}/memberships/${membershipId}/`
     });
     
-    await axiosInstance.delete(`/api/orgs/${String(orgId)}/memberships/${membershipId}/`);
+    await axiosInstance.delete(`/orgs/${String(orgId)}/memberships/${membershipId}/`);
   } catch (error) {
     console.error('Error removing member:', error);
     throw error;
@@ -283,7 +283,7 @@ export const fetchAuditLogs = async (orgId?: string): Promise<AuditLogEntry[]> =
   }
 
   try {
-    const response = await axiosInstance.get(`/api/orgs/${orgId}/audit/`);
+    const response = await axiosInstance.get(`/orgs/${orgId}/audit/`);
     return response.data;
   } catch (error) {
     console.error('Error fetching audit logs:', error);

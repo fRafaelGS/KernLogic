@@ -145,7 +145,7 @@ axiosInstance.interceptors.response.use(
                         }
                         
                         // Use fetch for refresh to bypass this interceptor
-                        const refreshUrl = `${API_URL}/api/token/refresh/`; 
+                        const refreshUrl = `${API_URL}/token/refresh/`; 
                         console.log('[Refresh] Calling refresh URL:', refreshUrl);
                         console.log('[Refresh] Using refresh token:', refreshToken.substring(0, 10) + '...');
 

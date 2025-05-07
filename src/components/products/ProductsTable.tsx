@@ -119,6 +119,14 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue;
 }
 
+// Add price formatter util just after useDebounce implementation
+const formatPrice = (n: number) =>
+  Intl.NumberFormat("de-DE", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+  }).format(n);
+
 // SortableTableHeader component for handling sorting
 interface SortableTableHeaderProps {
   id: string;
@@ -150,7 +158,8 @@ const SortableTableHeader = ({ id, header }: SortableTableHeaderProps) => {
   return (
     <TableHead
       key={header.id}
-      className={`px-2 py-2 ${hideOnMobileClass} bg-gray-100 text-gray-700 font-semibold text-sm tracking-wide border-b border-gray-200 text-left whitespace-nowrap`}
+      style={{ width: header.getSize() }}
+      className={`px-2 py-2 ${hideOnMobileClass} bg-slate-950/12 text-gray-700 font-semibold text-sm tracking-wide border-b border-gray-200 text-left whitespace-nowrap`}
       onClick={column.getCanSort() ? column.getToggleSortingHandler() : undefined}
     >
       <div className="flex items-center">
@@ -329,6 +338,18 @@ export function ProductsTable() {
     pageSize: 25,
   });
   
+  // Add scroll container ref
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Effect to handle action column visibility
+  useEffect(() => {
+    if (!columnVisibility.actions) {
+      scrollRef.current?.classList.remove("pr-[112px]");
+    } else {
+      scrollRef.current?.classList.add("pr-[112px]");
+    }
+  }, [columnVisibility.actions]);
+  
   // Filters
   const [filters, setFilters] = useState<FilterState>({
     category: searchParams.get('category') || 'all',
@@ -339,6 +360,8 @@ export function ProductsTable() {
 
   const [columnOrder, setColumnOrder] = useState<string[]>([]);
   const [filtersVisible, setFiltersVisible] = useState(false);
+  // State to control visibility of the Columns selector dropdown
+  const [columnsMenuOpen, setColumnsMenuOpen] = useState<boolean>(false);
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -964,7 +987,7 @@ export function ProductsTable() {
                 </HoverCardContent>
               </HoverCard>
             ) : (
-              <div className="h-16 w-16 rounded-md border flex items-center justify-center bg-gray-100 backdrop-blur-sm">
+              <div className="h-14 w-14 rounded-md border flex items-center justify-center bg-gray-100 backdrop-blur-sm">
                 <div className="flex flex-col items-center justify-center">
                   <ImageIcon className="h-6 w-6 text-slate-400" />
                   <span className="text-xs text-slate-400 mt-1">No Image</span>
@@ -1020,14 +1043,10 @@ export function ProductsTable() {
           </div>
         ) : (
           <div
-            className="truncate cursor-pointer hover:text-primary transition-colors p-1"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleCellEdit(rowIndex, 'sku', value);
-            }}
-            data-editable="true"
+            className="text-ellipsis whitespace-nowrap overflow-hidden cursor-pointer hover:text-primary transition-colors p-1"
+            title={value}
           >
-            {value}
+            {value.length > 25 ? `${value.slice(0, 25)}…` : value}
           </div>
         );
       },
@@ -1078,14 +1097,10 @@ export function ProductsTable() {
           </div>
         ) : (
           <div
-            className="truncate lg:whitespace-normal cursor-pointer hover:text-primary transition-colors font-medium p-1"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleCellEdit(rowIndex, 'name', value);
-            }}
-            data-editable="true"
+            className="text-ellipsis whitespace-nowrap overflow-hidden cursor-pointer hover:text-primary transition-colors font-medium p-1"
+            title={value}
           >
-            {value}
+            {value.length > 30 ? `${value.slice(0, 30)}…` : value}
           </div>
         );
       },
@@ -1156,14 +1171,15 @@ export function ProductsTable() {
         
         return (
           <div 
-            className="truncate lg:whitespace-normal cursor-pointer hover:text-primary transition-colors p-1"
+            className="truncate lg:whitespace-normal cursor-pointer hover:text-primary transition-colors p-1 text-ellipsis whitespace-nowrap overflow-hidden"
+            title={categoryValue || 'Uncategorized'}
             onClick={(e) => {
               e.stopPropagation();
               handleCellEdit(rowIndex, 'category', categoryValue || '');
             }}
             data-editable="true"
           >
-            {categoryValue || "Uncategorized"}
+            { (categoryValue || 'Uncategorized').length > 22 ? `${(categoryValue || 'Uncategorized').slice(0,22)}…` : (categoryValue || 'Uncategorized') }
           </div>
         );
       },
@@ -1218,14 +1234,15 @@ export function ProductsTable() {
         
         return (
           <div 
-            className="truncate lg:whitespace-normal cursor-pointer hover:text-primary transition-colors p-1"
+            className="truncate lg:whitespace-normal cursor-pointer hover:text-primary transition-colors p-1 text-ellipsis whitespace-nowrap overflow-hidden"
+            title={value || '—'}
             onClick={(e) => {
               e.stopPropagation();
               handleCellEdit(rowIndex, 'brand', value);
             }}
             data-editable="true"
           >
-            {value || "—"}
+            {value.length > 18 ? `${value.slice(0,18)}…` : value || '—'}
           </div>
         );
       },
@@ -1420,7 +1437,7 @@ export function ProductsTable() {
       cell: ({ row, column, table }) => {
         const rowIndex = row.index;
         const value = row.getValue('price');
-        const formattedValue = typeof value === 'number' ? value.toFixed(2) : '0.00';
+        const formattedValue = typeof value === 'number' ? formatPrice(value) : formatPrice(0);
         const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.columnId === 'price';
 
         return isEditing ? (
@@ -1446,13 +1463,14 @@ export function ProductsTable() {
         ) : (
           <div 
             className="cursor-pointer hover:text-primary transition-colors p-1"
+            title={formattedValue}
             onClick={(e) => {
               e.stopPropagation();
               handleCellEdit(rowIndex, 'price', formattedValue);
             }}
             data-editable="true"
           >
-            ${formattedValue}
+            {formattedValue}
           </div>
         );
       },
@@ -1613,12 +1631,12 @@ export function ProductsTable() {
     id: "actions",
     enableHiding: false,
     enableSorting: false,
-    size: 110,           // keeps icons + shadow but a bit tighter
+    size: 112,           // explicit width (112 px) matches 3 icon buttons + padding
     meta: {
-      className: "sticky right-0 bg-white shadow-md z-10", // Make the column sticky
+      className: "sticky right-0 bg-slate-950/12 z-10 border-l border-slate-300/40", // sticky with divider
     },
     header: () => (
-      <div className="text-right px-2 sticky right-0 bg-white shadow-md border-l border-gray-200 z-20">
+      <div className="text-right px-2 sticky right-0 bg-slate-950/12 border-l border-slate-300/40 z-20 w-[112px]">
         Actions
       </div>
     ),
@@ -1628,7 +1646,7 @@ export function ProductsTable() {
       if (!productId) return null;
       
       return (
-        <div className="flex justify-end gap-2 pr-2 sticky right-0 bg-white shadow-md z-10">
+        <div className="flex justify-end gap-2 pr-2 sticky right-0 bg-slate-950/12 z-10 border-l border-slate-300/40 w-[112px]">
           <Button
             variant="ghost"
             size="icon"
@@ -1739,10 +1757,10 @@ export function ProductsTable() {
   // Configure the table with useReactTable
   const table = useReactTable({
     data: filteredData,
-    columns: allColumns, // Use allColumns instead of columns
-    defaultColumn: {            // 👈 add this block
-      minSize: 80,              // every column can shrink to 80 px
-      size: 150,                // …but starts at 150 px
+    columns: allColumns,
+    defaultColumn: {
+      minSize: 80,
+      size: 150,
       maxSize: 500,
     },
     state: {
@@ -1890,9 +1908,10 @@ export function ProductsTable() {
       .filter((id): id is number => typeof id === 'number');
   }, [rowSelection, productRowMap]);
 
+  // Render the component
   return (
     <React.Fragment>
-      <div className="w-full h-full flex flex-col mx-auto max-w-screen-2xl px-2 lg:px-4">
+      <div className="flex flex-col flex-1 w-full h-full mx-auto max-w-screen-2xl px-2 lg:px-4 min-h-0">
         {/* Table Toolbar */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-1 px-1 border-b gap-1 sm:gap-1">
           <div className="flex items-center space-x-2 w-full sm:w-auto">
@@ -1970,14 +1989,14 @@ export function ProductsTable() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <DropdownMenu>
+            <DropdownMenu open={columnsMenuOpen} onOpenChange={setColumnsMenuOpen}>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="h-9">
                   <ColumnsIcon className="mr-2 h-4 w-4" />
                   <span>Columns</span>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" onPointerDownOutside={() => setColumnsMenuOpen(false)}>
                 {table.getAllColumns()
                   .filter(column => column.id !== 'select' && column.id !== 'actions')
                   .map(column => {
@@ -1985,6 +2004,7 @@ export function ProductsTable() {
                       <DropdownMenuCheckboxItem
                         key={column.id}
                         checked={column.getIsVisible()}
+                        onSelect={(e) => e.preventDefault()}
                         onCheckedChange={(value) => column.toggleVisibility(!!value)}
                       >
                         {column.id.charAt(0).toUpperCase() + column.id.slice(1).replace('_', ' ')}
@@ -2079,270 +2099,265 @@ export function ProductsTable() {
           </div>
         )}
 
-        <div className="w-full h-full flex flex-col relative overflow-x-auto">
-          <Table className="w-full">
-            <TableHeader className="shadow-header">
-              {table.getHeaderGroups().map(headerGroup => (
-                <React.Fragment key={headerGroup.id}>
-                  {/* 1) Column titles */}
-                  <TableRow className="sticky top-0 z-20 bg-slate-100 border-b border-slate-200 h-8">
-                    {headerGroup.headers.map(header =>
-                      <SortableTableHeader key={header.id} id={header.column.id} header={header}/>
-                    )}
-                  </TableRow>
-
-                  {/* 2) Filter inputs - Always visible now */}
-                  <TableRow className="sticky top-8 z-10 bg-slate-50 border-b border-slate-200 h-8">
-                    {headerGroup.headers.map((header) => {
-                      const column = header.column;
-                      const columnId = column.id;
-                      
-                      // Skip filter UI for select column
-                      if (columnId === 'select') {
-                        return <TableHead key={`filter-${columnId}`} className="px-2 py-2" />;
-                      }
-                      
-                      // Skip filter UI for thumbnail column
-                      if (columnId === 'thumbnail') {
-                        return <TableHead key={`filter-${columnId}`} className="px-2 py-2" />;
-                      }
-                      
-                      // Use tailwind classes for mobile responsiveness
-                      const hideOnMobileClass = ['brand', 'barcode', 'created_at', 'tags'].includes(columnId) ? 'hidden md:table-cell' : '';
-                      
-                      return (
-                        <TableHead key={`filter-${columnId}`} className={`px-2 py-2 ${hideOnMobileClass}`}>
-                          {(() => {
-                            // Text input filter for text columns
-                            if (['name', 'sku', 'brand', 'barcode'].includes(columnId)) {
-                              return (
-                                <Input
-                                  placeholder={`Filter...`}
-                                  value={(table.getColumn(columnId)?.getFilterValue() as string) ?? ''}
-                                  onChange={(e) => {
-                                    column.setFilterValue(e.target.value);
-                                    handleColumnFilterChange(columnId, e.target.value);
-                                  }}
-                                  className="h-7 text-xs"
-                                  onClick={(e) => e.stopPropagation()}
-                                />
-                              );
-                            }
-                            
-                            // Dropdown filter for category
-                            if (columnId === 'category') {
-                              return (
-                                <Select
-                                  value={(table.getColumn(columnId)?.getFilterValue() as string) ?? ''}
-                                  onValueChange={(value) => {
-                                    // Handle special values:
-                                    // 1. "all" - clears the filter completely (undefined)
-                                    // 2. "uncategorized" - sets filter to empty string to find products with no category
-                                    let filterValue;
-                                    if (value === "all") {
-                                      filterValue = undefined;
-                                    } else if (value === "uncategorized") {
-                                      filterValue = "";
-                                    } else {
-                                      filterValue = value;
-                                    }
-                                    column.setFilterValue(filterValue);
-                                    handleColumnFilterChange(columnId, filterValue);
-                                  }}
-                                >
-                                  <SelectTrigger className="h-8 text-xs" onClick={(e) => e.stopPropagation()}>
-                                    <SelectValue placeholder="Filter..." />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="all">All Categories</SelectItem>
-                                    <SelectItem value="uncategorized">Uncategorized</SelectItem>
-                                    {uniqueCategories.map((category) => (
-                                      <SelectItem key={category} value={category || "uncategorized"}>
-                                        {category || "Uncategorized"}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              );
-                            }
-                            
-                            // Dropdown filter for status
-                            if (columnId === 'is_active') {
-                              return (
-                                <Select
-                                  value={(table.getColumn(columnId)?.getFilterValue() as string) ?? ''}
-                                  onValueChange={(value) => {
-                                    // Convert "all" to undefined to clear the filter
-                                    const filterValue = value === "all" ? undefined : value;
-                                    column.setFilterValue(filterValue);
-                                    handleColumnFilterChange(columnId, filterValue);
-                                  }}
-                                >
-                                  <SelectTrigger className="h-8 text-xs" onClick={(e) => e.stopPropagation()}>
-                                    <SelectValue placeholder="Filter..." />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="all">All</SelectItem>
-                                    <SelectItem value="true">Active</SelectItem>
-                                    <SelectItem value="false">Inactive</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              );
-                            }
-                            
-                            // Price range filter
-                            if (columnId === 'price') {
-                              const priceRange = table.getColumn(columnId)?.getFilterValue() as [number, number] | undefined;
-                              
-                              return (
-                                <Popover>
-                                  <PopoverTrigger asChild>
-                                    <Button 
-                                      variant="outline" 
-                                      size="sm" 
-                                      className="h-8 text-xs w-full justify-between"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      {priceRange ? `$${priceRange[0]} - $${priceRange[1]}` : 'Filter price'}
-                                      <ChevronDown className="h-3 w-3 opacity-50" />
-                                    </Button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-80" onClick={(e) => e.stopPropagation()}>
-                                    <div className="space-y-2">
-                                      <div className="grid grid-cols-2 gap-2">
-                                        <div className="space-y-1">
-                                          <Label htmlFor="min-price">Min Price</Label>
-                                          <Input
-                                            id="min-price"
-                                            type="number"
-                                            min={0}
-                                            placeholder="Min"
-                                            value={priceRange?.[0] ?? ''}
-                                            onChange={(e) => {
-                                              const min = e.target.value ? Number(e.target.value) : 0;
-                                              const max = priceRange?.[1] ?? Infinity;
-                                              column.setFilterValue([min, max]);
-                                              handleColumnFilterChange(columnId, [min, max]);
-                                            }}
-                                          />
-                                        </div>
-                                        <div className="space-y-1">
-                                          <Label htmlFor="max-price">Max Price</Label>
-                                          <Input
-                                            id="max-price"
-                                            type="number"
-                                            min={0}
-                                            placeholder="Max"
-                                            value={priceRange?.[1] ?? ''}
-                                            onChange={(e) => {
-                                              const min = priceRange?.[0] ?? 0;
-                                              const max = e.target.value ? Number(e.target.value) : Infinity;
-                                              column.setFilterValue([min, max]);
-                                              handleColumnFilterChange(columnId, [min, max]);
-                                            }}
-                                          />
-                                        </div>
-                                      </div>
-                                      <div className="flex justify-end">
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => {
-                                            column.setFilterValue(undefined);
-                                            handleColumnFilterChange(columnId, undefined);
-                                          }}
-                                        >
-                                          Reset
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  </PopoverContent>
-                                </Popover>
-                              );
-                            }
-                            
-                            // Date range filter for created_at and updated_at
-                            if (['created_at', 'updated_at'].includes(columnId)) {
-                              return (
-                                <Popover>
-                                  <PopoverTrigger asChild>
-                                    <Button 
-                                      variant="outline" 
-                                      size="sm" 
-                                      className="h-8 text-xs w-full justify-between"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      {column.getFilterValue() ? 'Date filtered' : 'Filter date'}
-                                      <ChevronDown className="h-3 w-3 opacity-50" />
-                                    </Button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-80" onClick={(e) => e.stopPropagation()}>
-                                    <div className="space-y-2">
-                                      <div className="grid grid-cols-2 gap-2">
-                                        <div className="space-y-1">
-                                          <Label htmlFor={`${columnId}-from`}>From</Label>
-                                          <Input
-                                            id={`${columnId}-from`}
-                                            type="date"
-                                            onChange={(e) => {
-                                              const dateRange = column.getFilterValue() as [string, string] || ['', ''];
-                                              column.setFilterValue([e.target.value, dateRange[1]]);
-                                              handleColumnFilterChange(columnId, [e.target.value, dateRange[1]]);
-                                            }}
-                                          />
-                                        </div>
-                                        <div className="space-y-1">
-                                          <Label htmlFor={`${columnId}-to`}>To</Label>
-                                          <Input
-                                            id={`${columnId}-to`}
-                                            type="date"
-                                            onChange={(e) => {
-                                              const dateRange = column.getFilterValue() as [string, string] || ['', ''];
-                                              column.setFilterValue([dateRange[0], e.target.value]);
-                                              handleColumnFilterChange(columnId, [dateRange[0], e.target.value]);
-                                            }}
-                                          />
-                                        </div>
-                                      </div>
-                                      <div className="flex justify-end">
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => {
-                                            column.setFilterValue(undefined);
-                                            handleColumnFilterChange(columnId, undefined);
-                                          }}
-                                        >
-                                          Reset
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  </PopoverContent>
-                                </Popover>
-                              );
-                            }
-
-                            return null;
-                          })()}
-                        </TableHead>
-                      );
-                    })}
-                  </TableRow>
-                </React.Fragment>
-              ))}
-            </TableHeader>
-          </Table>
-          
-          <div className="overflow-auto h-[calc(100%-100px)]">
+        {/* Section containing scroll area and footer with overflow control */}
+        <section className="flex flex-col flex-1 overflow-hidden min-h-0">
+          {/* Create ONE scroll container that handles both axes */}
+          <div
+            ref={scrollRef}
+            className={cn(
+              "flex-1 overflow-auto min-h-0",
+              columnVisibility.actions !== false && "pr-[112px]"
+            )}
+            id="products-scroll-area"
+          >
             <DndContext
               sensors={sensors}
               onDragEnd={handleDragEnd}
             >
               <SortableContext
-                items={columnOrder.filter(Boolean)} // Extra safety to filter out null/undefined
+                items={columnOrder.filter(Boolean)}
                 strategy={horizontalListSortingStrategy}
               >
-                <Table className="w-full">
+                <Table className="min-w-fit">
+                  <TableHeader className="relative">
+                      {table.getHeaderGroups().map(headerGroup => (
+                        <React.Fragment key={headerGroup.id}>
+                          {/* 1) Column titles */}
+                          <TableRow className="sticky top-0 z-30 bg-slate-100 h-9 border-b border-slate-200">
+                            {headerGroup.headers.map(header =>
+                              <SortableTableHeader key={header.id} id={header.column.id} header={header}/>
+                            )}
+                          </TableRow>
+
+                          {/* 2) Filter inputs - Always visible now */}
+                          <TableRow className="sticky top-9 z-20 bg-slate-50 h-9 border-b border-slate-200">
+                            {headerGroup.headers.map((header) => {
+                              const column = header.column;
+                              const columnId = column.id;
+                              
+                              // Skip filter UI for select column
+                              if (columnId === 'select') {
+                                return <TableHead key={`filter-${columnId}`} className="px-2 py-2" />;
+                              }
+                              
+                              // Skip filter UI for thumbnail column
+                              if (columnId === 'thumbnail') {
+                                return <TableHead key={`filter-${columnId}`} className="px-2 py-2" />;
+                              }
+                              
+                              // Use tailwind classes for mobile responsiveness
+                              const hideOnMobileClass = ['brand', 'barcode', 'created_at', 'tags'].includes(columnId) ? 'hidden md:table-cell' : '';
+                              
+                              return (
+                                <TableHead key={`filter-${columnId}`} className={`px-2 py-2 ${hideOnMobileClass}`}>
+                                  {/* Using React.Fragment to properly wrap the IIFE result as a ReactNode */}
+                                  <React.Fragment>
+                                  {(() => {
+                                    // Text input filter for text columns
+                                    if (['name','sku','brand','barcode'].includes(columnId)) {
+                                      return (
+                                        <Input
+                                          placeholder="Filter…"
+                                          value={(table.getColumn(columnId)?.getFilterValue() as string) ?? ''}
+                                          onChange={(e) => {
+                                            column.setFilterValue(e.target.value);
+                                            handleColumnFilterChange(columnId, e.target.value);
+                                          }}
+                                          className="h-7 text-xs"
+                                          onClick={(e) => e.stopPropagation()}
+                                        />
+                                      );
+                                    }
+
+                                    // Dropdown filter for category
+                                    if (columnId === 'category') {
+                                      return (
+                                        <Select
+                                          value={(table.getColumn(columnId)?.getFilterValue() as string) ?? ''}
+                                          onValueChange={(value) => {
+                                            column.setFilterValue(value);
+                                            handleColumnFilterChange(columnId, value === 'all' ? '' : value);
+                                          }}
+                                        >
+                                          <SelectTrigger className="h-7 text-xs">
+                                            <SelectValue placeholder="Filter category" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="all">All</SelectItem>
+                                            <SelectItem value="uncategorized">Uncategorized</SelectItem>
+                                            {uniqueCategories.map((category) => (
+                                              <SelectItem key={category} value={category}>
+                                                {category}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      );
+                                    }
+
+                                    // Status filter for is_active
+                                    if (columnId === 'is_active') {
+                                      return (
+                                        <Select
+                                          value={(table.getColumn(columnId)?.getFilterValue() as string) ?? ''}
+                                          onValueChange={(value) => {
+                                            column.setFilterValue(value);
+                                            handleColumnFilterChange(columnId, value === 'all' ? '' : value);
+                                          }}
+                                        >
+                                          <SelectTrigger className="h-7 text-xs">
+                                            <SelectValue placeholder="Status" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="all">All</SelectItem>
+                                            <SelectItem value="true">Active</SelectItem>
+                                            <SelectItem value="false">Inactive</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                      );
+                                    }
+
+                                    // Price range filter
+                                    if (columnId === 'price') {
+                                      return (
+                                        <Popover>
+                                          <PopoverTrigger asChild>
+                                            <Button 
+                                              variant="outline" 
+                                              className="h-7 text-xs w-full justify-start font-normal"
+                                              onClick={(e) => e.stopPropagation()}
+                                            >
+                                              <span>Price Range</span>
+                                            </Button>
+                                          </PopoverTrigger>
+                                          <PopoverContent className="w-60 p-3" align="start">
+                                            <div className="space-y-2">
+                                              <div className="grid grid-cols-2 gap-2">
+                                                <div>
+                                                  <Label htmlFor="price-min">Min</Label>
+                                                  <Input
+                                                    id="price-min"
+                                                    type="number"
+                                                    placeholder="Min"
+                                                    className="h-8"
+                                                    value={columnFilterValues['price']?.min || ''}
+                                                    onChange={(e) => {
+                                                      const currentValues = columnFilterValues['price'] || {};
+                                                      const newValues = { ...currentValues, min: e.target.value };
+                                                      column.setFilterValue(newValues);
+                                                      handleColumnFilterChange(columnId, newValues);
+                                                    }}
+                                                  />
+                                                </div>
+                                                <div>
+                                                  <Label htmlFor="price-max">Max</Label>
+                                                  <Input
+                                                    id="price-max"
+                                                    type="number"
+                                                    placeholder="Max"
+                                                    className="h-8"
+                                                    value={columnFilterValues['price']?.max || ''}
+                                                    onChange={(e) => {
+                                                      const currentValues = columnFilterValues['price'] || {};
+                                                      const newValues = { ...currentValues, max: e.target.value };
+                                                      column.setFilterValue(newValues);
+                                                      handleColumnFilterChange(columnId, newValues);
+                                                    }}
+                                                  />
+                                                </div>
+                                              </div>
+                                              <Button 
+                                                size="sm" 
+                                                variant="outline" 
+                                                className="w-full text-xs"
+                                                onClick={() => {
+                                                  column.setFilterValue(undefined);
+                                                  handleColumnFilterChange(columnId, undefined);
+                                                }}
+                                              >
+                                                Reset
+                                              </Button>
+                                            </div>
+                                          </PopoverContent>
+                                        </Popover>
+                                      );
+                                    }
+
+                                    // Date filters
+                                    if (['created_at', 'updated_at'].includes(columnId)) {
+                                      return (
+                                        <Popover>
+                                          <PopoverTrigger asChild>
+                                            <Button 
+                                              variant="outline" 
+                                              className="h-7 text-xs w-full justify-start font-normal"
+                                              onClick={(e) => e.stopPropagation()}
+                                            >
+                                              <span>Date Range</span>
+                                            </Button>
+                                          </PopoverTrigger>
+                                          <PopoverContent className="w-auto p-3" align="start">
+                                            <div className="space-y-2">
+                                              <div className="grid gap-2">
+                                                <div>
+                                                  <Label htmlFor={`${columnId}-from`}>From</Label>
+                                                  <Input
+                                                    id={`${columnId}-from`}
+                                                    type="date"
+                                                    className="h-8"
+                                                    value={columnFilterValues[columnId]?.from || ''}
+                                                    onChange={(e) => {
+                                                      const currentValues = columnFilterValues[columnId] || {};
+                                                      const newValues = { ...currentValues, from: e.target.value };
+                                                      column.setFilterValue(newValues);
+                                                      handleColumnFilterChange(columnId, newValues);
+                                                    }}
+                                                  />
+                                                </div>
+                                                <div>
+                                                  <Label htmlFor={`${columnId}-to`}>To</Label>
+                                                  <Input
+                                                    id={`${columnId}-to`}
+                                                    type="date"
+                                                    className="h-8"
+                                                    value={columnFilterValues[columnId]?.to || ''}
+                                                    onChange={(e) => {
+                                                      const currentValues = columnFilterValues[columnId] || {};
+                                                      const newValues = { ...currentValues, to: e.target.value };
+                                                      column.setFilterValue(newValues);
+                                                      handleColumnFilterChange(columnId, newValues);
+                                                    }}
+                                                  />
+                                                </div>
+                                              </div>
+                                              <Button 
+                                                size="sm" 
+                                                variant="outline" 
+                                                className="w-full text-xs"
+                                                onClick={() => {
+                                                  column.setFilterValue(undefined);
+                                                  handleColumnFilterChange(columnId, undefined);
+                                                }}
+                                              >
+                                                Reset
+                                              </Button>
+                                            </div>
+                                          </PopoverContent>
+                                        </Popover>
+                                      );
+                                    }
+
+                                    // Default: no filter
+                                    return null;
+                                  })()}
+                                  </React.Fragment>
+                                </TableHead>
+                              );
+                            })}
+                          </TableRow>
+                        </React.Fragment>
+                      ))}
+                  </TableHeader>
                   <TableBody>
                     <TableFallback 
                       columns={columns}
@@ -2354,135 +2369,140 @@ export function ProductsTable() {
                       handleRefresh={handleRefresh}
                     />
                     
-                    {!loading && filteredData.length > 0 && table.getRowModel().rows.map((row, index) => {
-                      // Access the id once outside JSX to avoid potential issues
-                      const productId = row.original.id;
-                      
-                      return (
-                        <TableRow 
-                          key={row.id} 
-                          data-state={row.getIsSelected() && "selected"}
-                          className={cn(
-                            "border-b border-gray-200 transition-colors hover:bg-gray-50",
-                            row.getIsSelected() ? "bg-slate-50" : index % 2 === 0 ? "bg-white" : "bg-gray-50",
-                            "cursor-pointer"
-                          )}
-                          onClick={(e) => {
-                            // Only navigate if the click wasn't on an interactive element
-                            const target = e.target as HTMLElement;
-                            const isActionClick = !!target.closest('button, input, [role="combobox"], [data-editable="true"]');
-                            if (!isActionClick && productId) {
-                              handleRowClick(productId);
-                            }
-                          }}
-                        >
-                          {row.getVisibleCells().map((cell) => {
-                            // Add mobile responsiveness to table cells
-                            const columnId = cell.column.id;
-                            const hideOnMobileClass = ['brand', 'barcode', 'created_at', 'tags'].includes(columnId) ? 'hidden md:table-cell' : '';
-                            
-                            // Add background color for the actions column
-                            const isActionsColumn = columnId === 'actions';
-                            const actionsClass = isActionsColumn ? 'sticky right-0 z-20 shadow-sm border-l border-gray-200' : '';
-                            const cellBgClass = isActionsColumn ? (row.getIsSelected() ? 'bg-slate-50' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50') : '';
-                            
-                            // Add icon to specific columns
-                            if (columnId === 'brand' && row.getValue('brand')) {
+                    {!loading && filteredData.length > 0 && 
+                      table.getRowModel().rows.map((row, index) => {
+                        const productId = row.original.id;
+                        
+                        return (
+                          <TableRow 
+                            key={row.id} 
+                            data-state={row.getIsSelected() && "selected"}
+                            className={cn(
+                              "border-b border-gray-200 transition-colors hover:bg-slate-950/15",
+                              row.getIsSelected() ? "bg-slate-950/18" : index % 2 === 0 ? "bg-slate-950/5" : "bg-slate-950/11",
+                              "cursor-pointer"
+                            )}
+                            onClick={(e) => {
+                              const target = e.target as HTMLElement;
+                              const isActionClick = !!target.closest('button, input, [role="combobox"], [data-editable="true"]');
+                              if (!isActionClick && productId) {
+                                handleRowClick(productId);
+                              }
+                            }}
+                          >
+                            {row.getVisibleCells().map((cell) => {
+                              const columnId = cell.column.id;
+                              const hideOnMobileClass = ['brand', 'barcode', 'created_at', 'tags'].includes(columnId) ? 'hidden md:table-cell' : '';
+                              
+                              const isActionsColumn = columnId === 'actions';
+                              const actionsClass = isActionsColumn ? 'sticky right-0 z-20 border-l border-slate-300/40' : '';
+                              const cellBgClass = isActionsColumn ? (row.getIsSelected() ? 'bg-slate-950/18' : index % 2 === 0 ? 'bg-slate-950/5' : 'bg-slate-950/11') : '';
+                              
+                              // Special cell rendering for specific column types
+                              if (columnId === 'brand' && row.getValue('brand')) {
+                                return (
+                                  <TableCell 
+                                    key={cell.id} 
+                                    className={`px-2 py-1 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
+                                    data-column-id={columnId}
+                                  >
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-gray-500"><TagIcon className="h-3.5 w-3.5" /></span>
+                                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                    </div>
+                                  </TableCell>
+                                );
+                              }
+                              
+                              if (columnId === 'category' && row.getValue('category')) {
+                                return (
+                                  <TableCell 
+                                    key={cell.id} 
+                                    className={`px-2 py-1 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
+                                    data-column-id={columnId}
+                                  >
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-gray-500"><FolderIcon className="h-3.5 w-3.5" /></span>
+                                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                    </div>
+                                  </TableCell>
+                                );
+                              }
+                              
+                              if (columnId === 'is_active') {
+                                const isActive = row.getValue('is_active') as boolean;
+                                return (
+                                  <TableCell 
+                                    key={cell.id} 
+                                    className={`px-2 py-1 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
+                                    data-column-id={columnId}
+                                  >
+                                    <div className="flex items-center gap-1">
+                                      {isActive ? <CheckCircle className="h-4 w-4 text-green-600" /> : <XCircle className="h-4 w-4 text-red-600" />}
+                                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                    </div>
+                                  </TableCell>
+                                );
+                              }
+                              
+                              // Default cell rendering
                               return (
                                 <TableCell 
                                   key={cell.id} 
                                   className={`px-2 py-1 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
                                   data-column-id={columnId}
                                 >
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-gray-500"><TagIcon className="h-3.5 w-3.5" /></span>
-                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                  </div>
+                                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                 </TableCell>
                               );
-                            }
-                            
-                            if (columnId === 'category' && row.getValue('category')) {
-                              return (
-                                <TableCell 
-                                  key={cell.id} 
-                                  className={`px-2 py-1 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
-                                  data-column-id={columnId}
-                                >
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-gray-500"><FolderIcon className="h-3.5 w-3.5" /></span>
-                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                  </div>
-                                </TableCell>
-                              );
-                            }
-                            
-                            if (columnId === 'is_active') {
-                              const isActive = row.getValue('is_active') as boolean;
-                              return (
-                                <TableCell 
-                                  key={cell.id} 
-                                  className={`px-2 py-1 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
-                                  data-column-id={columnId}
-                                >
-                                  <div className="flex items-center gap-1">
-                                    {isActive ? <CheckCircle className="h-4 w-4 text-green-600" /> : <XCircle className="h-4 w-4 text-red-600" />}
-                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                  </div>
-                                </TableCell>
-                              );
-                            }
-                            
-                            return (
-                              <TableCell 
-                                key={cell.id} 
-                                className={`px-2 py-1 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
-                                data-column-id={columnId}
-                              >
-                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                              </TableCell>
-                            );
-                          })}
-                        </TableRow>
-                      );
-                    })}
+                            })}
+                          </TableRow>
+                        );
+                      })
+                    }
                   </TableBody>
                 </Table>
-                
-                {/* PAGINATION */}
-                <div className="flex items-center justify-between p-2 border-t bg-white">
-                  <div className="flex space-x-2">
-                    <Button size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
-                      <ChevronLeft />
-                    </Button>
-                    <Button size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
-                      <ChevronRight />
-                    </Button>
-                  </div>
-
-                  <span className="text-sm">
-                    Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
-                  </span>
-
-                  <div className="flex items-center space-x-2">
-                    <span className="text-sm">Show</span>
-                    <Select
-                      value={String(table.getState().pagination.pageSize)}
-                      onValueChange={v => table.setPageSize(Number(v))}
-                    >
-                      <SelectTrigger className="h-8 w-[70px]"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {[10, 20, 50].map((n) => (
-                          <SelectItem key={n} value={String(n)}>{n}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
               </SortableContext>
             </DndContext>
           </div>
-        </div>
+              
+          {/* PAGINATION */}
+          <div className="flex items-center justify-between p-2 border-t bg-slate-950/12">
+            <div className="flex space-x-2">
+              <Button size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+                <ChevronLeft />
+              </Button>
+              <Button size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+                <ChevronRight />
+              </Button>
+            </div>
+
+            <span className="text-sm text-slate-600">
+              {(() => {
+                const { pageIndex, pageSize } = table.getState().pagination;
+                const total = table.getFilteredRowModel().rows.length;
+                const start = pageIndex * pageSize + 1;
+                const end = Math.min(total, start + pageSize - 1);
+                return `Showing ${start}-${end} of ${total}`;
+              })()}
+            </span>
+
+            <div className="flex items-center space-x-2">
+              <span className="text-sm">Show</span>
+              <Select
+                value={String(table.getState().pagination.pageSize)}
+                onValueChange={v => table.setPageSize(Number(v))}
+              >
+                <SelectTrigger className="h-8 w-[70px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[10, 20, 50].map((n) => (
+                    <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </section>
       </div>
       
       {/* Add modals at the end */}
@@ -2509,23 +2529,18 @@ export function ProductsTable() {
   );
 }
 
-// Add CSS for header shadow
+// Updated CSS helper
 // @ts-ignore - Ignore CSS properties in string literal
-const headerShadowStyle: string = `
-.shadow-header {
-  // @ts-ignore
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+const headerShadowStyle = `
+thead tr:first-child { 
+  box-shadow: 0 2px 4px rgb(0 0 0 / .05); 
 }
-
 th[data-column-id="actions"],
 td[data-column-id="actions"] {
-  // @ts-ignore
   position: sticky;
   right: 0;
-  z-index: 20;
-  background-color: inherit;
-  // @ts-ignore
-  box-shadow: -2px 0 4px rgba(0,0,0,0.05);
+  background: inherit;
+  box-shadow: -2px 0 4px rgb(0 0 0 / .05);
 }
 `;
 

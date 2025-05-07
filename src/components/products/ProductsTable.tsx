@@ -48,7 +48,6 @@ import {
   CheckIcon,
   XIcon,
   PlusIcon,
-  ShoppingBagIcon,
   ArrowUp,
   ArrowDown,
   CheckCircle,
@@ -83,6 +82,7 @@ import { ProductsSearchBox } from './ProductsSearchBox';
 import { BulkCategoryModal } from './BulkCategoryModal';
 import { BulkTagModal } from './BulkTagModal';
 import { useDebounce } from "@/hooks/useDebounce";
+import { TableFallback } from "@/components/products/ProductsTableFallback";
 
 // Define filter state type
 interface FilterState {
@@ -146,127 +146,6 @@ const SortableTableHeader = ({ id, header }: SortableTableHeaderProps) => {
       </div>
     </TableHead>
   );
-};
-
-interface TableFallbackProps {
-  columns: ColumnDef<Product>[];
-  loading: boolean;
-  filteredData: Product[];
-  debouncedSearchTerm: string;
-  filters: FilterState;
-  handleClearFilters: () => void;
-  handleRefresh: () => void;
-}
-
-const TableFallback = ({
-  columns,
-  loading,
-  filteredData,
-  debouncedSearchTerm,
-  filters,
-  handleClearFilters,
-  handleRefresh
-}: TableFallbackProps) => {
-  if (loading) {
-    return (
-      <>
-        {/* Skeleton Loading Rows with aria-label for screen readers */}
-        <tr className="sr-only"><td>Loading product data...</td></tr>
-        {Array.from({ length: 5 }).map((_, index) => (
-          <TableRow key={`skeleton-${index}`} className="border-b border-slate-100 bg-white h-8">
-            {columns.map((column, colIndex) => {
-              // Add mobile responsiveness to table cells
-              const columnId = column.id || 
-                // Access accessorKey safely with a type assertion
-                (column as any).accessorKey?.toString() || '';
-              const hideOnMobileClass = ['brand', 'barcode', 'created_at', 'tags'].includes(columnId) ? 'hidden md:table-cell' : '';
-              
-              // Make first column wider for name
-              const widthClass = columnId === 'name' ? 'w-1/4' : columnId === 'select' ? 'w-10' : '';
-              
-              return (
-                <TableCell 
-                  key={`skeleton-${index}-${colIndex}`} 
-                  className={`p-2 ${hideOnMobileClass} ${widthClass}`}
-                >
-                  <Skeleton className="h-5 w-full" />
-                </TableCell>
-              );
-            })}
-          </TableRow>
-        ))}
-      </>
-    );
-  }
-
-  // No data scenario with clear filters option
-  if (filteredData.length === 0) {
-    const hasFilters = debouncedSearchTerm || 
-      filters.category || 
-      filters.status !== 'all' || 
-      filters.minPrice || 
-      filters.maxPrice;
-      
-    return (
-      <TableRow>
-        <TableCell 
-          colSpan={columns.length} 
-          className="h-60 text-center"
-          role="alert"
-        >
-          <div className="flex flex-col items-center justify-center p-6">
-            {hasFilters ? (
-              <>
-                <div className="h-24 w-24 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-                  <FilterIcon className="h-12 w-12 text-gray-400" />
-                </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-1">No products match your filters</h3>
-                <p className="text-gray-500 mb-4 max-w-md">
-                  Try adjusting your search or filter criteria to find what you're looking for.
-                </p>
-                <div className="flex gap-3">
-                  <Button
-                    variant="outline"
-                    onClick={handleClearFilters}
-                    className="flex items-center gap-2"
-                  >
-                    <XIcon className="h-4 w-4" />
-                    Clear Filters
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={handleRefresh}
-                    className="flex items-center gap-2"
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                    Refresh
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="h-24 w-24 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-                  <ShoppingBagIcon className="h-12 w-12 text-gray-400" />
-                </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-1">No products found</h3>
-                <p className="text-gray-500 mb-4 max-w-md">
-                  There are no products in your inventory yet. Start by adding a new product.
-                </p>
-                <Link to="/app/products/new">
-                  <Button className="flex items-center gap-2">
-                    <PlusIcon className="h-4 w-4" />
-                    Add Product
-                  </Button>
-                </Link>
-              </>
-            )}
-          </div>
-        </TableCell>
-      </TableRow>
-    );
-  }
-
-  return null;
 };
 
 // Add type for category options

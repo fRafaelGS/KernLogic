@@ -20,6 +20,8 @@ import {
   type RowSelectionState,
   type ColumnFiltersState,
   type PaginationState,
+  type FilterFn,
+  type Row,
   Header,
 } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
@@ -313,6 +315,16 @@ interface Category {
   // Add other category fields if they exist
 }
 
+// Add a type for tag objects that might be in the product.tags array
+// Add this near the other interfaces at the top of the file (after line 310)
+interface TagObject {
+  id?: string | number;
+  name?: string;
+  value?: string | number;
+  label?: string;
+  [key: string]: any; // Allow other properties
+}
+
 export function ProductsTable() {
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
@@ -516,8 +528,12 @@ export function ProductsTable() {
     }
   }, [isAuthenticated, toast]);
 
-  // Re-introduce filteredData calculation
+  // Update the filteredData tag filtering logic with proper type casting
   const filteredData = useMemo(() => {
+    // Debug the filters state
+    console.log('[ProductsTable.filteredData] Filters applied:', filters);
+    console.log('[ProductsTable.filteredData] Tags filter:', filters.tags);
+    
     let filtered = [...products];
     // Apply text search
     if (debouncedSearchTerm) {
@@ -554,14 +570,65 @@ export function ProductsTable() {
         filtered = filtered.filter(product => product.price <= max);
       }
     }
-    // Apply tags filter
-    if (filters.tags.length > 0) {
+    
+    // SIMPLIFIED TAG FILTERING LOGIC - using AND logic
+    if (filters.tags && filters.tags.length > 0) {
+      console.log('[ProductsTable.filteredData] Applying tag filters with AND logic:', filters.tags);
+      
       filtered = filtered.filter(product => {
-        const productTags = product.tags || [];
-        // Check if any of the selected filter tags exist in the product's tags
-        return filters.tags.some(tag => productTags.includes(tag));
+        // Detailed logging for the first product to help with debugging
+        const isFirstProduct = product.id === products[0]?.id;
+        if (isFirstProduct) {
+          console.log('[ProductsTable.filteredData] Sample product tags:', product.tags);
+        }
+        
+        // Handle missing tags case
+        if (!product.tags || !Array.isArray(product.tags) || product.tags.length === 0) {
+          return false;
+        }
+        
+        // Check if ALL filter tags match (AND logic instead of OR)
+        const hasAllTags = filters.tags.every(filterTag => {
+          const found = product.tags.some(productTag => {
+            // String comparison
+            if (typeof productTag === 'string') {
+              return productTag === filterTag;
+            }
+            
+            // Object comparison with type safety
+            if (productTag && typeof productTag === 'object') {
+              // Safe access with type assertion
+              const tag = productTag as any;
+              return (
+                (tag.id !== undefined && String(tag.id) === filterTag) || 
+                (tag.name !== undefined && String(tag.name) === filterTag) ||
+                (tag.value !== undefined && String(tag.value) === filterTag) ||
+                (tag.label !== undefined && String(tag.label) === filterTag)
+              );
+            }
+            
+            return false;
+          });
+          
+          // Log when a tag is found for debugging
+          if (isFirstProduct) {
+            console.log(`[ProductsTable.filteredData] Tag '${filterTag}' ${found ? 'FOUND' : 'NOT FOUND'} in sample product`);
+          }
+          
+          return found;
+        });
+        
+        // Log the final decision for the sample product
+        if (isFirstProduct) {
+          console.log(`[ProductsTable.filteredData] Sample product has ${hasAllTags ? 'ALL' : 'NOT ALL'} required tags`);
+        }
+        
+        return hasAllTags;
       });
     }
+    
+    console.log('[ProductsTable.filteredData] Products after filtering:', filtered.length);
+    
     return filtered;
   }, [products, debouncedSearchTerm, filters]);
 
@@ -626,13 +693,7 @@ export function ProductsTable() {
     console.log("Filter visibility toggled:", !filtersVisible);
   }, [filtersVisible]);
 
-  const handleFilterChange = useCallback(<K extends keyof FilterState>(
-    key: K,
-    value: FilterState[K]
-  ) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
-  }, []);
-
+  // Handle clear filters
   const handleClearFilters = useCallback(() => {
     setFilters({
       category: 'all',
@@ -1368,6 +1429,41 @@ export function ProductsTable() {
         );
       },
       enableSorting: true,
+      // Add these properties to enable filtering
+      enableColumnFilter: true,
+      filterFn: (row: Row<Product>, columnId: string, filterValue: any): boolean => {
+        // Skip if no filter value
+        if (!filterValue || !Array.isArray(filterValue) || filterValue.length === 0) return true;
+        
+        // Get tags from the row
+        const tags = row.getValue(columnId) as any[];
+        
+        // If no tags, no match
+        if (!tags || !Array.isArray(tags) || tags.length === 0) return false;
+        
+        // Check if ALL of the filter tags exist in the row's tags (AND logic)
+        return filterValue.every(filterTag => 
+          tags.some((tag: any) => {
+            // Handle tag as string
+            if (typeof tag === 'string') {
+              return tag === filterTag;
+            }
+            
+            // Handle tag as object
+            if (tag && typeof tag === 'object') {
+              const tagObj = tag as any;
+              return (
+                String(tagObj.id) === filterTag ||
+                String(tagObj.name) === filterTag ||
+                String(tagObj.value) === filterTag ||
+                String(tagObj.label) === filterTag
+              );
+            }
+            
+            return false;
+          })
+        );
+      }
     },
     {
       accessorKey: "barcode",
@@ -1796,6 +1892,44 @@ export function ProductsTable() {
     meta: {
       updateData,
     },
+    // Add custom filterFns for tags with proper typing
+    filterFns: {
+      tags: (row: Row<Product>, columnId: string, filterValue: any): boolean => {
+        console.log('[filterFns.tags] Filtering with:', filterValue);
+        
+        // Skip if no filter value
+        if (!filterValue || !Array.isArray(filterValue) || filterValue.length === 0) return true;
+        
+        // Get tags from the row
+        const tags = row.getValue(columnId);
+        console.log('[filterFns.tags] Row tags:', tags);
+        
+        // If no tags, no match
+        if (!tags || !Array.isArray(tags) || tags.length === 0) return false;
+        
+        // Check if any of the filter tags exist in the row's tags
+        return filterValue.some(filterTag => 
+          tags.some((tag: any) => {
+            // Handle tag as string
+            if (typeof tag === 'string') {
+              return tag === filterTag;
+            }
+            
+            // Handle tag as object
+            if (tag && typeof tag === 'object') {
+              return (
+                String(tag.id) === filterTag ||
+                String(tag.name) === filterTag ||
+                String(tag.value) === filterTag ||
+                String(tag.label) === filterTag
+              );
+            }
+            
+            return false;
+          })
+        );
+      }
+    } as Record<string, FilterFn<Product>>,
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
@@ -1948,6 +2082,36 @@ export function ProductsTable() {
     
     return Array.from(tagSet);
   }, [products]);
+
+  // Now update the handleFilterChange function to ensure tags are properly handled
+  const handleFilterChange = useCallback(<K extends keyof FilterState>(
+    key: K,
+    value: FilterState[K]
+  ) => {
+    // Simple log for debugging
+    console.log(`[handleFilterChange] Setting ${key} filter:`, value);
+    
+    // Update the filters state
+    setFilters(prev => ({ ...prev, [key]: value }));
+    
+    // Special handling for tags filter
+    if (key === 'tags') {
+      const tagsColumn = table.getColumn('tags');
+      if (tagsColumn) {
+        const tags = value as string[];
+        
+        // Set the column filter correctly based on whether there are tags or not
+        if (tags.length > 0) {
+          // Create a new array reference to ensure React detects the change
+          tagsColumn.setFilterValue([...tags]);
+          console.log('[handleFilterChange] Applied tags filter:', tags);
+        } else {
+          tagsColumn.setFilterValue(undefined);
+          console.log('[handleFilterChange] Cleared tags filter');
+        }
+      }
+    }
+  }, [table]);
 
   // Render the component
   return (
@@ -2418,16 +2582,30 @@ export function ProductsTable() {
                                                           id={`tag-${tag}`}
                                                           checked={filters.tags.includes(tag)}
                                                           onCheckedChange={(checked) => {
+                                                            console.log(`[Tag filter] ${checked ? 'Adding' : 'Removing'} tag: ${tag}`);
+                                                            
+                                                            // Create new tags array
                                                             const newTags = checked 
                                                               ? [...filters.tags, tag] 
                                                               : filters.tags.filter(t => t !== tag);
                                                             
-                                                            // Update the filter state
-                                                            handleFilterChange('tags', newTags);
+                                                            console.log('[Tag filter] New tags list:', newTags);
                                                             
-                                                            // Update the table column filter
-                                                            column.setFilterValue(newTags.length > 0 ? newTags : undefined);
-                                                            handleColumnFilterChange(columnId, newTags.length > 0 ? newTags : undefined);
+                                                            // Update the filters state directly
+                                                            setFilters(prev => ({ ...prev, tags: newTags }));
+                                                            
+                                                            // Force refresh of filtered data via a direct table update
+                                                            const tagsColumn = table.getColumn('tags');
+                                                            if (tagsColumn) {
+                                                              console.log('[Tag filter] Updating table column filter');
+                                                              
+                                                              if (newTags.length > 0) {
+                                                                // Important: create a new array reference to ensure React detects the change
+                                                                tagsColumn.setFilterValue([...newTags]);
+                                                              } else {
+                                                                tagsColumn.setFilterValue(undefined);
+                                                              }
+                                                            }
                                                           }}
                                                         />
                                                         <Label 
@@ -2451,12 +2629,17 @@ export function ProductsTable() {
                                                   variant="outline" 
                                                   className="text-xs"
                                                   onClick={() => {
-                                                    // Clear the tag filters
-                                                    handleFilterChange('tags', []);
+                                                    console.log('[Tag filter] Clearing all tag filters');
                                                     
-                                                    // Clear the table column filter for tags
-                                                    column.setFilterValue(undefined);
-                                                    handleColumnFilterChange(columnId, undefined);
+                                                    // Clear the tags filter
+                                                    setFilters(prev => ({ ...prev, tags: [] }));
+                                                    
+                                                    // Clear the table column filter
+                                                    const tagsColumn = table.getColumn('tags');
+                                                    if (tagsColumn) {
+                                                      console.log('[Tag filter] Resetting table column filter');
+                                                      tagsColumn.setFilterValue(undefined);
+                                                    }
                                                   }}
                                                   disabled={filters.tags.length === 0}
                                                 >

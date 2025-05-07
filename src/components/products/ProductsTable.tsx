@@ -1631,74 +1631,69 @@ export function ProductsTable() {
   ]);
 
   // Action column definition
-  const ACTION_W = 64;    // single scrollbar pad & column width
+  const ACTION_W = 48;        // narrower (48 px = 12 × 3 icons + gaps)
+  const FOOTER_H = 48;        // pagination footer height (= h-12)
 
   const actionColumn: ColumnDef<Product> = {
-    id: 'actions',
+    id: "actions",
     enableHiding: false,
     enableSorting: false,
     size: ACTION_W,
 
     header: () => (
-      <div
-        className={cn(
-          'sticky right-0 z-30',
-          'w-16 text-center font-medium text-xs tracking-wide',
-          'bg-slate-100 border-l border-slate-300/40 py-1'
-        )}
-      >
-        Acts
+      <div className="sticky right-0 z-30 w-12 text-center
+                  py-1 text-xs font-medium
+                  bg-slate-100 border-l border-slate-300/40">
+        Actions
       </div>
     ),
 
     cell: ({ row }) => {
-      const pid = row.original.id;
-      if (!pid) return null;
-
-      // zebra / selection colour – already calculated earlier
-      const rowBg =
-        row.getIsSelected() ? 'bg-blue-50'
-        : row.index % 2 ? 'bg-slate-50'
-        : 'bg-white';
-
+      const id = row.original.id;
+      if (!id) return null;
+      
       return (
-        <div
-          className={cn(
-            'sticky right-0 z-30 w-16 px-1 py-1',
-            'border-l border-slate-300/40 flex flex-col items-center gap-1',
-            rowBg
-          )}
+        <div className="sticky right-0 z-30 w-12
+                 flex justify-center
+                 border-l border-slate-300/40
+                 bg-transparent"
         >
-          <IconBtn title="View"    onClick={() => handleRowClick(pid)}       icon={EyeIcon} />
-          <IconBtn title="Edit"    onClick={() => navigate(`/app/products/${pid}/edit`)} icon={PencilIcon} />
-          <IconBtn title="Archive" onClick={() => handleDelete(pid)}         icon={TrashIcon} />
+          {/* white pill just around the icons */}
+          <div className="flex flex-col items-center gap-1
+                      rounded-lg bg-white shadow-sm
+                      py-1 px-0.5 max-w-fit">
+            <IconBtn tooltip="View"    icon={EyeIcon}    onClick={() => handleRowClick(id)} />
+            <IconBtn tooltip="Edit"    icon={PencilIcon} onClick={() => navigate(`/app/products/${id}/edit`)} />
+            <IconBtn tooltip="Archive" icon={TrashIcon}  onClick={() => handleDelete(id)} />
+          </div>
         </div>
       );
     },
   };
 
   // Icon button helper component
-  function IconBtn({
-    title,
-    onClick,
-    icon: Icon,
-  }: {
-    title: string;
+  function IconBtn({ 
+    icon: Icon, 
+    tooltip, 
+    onClick
+  }: { 
+    icon: LucideIcon; 
+    tooltip: string; 
     onClick: () => void;
-    icon: LucideIcon;
   }) {
     return (
       <Button
         variant="ghost"
         size="icon"
-        title={title}
+        title={tooltip}
         onClick={(e) => {
           e.stopPropagation();
           onClick();
         }}
-        className="h-7 w-7 rounded-full hover:bg-slate-200"
+        className="h-7 w-7 rounded-full hover:bg-slate-100"
       >
         <Icon className="h-4 w-4 text-slate-600" />
+        <span className="sr-only">{tooltip}</span>
       </Button>
     );
   }
@@ -2115,13 +2110,14 @@ export function ProductsTable() {
         )}
 
         {/* Section containing scroll area and footer with overflow control */}
-        <section className="flex flex-col flex-1 overflow-hidden min-h-0">
+        <section className="flex flex-col flex-1 min-h-0">
           {/* Create ONE scroll container that handles both axes */}
           <div
             ref={scrollRef}
             className={cn(
               "flex-1 overflow-auto min-h-0",
-              columnVisibility.actions !== false && `pr-[${ACTION_W}px]`
+              columnVisibility.actions !== false && `pr-[${ACTION_W}px]`,
+              `pb-[${FOOTER_H}px]`          // space for the sticky footer
             )}
             id="products-scroll-area"
           >
@@ -2482,7 +2478,11 @@ export function ProductsTable() {
           </div>
               
           {/* PAGINATION */}
-          <div className="flex items-center justify-between p-2 border-t bg-slate-950/12">
+          <div 
+            className="sticky bottom-0 left-0 right-0 z-40
+                       h-12 px-2
+                       flex items-center justify-between
+                       bg-slate-100 border-t border-slate-300/40">
             <div className="flex space-x-2">
               <Button size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
                 <ChevronLeft />
@@ -2550,21 +2550,8 @@ const headerShadowStyle = `
 thead tr:first-child { 
   box-shadow: 0 2px 4px rgb(0 0 0 / .05); 
 }
-[data-column-id="actions"] {
-  position: sticky;
-  right: 0;
-  z-index: 30;                 /* > row cells */
-  min-width: 64px;
-  max-width: 64px;
-  background: inherit;         /* rowBg already set inline */
-  border-left: 1px solid rgb(203 213 225 / .4); /* slate-300/40 */
-  box-shadow: -2px 0 4px rgb(0 0 0 / .05);
-}
-
-/* make sure hover keeps inheritance */
-tr:hover td[data-column-id="actions"] {
-  background: inherit;
-}
+/* still keep the left-hand divider shadow */
+[data-column-id="actions"] { background: transparent !important; }
 `;
 
 // Inject the CSS style into the document head if it doesn't already exist

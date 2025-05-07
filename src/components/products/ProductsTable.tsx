@@ -2109,7 +2109,7 @@ export function ProductsTable() {
           </div>
         )}
 
-        {/* Section containing scroll area and footer with overflow control */}
+        {/* Section containing scroll area and footer */}
         <section className="flex flex-col flex-1 min-h-0">
           {/* Create ONE scroll container that handles both axes */}
           <div
@@ -2476,48 +2476,48 @@ export function ProductsTable() {
               </SortableContext>
             </DndContext>
           </div>
-              
-          {/* PAGINATION */}
-          <div 
-            className="sticky bottom-0 left-0 right-0 z-40
-                       h-12 px-2
-                       flex items-center justify-between
-                       bg-slate-100 border-t border-slate-300/40">
-            <div className="flex space-x-2">
-              <Button size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
-                <ChevronLeft />
-              </Button>
-              <Button size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
-                <ChevronRight />
-              </Button>
-            </div>
-
-            <span className="text-sm text-slate-600">
-              {(() => {
-                const { pageIndex, pageSize } = table.getState().pagination;
-                const total = table.getFilteredRowModel().rows.length;
-                const start = pageIndex * pageSize + 1;
-                const end = Math.min(total, start + pageSize - 1);
-                return `Showing ${start}-${end} of ${total}`;
-              })()}
-            </span>
-
-            <div className="flex items-center space-x-2">
-              <span className="text-sm">Show</span>
-              <Select
-                value={String(table.getState().pagination.pageSize)}
-                onValueChange={v => table.setPageSize(Number(v))}
-              >
-                <SelectTrigger className="h-8 w-[70px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {[10, 20, 50].map((n) => (
-                    <SelectItem key={n} value={String(n)}>{n}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
         </section>
+
+        {/* PAGINATION - Fixed to viewport bottom */}
+        <div 
+          className="fixed left-0 right-0 bottom-0 z-50 
+                     h-12 bg-slate-100 border-t border-slate-300/40
+                     flex items-center justify-between px-4"
+        >
+          <div className="flex space-x-2">
+            <Button size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+              <ChevronLeft />
+            </Button>
+            <Button size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+              <ChevronRight />
+            </Button>
+          </div>
+
+          <span className="text-sm text-slate-600">
+            {(() => {
+              const { pageIndex, pageSize } = table.getState().pagination;
+              const total = table.getFilteredRowModel().rows.length;
+              const start = pageIndex * pageSize + 1;
+              const end = Math.min(total, start + pageSize - 1);
+              return `Showing ${start}-${end} of ${total}`;
+            })()}
+          </span>
+
+          <div className="flex items-center space-x-2">
+            <span className="text-sm">Show</span>
+            <Select
+              value={String(table.getState().pagination.pageSize)}
+              onValueChange={v => table.setPageSize(Number(v))}
+            >
+              <SelectTrigger className="h-8 w-[70px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {[10, 20, 50].map((n) => (
+                  <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
       </div>
       
       {/* Add modals at the end */}

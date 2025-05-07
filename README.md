@@ -30,7 +30,7 @@ KernLogic is a lightweight ERP-like inventory management system designed for sma
 - Python 3.8+
 - Node.js 14+
 - npm or yarn
-- PostgreSQL (optional, SQLite for development)
+- PostgreSQL
 
 ### Installation
 
@@ -87,7 +87,7 @@ KernLogic follows a modern web application architecture:
 - **Django**: Web framework
 - **Django REST Framework**: API layer
 - **SimpleJWT**: Authentication with JWT tokens
-- **SQLite/PostgreSQL**: Database
+- **PostgreSQL**: Database
 
 ### Frontend
 

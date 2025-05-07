@@ -32,46 +32,31 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  DropdownMenuGroup,
 } from "@/components/ui/dropdown-menu";
 import {
-  SearchIcon,
   FilterIcon,
-  MoreHorizontalIcon,
-  EditIcon,
   TrashIcon,
   RefreshCw,
   ArrowUpDown,
   ChevronLeft,
   ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
   ColumnsIcon,
   ChevronDown,
   ImageIcon,
-  AlertTriangle,
   CheckIcon,
   XIcon,
   PlusIcon,
   ShoppingBagIcon,
   ArrowUp,
   ArrowDown,
-  ChevronUp,
-  Filter,
-  MoreVertical,
-  Cloud,
   CheckCircle,
   XCircle,
   EyeIcon,
   PencilIcon,
   TagIcon,
   FolderIcon,
-  ListFilterIcon,
-  ArrowUpDownIcon,
-  SlidersHorizontalIcon,
   LucideIcon
 } from "lucide-react";
 import { Product, productService, ProductImage } from "@/services/productService";
@@ -87,8 +72,6 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/h
 import { useToast } from '@/components/ui/use-toast';
 import { DndContext, useSensor, useSensors, PointerSensor, DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, arrayMove, horizontalListSortingStrategy } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { useLayoutEffect } from "react";
 import { 
   Popover, 
   PopoverContent, 
@@ -744,17 +727,6 @@ export function ProductsTable() {
     
     return Array.from(categories);
   }, [products]);
-
-  // Update the productRowMap whenever the filtered products change
-  useEffect(() => {
-    const newMap: Record<number, number> = {};
-    filteredData.forEach((product, index) => {
-      if (product.id) {
-        newMap[index] = product.id;
-      }
-    });
-    setProductRowMap(newMap);
-  }, [filteredData]);
   
   // Update the updateData function to use the productRowMap instead of the table reference
   const updateData = useCallback(async (rowIndex: number, columnId: string, value: any) => {
@@ -1893,47 +1865,6 @@ export function ProductsTable() {
     setSearchTerm(e.target.value);
   }, []);
 
-  // Update toast calls to match the correct API
-  const handleStatusChange = useCallback(async (productId: number) => {
-    try {
-      const currentProduct = products.find(p => p.id === productId);
-      if (!currentProduct) return;
-      
-      toast({
-        title: "Updating status...",
-        description: "Please wait while we update the product status.",
-      });
-      
-      const updatedProduct = await productService.updateProduct(productId, {
-        ...currentProduct,
-        is_active: !currentProduct.is_active
-      });
-      
-      // Update product in local state
-      setProducts(prevProducts => 
-        prevProducts.map(p => p.id === productId ? updatedProduct : p)
-      );
-      
-      toast({
-        title: "Status updated",
-        description: `Product status has been ${updatedProduct.is_active ? 'activated' : 'deactivated'}.`,
-        variant: "default",
-      });
-    } catch (err) {
-      console.error('Failed to update product status:', err);
-      toast({
-        title: "Error",
-        description: "Failed to update product status. Please try again.",
-        variant: "destructive",
-      });
-    }
-  }, [products, toast]);
-
-  // --- Render ---
-  
-  // --- DEBUGGING LOGS ---
-  // --- END DEBUGGING LOGS ---
-
   // Add column filter state and handlers
   const [columnFilterValues, setColumnFilterValues] = useState<Record<string, any>>({});
 
@@ -2265,21 +2196,21 @@ export function ProductsTable() {
                       {table.getHeaderGroups().map(headerGroup => (
                         <React.Fragment key={headerGroup.id}>
                           {/* 1) Column titles */}
-                          <TableRow className="sticky top-0 z-30 bg-slate-100 h-9 border-b border-slate-200">
+                          <TableRow className="sticky top-0 z-30 bg-slate-100 h-4 border-b border-slate-200">
                             {headerGroup.headers.map(header =>
                               <SortableTableHeader key={header.id} id={header.column.id} header={header}/>
                             )}
                           </TableRow>
 
                           {/* 2) Filter inputs - Always visible now */}
-                          <TableRow className="sticky top-9 z-20 bg-slate-50 h-9 border-b border-slate-200">
+                          <TableRow className="sticky top-9 z-20 bg-slate-50 h-6 border-b border-slate-200">
                             {headerGroup.headers.map((header) => {
                               const column = header.column;
                               const columnId = column.id;
                               
                               // Skip filter UI for select column
                               if (columnId === 'select') {
-                                return <TableHead key={`filter-${columnId}`} className="px-2 py-2" />;
+                                return <TableHead key={`filter-${columnId}`} className="px-1 py-1" />;
                               }
                               
                               // Add Clear Filters button to thumbnail column 
@@ -2655,7 +2586,8 @@ export function ProductsTable() {
                             className={cn(
                               "border-b border-gray-200 transition-colors hover:bg-slate-950/15",
                               row.getIsSelected() ? "bg-slate-950/18" : index % 2 === 0 ? "bg-slate-950/5" : "bg-slate-950/11",
-                              "cursor-pointer"
+                              "cursor-pointer",
+                              "h-0 leading-tight"
                             )}
                             onClick={(e) => {
                               const target = e.target as HTMLElement;
@@ -2678,7 +2610,7 @@ export function ProductsTable() {
                                 return (
                                   <TableCell 
                                     key={cell.id} 
-                                    className={`px-2 py-1 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
+                                    className={`px-2 py-0 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
                                     data-column-id={columnId}
                                   >
                                     <div className="flex items-center gap-1">

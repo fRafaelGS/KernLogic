@@ -2346,10 +2346,38 @@ export function ProductsTable() {
                                 return <TableHead key={`filter-${columnId}`} className="px-2 py-2" />;
                               }
                               
-                              // Skip filter UI for thumbnail column
-                              if (columnId === 'thumbnail') {
-                                return <TableHead key={`filter-${columnId}`} className="px-2 py-2" />;
+                              // Add Clear Filters button to thumbnail column 
+                              // thumbnail column ➜ filter row
+                              if (columnId === "thumbnail") {
+                                return (
+                                  <TableHead key={`filter-${columnId}`} className="px-1 py-1">
+                                    <Button
+                                      variant="outline"       // keeps the shadcn outline styling
+                                      size="sm"
+                                      onClick={() => {
+                                        table.resetColumnFilters();
+                                        setColumnFilterValues({});
+                                        handleClearFilters();
+                                      }}
+                                      /* prettier, compact pill-style */
+                                      className="
+                                        h-6 px-3                   /* slimmer height & horizontal padding  */
+                                        rounded-full               /* fully rounded pill                  */
+                                        border-slate-300           /* subtle 1-px border                  */
+                                        bg-white/90                /* soft white with a hint of opacity   */
+                                        text-slate-600             /* medium-gray label                   */
+                                        hover:bg-slate-100         /* light gray hover                    */
+                                        hover:border-slate-400
+                                        shadow-sm                  /* faint drop-shadow                   */
+                                        transition-colors
+                                      "
+                                    >
+                                      Clear&nbsp;filters
+                                    </Button>
+                                  </TableHead>
+                                );
                               }
+
                               
                               // Use tailwind classes for mobile responsiveness
                               const hideOnMobileClass = ['brand', 'barcode', 'created_at', 'tags'].includes(columnId) ? 'hidden md:table-cell' : '';

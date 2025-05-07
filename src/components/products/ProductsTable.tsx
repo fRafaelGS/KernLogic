@@ -82,6 +82,7 @@ import { ActionMeta, OnChangeValue } from 'react-select';
 import { ProductsSearchBox } from './ProductsSearchBox';
 import { BulkCategoryModal } from './BulkCategoryModal';
 import { BulkTagModal } from './BulkTagModal';
+import { useDebounce } from "@/hooks/useDebounce";
 
 // Define filter state type
 interface FilterState {
@@ -90,23 +91,6 @@ interface FilterState {
   minPrice: string;
   maxPrice: string;
   tags: string[]; // Add tags array to FilterState
-}
-
-// Add useDebounce hook
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [value, delay]);
-
-  return debouncedValue;
 }
 
 // Add price formatter util just after useDebounce implementation

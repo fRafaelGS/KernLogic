@@ -104,6 +104,7 @@ interface FilterState {
   status: 'all' | 'active' | 'inactive';
   minPrice: string;
   maxPrice: string;
+  tags: string[]; // Add tags array to FilterState
 }
 
 // Add useDebounce hook
@@ -339,7 +340,7 @@ export function ProductsTable() {
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
-    pageSize: 25,
+    pageSize: 10,
   });
   
   // Add scroll container ref
@@ -360,6 +361,7 @@ export function ProductsTable() {
     status: (searchParams.get('status') as 'all' | 'active' | 'inactive') || 'all',
     minPrice: searchParams.get('minPrice') || '',
     maxPrice: searchParams.get('maxPrice') || '',
+    tags: [], // Initialize empty tags array
   });
 
   const [columnOrder, setColumnOrder] = useState<string[]>([]);
@@ -552,6 +554,14 @@ export function ProductsTable() {
         filtered = filtered.filter(product => product.price <= max);
       }
     }
+    // Apply tags filter
+    if (filters.tags.length > 0) {
+      filtered = filtered.filter(product => {
+        const productTags = product.tags || [];
+        // Check if any of the selected filter tags exist in the product's tags
+        return filters.tags.some(tag => productTags.includes(tag));
+      });
+    }
     return filtered;
   }, [products, debouncedSearchTerm, filters]);
 
@@ -629,6 +639,7 @@ export function ProductsTable() {
       status: 'all',
       minPrice: '',
       maxPrice: '',
+      tags: [], // Clear tags array
     });
     
     // Update URL params without the cleared filters
@@ -637,6 +648,7 @@ export function ProductsTable() {
     params.delete('status');
     params.delete('minPrice');
     params.delete('maxPrice');
+    params.delete('tags'); // Remove tags parameter if it exists
     setSearchParams(params);
   }, [searchParams, setSearchParams]);
 
@@ -1918,6 +1930,25 @@ export function ProductsTable() {
       .filter((id): id is number => typeof id === 'number');
   }, [rowSelection, productRowMap]);
 
+  // Add this function to extract unique tags from products for the filter dropdown
+  const uniqueTags = useMemo(() => {
+    if (!Array.isArray(products)) {
+      return [];
+    }
+    
+    // Create a set of all unique tags from all products
+    const tagSet = new Set<string>();
+    products.forEach(product => {
+      if (Array.isArray(product.tags)) {
+        product.tags.forEach(tag => {
+          if (tag) tagSet.add(tag);
+        });
+      }
+    });
+    
+    return Array.from(tagSet);
+  }, [products]);
+
   // Render the component
   return (
     <React.Fragment>
@@ -2358,6 +2389,101 @@ export function ProductsTable() {
                                       );
                                     }
 
+                                    // Tags filter 
+                                    if (columnId === 'tags') {
+                                      return (
+                                        <Popover>
+                                          <PopoverTrigger asChild>
+                                            <Button 
+                                              variant="outline" 
+                                              className="h-7 text-xs w-full justify-start font-normal"
+                                              onClick={(e) => e.stopPropagation()}
+                                            >
+                                              <TagIcon className="mr-1 h-3 w-3" />
+                                              <span>
+                                                {filters.tags.length > 0 
+                                                  ? `${filters.tags.length} Selected`
+                                                  : "Filter Tags"}
+                                              </span>
+                                            </Button>
+                                          </PopoverTrigger>
+                                          <PopoverContent className="w-64 p-3" align="start">
+                                            <div className="space-y-2">
+                                              <div className="max-h-60 overflow-y-auto pr-2">
+                                                {uniqueTags.length > 0 ? (
+                                                  <div className="space-y-1">
+                                                    {uniqueTags.map((tag) => (
+                                                      <div key={tag} className="flex items-center">
+                                                        <Checkbox 
+                                                          id={`tag-${tag}`}
+                                                          checked={filters.tags.includes(tag)}
+                                                          onCheckedChange={(checked) => {
+                                                            const newTags = checked 
+                                                              ? [...filters.tags, tag] 
+                                                              : filters.tags.filter(t => t !== tag);
+                                                            
+                                                            // Update the filter state
+                                                            handleFilterChange('tags', newTags);
+                                                            
+                                                            // Update the table column filter
+                                                            column.setFilterValue(newTags.length > 0 ? newTags : undefined);
+                                                            handleColumnFilterChange(columnId, newTags.length > 0 ? newTags : undefined);
+                                                          }}
+                                                        />
+                                                        <Label 
+                                                          htmlFor={`tag-${tag}`}
+                                                          className="ml-2 text-sm cursor-pointer"
+                                                        >
+                                                          {tag}
+                                                        </Label>
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                ) : (
+                                                  <p className="text-sm text-slate-500 text-center py-2">
+                                                    No tags available
+                                                  </p>
+                                                )}
+                                              </div>
+                                              <div className="flex justify-between">
+                                                <Button 
+                                                  size="sm" 
+                                                  variant="outline" 
+                                                  className="text-xs"
+                                                  onClick={() => {
+                                                    // Clear the tag filters
+                                                    handleFilterChange('tags', []);
+                                                    
+                                                    // Clear the table column filter for tags
+                                                    column.setFilterValue(undefined);
+                                                    handleColumnFilterChange(columnId, undefined);
+                                                  }}
+                                                  disabled={filters.tags.length === 0}
+                                                >
+                                                  Clear
+                                                </Button>
+                                                <Button 
+                                                  size="sm" 
+                                                  className="text-xs"
+                                                  onClick={() => {
+                                                    // Close the popover by simulating a click outside
+                                                    const closeEvent = new MouseEvent('click', {
+                                                      bubbles: true,
+                                                      cancelable: true,
+                                                      view: window
+                                                    });
+                                                    document.dispatchEvent(closeEvent);
+                                                  }}
+                                                >
+                                                  Apply
+                                                </Button>
+                                              </div>
+                                            </div>
+                                          </PopoverContent>
+                                        </Popover>
+                                      );
+                                    }
+
                                     // Default: no filter
                                     return null;
                                   })()}
@@ -2511,7 +2637,7 @@ export function ProductsTable() {
             >
               <SelectTrigger className="h-8 w-[70px]"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {[10, 20, 50].map((n) => (
+                {[10, 25, 50, 100].map((n) => (
                   <SelectItem key={n} value={String(n)}>{n}</SelectItem>
                 ))}
               </SelectContent>

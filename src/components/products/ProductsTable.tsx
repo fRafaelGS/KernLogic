@@ -67,6 +67,10 @@ import {
   PencilIcon,
   TagIcon,
   FolderIcon,
+  ListFilterIcon,
+  ArrowUpDownIcon,
+  SlidersHorizontalIcon,
+  LucideIcon
 } from "lucide-react";
 import { Product, productService, ProductImage } from "@/services/productService";
 import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
@@ -1627,66 +1631,77 @@ export function ProductsTable() {
   ]);
 
   // Action column definition
+  const ACTION_W = 64;    // single scrollbar pad & column width
+
   const actionColumn: ColumnDef<Product> = {
-    id: "actions",
+    id: 'actions',
     enableHiding: false,
     enableSorting: false,
-    size: 112,           // explicit width (112 px) matches 3 icon buttons + padding
-    meta: {
-      className: "sticky right-0 bg-slate-950/12 z-10 border-l border-slate-300/40", // sticky with divider
-    },
+    size: ACTION_W,
+
     header: () => (
-      <div className="text-right px-2 sticky right-0 bg-slate-950/12 border-l border-slate-300/40 z-20 w-[112px]">
-        Actions
+      <div
+        className={cn(
+          'sticky right-0 z-30',
+          'w-16 text-center font-medium text-xs tracking-wide',
+          'bg-slate-100 border-l border-slate-300/40 py-1'
+        )}
+      >
+        Acts
       </div>
     ),
+
     cell: ({ row }) => {
-      const productId = row.original.id;
-      
-      if (!productId) return null;
-      
+      const pid = row.original.id;
+      if (!pid) return null;
+
+      // zebra / selection colour – already calculated earlier
+      const rowBg =
+        row.getIsSelected() ? 'bg-blue-50'
+        : row.index % 2 ? 'bg-slate-50'
+        : 'bg-white';
+
       return (
-        <div className="flex justify-end gap-2 pr-2 sticky right-0 bg-slate-950/12 z-10 border-l border-slate-300/40 w-[112px]">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (productId) handleRowClick(productId);
-            }}
-            title="View"
-          >
-            <EyeIcon className="h-4 w-4 text-gray-500 hover:text-blue-600" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (productId) navigate(`/app/products/${productId}/edit`);
-            }}
-            title="Edit"
-          >
-            <PencilIcon className="h-4 w-4 text-gray-500 hover:text-green-600" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (productId) handleDelete(productId);
-            }}
-            title="Archive"
-          >
-            <TrashIcon className="h-4 w-4 text-gray-500 hover:text-red-600" />
-          </Button>
+        <div
+          className={cn(
+            'sticky right-0 z-30 w-16 px-1 py-1',
+            'border-l border-slate-300/40 flex flex-col items-center gap-1',
+            rowBg
+          )}
+        >
+          <IconBtn title="View"    onClick={() => handleRowClick(pid)}       icon={EyeIcon} />
+          <IconBtn title="Edit"    onClick={() => navigate(`/app/products/${pid}/edit`)} icon={PencilIcon} />
+          <IconBtn title="Archive" onClick={() => handleDelete(pid)}         icon={TrashIcon} />
         </div>
       );
     },
   };
+
+  // Icon button helper component
+  function IconBtn({
+    title,
+    onClick,
+    icon: Icon,
+  }: {
+    title: string;
+    onClick: () => void;
+    icon: LucideIcon;
+  }) {
+    return (
+      <Button
+        variant="ghost"
+        size="icon"
+        title={title}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick();
+        }}
+        className="h-7 w-7 rounded-full hover:bg-slate-200"
+      >
+        <Icon className="h-4 w-4 text-slate-600" />
+      </Button>
+    );
+  }
 
   // Combine the columns with the action column - MOVED HERE RIGHT AFTER BOTH DEPENDENCIES ARE DEFINED
   const allColumns = useMemo(() => [...columns, actionColumn], [columns, actionColumn]);
@@ -2106,7 +2121,7 @@ export function ProductsTable() {
             ref={scrollRef}
             className={cn(
               "flex-1 overflow-auto min-h-0",
-              columnVisibility.actions !== false && "pr-[112px]"
+              columnVisibility.actions !== false && `pr-[${ACTION_W}px]`
             )}
             id="products-scroll-area"
           >
@@ -2535,12 +2550,20 @@ const headerShadowStyle = `
 thead tr:first-child { 
   box-shadow: 0 2px 4px rgb(0 0 0 / .05); 
 }
-th[data-column-id="actions"],
-td[data-column-id="actions"] {
+[data-column-id="actions"] {
   position: sticky;
   right: 0;
-  background: inherit;
+  z-index: 30;                 /* > row cells */
+  min-width: 64px;
+  max-width: 64px;
+  background: inherit;         /* rowBg already set inline */
+  border-left: 1px solid rgb(203 213 225 / .4); /* slate-300/40 */
   box-shadow: -2px 0 4px rgb(0 0 0 / .05);
+}
+
+/* make sure hover keeps inheritance */
+tr:hover td[data-column-id="actions"] {
+  background: inherit;
 }
 `;
 

@@ -2,6 +2,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Download } from 'lucide-react';
 import { toast } from 'sonner';
+import { API_URL } from '@/config';
 
 interface ReportExportButtonProps {
   reportType: string;
@@ -14,8 +15,8 @@ const ReportExportButton: React.FC<ReportExportButtonProps> = ({ reportType, fil
       // Construct the query string from filters
       const queryParams = new URLSearchParams({ ...filters, format });
       
-      // Use the simplified direct export URL for completeness
-      const backendUrl = 'http://localhost:8000';
+      // Base backend URL – pulled from the central config so it works in all environments
+      const backendUrl = API_URL.replace(/\/$/, ''); // trim trailing slash if present
       let fullUrl = '';
       
       if (reportType === 'completeness') {
@@ -40,7 +41,9 @@ const ReportExportButton: React.FC<ReportExportButtonProps> = ({ reportType, fil
             console.error(`Unknown report type: ${reportType}`);
             return;
         }
-        fullUrl = `${backendUrl}/${exportPath}/?${queryParams.toString()}`;
+        // Ensure a single leading slash on the export path
+        const pathWithSlash = exportPath.startsWith('/') ? exportPath : `/${exportPath}`;
+        fullUrl = `${backendUrl}${pathWithSlash}/?${queryParams.toString()}`;
       }
       
       console.log(`Exporting report to: ${fullUrl}`);

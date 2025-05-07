@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { API_URL } from '@/config';
 
 // Create an axios instance with default config
 const api = axios.create({
@@ -41,7 +42,7 @@ api.interceptors.response.use(
         }
         
         // Try to get a new token
-        const response = await axios.post('/token/refresh/', {
+        const response = await axios.post(`${API_URL}/token/refresh/`, {
           refresh: refreshToken
         });
         

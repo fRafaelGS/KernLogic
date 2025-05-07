@@ -31,6 +31,13 @@ import ReportExportButton from '@/features/reports/components/ReportExportButton
 // Import types
 import type { ReportFiltersState } from '@/features/reports/components/filters/ReportFilters';
 
+// Dashboard summary service for completeness integration
+import { useQuery as useDashboardQuery } from '@tanstack/react-query';
+
+// Helper to fetch dashboard summary (overall completeness & missing fields)
+const fetchDashboardSummary = () =>
+  axiosInstance.get(paths.dashboard() + 'summary/').then(res => res.data);
+
 interface Theme {
   slug: string;
   name: string;
@@ -59,6 +66,15 @@ interface ReadinessReportProps {
 const CompletenessReport: React.FC = () => {
   const [filters, setFilters] = useState<ReportFiltersState>({});
   
+  /* --------------------------------------------------
+   * Dashboard summary (overall completeness & missing)
+   * -------------------------------------------------- */
+  const { data: dashboardSummary } = useDashboardQuery({
+    queryKey: ['dashboard', 'summary'],
+    queryFn: fetchDashboardSummary,
+    staleTime: 5 * 60 * 1000, // 5 min – dashboard KPIs don't change that fast
+  });
+
   // Define fallback data structure that fully matches the expected API response
   const fallbackData = {
     overall: 0,
@@ -97,9 +113,14 @@ const CompletenessReport: React.FC = () => {
     // If no data, return the fallback
     if (!apiData) return fallbackData;
     
+    // Prefer the precise dashboard calculation if available
+    const overall = typeof dashboardSummary?.data_completeness === 'number'
+      ? dashboardSummary.data_completeness
+      : (typeof apiData.overall === 'number' ? apiData.overall : 0);
+    
     // Ensure all expected properties exist with proper fallbacks
     return {
-      overall: typeof apiData.overall === 'number' ? apiData.overall : 0,
+      overall,
       byAttribute: Array.isArray(apiData.byAttribute) && apiData.byAttribute.length > 0 
         ? apiData.byAttribute.map(attr => ({
             name: attr?.name || 'Unknown',
@@ -114,7 +135,7 @@ const CompletenessReport: React.FC = () => {
           }))
         : fallbackData.byCategory
     };
-  }, [apiData]);
+  }, [apiData, dashboardSummary]);
 
   if (isLoading) {
     return (
@@ -176,6 +197,26 @@ const CompletenessReport: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Top Missing Fields – from dashboard summary */}
+      {dashboardSummary?.most_missing_fields?.length ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Top Missing Fields</CardTitle>
+            <CardDescription>Fields most frequently incomplete across your catalogue</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2">
+              {dashboardSummary.most_missing_fields.map((mf: any, idx: number) => (
+                <li key={idx} className="flex justify-between items-center">
+                  <span>{mf.field}</span>
+                  <Badge variant="destructive">{mf.count} missing</Badge>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* Completeness by Attribute */}
       <Card>
@@ -488,7 +529,7 @@ const ReportsPage: React.FC = () => {
   const [activeReport, setActiveReport] = useState<string>('completeness');
   
   // Fetch report themes from API
-  const { data: themes = [], isLoading, error } = useQuery({
+  const { data: fetchedThemes = [], isLoading, error } = useQuery({
     queryKey: qkReportThemes(),
     queryFn: () =>
       axiosInstance.get<Theme[]>(paths.reports.themes()).then(res => res.data),
@@ -499,6 +540,15 @@ const ReportsPage: React.FC = () => {
       description: report.description
     }))
   });
+
+  // Determine which set of themes to display – if the backend returns an empty
+  // list (e.g. freshly-migrated database), fall back to the static REPORTS
+  // definition so the page is never empty.
+  const themes = fetchedThemes.length > 0 ? fetchedThemes : REPORTS.map(r => ({
+    slug: r.slug,
+    name: r.name,
+    description: r.description,
+  }));
 
   if (isLoading) return <div className="flex justify-center p-8">Loading reports...</div>;
   

@@ -32,7 +32,7 @@ class Command(BaseCommand):
                 admin_role = Role.objects.create(
                     name="Admin",
                     description="Administrator with full access",
-                    permissions=["*"]  # Full permissions as a list
+                    permissions=["product.view", "product.add", "product.change", "product.delete", "team.view", "team.invite", "team.change_role", "team.remove", "dashboard.view"]  # Correct permissions format
                 )
                 self.stdout.write(self.style.SUCCESS(f"Created Admin role (ID: {admin_role.id})"))
             else:

@@ -40,10 +40,29 @@ class AttributeGroupViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         """Set organization and created_by from request user"""
-        serializer.save(
+        group = serializer.save(
             organization=get_user_organization(self.request.user),
             created_by=self.request.user
         )
+        
+        # Automatically add available attributes to the group
+        try:
+            # Get attributes for the same organization
+            attributes = Attribute.objects.filter(
+                organization=get_user_organization(self.request.user)
+            ).order_by('id')[:1]  # Add at least one attribute to start with
+            
+            # Add each attribute to the group
+            for index, attr in enumerate(attributes):
+                AttributeGroupItem.objects.create(
+                    group=group,
+                    attribute=attr,
+                    order=index
+                )
+                print(f"Added attribute {attr.code} to new group {group.name}")
+        except Exception as e:
+            # Log the error but don't fail the group creation
+            print(f"Error adding default attributes to group: {e}")
     
     @action(detail=False, methods=['post'])
     def reorder(self, request):

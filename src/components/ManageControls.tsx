@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   DropdownMenu,
@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { MoreHorizontal } from 'lucide-react';
 import { removeMember, resendInvite } from '@/services/teamService';
 import { toast } from 'sonner';
-import RoleChangeModal from './RoleChangeModal';
+import SelectRoleModal from './SelectRoleModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { PermissionGuard } from './common/PermissionGuard';
 
@@ -19,16 +19,19 @@ interface ManageControlsProps {
   membershipId: string | number;
   status: 'active' | 'pending';
   currentRoleId: string | number;
+  roleName: string;
 }
 
 export const ManageControls: React.FC<ManageControlsProps> = ({
   membershipId,
   status,
-  currentRoleId
+  currentRoleId,
+  roleName
 }) => {
   const { user, checkPermission } = useAuth();
   const orgId = user?.organization_id;
   const queryClient = useQueryClient();
+  const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
   
   // Check permissions for the various actions
   const canInvite = checkPermission('team.invite');
@@ -85,6 +88,16 @@ export const ManageControls: React.FC<ManageControlsProps> = ({
 
   return (
     <div>
+      {/* Role change modal - render conditionally when needed */}
+      {canChangeRole && isRoleModalOpen && (
+        <SelectRoleModal
+          membershipId={membershipId}
+          currentRoleName={roleName}
+          open={isRoleModalOpen}
+          onClose={() => setIsRoleModalOpen(false)}
+        />
+      )}
+
       {status === 'pending' ? (
         // For pending members, show direct action buttons
         <div className="flex space-x-2">
@@ -117,15 +130,12 @@ export const ManageControls: React.FC<ManageControlsProps> = ({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {canChangeRole && (
-              <RoleChangeModal 
-                membershipId={membershipId}
-                currentRoleId={currentRoleId}
-                trigger={
-                  <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                    Change Role
-                  </DropdownMenuItem>
-                }
-              />
+              <DropdownMenuItem onSelect={(e) => {
+                e.preventDefault();
+                setIsRoleModalOpen(true);
+              }}>
+                Change Role
+              </DropdownMenuItem>
             )}
             {canRemove && (
               <>

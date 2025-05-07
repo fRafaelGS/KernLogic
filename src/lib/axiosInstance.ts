@@ -3,7 +3,7 @@ import { API_URL } from '@/config';
 
 // Create the single Axios instance
 const axiosInstance = axios.create({
-    baseURL: '',
+    baseURL: API_URL,
     withCredentials: false, // Changed to false since we're using JWT in headers
     headers: {
         'Accept': 'application/json',

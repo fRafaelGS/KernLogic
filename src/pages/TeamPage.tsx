@@ -541,6 +541,7 @@ export const TeamPage: React.FC = () => {
                                   membershipId={member.id}
                                   status={status}
                                   currentRoleId={roleId}
+                                  roleName={roleInfo.name}
                                 />
                               </PermissionGuard>
                             </TableCell>

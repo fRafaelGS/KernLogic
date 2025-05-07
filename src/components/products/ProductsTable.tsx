@@ -408,8 +408,6 @@ export function ProductsTable() {
     setError(null);
     
     try {
-      console.log('[ProductsTable] Fetching data, auth status:', isAuthenticated);
-      
       // Make the requests one at a time to avoid race conditions
       let fetchedProducts: Product[] = [];
       let fetchedCategories: Category[] = [];
@@ -417,28 +415,22 @@ export function ProductsTable() {
       try {
         // Explicitly set fetchAll to true to get all products across all pages
         fetchedProducts = await productService.getProducts({}, true);
-        console.log('[ProductsTable] Fetched products:', fetchedProducts.length);
         // Guard against non-array responses
         if (!Array.isArray(fetchedProducts)) {
-          console.error('[ProductsTable] Products response is not an array:', fetchedProducts);
           fetchedProducts = [];
         }
       } catch (productsError) {
-        console.error('[ProductsTable] Error fetching products:', productsError);
         // Don't throw, continue to fetch categories
         fetchedProducts = [];
       }
       
       try {
         fetchedCategories = await productService.getCategories();
-        console.log('[ProductsTable] Fetched categories:', fetchedCategories);
         // Guard against non-array responses
         if (!Array.isArray(fetchedCategories)) {
-          console.error('[ProductsTable] Categories response is not an array:', fetchedCategories);
           fetchedCategories = [];
         }
       } catch (categoriesError) {
-        console.error('[ProductsTable] Error fetching categories:', categoriesError);
         // Don't throw, continue with empty categories
         fetchedCategories = [];
       }
@@ -497,7 +489,7 @@ export function ProductsTable() {
               }
             }
           } catch (assetErr) {
-            console.warn('[ProductsTable] Could not fetch assets for product', prod.id, assetErr);
+            // Continue with the original product
           }
 
           return prod; // return original if enrichment fails
@@ -511,13 +503,8 @@ export function ProductsTable() {
       }));
       setCategoryOptions(categoryOpts);
       
-      // Log success
-      console.log('[ProductsTable] Data fetch completed successfully');
-      
     } catch (err) {
-      console.error('[ProductsTable] Error in fetchData:', err);
       setError('Failed to fetch data');
-      // Don't logout the user, let them retry
       toast({ 
         title: 'Could not load products',
         description: 'Please try refreshing the page',
@@ -530,10 +517,6 @@ export function ProductsTable() {
 
   // Update the filteredData tag filtering logic with proper type casting
   const filteredData = useMemo(() => {
-    // Debug the filters state
-    console.log('[ProductsTable.filteredData] Filters applied:', filters);
-    console.log('[ProductsTable.filteredData] Tags filter:', filters.tags);
-    
     let filtered = [...products];
     // Apply text search
     if (debouncedSearchTerm) {
@@ -573,15 +556,7 @@ export function ProductsTable() {
     
     // SIMPLIFIED TAG FILTERING LOGIC - using AND logic
     if (filters.tags && filters.tags.length > 0) {
-      console.log('[ProductsTable.filteredData] Applying tag filters with AND logic:', filters.tags);
-      
       filtered = filtered.filter(product => {
-        // Detailed logging for the first product to help with debugging
-        const isFirstProduct = product.id === products[0]?.id;
-        if (isFirstProduct) {
-          console.log('[ProductsTable.filteredData] Sample product tags:', product.tags);
-        }
-        
         // Handle missing tags case
         if (!product.tags || !Array.isArray(product.tags) || product.tags.length === 0) {
           return false;
@@ -610,24 +585,12 @@ export function ProductsTable() {
             return false;
           });
           
-          // Log when a tag is found for debugging
-          if (isFirstProduct) {
-            console.log(`[ProductsTable.filteredData] Tag '${filterTag}' ${found ? 'FOUND' : 'NOT FOUND'} in sample product`);
-          }
-          
           return found;
         });
-        
-        // Log the final decision for the sample product
-        if (isFirstProduct) {
-          console.log(`[ProductsTable.filteredData] Sample product has ${hasAllTags ? 'ALL' : 'NOT ALL'} required tags`);
-        }
         
         return hasAllTags;
       });
     }
-    
-    console.log('[ProductsTable.filteredData] Products after filtering:', filtered.length);
     
     return filtered;
   }, [products, debouncedSearchTerm, filters]);
@@ -651,11 +614,9 @@ export function ProductsTable() {
   // Handle refresh button click
   const handleRefresh = () => {
     if (isAuthenticated) {
-        console.log('Manually refreshing data');
         setLoading(true);
         fetchData();
     } else {
-        console.log('Manual refresh skipped, not authenticated.');
         toast({ title: 'Please log in to refresh data.', variant: 'default' });
     }
   };
@@ -690,7 +651,6 @@ export function ProductsTable() {
   const handleFilterToggle = useCallback(() => {
     setFiltersVisible(prev => !prev);
     // Add more visibility logic if needed for specific filter sections
-    console.log("Filter visibility toggled:", !filtersVisible);
   }, [filtersVisible]);
 
   // Handle clear filters
@@ -731,7 +691,6 @@ export function ProductsTable() {
         setRowSelection({}); // Clear selection
         fetchData(); // Refresh data
       } catch (error: any) {
-        console.error("Bulk delete error:", error);
         toast({ 
           title: "Failed to archive selected products.", 
           description: error.message || "An unexpected error occurred.",
@@ -761,7 +720,6 @@ export function ProductsTable() {
       setRowSelection({}); // Clear selection
       fetchData(); // Refresh data
     } catch (error: any) {
-      console.error("Bulk status update error:", error);
       toast({ 
         title: `Failed to update status for selected products.`,
         description: error.message || "An unexpected error occurred.",
@@ -773,12 +731,7 @@ export function ProductsTable() {
 
   // --- Derived Data ---
   const uniqueCategories = useMemo(() => {
-    // --- DEBUG LOGS ---
-    console.log('[ProductsTable.useMemo uniqueCategories] Products value:', products);
-    console.log('[ProductsTable.useMemo uniqueCategories] Is products an array?:', Array.isArray(products));
-    // --- END DEBUG LOGS ---
     if (!Array.isArray(products)) {
-        console.error('[ProductsTable.useMemo uniqueCategories] products is not an array!', products);
         return []; // Return empty array if not an array
     }
     
@@ -808,7 +761,6 @@ export function ProductsTable() {
     const productId = productRowMap[rowIndex];
     
     if (!productId) {
-      console.error('Product ID not found for row:', rowIndex);
       return;
     }
 
@@ -837,15 +789,12 @@ export function ProductsTable() {
         prev.map(p => (p.id === productId ? { ...p, [columnId]: formattedValue } : p))
       );
 
-      console.log(`Updating product ${productId}, setting ${columnId} to`, formattedValue);
-
       // Save to API
       await productService.updateProduct(productId, updateData);
       
       toast({ title: `${columnId.charAt(0).toUpperCase() + columnId.slice(1)} updated`, variant: 'default' });
       setEditingCell(null); // Clear editing state
     } catch (error) {
-      console.error('Failed to update product:', error);
       toast({ title: 'Failed to update product', variant: 'destructive' });
       
       // Revert optimistic update
@@ -954,7 +903,6 @@ export function ProductsTable() {
       
       return newOption;
     } catch (error) {
-      console.error("Error creating tag:", error);
       toast({ title: 'Failed to create tag', variant: 'destructive' });
     }
   }, [editingCell, productRowMap, products, updateData, toast]);
@@ -1895,14 +1843,11 @@ export function ProductsTable() {
     // Add custom filterFns for tags with proper typing
     filterFns: {
       tags: (row: Row<Product>, columnId: string, filterValue: any): boolean => {
-        console.log('[filterFns.tags] Filtering with:', filterValue);
-        
         // Skip if no filter value
         if (!filterValue || !Array.isArray(filterValue) || filterValue.length === 0) return true;
         
         // Get tags from the row
         const tags = row.getValue(columnId);
-        console.log('[filterFns.tags] Row tags:', tags);
         
         // If no tags, no match
         if (!tags || !Array.isArray(tags) || tags.length === 0) return false;
@@ -1987,10 +1932,6 @@ export function ProductsTable() {
   // --- Render ---
   
   // --- DEBUGGING LOGS ---
-  console.log('[ProductsTable Render] Loading:', loading);
-  console.log('[ProductsTable Render] Products State:', products);
-  console.log('[ProductsTable Render] Filtered Products:', filteredData);
-  console.log('[ProductsTable Render] Table Row Count:', table.getRowModel().rows?.length);
   // --- END DEBUGGING LOGS ---
 
   // Add column filter state and handlers
@@ -2088,9 +2029,6 @@ export function ProductsTable() {
     key: K,
     value: FilterState[K]
   ) => {
-    // Simple log for debugging
-    console.log(`[handleFilterChange] Setting ${key} filter:`, value);
-    
     // Update the filters state
     setFilters(prev => ({ ...prev, [key]: value }));
     
@@ -2104,10 +2042,8 @@ export function ProductsTable() {
         if (tags.length > 0) {
           // Create a new array reference to ensure React detects the change
           tagsColumn.setFilterValue([...tags]);
-          console.log('[handleFilterChange] Applied tags filter:', tags);
         } else {
           tagsColumn.setFilterValue(undefined);
-          console.log('[handleFilterChange] Cleared tags filter');
         }
       }
     }
@@ -2610,14 +2546,10 @@ export function ProductsTable() {
                                                           id={`tag-${tag}`}
                                                           checked={filters.tags.includes(tag)}
                                                           onCheckedChange={(checked) => {
-                                                            console.log(`[Tag filter] ${checked ? 'Adding' : 'Removing'} tag: ${tag}`);
-                                                            
                                                             // Create new tags array
                                                             const newTags = checked 
                                                               ? [...filters.tags, tag] 
                                                               : filters.tags.filter(t => t !== tag);
-                                                            
-                                                            console.log('[Tag filter] New tags list:', newTags);
                                                             
                                                             // Update the filters state directly
                                                             setFilters(prev => ({ ...prev, tags: newTags }));
@@ -2625,8 +2557,6 @@ export function ProductsTable() {
                                                             // Force refresh of filtered data via a direct table update
                                                             const tagsColumn = table.getColumn('tags');
                                                             if (tagsColumn) {
-                                                              console.log('[Tag filter] Updating table column filter');
-                                                              
                                                               if (newTags.length > 0) {
                                                                 // Important: create a new array reference to ensure React detects the change
                                                                 tagsColumn.setFilterValue([...newTags]);
@@ -2657,15 +2587,12 @@ export function ProductsTable() {
                                                   variant="outline" 
                                                   className="text-xs"
                                                   onClick={() => {
-                                                    console.log('[Tag filter] Clearing all tag filters');
-                                                    
                                                     // Clear the tags filter
                                                     setFilters(prev => ({ ...prev, tags: [] }));
                                                     
                                                     // Clear the table column filter
                                                     const tagsColumn = table.getColumn('tags');
                                                     if (tagsColumn) {
-                                                      console.log('[Tag filter] Resetting table column filter');
                                                       tagsColumn.setFilterValue(undefined);
                                                     }
                                                   }}

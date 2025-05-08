@@ -768,13 +768,31 @@ export function useProductColumns({
                 value={editValue}
                 onChange={handlePriceCellChange}
                 onKeyDown={handleKeyDown}
-                onBlur={handleSaveCellEdit}
+                type="number"
+                step="0.01"
+                min="0"
               />
             </div>
-            <Button size="sm" variant="ghost" onClick={handleSaveCellEdit}>
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSaveCellEdit();
+              }}
+            >
               <CheckIcon className="h-4 w-4" />
             </Button>
-            <Button size="sm" variant="ghost" onClick={handleCancelEdit}>
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCancelEdit();
+              }}
+            >
               <XIcon className="h-4 w-4" />
             </Button>
           </div>
@@ -784,7 +802,7 @@ export function useProductColumns({
             title={formattedValue}
             onClick={(e) => {
               e.stopPropagation();
-              handleCellEdit(rowIndex, 'price', formattedValue);
+              handleCellEdit(rowIndex, 'price', value?.toString() || '0');
             }}
             data-editable="true"
           >

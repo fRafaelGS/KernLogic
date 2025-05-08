@@ -60,7 +60,7 @@ import {
   FolderIcon,
   LucideIcon
 } from "lucide-react";
-import { Product, productService, ProductImage, ProductAttribute } from "@/services/productService";
+import { Product, productService, ProductImage, ProductAttribute, ProductAsset, PaginatedResponse } from "@/services/productService";
 import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -149,6 +149,20 @@ export function ProductsTable() {
   const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]); // State for formatted options
   const [editingCell, setEditingCell] = useState<{ rowIndex: number; columnId: string } | null>(null);
   const [editValue, setEditValue] = useState<string>('');
+  // Add a new state to store the original value before editing
+  const [originalEditValue, setOriginalEditValue] = useState<string>('');
+  
+  // Add product assets cache state
+  const [productAssetsCache, setProductAssetsCache] = useState<Record<number, ProductAsset[]>>({});
+  
+  // 🆕 keep track of attribute-group requests that are in progress
+  const attrGroupsInFlight = useRef<Set<number>>(new Set());
+  
+  // Add reference to track if we've already fetched once for this pagination state
+  const fetchedOnceRef = useRef(false);
+  
+  // Add reference to track if user preferences have been loaded
+  const prefsLoadedRef = useRef(false);   // ⬅️ add this
   
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm, 300); // 300ms debounce
@@ -175,6 +189,9 @@ export function ProductsTable() {
     pageIndex: 0,
     pageSize: 10,
   });
+  
+  // Add totalCount state to track the total number of products
+  const [totalCount, setTotalCount] = useState<number>(100); // Default to 100 to enable pagination initially
   
   // Add scroll container ref
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -225,6 +242,11 @@ export function ProductsTable() {
   // Function to fetch products and categories
   const fetchData = useCallback(async () => {
     if (!isAuthenticated) return;
+    
+    // Guard against double-firing on mount
+    if (fetchedOnceRef.current) return;
+    fetchedOnceRef.current = true;
+    
     setLoading(true);
     setError(null);
     
@@ -234,15 +256,42 @@ export function ProductsTable() {
       let fetchedCategories: Category[] = [];
       
       try {
-        // Explicitly set fetchAll to true to get all products across all pages
-        fetchedProducts = await productService.getProducts({}, true);
-        // Guard against non-array responses
-        if (!Array.isArray(fetchedProducts)) {
+        // Use pagination instead of fetching all products
+        const { pageIndex, pageSize } = pagination;
+        const response = await productService.getProducts(
+          { page: pageIndex + 1, page_size: pageSize },
+          /* fetchAll       */ false,
+          /* includeAssets  */ false     // 🚫 skip per-row /assets/ fetches here
+        );
+        
+        // Use any to bypass TypeScript issues, but safely check properties
+        const anyResponse = response as any;
+        
+        // Check if it's a paginated response with proper structure
+        if (anyResponse && 
+            typeof anyResponse === 'object' && 
+            'results' in anyResponse && 
+            Array.isArray(anyResponse.results)) {
+          // Update total count
+          if (typeof anyResponse.count === 'number') {
+            console.log(`Setting total count from server: ${anyResponse.count}`);
+            setTotalCount(anyResponse.count);
+          }
+          fetchedProducts = anyResponse.results;
+        } else if (Array.isArray(anyResponse)) {
+          // It's directly an array of products
+          fetchedProducts = anyResponse;
+          // If we get an array without count info, update totalCount to match array length
+          setTotalCount(anyResponse.length);
+        } else {
+          // Fallback to empty array
           fetchedProducts = [];
+          setTotalCount(0);
         }
       } catch (productsError) {
         // Don't throw, continue to fetch categories
         fetchedProducts = [];
+        setTotalCount(0); // Reset total count on error
       }
       
       try {
@@ -256,68 +305,8 @@ export function ProductsTable() {
         fetchedCategories = [];
       }
       
-      // ------------------------------------------------------------------
-      // NEW: Enrich products with their primary image if not already present
-      // ------------------------------------------------------------------
-      const enrichedProducts = await Promise.all(
-        fetchedProducts.map(async (prod) => {
-          // If we already have a thumbnail or images, keep it as-is
-          if (
-            prod.primary_image_thumb ||
-            (Array.isArray(prod.images) && prod.images.length > 0)
-          ) {
-            return prod;
-          }
-
-          // Otherwise try to fetch assets to derive a thumbnail
-          try {
-            if (!prod.id) return prod;
-            const assets = await productService.getProductAssets(prod.id);
-            if (Array.isArray(assets) && assets.length > 0) {
-              // Find primary image first, else first image
-              const primaryAsset =
-                assets.find(
-                  (a) =>
-                    (a.is_primary &&
-                      ((a.type || a.asset_type) || '').toLowerCase().includes('image'))
-                ) ||
-                assets.find((a) =>
-                  ((a.type || a.asset_type) || '').toLowerCase().includes('image')
-                );
-
-              if (primaryAsset?.url) {
-                // Build images array for consistency
-                const images = assets
-                  .filter((a) =>
-                    ((a.type || a.asset_type) || '')
-                      .toLowerCase()
-                      .includes('image')
-                  )
-                  .map((a, idx) => ({
-                    id: typeof a.id === 'string' ? parseInt(a.id, 10) : Number(a.id),
-                    url: a.url,
-                    order: idx,
-                    is_primary: a.id === primaryAsset.id,
-                  }));
-
-                return {
-                  ...prod,
-                  assets,
-                  images,
-                  primary_image_thumb: primaryAsset.url,
-                  primary_image_large: primaryAsset.url,
-                } as Product;
-              }
-            }
-          } catch (assetErr) {
-            // Continue with the original product
-          }
-
-          return prod; // return original if enrichment fails
-        })
-      );
-
-      setProducts(enrichedProducts);
+      // Remove the eager asset loading and just set products directly
+      setProducts(fetchedProducts);
       const categoryOpts = fetchedCategories.map(c => ({ 
         label: typeof c === 'object' ? c.name : c,
         value: typeof c === 'object' ? c.id : c
@@ -334,7 +323,13 @@ export function ProductsTable() {
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated, toast]);
+  }, [isAuthenticated, pagination.pageIndex, pagination.pageSize, toast]);
+
+  /** call this when you need a *fresh* hit even after the first load */
+  const forceReload = useCallback(() => {
+    fetchedOnceRef.current = false;   // ← bypass the one-run guard
+    fetchData();
+  }, [fetchData]);
 
   // Update the filteredData tag filtering logic with proper type casting
   const filteredData = useMemo(() => {
@@ -436,7 +431,7 @@ export function ProductsTable() {
   const handleRefresh = () => {
     if (isAuthenticated) {
         setLoading(true);
-        fetchData();
+        forceReload();
     } else {
         toast({ title: 'Please log in to refresh data.', variant: 'default' });
     }
@@ -510,7 +505,7 @@ export function ProductsTable() {
         await productService.bulkDelete(selectedIds);
         toast({ title: `${selectedIds.length} product(s) archived successfully.`, variant: 'default' });
         setRowSelection({}); // Clear selection
-        fetchData(); // Refresh data
+        forceReload(); // Refresh data
       } catch (error: any) {
         toast({ 
           title: "Failed to archive selected products.", 
@@ -539,7 +534,7 @@ export function ProductsTable() {
       await productService.bulkSetStatus(selectedIds, isActive);
       toast({ title: `${selectedIds.length} product(s) marked as ${actionText}.`, variant: 'default' });
       setRowSelection({}); // Clear selection
-      fetchData(); // Refresh data
+      forceReload(); // Refresh data
     } catch (error: any) {
       toast({ 
         title: `Failed to update status for selected products.`,
@@ -611,7 +606,17 @@ export function ProductsTable() {
   // Handle starting cell editing
   const handleCellEdit = useCallback((rowIndex: number, columnId: string, value: string) => {
     setEditingCell({ rowIndex, columnId });
-    setEditValue(value);
+    
+    // Handle special case for price - remove currency formatting
+    if (columnId === 'price') {
+      // Remove currency symbols and formatting, keep only numbers and decimal
+      const numericValue = value.replace(/[^0-9.]/g, '');
+      setEditValue(numericValue);
+      setOriginalEditValue(numericValue);
+    } else {
+      setEditValue(value);
+      setOriginalEditValue(value);
+    }
   }, []);
 
   // Handle saving cell edit
@@ -632,8 +637,9 @@ export function ProductsTable() {
 
   // Handle canceling cell edit
   const handleCancelEdit = useCallback(() => {
+    setEditValue(originalEditValue); // Restore the original value
     setEditingCell(null);
-  }, []);
+  }, [originalEditValue]);
 
   // Handle key press in editable cell
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -835,8 +841,9 @@ export function ProductsTable() {
 
   // Initialize column order from saved state or create default order
   useEffect(() => {
-    // Only attempt to get column IDs if columns array has items
-    if (columns.length === 0) return;
+    /* run only once — prevents page-size from jumping back */
+    if (prefsLoadedRef.current || columns.length === 0) return;
+    prefsLoadedRef.current = true;
     
     const loadUserPreferences = () => {
       try {
@@ -915,7 +922,7 @@ export function ProductsTable() {
     loadUserPreferences();
   }, [columns]);
 
-  // accordion: allow only one expanded row
+  // Update the handleExpandedChange function to load assets when a row is expanded
   const handleExpandedChange = useCallback(
     (updater: Updater<Record<string, boolean>>) => {
       setExpanded(prev => {
@@ -927,10 +934,72 @@ export function ProductsTable() {
         if (openKeys.length === 0) return {};             // none open
 
         const last = openKeys[openKeys.length - 1];       // keep newest
+        
+        // Get the product ID for the expanded row
+        const row = last ? table.getRow(last) : null;
+        const productId = row?.original?.id;
+        
+        // Lazy-load assets only if not cached or loading
+        if (productId &&
+            !productAssetsCache[productId] &&
+            !attrGroupsInFlight.current.has(productId)) {
+          // Trigger the asset fetch here – one product at a time
+          productService.getProductAssets(productId)
+            .then(assets => {
+              setProductAssetsCache(prev => ({ ...prev, [productId]: assets }));
+              
+              // If the product doesn't have images already, enrich it with the fetched assets
+              setProducts(prevProducts => 
+                prevProducts.map(prod => {
+                  if (prod.id === productId && (!prod.images || prod.images.length === 0)) {
+                    // Find primary image or first image
+                    const primaryAsset =
+                      assets.find(
+                        (a) =>
+                          (a.is_primary &&
+                            ((a.type || a.asset_type) || '').toLowerCase().includes('image'))
+                      ) ||
+                      assets.find((a) =>
+                        ((a.type || a.asset_type) || '').toLowerCase().includes('image')
+                      );
+                    
+                    if (primaryAsset?.url) {
+                      // Build images array for consistency
+                      const images = assets
+                        .filter((a) =>
+                          ((a.type || a.asset_type) || '')
+                            .toLowerCase()
+                            .includes('image')
+                        )
+                        .map((a, idx) => ({
+                          id: typeof a.id === 'string' ? parseInt(a.id, 10) : Number(a.id),
+                          url: a.url,
+                          order: idx,
+                          is_primary: a.id === primaryAsset.id,
+                        }));
+                      
+                      return {
+                        ...prod,
+                        assets,
+                        images,
+                        primary_image_thumb: primaryAsset.url,
+                        primary_image_large: primaryAsset.url,
+                      } as Product;
+                    }
+                  }
+                  return prod;
+                })
+              );
+            })
+            .catch(err => {
+              console.error(`Error loading assets for product ${productId}:`, err);
+            });
+        }
+        
         return { [last]: true };
       });
     },
-    []
+    [productAssetsCache]
   );
 
   // Configure the table with useReactTable
@@ -951,6 +1020,10 @@ export function ProductsTable() {
       columnOrder,
       expanded, // Add expanded state
     },
+    // Add manual pagination flag since we're doing server-side pagination
+    manualPagination: true,
+    // Calculate page count based on total count from server
+    pageCount: Math.max(1, Math.ceil(totalCount / pagination.pageSize)),
     meta: {
       updateData,
     },
@@ -998,7 +1071,20 @@ export function ProductsTable() {
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
-    onPaginationChange: setPagination,
+    onPaginationChange: (updater) => {
+      setPagination(prev => {
+        const next = typeof updater === 'function' ? updater(prev) : updater;
+
+        // 🔐 nothing actually changed – bail early
+        if (next.pageIndex === prev.pageIndex && next.pageSize === prev.pageSize) {
+          return prev;
+        }
+
+        // mark this as a *new* pagination state, so fetchData may run once
+        fetchedOnceRef.current = false;
+        return next;
+      });
+    },
     onColumnOrderChange: setColumnOrder,
     onExpandedChange: handleExpandedChange,
     getExpandedRowModel: getExpandedRowModel(),
@@ -1016,9 +1102,12 @@ export function ProductsTable() {
       const row = table.getRow(rowId);
       const pid = row?.original?.id;
       if (!pid || productAttributes[pid] !== undefined) return; // already cached
+      if (attrGroupsInFlight.current.has(pid)) return; // already fetching
 
       try {
         console.log(`[ProductsTable] Loading attributes for product ${pid}`);
+        attrGroupsInFlight.current.add(pid); // mark as in-flight
+        
         // First fetch the detailed attributes
         const attrs = await productService.getProductAttributes(pid);
         // Then fetch the attribute groups structure
@@ -1069,6 +1158,8 @@ export function ProductsTable() {
       } catch (e) {
         console.error(`[ProductsTable] Attribute loading failed for ${pid}`, e);
         setProductAttributes(prev => ({ ...prev, [pid]: [] })); // cache failure too
+      } finally {
+        attrGroupsInFlight.current.delete(pid);           // ✅ done
       }
     });
   }, [expanded, productAttributes, table]);
@@ -1179,26 +1270,77 @@ export function ProductsTable() {
 
   // 🚀 Pre-fetch attribute groups for the first visible rows
   useEffect(() => {
-    // Only run for the first page
-    if (pagination.pageIndex !== 0) return;
+    if (pagination.pageIndex !== 0) return;                // only first page
 
-    const firstPage = filteredData.slice(0, pagination.pageSize);
+    filteredData.slice(0, pagination.pageSize).forEach(async (p) => {
+      if (!p.id) return;                                   // safety
+      if (productAttributes[p.id] !== undefined) return;   // already cached
+      if (attrGroupsInFlight.current.has(p.id)) return;    // already fetching
 
-    firstPage.forEach(async product => {
-      if (!product.id || productAttributes[product.id] !== undefined) return;
-
+      attrGroupsInFlight.current.add(p.id);
       try {
-        const groups = await productService.getProductAttributeGroups(product.id);
-        if (groups && groups.length) {
-          setProductAttributes(prev => ({ ...prev, [product.id]: groups }));
+        const groups = await productService.getProductAttributeGroups(p.id);
+        if (groups?.length) {
+          setProductAttributes(prev => ({ ...prev, [p.id]: groups }));
+        } else {
+          setProductAttributes(prev => ({ ...prev, [p.id]: [] }));
         }
-      } catch (e) {
-        console.error(`prefetch groups failed for product ${product.id}`, e);
-        // Cache failure to avoid repeat hits
-        setProductAttributes(prev => ({ ...prev, [product.id]: [] }));
+      } catch (err) {
+        console.error(`prefetch groups failed for product ${p.id}`, err);
+        setProductAttributes(prev => ({ ...prev, [p.id]: [] }));
+      } finally {
+        attrGroupsInFlight.current.delete(p.id);           // ✅ done
       }
     });
-  }, [filteredData, pagination, productAttributes]);
+  /* deps: only when the *page* itself changes */
+  }, [pagination.pageIndex, pagination.pageSize, filteredData]);
+
+  // Add a function to calculate pagination display info
+  const renderPaginationInfo = useCallback(() => {
+    const { pageIndex, pageSize } = table.getState().pagination;
+    // Use total count from server for pagination display
+    const totalItems = totalCount;
+    const start = totalItems > 0 ? pageIndex * pageSize + 1 : 0;
+    const end = Math.min(totalItems, (pageIndex + 1) * pageSize);
+    return `Showing ${start}-${end} of ${totalItems}`;
+  }, [table, totalCount]);
+
+  // Add effect to log pagination state for debugging
+  useEffect(() => {
+    console.log("Pagination state:", {
+      pageIndex: pagination.pageIndex,
+      pageSize: pagination.pageSize,
+      totalCount,
+      pageCount: Math.max(1, Math.ceil(totalCount / pagination.pageSize)),
+      canPreviousPage: table.getCanPreviousPage(),
+      canNextPage: table.getCanNextPage()
+    });
+  }, [pagination.pageIndex, pagination.pageSize, totalCount, table]);
+
+  // Add click outside handler to cancel editing
+  useEffect(() => {
+    // Only add the handler if we're in edit mode
+    if (!editingCell) return;
+    
+    const handleClickOutside = (event: MouseEvent) => {
+      // Check if the click is outside all edit fields
+      const target = event.target as HTMLElement;
+      const isEditField = target.closest('input, [role="combobox"], button');
+      
+      // If clicking outside of any edit field, cancel the edit
+      if (!isEditField) {
+        handleCancelEdit();
+      }
+    };
+    
+    // Add global click handler
+    document.addEventListener('mousedown', handleClickOutside);
+    
+    // Cleanup
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [editingCell, handleCancelEdit]);
 
   // Render the component
   return (
@@ -1920,22 +2062,24 @@ export function ProductsTable() {
                      flex items-center justify-between px-4"
         >
           <div className="flex space-x-2">
-            <Button size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+            <Button 
+              size="sm" 
+              onClick={() => table.previousPage()} 
+              disabled={!table.getCanPreviousPage()}
+            >
               <ChevronLeft />
             </Button>
-            <Button size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+            <Button 
+              size="sm" 
+              onClick={() => table.nextPage()} 
+              disabled={!table.getCanNextPage()}
+            >
               <ChevronRight />
             </Button>
           </div>
 
           <span className="text-sm text-slate-600">
-            {(() => {
-              const { pageIndex, pageSize } = table.getState().pagination;
-              const total = table.getFilteredRowModel().rows.length;
-              const start = pageIndex * pageSize + 1;
-              const end = Math.min(total, start + pageSize - 1);
-              return `Showing ${start}-${end} of ${total}`;
-            })()}
+            {renderPaginationInfo()}
           </span>
 
           <div className="flex items-center space-x-2">
@@ -1962,7 +2106,7 @@ export function ProductsTable() {
         selectedIds={getSelectedProductIds()}
         onSuccess={() => {
           setRowSelection({});
-          fetchData();
+          forceReload();
         }}
       />
       
@@ -1972,7 +2116,7 @@ export function ProductsTable() {
         selectedIds={getSelectedProductIds()}
         onSuccess={() => {
           setRowSelection({});
-          fetchData();
+          forceReload();
         }}
       />
     </React.Fragment>

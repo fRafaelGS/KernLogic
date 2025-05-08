@@ -269,21 +269,36 @@
 
     export const productService = {
         // Get all products with optional pagination support
-        getProducts: async (filters?: Record<string, any>, fetchAll: boolean = true): Promise<Product[]> => {
-            let url = `${PRODUCTS_PATH}/`;
+        getProducts: async (
+            filters: Record<string, any> = {},
+            fetchAll: boolean = true,
+            includeAssets: boolean = true
+        ): Promise<Product[] | PaginatedResponse<Product>> => {
+            /* ------------------------------------------------------------------ *
+             * 1️⃣ build the first-page URL with page & page_size if provided
+             * ------------------------------------------------------------------ */
+            const qs = new URLSearchParams();
+            if (filters.page)       qs.append('page',       String(filters.page));
+            if (filters.page_size)  qs.append('page_size',  String(filters.page_size));
+            if (filters.search)     qs.append('search',     String(filters.search));
+
+            let nextPageUrl: string | null =
+              qs.toString().length
+                ? `${PRODUCTS_PATH}/?${qs.toString()}`
+                : `${PRODUCTS_PATH}/`;
+
+            console.log('[getProducts] first request →', nextPageUrl);
+
             let allProducts: Product[] = [];
-            let nextPageUrl: string | null = url;
-            
-            console.log('Fetching products from:', url);
             
             try {
-                const token = localStorage.getItem('access_token');
-                console.log('Current access token (from productService):', token ? `${token.substring(0, 15)}...` : 'none');
-                
-                // If fetchAll is true, keep fetching pages until there's no next page
+                /* ------------------------------------------------------------------ *
+                 * 2️⃣ fetch one page (or all pages if fetchAll=true)
+                 * ------------------------------------------------------------------ */
                 while (nextPageUrl && (fetchAll || allProducts.length === 0)) {
-                    console.log(`Fetching products page: ${nextPageUrl}`);
+                    console.log(`[getProducts] GET ${nextPageUrl}`);
                     const response = await axiosInstance.get(nextPageUrl);
+                    
                     console.log(`[productService.getProducts] Response from: ${nextPageUrl}`, response.data);
                     
                     // Check for HTML response
@@ -302,6 +317,10 @@
                             
                             // Handle paginated response from second request
                             if (productsResponse.data && 'results' in productsResponse.data) {
+                                if (!fetchAll) {
+                                    // For single page request, return paginated response
+                                    return productsResponse.data;
+                                }
                                 allProducts = [...allProducts, ...productsResponse.data.results];
                                 nextPageUrl = productsResponse.data.next;
                                 continue;
@@ -317,6 +336,13 @@
                         // Handle paginated response format
                         if ('results' in response.data) {
                             console.log('[productService.getProducts] Detected paginated response, processing results');
+                            
+                            // For single page requests, return the full paginated response with count, next, etc.
+                            if (!fetchAll) {
+                                return response.data;
+                            }
+                            
+                            // For fetch all, accumulate results
                             allProducts = [...allProducts, ...response.data.results];
                             nextPageUrl = response.data.next;
                             continue;
@@ -333,6 +359,55 @@
                 }
                 
                 console.log(`[productService.getProducts] Total products fetched: ${allProducts.length}`);
+                
+                // Enrich with assets only when the caller asks for it
+                if (includeAssets) {
+                    console.log('[productService.getProducts] Including assets for products');
+                    for (const product of allProducts) {
+                        try {
+                            if (!product.id) continue;
+                            const assets = await productService.getProductAssets(product.id);
+                            product.assets = assets;
+                            
+                            // Find primary image or first image for thumbnails
+                            if (!product.primary_image_thumb && Array.isArray(assets) && assets.length > 0) {
+                                const primaryAsset = 
+                                    assets.find(a => 
+                                        a.is_primary && 
+                                        ((a.type || a.asset_type) || '').toLowerCase().includes('image')
+                                    ) || 
+                                    assets.find(a => 
+                                        ((a.type || a.asset_type) || '').toLowerCase().includes('image')
+                                    );
+                                
+                                if (primaryAsset?.url) {
+                                    // Build images array for consistency
+                                    const images = assets
+                                        .filter(a => 
+                                            ((a.type || a.asset_type) || '')
+                                            .toLowerCase()
+                                            .includes('image')
+                                        )
+                                        .map((a, idx) => ({
+                                            id: typeof a.id === 'string' ? parseInt(a.id, 10) : Number(a.id),
+                                            url: a.url,
+                                            order: idx,
+                                            is_primary: a.id === primaryAsset.id,
+                                        }));
+                                    
+                                    product.images = images;
+                                    product.primary_image_thumb = primaryAsset.url;
+                                    product.primary_image_large = primaryAsset.url;
+                                }
+                            }
+                        } catch (assetErr) {
+                            console.error(`[productService.getProducts] Error loading assets for product ${product.id}:`, assetErr);
+                        }
+                    }
+                } else {
+                    console.log('[productService.getProducts] Skipping assets loading (includeAssets=false)');
+                }
+                
                 return allProducts;
             } catch (error) {
                 console.error('Error fetching products:', error);

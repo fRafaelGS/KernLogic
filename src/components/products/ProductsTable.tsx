@@ -23,6 +23,7 @@ import {
   type FilterFn,
   type Row,
   Header,
+  getExpandedRowModel,
 } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,7 +59,7 @@ import {
   FolderIcon,
   LucideIcon
 } from "lucide-react";
-import { Product, productService, ProductImage } from "@/services/productService";
+import { Product, productService, ProductImage, ProductAttribute } from "@/services/productService";
 import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -88,6 +89,7 @@ import { SortableTableHeader } from "@/components/products/productstable/Sortabl
 import { formatPrice } from "@/utils/formatPrice";
 import { useUniqueCategories, useUniqueTags } from "@/hooks/useProductDerived";
 import { useProductColumns } from "@/hooks/useProductColumns";    
+import ProductRowDetails from "./productstable/ProductRowDetails";
 
 // Define constants for fixed widths
 const ACTION_W = 112; // Width of action column in pixels
@@ -131,6 +133,11 @@ interface TagObject {
   [key: string]: any; // Allow other properties
 }
 
+// Add this type declaration for productAttributes to match the Product interface
+type ProductWithAttributeArray = Omit<Product, 'attributes'> & {
+  attributes?: ProductAttribute[];
+};
+
 export function ProductsTable() {
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
@@ -146,6 +153,12 @@ export function ProductsTable() {
   
   const [productRowMap, setProductRowMap] = useState<Record<number, number>>({});
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  
+  // Add expanded rows state
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  
+  // Add state for product attributes
+  const [productAttributes, setProductAttributes] = useState<Record<number, ProductAttribute[]>>({});
   
   const navigate = useNavigate();
   const location = useLocation();
@@ -689,11 +702,70 @@ export function ProductsTable() {
     }
   }, [editingCell, productRowMap, products, updateData, toast]);
 
-/* --- keep all your state + handlers above this line --- */
+  // Function to render expanded row content with attributes
+  const renderExpandedRow = (row: Row<Product>, index: number) => {
+    const productId = row.original.id;
+    
+    if (!productId) {
+      return (
+        <ProductRowDetails 
+          key={`expanded-${row.id}-product-undefined`}
+          product={row.original as any} 
+          zebra={index % 2 === 0}
+        />
+      );
+    }
+    
+    // Create product with attributes if they've been loaded
+    const productWithAttributes: ProductWithAttributeArray = {
+      ...row.original,
+      attributes: productAttributes[productId] || []
+    };
+    
+    return (
+      <ProductRowDetails 
+        key={`expanded-${row.id}-product-${productId}`}
+        product={productWithAttributes as any} 
+        zebra={index % 2 === 0}
+      />
+    );
+  };
+
+  // ROW EXPANSION
+  // Create the expander column with proper memoization
+  const expanderColumn = useMemo<ColumnDef<Product>>(
+    () => ({
+      id: 'expander',
+      // Keep header minimal
+      header: () => <div className="w-9"></div>,
+      cell: ({ row }) => {
+        return (
+          <button
+            onClick={row.getToggleExpandedHandler()}
+            aria-label={row.getIsExpanded() ? "Collapse row" : "Expand row"}
+            className="rounded-full h-6 w-6 inline-flex items-center justify-center hover:bg-slate-100 transition-transform duration-200"
+          >
+            <ChevronRight 
+              className={cn(
+                "h-4 w-4",
+                row.getIsExpanded() && "rotate-90"
+              )} 
+            />
+          </button>
+        );
+      },
+      enableSorting: false,
+      enableHiding: false, // Make sure it can't be hidden
+      size: 36,
+      minSize: 36, // Ensure minimum width
+      maxSize: 36, // Ensure maximum width
+    }),
+    [] // No dependencies - stable reference
+  );
 
   const {
     columns,
-    actionColumn,    // optional, in case you still need it individually
+    actionColumn,
     allColumns,
   } = useProductColumns({
     /* state & refs */
@@ -725,8 +797,25 @@ export function ProductsTable() {
     IconBtn,
   });
 
-/* --- keep everything below unchanged --- */
+  // Memoize derived column arrays to prevent re-creation on each render
+  const columnsWithExpander = useMemo(
+    () => [expanderColumn, ...columns],
+    [expanderColumn, columns]
+  );
 
+  // Memoize allColumnsWithExpander to prevent re-creation on each render
+  const allColumnsWithExpander = useMemo(() => {
+    const selectColumn = allColumns.find(col => col.id === 'select');
+    const restColumns = allColumns.filter(col => col.id !== 'select');
+    
+    if (selectColumn) {
+      // If there's a select column, keep it first, then expander, then other columns
+      return [selectColumn, expanderColumn, ...restColumns];
+    } else {
+      // If no select column, expander goes first
+      return [expanderColumn, ...restColumns];
+    }
+  }, [expanderColumn, allColumns]);
 
   // Initialize column order from saved state or create default order
   useEffect(() => {
@@ -742,7 +831,14 @@ export function ProductsTable() {
             const parsedOrder = JSON.parse(savedOrder);
             // Validate that parsedOrder is an array and filter out any null/undefined values
             if (Array.isArray(parsedOrder) && parsedOrder.length > 0) {
-              setColumnOrder(parsedOrder.filter(Boolean));
+              // Ensure expander column is first
+              const orderWithExpander = ['expander'];
+              parsedOrder.forEach(colId => {
+                if (colId !== 'expander') {
+                  orderWithExpander.push(colId);
+                }
+              });
+              setColumnOrder(orderWithExpander);
             } else {
               // Fall back to default if saved order is invalid
               createDefaultOrder();
@@ -758,7 +854,12 @@ export function ProductsTable() {
         // Load column visibility
         const savedVisibility = localStorage.getItem('productTableColumnVisibility');
         if (savedVisibility) {
-          setColumnVisibility(JSON.parse(savedVisibility));
+          // Ensure expander column is always visible
+          const visibilitySettings = JSON.parse(savedVisibility);
+          setColumnVisibility({
+            ...visibilitySettings,
+            expander: true
+          });
         }
         
         // Load page size
@@ -776,14 +877,21 @@ export function ProductsTable() {
     };
     
     const createDefaultOrder = () => {
-      // Initialize with default order
-      const defaultOrder = columns
+      // Initialize with default order, making sure expander is first
+      const defaultOrder = ['expander'];
+      
+      columns
         .map((column) => {
           return column.id || 
             // @ts-ignore - handle accessorKey which may exist on some column types
             (column.accessorKey ? column.accessorKey.toString() : '');
         })
-        .filter(Boolean); // Filter out any null or empty strings
+        .filter(Boolean) // Filter out any null or empty strings
+        .forEach(colId => {
+          if (colId !== 'expander') {
+            defaultOrder.push(colId);
+          }
+        });
       
       setColumnOrder(defaultOrder);
     };
@@ -791,10 +899,16 @@ export function ProductsTable() {
     loadUserPreferences();
   }, [columns]);
 
+  // After declaring productAttributes state
+  const handleExpandedChange = useCallback(
+    (state: Record<string, boolean>) => setExpanded(state),
+    []
+  );
+
   // Configure the table with useReactTable
   const table = useReactTable({
     data: filteredData,
-    columns: allColumns,
+    columns: allColumnsWithExpander,
     defaultColumn: {
       minSize: 80,
       size: 150,
@@ -807,10 +921,15 @@ export function ProductsTable() {
       pagination,
       rowSelection,
       columnOrder,
+      expanded, // Add expanded state
     },
     meta: {
       updateData,
     },
+    // Tell the table that every row can be expanded
+    getRowCanExpand: () => true,
+    // Prevent auto-reset of expanded state when columns change
+    autoResetExpanded: false,
     // Add custom filterFns for tags with proper typing
     filterFns: {
       tags: (row: Row<Product>, columnId: string, filterValue: any): boolean => {
@@ -853,11 +972,78 @@ export function ProductsTable() {
     onColumnVisibilityChange: setColumnVisibility,
     onPaginationChange: setPagination,
     onColumnOrderChange: setColumnOrder,
+    onExpandedChange: handleExpandedChange,
+    getExpandedRowModel: getExpandedRowModel(),
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
   });
+
+  // Add effect to fetch attributes when expanded state changes
+  useEffect(() => {
+    const expandedIds = Object.keys(expanded).filter(id => expanded[id]);
+
+    expandedIds.forEach(async rowId => {
+      const row = table.getRow(rowId);
+      const pid = row?.original?.id;
+      if (!pid || productAttributes[pid] !== undefined) return; // already cached
+
+      try {
+        console.log(`[ProductsTable] Loading attributes for product ${pid}`);
+        // First fetch the detailed attributes
+        const attrs = await productService.getProductAttributes(pid);
+        // Then fetch the attribute groups structure
+        const attrGroups = await productService.getProductAttributeGroups(pid);
+        
+        console.log(`[ProductsTable] Product ${pid} received ${attrs?.length || 0} attributes and ${attrGroups?.length || 0} attribute groups`);
+        
+        // Create a merged data structure with group information
+        let mergedAttributes = [];
+        
+        // If we have attribute groups, use that structure as the primary data
+        if (Array.isArray(attrGroups) && attrGroups.length > 0) {
+          console.log(`[ProductsTable] Using attribute group structure for product ${pid}`);
+          mergedAttributes = attrGroups;
+        } 
+        // Otherwise fall back to using the attributes with default grouping
+        else if (Array.isArray(attrs) && attrs.length > 0) {
+          console.log(`[ProductsTable] Falling back to individual attributes for product ${pid}`);
+          // Process attributes into a group-compatible structure
+          const groupMap = {};
+          
+          attrs.forEach(attr => {
+            const groupName = attr.group || 'General';
+            if (!groupMap[groupName]) {
+              groupMap[groupName] = {
+                id: Math.random(),
+                name: groupName,
+                items: []
+              };
+            }
+            
+            groupMap[groupName].items.push({
+              ...attr,
+              attribute_label: attr.name,
+              value: attr.value
+            });
+          });
+          
+          mergedAttributes = Object.values(groupMap);
+        }
+        
+        console.log(`[ProductsTable] Final merged attributes for product ${pid}:`, mergedAttributes);
+        
+        setProductAttributes(prev => {
+          const newState = { ...prev, [pid]: mergedAttributes };
+          return newState;
+        });
+      } catch (e) {
+        console.error(`[ProductsTable] Attribute loading failed for ${pid}`, e);
+        setProductAttributes(prev => ({ ...prev, [pid]: [] })); // cache failure too
+      }
+    });
+  }, [expanded, productAttributes, table]);
 
   // Handle search input change
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1563,90 +1749,107 @@ export function ProductsTable() {
                         const productId = row.original.id;
                         
                         return (
-                          <TableRow 
-                            key={row.id} 
-                            data-state={row.getIsSelected() && "selected"}
-                            className={cn(
-                              "border-b border-gray-200 transition-colors hover:bg-slate-950/15",
-                              row.getIsSelected() ? "bg-slate-950/18" : index % 2 === 0 ? "bg-slate-950/5" : "bg-slate-950/11",
-                              "cursor-pointer",
-                              "h-0 leading-tight"
-                            )}
-                            onClick={(e) => {
-                              const target = e.target as HTMLElement;
-                              const isActionClick = !!target.closest('button, input, [role="combobox"], [data-editable="true"]');
-                              if (!isActionClick && productId) {
-                                handleRowClick(productId);
-                              }
-                            }}
-                          >
-                            {row.getVisibleCells().map((cell) => {
-                              const columnId = cell.column.id;
-                              const hideOnMobileClass = ['brand', 'barcode', 'created_at', 'tags'].includes(columnId) ? 'hidden md:table-cell' : '';
-                              
-                              const isActionsColumn = columnId === 'actions';
-                              const actionsClass = isActionsColumn ? 'sticky right-0 z-20 border-l border-slate-300/40' : '';
-                              const cellBgClass = isActionsColumn ? (row.getIsSelected() ? 'bg-slate-950/18' : index % 2 === 0 ? 'bg-slate-950/5' : 'bg-slate-950/11') : '';
-                              
-                              // Special cell rendering for specific column types
-                              if (columnId === 'brand' && row.getValue('brand')) {
-                                return (
-                                  <TableCell 
-                                    key={cell.id} 
-                                    className={`px-2 py-0 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
-                                    data-column-id={columnId}
-                                  >
-                                    <div className="flex items-center gap-1">
-                                      <span className="text-gray-500"><TagIcon className="h-3.5 w-3.5" /></span>
+                          <React.Fragment key={row.id}>
+                            <TableRow 
+                              data-state={row.getIsSelected() && "selected"}
+                              className={cn(
+                                "border-b border-gray-200 transition-colors hover:bg-slate-950/15",
+                                row.getIsSelected() ? "bg-slate-950/18" : index % 2 === 0 ? "bg-slate-950/5" : "bg-slate-950/11",
+                                "cursor-pointer",
+                                "h-0 leading-tight"
+                              )}
+                              onClick={(e) => {
+                                const target = e.target as HTMLElement;
+                                const isActionClick = !!target.closest('button, input, [role="combobox"], [data-editable="true"]');
+                                if (!isActionClick && productId) {
+                                  handleRowClick(productId);
+                                }
+                              }}
+                            >
+                              {row.getVisibleCells().map((cell) => {
+                                const columnId = cell.column.id;
+                                const hideOnMobileClass = ['brand', 'barcode', 'created_at', 'tags'].includes(columnId) ? 'hidden md:table-cell' : '';
+                                
+                                // Special styling for expander column
+                                if (columnId === 'expander') {
+                                  return (
+                                    <TableCell 
+                                      key={cell.id} 
+                                      className="px-1 py-1 w-9"
+                                      data-column-id={columnId}
+                                    >
                                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                    </div>
-                                  </TableCell>
-                                );
-                              }
-                              
-                              if (columnId === 'category' && row.getValue('category')) {
+                                    </TableCell>
+                                  );
+                                }
+                                
+                                const isActionsColumn = columnId === 'actions';
+                                const actionsClass = isActionsColumn ? 'sticky right-0 z-20 border-l border-slate-300/40' : '';
+                                const cellBgClass = isActionsColumn ? (row.getIsSelected() ? 'bg-slate-950/18' : index % 2 === 0 ? 'bg-slate-950/5' : 'bg-slate-950/11') : '';
+                                
+                                // Special cell rendering for specific column types
+                                if (columnId === 'brand' && row.getValue('brand')) {
+                                  return (
+                                    <TableCell 
+                                      key={cell.id} 
+                                      className={`px-2 py-0 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
+                                      data-column-id={columnId}
+                                    >
+                                      <div className="flex items-center gap-1">
+                                        <span className="text-gray-500"><TagIcon className="h-3.5 w-3.5" /></span>
+                                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                      </div>
+                                    </TableCell>
+                                  );
+                                }
+                                
+                                if (columnId === 'category' && row.getValue('category')) {
+                                  return (
+                                    <TableCell 
+                                      key={cell.id} 
+                                      className={`px-2 py-1 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
+                                      data-column-id={columnId}
+                                    >
+                                      <div className="flex items-center gap-1">
+                                        <span className="text-gray-500"><FolderIcon className="h-3.5 w-3.5" /></span>
+                                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                      </div>
+                                    </TableCell>
+                                  );
+                                }
+                                
+                                if (columnId === 'is_active') {
+                                  const isActive = row.getValue('is_active') as boolean;
+                                  return (
+                                    <TableCell 
+                                      key={cell.id} 
+                                      className={`px-2 py-1 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
+                                      data-column-id={columnId}
+                                    >
+                                      <div className="flex items-center gap-1">
+                                        {isActive ? <CheckCircle className="h-4 w-4 text-green-600" /> : <XCircle className="h-4 w-4 text-red-600" />}
+                                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                      </div>
+                                    </TableCell>
+                                  );
+                                }
+                                
+                                // Default cell rendering
                                 return (
                                   <TableCell 
                                     key={cell.id} 
                                     className={`px-2 py-1 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
                                     data-column-id={columnId}
                                   >
-                                    <div className="flex items-center gap-1">
-                                      <span className="text-gray-500"><FolderIcon className="h-3.5 w-3.5" /></span>
-                                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                    </div>
+                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                   </TableCell>
                                 );
-                              }
-                              
-                              if (columnId === 'is_active') {
-                                const isActive = row.getValue('is_active') as boolean;
-                                return (
-                                  <TableCell 
-                                    key={cell.id} 
-                                    className={`px-2 py-1 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
-                                    data-column-id={columnId}
-                                  >
-                                    <div className="flex items-center gap-1">
-                                      {isActive ? <CheckCircle className="h-4 w-4 text-green-600" /> : <XCircle className="h-4 w-4 text-red-600" />}
-                                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                    </div>
-                                  </TableCell>
-                                );
-                              }
-                              
-                              // Default cell rendering
-                              return (
-                                <TableCell 
-                                  key={cell.id} 
-                                  className={`px-2 py-1 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
-                                  data-column-id={columnId}
-                                >
-                                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                </TableCell>
-                              );
-                            })}
-                          </TableRow>
+                              })}
+                            </TableRow>
+                            
+                            {/* Render expanded row content */}
+                            {row.getIsExpanded() && renderExpandedRow(row, index)}
+                          </React.Fragment>
                         );
                       })
                     }

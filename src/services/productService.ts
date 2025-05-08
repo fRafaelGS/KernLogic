@@ -81,7 +81,7 @@
         barcode?: string;
         
         // Technical Specifications (Optional)
-        attributes?: Record<string, string>;
+        attributes?: Record<string, string> | ProductAttribute[];
         
         // Assets
         assets?: ProductAsset[];
@@ -92,11 +92,21 @@
     export interface ProductAttribute {
         id: number;
         name: string;
-        value: string;
-        group: string;
-        locale: string;
-        updated_at: string;
-        isMandatory: boolean;
+        value?: string;
+        group?: string;
+        locale?: string;
+        updated_at?: string;
+        isMandatory?: boolean;
+        // Properties for attribute group structure
+        order?: number;
+        items?: any[];
+        // Properties for attribute items
+        attribute?: number;
+        attribute_label?: string;
+        attribute_code?: string;
+        attribute_type?: string;
+        channel?: string;
+        value_id?: number;
     }
 
     export interface ProductAsset {
@@ -620,15 +630,166 @@
         // Get product attributes
         getProductAttributes: async (productId: number): Promise<ProductAttribute[]> => {
             try {
-                const url = `${PRODUCTS_PATH}/${productId}/attributes/`;
+                // Use more consistent URL path
+                const url = `${PRODUCTS_API_URL}/${productId}/attributes/`;
+                console.log(`[getProductAttributes] Fetching attributes from ${url}`);
+                
                 const response = await axiosInstance.get(url);
-                return response.data;
+                
+                // Check for HTML response (which would indicate an error)
+                if (isHtmlResponse(response.data)) {
+                    console.error('[getProductAttributes] Received HTML response instead of JSON');
+                    return [];
+                }
+                
+                // Handle different response formats
+                let attributes: ProductAttribute[] = [];
+                
+                if (Array.isArray(response.data)) {
+                    console.log(`[getProductAttributes] Successfully fetched ${response.data.length} attributes in array format`);
+                    console.log(`[getProductAttributes] Attribute data structure for product ${productId}:`, JSON.stringify(response.data, null, 2));
+                    attributes = response.data;
+                } else if (response.data && response.data.results && Array.isArray(response.data.results)) {
+                    console.log(`[getProductAttributes] Successfully fetched ${response.data.results.length} attributes in paginated format`);
+                    attributes = response.data.results;
+                } else if (response.data && typeof response.data === 'object') {
+                    // If response is an object with attribute data, transform it to an array
+                    console.log(`[getProductAttributes] Received object format, converting to attributes array`);
+                    attributes = Object.entries(response.data).map(([key, value]) => {
+                        // Handle if value is a string
+                        if (typeof value === 'string') {
+                            return {
+                                id: Math.random(), // Generate a unique ID
+                                name: key,
+                                value: value,
+                                group: 'General',
+                                locale: 'en',
+                                updated_at: new Date().toISOString(),
+                                isMandatory: false
+                            } as ProductAttribute;
+                        }
+                        
+                        // Handle if value is an object
+                        const attrValue = value as any;
+                        return {
+                            id: attrValue.id || Math.random(),
+                            name: attrValue.name || key,
+                            value: attrValue.value || '',
+                            group: attrValue.group || 'General',
+                            locale: attrValue.locale || 'en',
+                            updated_at: attrValue.updated_at || new Date().toISOString(),
+                            isMandatory: !!attrValue.isMandatory
+                        } as ProductAttribute;
+                    });
+                } else {
+                    console.error('[getProductAttributes] Unexpected response format:', typeof response.data);
+                    console.log('[getProductAttributes] Response data sample:', 
+                        typeof response.data === 'object' ? JSON.stringify(response.data).substring(0, 100) : response.data);
+                    
+                    // Create some mock attributes for debugging if real ones aren't available
+                    if (process.env.NODE_ENV === 'development') {
+                        return [
+                            {
+                                id: 1,
+                                name: 'Weight',
+                                value: '2.5 kg',
+                                group: 'Physical',
+                                locale: 'en',
+                                updated_at: new Date().toISOString(),
+                                isMandatory: true
+                            },
+                            {
+                                id: 2,
+                                name: 'Color',
+                                value: 'Red',
+                                group: 'Appearance',
+                                locale: 'en',
+                                updated_at: new Date().toISOString(),
+                                isMandatory: false
+                            }
+                        ];
+                    }
+                    return [];
+                }
+                
+                // Do some basic validation of the attributes
+                for (const attr of attributes) {
+                    if (!attr.group) attr.group = 'General';
+                    if (!attr.locale) attr.locale = 'en';
+                    if (attr.isMandatory === undefined) attr.isMandatory = false;
+                    if (!attr.updated_at) attr.updated_at = new Date().toISOString();
+                }
+                
+                console.log(`[getProductAttributes] Processed ${attributes.length} attributes for product ${productId}`);
+                return attributes;
             } catch (error) {
-                console.error('Error fetching product attributes:', error);
-                // Fall back to default attributes if API fails
+                console.error('[getProductAttributes] Error fetching product attributes:', error);
+                // For development, return mock data if API fails
+                if (process.env.NODE_ENV === 'development') {
+                    return [
+                        {
+                            id: 1,
+                            name: 'Width',
+                            value: '30 cm',
+                            group: 'Dimensions',
+                            locale: 'en',
+                            updated_at: new Date().toISOString(),
+                            isMandatory: true
+                        },
+                        {
+                            id: 2,
+                            name: 'Material',
+                            value: 'Aluminum',
+                            group: 'Specifications',
+                            locale: 'en',
+                            updated_at: new Date().toISOString(),
+                            isMandatory: false
+                        }
+                    ];
+                }
                 return [];
             }
         },
+
+        // Get product attribute groups (NEW FUNCTION)
+        getProductAttributeGroups: async (
+            productId: number,
+            locale: string = 'en_US',
+            channel: string = 'ecommerce'
+          ): Promise<ProductAttribute[]> => {
+            try {
+              /* 1. build { id: { label, code } } map */
+              const { data: attrDefs } = await axiosInstance.get('/api/attributes/');
+              const attrMap = Array.isArray(attrDefs)
+                ? attrDefs.reduce<Record<number, { label: string; code: string }>>(
+                    (acc, a: any) => {
+                      acc[a.id] = { label: a.label, code: a.code };
+                      return acc;
+                    },
+                    {}
+                  )
+                : {};
+          
+              /* 2. fetch groups for the product */
+              const url = `${PRODUCTS_API_URL}/${productId}/attribute-groups/`;
+              const { data } = await axiosInstance.get(url, { params: { locale, channel } });
+          
+              if (isHtmlResponse(data) || !Array.isArray(data)) return [];
+          
+              /* 3. inject missing label/code into each item */
+              return data.map((g: any) => ({
+                ...g,
+                items: (g.items || []).map((it: any) => ({
+                  ...it,
+                  attribute_label: it.attribute_label ?? attrMap[it.attribute]?.label ?? '',
+                  attribute_code:  it.attribute_code  ?? attrMap[it.attribute]?.code  ?? ''
+                }))
+              }));
+            } catch (err) {
+              console.error('[getProductAttributeGroups] Error:', err);
+              return [];
+            }
+          },          
 
         // Get product assets
         getProductAssets: async (productId: number): Promise<ProductAsset[]> => {

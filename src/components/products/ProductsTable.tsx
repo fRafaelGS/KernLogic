@@ -82,7 +82,11 @@ import { ProductsSearchBox } from './ProductsSearchBox';
 import { BulkCategoryModal } from './BulkCategoryModal';
 import { BulkTagModal } from './BulkTagModal';
 import { useDebounce } from "@/hooks/useDebounce";
-import { TableFallback } from "@/components/products/ProductsTableFallback";
+import { ProductsTableFallback } from "@/components/products/productstable/ProductsTableFallback";
+import { IconBtn } from "@/components/products/productstable/IconBtn";
+import { SortableTableHeader } from "@/components/products/productstable/SortableTableHeader";
+import { formatPrice } from "@/utils/formatPrice";
+import { useUniqueCategories, useUniqueTags } from "@/hooks/useProductDerived";
 
 // Define filter state type
 interface FilterState {
@@ -93,60 +97,11 @@ interface FilterState {
   tags: string[]; // Add tags array to FilterState
 }
 
-// Add price formatter util just after useDebounce implementation
-const formatPrice = (n: number) =>
-  Intl.NumberFormat("de-DE", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-  }).format(n);
-
 // SortableTableHeader component for handling sorting
 interface SortableTableHeaderProps {
   id: string;
   header: Header<Product, unknown>;
 }
-
-const SortableTableHeader = ({ id, header }: SortableTableHeaderProps) => {
-  const column = header.column;
-  const isSorted = column.getIsSorted();
-  
-  // Skip sort UI for select column
-  if (id === 'select') {
-    return (
-      <TableHead key={header.id} className="p-2 w-10 bg-gray-100 font-semibold">
-        {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-      </TableHead>
-    );
-  }
-  
-  // Get sort icon
-  const getSortIcon = () => {
-    if (!isSorted) return null;
-    return isSorted === 'asc' ? <ArrowUp className="ml-2 h-4 w-4" /> : <ArrowDown className="ml-2 h-4 w-4" />;
-  };
-
-  // Use tailwind classes for mobile responsiveness
-  const hideOnMobileClass = ['brand', 'barcode', 'created_at', 'tags'].includes(id) ? 'hidden md:table-cell' : '';
-  
-  return (
-    <TableHead
-      key={header.id}
-      style={{ width: header.getSize() }}
-      className={`px-2 py-2 ${hideOnMobileClass} bg-slate-950/12 text-gray-700 font-semibold text-sm tracking-wide border-b border-gray-200 text-left whitespace-nowrap`}
-      onClick={column.getCanSort() ? column.getToggleSortingHandler() : undefined}
-    >
-      <div className="flex items-center">
-        {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-        {column.getCanSort() && (
-          <div className="flex items-center">
-            {getSortIcon()}
-          </div>
-        )}
-      </div>
-    </TableHead>
-  );
-};
 
 // Add type for category options
 interface CategoryOption {
@@ -576,20 +531,7 @@ export function ProductsTable() {
   // --- End Bulk Action Handlers ---
 
   // --- Derived Data ---
-  const uniqueCategories = useMemo(() => {
-    if (!Array.isArray(products)) {
-        return []; // Return empty array if not an array
-    }
-    
-    // Create a set of all non-empty categories
-    const categories = new Set(
-      products
-        .map(p => (p.category ?? '').trim())
-        .filter(Boolean)            // removes '', null, undefined
-    );
-    
-    return Array.from(categories);
-  }, [products]);
+  const uniqueCategories = useUniqueCategories(products);
   
   // Update the updateData function to use the productRowMap instead of the table reference
   const updateData = useCallback(async (rowIndex: number, columnId: string, value: any) => {
@@ -1562,33 +1504,6 @@ export function ProductsTable() {
     },
   };
 
-  // Icon button helper component
-  function IconBtn({ 
-    icon: Icon, 
-    tooltip, 
-    onClick
-  }: { 
-    icon: LucideIcon; 
-    tooltip: string; 
-    onClick: () => void;
-  }) {
-    return (
-      <Button
-        variant="ghost"
-        size="icon"
-        title={tooltip}
-        onClick={(e) => {
-          e.stopPropagation();
-          onClick();
-        }}
-        className="h-7 w-7 rounded-full hover:bg-slate-100"
-      >
-        <Icon className="h-4 w-4 text-slate-600" />
-        <span className="sr-only">{tooltip}</span>
-      </Button>
-    );
-  }
-
   // Combine the columns with the action column - MOVED HERE RIGHT AFTER BOTH DEPENDENCIES ARE DEFINED
   const allColumns = useMemo(() => [...columns, actionColumn], [columns, actionColumn]);
 
@@ -1800,23 +1715,7 @@ export function ProductsTable() {
   }, [rowSelection, productRowMap]);
 
   // Add this function to extract unique tags from products for the filter dropdown
-  const uniqueTags = useMemo(() => {
-    if (!Array.isArray(products)) {
-      return [];
-    }
-    
-    // Create a set of all unique tags from all products
-    const tagSet = new Set<string>();
-    products.forEach(product => {
-      if (Array.isArray(product.tags)) {
-        product.tags.forEach(tag => {
-          if (tag) tagSet.add(tag);
-        });
-      }
-    });
-    
-    return Array.from(tagSet);
-  }, [products]);
+  const uniqueTags = useUniqueTags(products);
 
   // Now update the handleFilterChange function to ensure tags are properly handled
   const handleFilterChange = useCallback(<K extends keyof FilterState>(
@@ -2428,7 +2327,7 @@ export function ProductsTable() {
                       ))}
                   </TableHeader>
                   <TableBody>
-                    <TableFallback 
+                    <ProductsTableFallback 
                       columns={columns}
                       loading={loading}
                       filteredData={filteredData}

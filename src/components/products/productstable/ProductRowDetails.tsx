@@ -3,6 +3,7 @@ import { Product, ProductAttribute } from "@/services/productService";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { TableRow, TableCell } from "@/components/ui/table";
+import { motion } from 'framer-motion';
 
 interface ProductRowDetailsProps {
   product: Product & { attributes?: ProductAttribute[] };
@@ -188,28 +189,42 @@ const ProductRowDetails: React.FC<ProductRowDetailsProps> = ({ product, zebra })
   // If no attributes, render a simple message
   if (attributeGroups.length === 0) {
     return (
-      <TableRow className={cn(
-        "border-b",
-        zebra ? "bg-slate-50" : "bg-white"
-      )}>
+      <motion.tr
+        layout
+        initial={{ opacity: 0, height: 0 }}
+        animate={{ opacity: 1, height: 'auto' }}
+        exit={{ opacity: 0, height: 0 }}
+        transition={{ duration: 0.25 }}
+        className={cn(
+          "border-b",
+          zebra ? "bg-slate-50" : "bg-white"
+        )}
+      >
         <TableCell colSpan={999} className="p-4 text-center text-sm text-gray-500">
           No attributes available for this product.
         </TableCell>
-      </TableRow>
+      </motion.tr>
     );
   }
 
   return (
-    <TableRow className={cn(
-      "border-b",
-      zebra ? "bg-slate-50/60" : "bg-white/60"
-    )}>
+    <motion.tr
+      layout
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: 'auto' }}
+      exit={{ opacity: 0, height: 0 }}
+      transition={{ duration: 0.25 }}
+      className={cn(
+        "border-b",
+        zebra ? "bg-slate-50/60" : "bg-white/60"
+      )}
+    >
       <TableCell colSpan={999} className="p-2">
         <div className="rounded-md border border-slate-200 bg-white shadow-sm overflow-hidden">
           <div className="p-3">
             <h3 className="text-sm font-medium mb-2">Product Attributes</h3>
             
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+            <div className="grid gap-2 grid-cols-[repeat(auto-fit,minmax(240px,1fr))]">
               {attributeGroups.map((group) => (
                 <div
                   key={group.name}
@@ -225,12 +240,12 @@ const ProductRowDetails: React.FC<ProductRowDetailsProps> = ({ product, zebra })
                       <h4 className="text-xs font-medium text-slate-700 mb-1 pt-1 border-t border-slate-200 flex items-center gap-1">
                         {group.name}
                         {loc && (
-                          <span className="inline-block rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-normal text-slate-700">
+                          <span className="inline-block rounded-full bg-slate-200 px-1 py-0.5 text-[10px] font-normal text-slate-700">
                             {loc}
                           </span>
                         )}
                         {ch && (
-                          <span className="inline-block rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-normal text-slate-700">
+                          <span className="inline-block rounded-full bg-slate-200 px-1 py-0.5 text-[10px] font-normal text-slate-700">
                             {ch}
                           </span>
                         )}
@@ -259,7 +274,7 @@ const ProductRowDetails: React.FC<ProductRowDetailsProps> = ({ product, zebra })
           </div>
         </div>
       </TableCell>
-    </TableRow>
+    </motion.tr>
   );
 };
 

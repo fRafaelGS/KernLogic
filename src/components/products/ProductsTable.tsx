@@ -90,6 +90,7 @@ import { formatPrice } from "@/utils/formatPrice";
 import { useUniqueCategories, useUniqueTags } from "@/hooks/useProductDerived";
 import { useProductColumns } from "@/hooks/useProductColumns";    
 import ProductRowDetails from "./productstable/ProductRowDetails";
+import { motion, AnimatePresence } from 'framer-motion';
 
 // Define constants for fixed widths
 const ACTION_W = 112; // Width of action column in pixels
@@ -1848,7 +1849,9 @@ export function ProductsTable() {
                             </TableRow>
                             
                             {/* Render expanded row content */}
-                            {row.getIsExpanded() && renderExpandedRow(row, index)}
+                            <AnimatePresence initial={false}>
+                              {row.getIsExpanded() && renderExpandedRow(row, index)}
+                            </AnimatePresence>
                           </React.Fragment>
                         );
                       })

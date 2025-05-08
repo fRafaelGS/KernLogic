@@ -742,7 +742,14 @@ export function ProductsTable() {
       cell: ({ row }) => {
         return (
           <button
+            type="button"
             onClick={row.getToggleExpandedHandler()}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                row.getToggleExpandedHandler()();
+              }
+            }}
             aria-label={row.getIsExpanded() ? "Collapse row" : "Expand row"}
             className="rounded-full h-6 w-6 inline-flex items-center justify-center hover:bg-slate-100 transition-transform duration-200"
           >
@@ -1149,6 +1156,29 @@ export function ProductsTable() {
       }
     }
   }, [table]);
+
+  // 🚀 Pre-fetch attribute groups for the first visible rows
+  useEffect(() => {
+    // Only run for the first page
+    if (pagination.pageIndex !== 0) return;
+
+    const firstPage = filteredData.slice(0, pagination.pageSize);
+
+    firstPage.forEach(async product => {
+      if (!product.id || productAttributes[product.id] !== undefined) return;
+
+      try {
+        const groups = await productService.getProductAttributeGroups(product.id);
+        if (groups && groups.length) {
+          setProductAttributes(prev => ({ ...prev, [product.id]: groups }));
+        }
+      } catch (e) {
+        console.error(`prefetch groups failed for product ${product.id}`, e);
+        // Cache failure to avoid repeat hits
+        setProductAttributes(prev => ({ ...prev, [product.id]: [] }));
+      }
+    });
+  }, [filteredData, pagination, productAttributes]);
 
   // Render the component
   return (

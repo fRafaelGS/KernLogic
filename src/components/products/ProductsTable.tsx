@@ -741,24 +741,31 @@ export function ProductsTable() {
       // Keep header minimal
       header: () => <div className="w-9"></div>,
       cell: ({ row }) => {
+        const toggle = row.getToggleExpandedHandler();
+      
         return (
           <button
             type="button"
-            onClick={row.getToggleExpandedHandler()}
+            tabIndex={0}
+            role="button"
+            aria-label={row.getIsExpanded() ? 'Collapse row' : 'Expand row'}
+            onClick={e => {
+              e.stopPropagation();
+              toggle();
+            }}
             onKeyDown={e => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
-                row.getToggleExpandedHandler()();
+                toggle();
               }
             }}
-            aria-label={row.getIsExpanded() ? "Collapse row" : "Expand row"}
-            className="rounded-full h-6 w-6 inline-flex items-center justify-center hover:bg-slate-100 transition-transform duration-200"
+            /* 🔑 fill whole cell */
+            className="absolute inset-0 flex items-center justify-center cursor-pointer
+                       hover:bg-slate-100 focus:outline-none transition-colors
+                       bg-transparent border-none"
           >
-            <ChevronRight 
-              className={cn(
-                "h-4 w-4",
-                row.getIsExpanded() && "rotate-90"
-              )} 
+            <ChevronRight
+              className={cn('h-4 w-4 transition-transform', row.getIsExpanded() && 'rotate-90')}
             />
           </button>
         );
@@ -1819,7 +1826,7 @@ export function ProductsTable() {
                                   return (
                                     <TableCell 
                                       key={cell.id} 
-                                      className="px-1 py-1 w-9"
+                                      className="p-0 w-9 relative"
                                       data-column-id={columnId}
                                     >
                                       {flexRender(cell.column.columnDef.cell, cell.getContext())}

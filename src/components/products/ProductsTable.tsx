@@ -24,6 +24,7 @@ import {
   type Row,
   Header,
   getExpandedRowModel,
+  Updater
 } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -907,9 +908,21 @@ export function ProductsTable() {
     loadUserPreferences();
   }, [columns]);
 
-  // After declaring productAttributes state
+  // accordion: allow only one expanded row
   const handleExpandedChange = useCallback(
-    (state: Record<string, boolean>) => setExpanded(state),
+    (updater: Updater<Record<string, boolean>>) => {
+      setExpanded(prev => {
+        // normalise to an object
+        const next =
+          typeof updater === 'function' ? updater(prev) : updater;
+
+        const openKeys = Object.keys(next).filter(k => next[k]);
+        if (openKeys.length === 0) return {};             // none open
+
+        const last = openKeys[openKeys.length - 1];       // keep newest
+        return { [last]: true };
+      });
+    },
     []
   );
 

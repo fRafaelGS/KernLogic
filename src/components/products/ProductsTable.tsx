@@ -652,8 +652,15 @@ export function ProductsTable() {
 
   // Handle row click for navigation to product detail - MOVED HERE BEFORE COLUMNS DEFINITION
   const handleRowClick = useCallback((productId: number) => {
+    // If currently editing a field, just cancel the edit without navigating
+    if (editingCell) {
+      handleCancelEdit();
+      return; // Prevent navigation on this click
+    }
+    
+    // Otherwise, navigate to product detail
     navigate(`/app/products/${productId}`);
-  }, [navigate]);
+  }, [navigate, editingCell, handleCancelEdit]);
 
   // Add state for tag options
   const [tagOptions, setTagOptions] = useState<{ label: string; value: string }[]>([]);
@@ -1325,20 +1332,49 @@ export function ProductsTable() {
     const handleClickOutside = (event: MouseEvent) => {
       // Check if the click is outside all edit fields
       const target = event.target as HTMLElement;
-      const isEditField = target.closest('input, [role="combobox"], button');
       
-      // If clicking outside of any edit field, cancel the edit
-      if (!isEditField) {
-        handleCancelEdit();
+      // Get the element that is currently being edited
+      const editContainer = document.querySelector('[data-editing="true"]');
+      
+      // If the click is within the edit container, allow it
+      if (editContainer && editContainer.contains(target)) {
+        return;
       }
+      
+      // Special handling for React Select components which might be outside their containers
+      if (
+        // Target has any class that starts with "react-select"
+        target.closest('[class*="react-select"]') || 
+        // Common React Select classes
+        target.closest('.css-26l3qy-menu, .css-1s2u09g-control, .css-1pahdxg-control') ||
+        // Role-based selection for dropdown components
+        target.closest('[role="listbox"], [role="option"], [role="combobox"]') ||
+        // Check for data attribute we'll add to the AsyncCreatableSelect container
+        target.closest('[data-component="async-select"]')
+      ) {
+        return;
+      }
+      
+      // Handle clicks on buttons inside the editing area (confirm/cancel)
+      if (target.closest('button') && editContainer && editContainer.contains(target.closest('button'))) {
+        return;
+      }
+      
+      // If we got here, the click was outside the editing area
+      handleCancelEdit();
     };
     
-    // Add global click handler
-    document.addEventListener('mousedown', handleClickOutside);
+    // Add global click handler with a small delay to let other click handlers fire first
+    const handleClickWithDelay = (event: MouseEvent) => {
+      // Use a small timeout to ensure other click handlers run first
+      setTimeout(() => handleClickOutside(event), 10);
+    };
+    
+    document.addEventListener('mousedown', handleClickWithDelay);
     
     // Cleanup
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('mousedown', handleClickWithDelay);
     };
   }, [editingCell, handleCancelEdit]);
 
@@ -1954,7 +1990,20 @@ export function ProductsTable() {
                               onClick={(e) => {
                                 const target = e.target as HTMLElement;
                                 const isActionClick = !!target.closest('button, input, [role="combobox"], [data-editable="true"]');
-                                if (!isActionClick && productId) {
+                                
+                                // Don't do anything if clicking on an action element
+                                if (isActionClick) return;
+                                
+                                // If there's an active edit in any cell, just cancel it - prevent navigation
+                                if (editingCell && productId) {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleCancelEdit();
+                                  return;
+                                }
+                                
+                                // Only navigate if not editing
+                                if (productId) {
                                   handleRowClick(productId);
                                 }
                               }}

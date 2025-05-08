@@ -259,6 +259,7 @@ export function useProductColumns({
           <div
             className="flex space-x-2 w-full p-1"
             onClick={(e) => e.stopPropagation()}
+            data-editing="true"
           >
             <Input
               autoFocus
@@ -316,6 +317,7 @@ export function useProductColumns({
           <div
             className="flex space-x-2 w-full p-1"
             onClick={(e) => e.stopPropagation()}
+            data-editing="true"
           >
             <Input
               autoFocus
@@ -382,10 +384,16 @@ export function useProductColumns({
 
         if (isEditing) {
           return (
-            <div className="min-w-[150px] p-1" onClick={(e) => e.stopPropagation()}>
+            <div 
+              className="min-w-[150px] p-1" 
+              onClick={(e) => e.stopPropagation()}
+              data-editing="true"
+              data-component="async-select"
+            >
               <AsyncCreatableSelect
                 cacheOptions
                 defaultOptions={categoryOptions} // Show initially fetched categories
+                classNamePrefix="react-select"
                 loadOptions={async (inputValue: string) => {
                   if (!inputValue) return [];
                   try {
@@ -554,11 +562,17 @@ export function useProductColumns({
           }
 
           return (
-            <div className="min-w-[200px] p-1" onClick={(e) => e.stopPropagation()}>
+            <div 
+              className="min-w-[200px] p-1" 
+              onClick={(e) => e.stopPropagation()}
+              data-editing="true"
+              data-component="async-select"
+            >
               <AsyncCreatableSelect
                 isMulti
                 cacheOptions
                 defaultOptions={tagOptions}
+                classNamePrefix="react-select"
                 loadOptions={async (inputValue: string) => {
                   const results = await searchTags(inputValue);
                   // Filter out empty strings and ensure each result has a non-empty value and label
@@ -697,7 +711,7 @@ export function useProductColumns({
         
         if (isEditing) {
           return (
-            <div className="flex space-x-2 w-full p-1" onClick={(e) => e.stopPropagation()}>
+            <div className="flex space-x-2 w-full p-1" onClick={(e) => e.stopPropagation()} data-editing="true">
               <Input
                 className="h-8 w-full min-w-[120px]"
                 autoFocus
@@ -759,7 +773,7 @@ export function useProductColumns({
         const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.columnId === 'price';
 
         return isEditing ? (
-          <div className="flex space-x-2 p-1" onClick={(e) => e.stopPropagation()}>
+          <div className="flex space-x-2 p-1" onClick={(e) => e.stopPropagation()} data-editing="true">
             <div className="relative w-full min-w-[100px]">
               <span className="absolute left-2 top-1/2 -translate-y-1/2">$</span>
               <Input

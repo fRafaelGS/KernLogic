@@ -107,6 +107,8 @@ export interface UseProductColumnsOpts {
   }>;
 }
 
+
+
 /* ---------------------------------------------------------- */
 /*  Currency formatter                                        */
 /* ---------------------------------------------------------- */
@@ -195,12 +197,23 @@ export function useProductColumns({
         </Button>
       ),
       cell: ({ row }) => {
+        console.log('ROW IMAGE DATA:', {
+          thumb: row.original.primary_image_thumb,
+          large: row.original.primary_image_large,
+          images: row.original.images
+        });
+        
+        // Add a local images variable with correct typing
         const images = (row.original.images as ProductImage[]) || [];
+
         const primary =
           row.original.primary_image_thumb ||
           row.original.primary_image_large ||
-          images.find((i) => i.is_primary)?.url ||
+          row.original.primary_image_url ||
+          row.original.primary_image ||
+          images.find(i => i.is_primary)?.url ||
           images[0]?.url;
+
 
         return (
           <div className="flex items-center space-x-2">

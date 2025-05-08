@@ -74,6 +74,8 @@
         // NEW fields for thumbnail display
         primary_image_thumb?: string;  // 64px webp/jpg 
         primary_image_large?: string;  // 600-800px original
+        primary_image_url?: string | null; // URL for primary image
+        primary_image?: string | null; // Alternative primary image field
         
         // Additional Product Information (Optional)
         brand?: string;

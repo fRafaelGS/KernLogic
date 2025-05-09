@@ -30,12 +30,35 @@ export interface Activity {
   created_at: string;
 }
 
+// Detail for a single missing field
+export interface FieldDetail {
+  field: string; // e.g., "Name", "SKU", "Attribute: Color"
+  weight: number;
+  attribute_id?: number;
+  attribute_code?: string;
+  attribute_type?: string; // e.g., 'text', 'number', 'boolean', 'select', 'date'
+}
+
+// Entry for the field_completeness array
+export interface FieldCompletenessEntry extends FieldDetail {
+  complete: boolean;
+}
+
 export interface IncompleteProduct {
   id: number;
   name: string;
   sku: string;
   completeness: number;
-  missing_fields: Array<{field: string, weight: number}>;
+  missing_fields: FieldDetail[];
+  missing_fields_count: number; // New field for counting missing fields
+  field_completeness: FieldCompletenessEntry[]; // Comprehensive list of all tracked fields and their status
+}
+
+// Define interface for incomplete products parameters
+export interface IncompleteProductsParams {
+  organization_id: number;
+  limit?: number;
+  product_id?: number;
 }
 
 // Define path to dashboard endpoints - use the path from config
@@ -150,21 +173,45 @@ export const getRecentActivity = async (organizationId?: string): Promise<Activi
 };
 
 /**
- * Fetch incomplete products
- * @param organizationId Optional organization ID to filter data
+ * Fetch incomplete products with optional filtering parameters
+ * @param params Object containing organization_id (required), limit (optional), and product_id (optional)
+ * @returns Array of incomplete products or a single product when product_id is provided
  */
-export const getIncompleteProducts = async (organizationId?: string): Promise<IncompleteProduct[]> => {
+export const getIncompleteProducts = async (
+  params: IncompleteProductsParams | string
+): Promise<IncompleteProduct[]> => {
   try {
-    // Log the request URL for debugging
-    const token = localStorage.getItem('access_token');
-    const url = withOrgParam(`${DASHBOARD_URL}/incomplete-products/`, organizationId);
+    let url = `${DASHBOARD_URL}/incomplete-products/`;
     
-    console.log('Incomplete Products API Call:', {
-      url,
-      hasToken: !!token,
-      tokenPrefix: token ? token.substring(0, 15) + '...' : 'none',
-      organizationId: organizationId || 'not provided'
-    });
+    // Handle both legacy string parameter and new params object
+    if (typeof params === 'string') {
+      // Legacy support - organizationId as string parameter
+      url = withOrgParam(url, params);
+      
+      console.log('Incomplete Products API Call (legacy):', {
+        url,
+        organizationId: params || 'not provided'
+      });
+    } else {
+      // New parameter object format
+      const { organization_id, limit, product_id } = params;
+      
+      // Build URL with query parameters
+      url = `${url}?organization_id=${organization_id}`;
+      
+      if (limit !== undefined) {
+        url += `&limit=${limit}`;
+      }
+      
+      if (product_id !== undefined) {
+        url += `&product_id=${product_id}`;
+      }
+      
+      console.log('Incomplete Products API Call:', {
+        url,
+        params
+      });
+    }
     
     const response = await axiosInstance.get(url);
     
@@ -175,6 +222,12 @@ export const getIncompleteProducts = async (organizationId?: string): Promise<In
       dataType: typeof response.data,
       dataPreview: response.data
     });
+    
+    // If product_id is provided, the response might be a single object
+    // Convert it to an array for consistent return type
+    if (!Array.isArray(response.data) && typeof response.data === 'object') {
+      return [response.data];
+    }
     
     // Ensure we always return an array
     return Array.isArray(response.data) ? response.data : [];

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Product, productService, ProductAttribute, ProductAsset, ProductActivity, ProductVersion, PriceHistory, PRODUCTS_API_URL as PRODUCTS_PATH, ProductImage } from '@/services/productService';
+import { IncompleteProduct, dashboardService } from '@/services/dashboardService';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -113,7 +114,7 @@ interface ProductDetailTabsProps {
   onProductUpdate?: (updatedProduct: Product) => void;
 }
 
-export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, onProductUpdate }) => {
+export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTabsProps): JSX.Element => {
   const [activeTab, setActiveTab] = useState('overview');
   
   // States for dynamic data
@@ -148,6 +149,13 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
   const [loadingVersions, setLoadingVersions] = useState(false);
   const [loadingAttributeDefinitions, setLoadingAttributeDefinitions] = useState(false);
   
+  // New state for completeness data
+  const [productCompletenessDetails, setProductCompletenessDetails] = useState<IncompleteProduct | null>(null);
+  const [isLoadingCompleteness, setIsLoadingCompleteness] = useState<boolean>(false);
+  
+  // Add the missing state declaration near the other state declarations, after the setAttributes state:
+  const [productFieldStatus, setProductFieldStatus] = useState<Array<{key: string; label: string; weight: number; complete: boolean}>>([]);
+  
   // Get current user and permissions from auth context
   const { user, checkPermission } = useAuth();
   
@@ -156,6 +164,36 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
   const hasEditPermission = checkPermission('product.change');
   const hasAddPermission = checkPermission('product.add');
   const hasRevertPermission = checkPermission('product.revert');
+  
+  // Calculate filtered missing fields (moved outside conditional rendering)
+  const filteredMissingFields = useMemo(() => {
+    if (!productCompletenessDetails?.missing_fields) return [];
+    
+    // Check if we have real images
+    const hasRealImages = assets.some(asset => {
+      const name = (asset.name || '').toLowerCase();
+      const url = (asset.url || '').toLowerCase();
+      const type = (asset.type || '').toLowerCase();
+      
+      const isImageByExt = /\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i.test(name) || 
+                          /\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i.test(url);
+      const isImageByType = type.includes('image/') && !type.includes('pdf');
+      
+      return isImageByExt || isImageByType;
+    });
+
+    // Create filtered missing fields array
+    return productCompletenessDetails.missing_fields.filter(item => {
+      if (hasRealImages) {
+        const imageRelatedTerms = ["image", "photo", "picture"];
+        const isImageRelated = imageRelatedTerms.some(term => 
+          item.field.toLowerCase().includes(term)
+        );
+        return !isImageRelated;
+      }
+      return true;
+    });
+  }, [productCompletenessDetails?.missing_fields, assets]);
   
   // Load data when component mounts or product changes
   useEffect(() => {
@@ -789,103 +827,6 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
     const usedIds = attributeValues.map(v => v.attributeId);   // any locale
     return availableAttributes.filter(attr => !usedIds.includes(attr.id));
   };
-  
-  // Calculate data completeness percentage and missing fields
-  const calculateCompleteness = () => {
-    if (!product) return { percentage: 0, missingFields: [], fieldStatus: [] };
-    
-    // Define required fields that should be present for completeness
-    const fieldDefinitions = [
-      { key: 'name', label: 'Name', weight: 2 },
-      { key: 'sku', label: 'SKU', weight: 2 },
-      { key: 'price', label: 'Price', weight: 2 },
-      { key: 'description', label: 'Description', weight: 1.5 },
-      { key: 'category', label: 'Category', weight: 1.5 },
-      { key: 'brand', label: 'Brand', weight: 1 },
-      { key: 'barcode', label: 'GTIN/Barcode', weight: 1 },
-      { key: 'tags', label: 'Tags', weight: 1 },
-      { key: 'images', label: 'Images', weight: 1 }
-    ];
-    
-    // Check which fields are complete
-    const fieldsStatus = fieldDefinitions.map(field => {
-      const value = product[field.key as keyof Product];
-      let isComplete = false;
-      
-      if (field.key === 'tags') {
-        isComplete = Array.isArray(value) && value.length > 0;
-      } else if (field.key === 'images') {
-        // Enhanced image detection logic
-        const hasStandardImages = Array.isArray(value) && value.length > 0;
-        const hasPrimaryImage = !!product.primary_image || !!product.primary_image_large || !!product.primary_image_thumb || !!product.primary_image_url;
-        const hasAssetImages = Array.isArray(product.assets) && product.assets.some(asset => 
-          (asset.type?.toLowerCase().includes('image') || asset.asset_type?.toLowerCase().includes('image'))
-        );
-        
-        isComplete = hasStandardImages || hasPrimaryImage || hasAssetImages;
-      } else if (field.key === 'price') {
-        isComplete = typeof value === 'number' && value > 0;
-      } else {
-        isComplete = !!value && (typeof value !== 'string' || value.trim() !== '');
-      }
-      
-      return {
-        ...field,
-        complete: isComplete
-      };
-    });
-    
-    // Process attribute values and identify mandatory attributes
-    const mandatoryAttributes = availableAttributes && Array.isArray(availableAttributes)
-      ? availableAttributes
-          .filter(attr => attr.isMandatory)
-          .map(attrDef => {
-            // Find if this attribute has a value for this product
-            const attrValue = attributeValues.find(v => 
-              v.attributeId === attrDef.id && 
-              v.locale === selectedLocale
-            );
-            
-            return {
-              key: `attr_${attrDef.id}`,
-              label: attrDef.groupName ? `${attrDef.groupName}: ${attrDef.name}` : attrDef.name,
-              weight: 1.5, // Give mandatory attributes higher weight
-              complete: !!attrValue && 
-                       attrValue.value !== null && 
-                       attrValue.value !== undefined && 
-                       (typeof attrValue.value !== 'string' || attrValue.value.trim() !== '')
-            };
-          })
-      : [];
-    
-    // Combine all fields
-    const allFields = [...fieldsStatus, ...mandatoryAttributes];
-    
-    // Calculate weighted percentage
-    const totalWeight = allFields.reduce((sum, field) => sum + field.weight, 0);
-    const completedWeight = allFields
-      .filter(field => field.complete)
-      .reduce((sum, field) => sum + field.weight, 0);
-    
-    const percentage = Math.round((completedWeight / totalWeight) * 100);
-    
-    // Get missing fields
-    const missingFields = allFields
-      .filter(field => !field.complete)
-      .map(field => field.label);
-    
-    return { 
-      percentage, 
-      missingFields,
-      fieldStatus: allFields
-    };
-  };
-
-  const { 
-    percentage: completenessPercentage, 
-    missingFields,
-    fieldStatus 
-  } = calculateCompleteness();
   
   // Status text based on percentage
   const getCompletenessStatus = (percentage: number) => {
@@ -1687,6 +1628,61 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
     setAssets(sortedAssets);
   };
 
+  // Add a useEffect to fetch completeness data (after the existing useEffect hooks)
+  useEffect(() => {
+    if (product.id) {
+      const fetchProductCompleteness = async () => {
+        setIsLoadingCompleteness(true);
+        try {
+          // Ensure we have a valid organization ID
+          let organizationId: number;
+          
+          if (typeof user?.organization_id === 'string') {
+            organizationId = parseInt(user.organization_id, 10);
+          } else if (typeof user?.organization_id === 'number') {
+            organizationId = user.organization_id;
+          } else {
+            console.error('Invalid organization ID');
+            toast.error('Invalid organization ID');
+            setIsLoadingCompleteness(false);
+            return;
+          }
+            
+          // Use the dashboardService to fetch product completeness with organization_id and product_id
+          const data = await dashboardService.getIncompleteProducts({
+            organization_id: organizationId,
+            product_id: product.id
+          });
+          
+          // If data array is returned (expected), take the first element
+          if (Array.isArray(data) && data.length > 0) {
+            setProductCompletenessDetails(data[0]);
+          } else if (data.length === 0) {
+            // Handle case where no data is returned
+            console.error('No completeness data found for this product');
+            toast.error('Completeness data not found for this product');
+          }
+        } catch (error) {
+          console.error('Error fetching product completeness:', error);
+          // Handle errors according to error type
+          if (axios.isAxiosError(error)) {
+            if (error.response?.status === 404) {
+              toast.error('Product not found');
+            } else {
+              toast.error('Failed to load completeness data');
+            }
+          } else {
+            toast.error('Failed to load completeness data');
+          }
+        } finally {
+          setIsLoadingCompleteness(false);
+        }
+      };
+
+      fetchProductCompleteness();
+    }
+  }, [product.id, user?.organization_id]);
+
   return (
     <Tabs 
       value={activeTab} 
@@ -1742,114 +1738,109 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {/* Data Completeness Content */}
-            <div className="space-y-4">
-              {/* Progress indicator */}
-              <div className="relative">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-medium">Completeness</span>
-                  <div className="flex items-center">
-                    <span className={`text-sm font-medium ${
-                      completenessPercentage < 60 ? 'text-red-500' :
-                      completenessPercentage < 80 ? 'text-amber-500' :
-                      completenessPercentage < 95 ? 'text-emerald-500' :
-                      'text-blue-500'
-                    }`}>
-                      {completenessPercentage}% - {getCompletenessStatus(completenessPercentage)}
-                    </span>
-                    <Button 
-                      variant="ghost" 
-                      className="p-0 h-auto ml-1"
-                      onClick={() => setShowDrilldown(true)}
-                    >
-                      <InfoIcon className="h-4 w-4 text-slate-400" />
-                    </Button>
+            {isLoadingCompleteness && (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <Skeleton className="h-4 w-1/3" />
+                  <Skeleton className="h-6 w-1/6" />
+                </div>
+                <Skeleton className="h-8 w-full" />
+                <h4 className="font-semibold mt-6 mb-3 text-md"><Skeleton className="h-5 w-2/5" /></h4>
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="p-3 border rounded-lg shadow-sm">
+                    <div className="flex justify-between items-center mb-1">
+                      <Skeleton className="h-4 w-3/5" />
+                      <Skeleton className="h-6 w-1/4" />
+                    </div>
                   </div>
+                ))}
+              </div>
+            )}
+            
+            {!isLoadingCompleteness && !productCompletenessDetails && (
+              <Alert variant="default" className="mt-4">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  Product completeness data is currently unavailable or could not be loaded. Please try refreshing or contact support if the issue persists.
+                </AlertDescription>
+              </Alert>
+            )}
+            
+            {!isLoadingCompleteness && productCompletenessDetails && (
+              <>
+                {/* Overall Completeness Section */}
+                <div className="mb-6">
+                  <div className="flex justify-between items-center mb-1">
+                    <CardDescription className="text-sm font-medium">Overall Product Completeness</CardDescription>
+                    <span className="font-bold text-xl text-primary">
+                      {Math.round(productCompletenessDetails.completeness)}%
+                    </span>
+                  </div>
+                  <Progress 
+                    value={productCompletenessDetails.completeness} 
+                    aria-label={`Product completeness: ${productCompletenessDetails.completeness}%`}
+                    className="w-full h-3" 
+                  />
                 </div>
                 
-                <Progress 
-                  value={completenessPercentage} 
-                  className={`h-2 ${
-                    completenessPercentage < 60 ? 'bg-red-100' :
-                    completenessPercentage < 80 ? 'bg-amber-100' :
-                    completenessPercentage < 95 ? 'bg-emerald-100' :
-                    'bg-blue-100'
-                  }`} 
-                />
-              </div>
-              
-              {/* Missing fields */}
-              {missingFields.length > 0 && (
-                <div className="mt-4">
-                  <h4 className="text-sm font-medium mb-2 flex items-center">
-                    <AlertTriangle className="h-4 w-4 text-amber-500 mr-2" />
-                    Missing information
-                  </h4>
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {/* Group missing fields by type */}
-                    {(() => {
-                      // Separate standard fields from attributes for better organization
-                      const standardFields = missingFields.filter(field => !field.includes(':'));
-                      const attributeFields = missingFields.filter(field => field.includes(':'));
-                      
-                      return (
-                        <>
-                          {/* Standard fields */}
-                          {standardFields.map((field, index) => (
-                            <TooltipProvider key={`standard-${index}`}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Badge variant="outline" className="bg-slate-50 hover:bg-slate-100">
-                                    {field}
-                                  </Badge>
-                                </TooltipTrigger>
-                                <TooltipContent side="bottom">
-                                  <p className="text-xs">Add {field.toLowerCase()} to improve completeness</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          ))}
-                          
-                          {/* Show attributes count if there are any missing */}
-                          {attributeFields.length > 0 && (
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Badge variant="outline" className="bg-amber-50 text-amber-700 hover:bg-amber-100">
-                                    Attributes ({attributeFields.length})
-                                  </Badge>
-                                </TooltipTrigger>
-                                <TooltipContent side="bottom" className="w-60 p-2">
-                                  <p className="text-xs font-medium mb-1">Missing required attributes:</p>
-                                  <ul className="text-xs list-disc pl-4 space-y-1">
-                                    {attributeFields.slice(0, 5).map((field, index) => (
-                                      <li key={index}>{field}</li>
-                                    ))}
-                                    {attributeFields.length > 5 && (
-                                      <li>+{attributeFields.length - 5} more...</li>
-                                    )}
-                                  </ul>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          )}
-                        </>
-                      );
-                    })()}
+                {/* Missing Information Section */}
+                {filteredMissingFields.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-amber-500" />
+                      Missing information
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {filteredMissingFields.map((item, index) => (
+                        <Badge key={index} variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                          {item.field}
+                        </Badge>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
-              
-              {/* Completeness drilldown */}
-              {showDrilldown && (
-                <CompletenessDrilldown
-                  open={showDrilldown}
-                  onOpenChange={setShowDrilldown}
-                  percentage={completenessPercentage}
-                  fieldStatus={fieldStatus}
-                />
-              )}
-            </div>
+                )}
+                
+                {/* Detailed Field Status Section */}
+                <h3 className="font-semibold text-lg mb-3 border-b pb-2">Field Status Breakdown:</h3>
+                {productCompletenessDetails.field_completeness.length > 0 ? (
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2"> {/* Added scroll for long lists */}
+                    {productCompletenessDetails.field_completeness.map((item, index) => (
+                      <div 
+                        key={index} 
+                        className={`p-3 border rounded-md flex justify-between items-center transition-all duration-150 ease-in-out ${
+                          item.complete ? 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-700' : 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-700'
+                        }`}
+                      >
+                        <span className={`text-sm font-medium ${item.complete ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
+                          {item.field}
+                        </span>
+                        {item.complete ? (
+                          <Badge variant="outline" className="border-green-600 bg-green-100 text-green-700 dark:bg-green-700/30 dark:text-green-300 dark:border-green-600/50">
+                            <Check className="mr-1 h-3 w-3" /> Complete
+                          </Badge>
+                        ) : (
+                          <Badge variant="destructive" className="bg-red-600/10 text-red-700 dark:bg-red-700/30 dark:text-red-300 border-red-600/30 dark:border-red-600/50">
+                            <AlertCircle className="mr-1 h-3 w-3" /> Incomplete
+                          </Badge>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No specific field completeness details are tracked for this product.</p>
+                )}
+              </>
+            )}
+            
+            {/* CompletenessDrilldown component (keep this unchanged) */}
+            {showDrilldown && (
+              <CompletenessDrilldown
+                open={showDrilldown}
+                onOpenChange={setShowDrilldown}
+                percentage={productCompletenessDetails?.completeness || 0}
+                fieldStatus={productCompletenessDetails?.field_completeness || []}
+              />
+            )}
           </CardContent>
         </Card>
         

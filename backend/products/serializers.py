@@ -1,6 +1,6 @@
 from rest_framework import serializers
 import json
-from .models import Product, ProductImage, Activity, ProductRelation, ProductAsset, ProductEvent, Attribute, AttributeValue, AttributeGroupItem, AttributeGroup
+from .models import Product, ProductImage, Activity, ProductRelation, ProductAsset, ProductEvent, Attribute, AttributeValue, AttributeGroupItem, AttributeGroup, SalesChannel, ProductPrice, Category
 from django.db.models import Sum, F, Count, Case, When, Value, FloatField
 from decimal import Decimal
 from django.conf import settings
@@ -10,6 +10,80 @@ from kernlogic.utils import get_user_organization
 from django.core.validators import MinValueValidator
 from django.core.exceptions import ValidationError
 from django.db import transaction
+
+# --- NEW CategorySerializer ---
+class CategorySerializer(serializers.ModelSerializer):
+    """Serializer for hierarchical category model"""
+    children = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Category
+        fields = ['id', 'name', 'parent', 'children']
+
+    def get_children(self, obj):
+        return CategorySerializer(obj.get_children(), many=True).data
+
+# Simplified CategorySerializer for nested usage
+class SimpleCategorySerializer(serializers.ModelSerializer):
+    """Simplified category serializer for nesting in products"""
+    parent_id = serializers.PrimaryKeyRelatedField(
+        source='parent',
+        queryset=Category.objects.all(),
+        required=False,
+        allow_null=True,
+        write_only=True
+    )
+    parent_name = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = Category
+        fields = ['id', 'name', 'parent_id', 'parent_name']
+        read_only_fields = ['parent_name']
+
+    def get_parent_name(self, obj):
+        return obj.parent.name if obj.parent else None
+    
+    def to_representation(self, instance):
+        """Add additional error handling for parent field"""
+        try:
+            return super().to_representation(instance)
+        except Exception as e:
+            # If there's an error in serialization, return a minimal representation
+            return {
+                'id': instance.id,
+                'name': instance.name,
+                'parent_id': instance.parent_id if hasattr(instance, 'parent_id') else None,
+                'parent_name': instance.parent.name if hasattr(instance, 'parent') and instance.parent else None
+            }
+
+# --- NEW SalesChannel Serializer ---
+class SalesChannelSerializer(serializers.ModelSerializer):
+    """Serializer for sales channels"""
+    class Meta:
+        model = SalesChannel
+        fields = ['id', 'code', 'name', 'description', 'is_active']
+
+# --- NEW ProductPrice Serializer ---
+class ProductPriceSerializer(serializers.ModelSerializer):
+    """Serializer for product prices"""
+    channel = SalesChannelSerializer(read_only=True)
+    channel_id = serializers.PrimaryKeyRelatedField(
+        queryset=SalesChannel.objects.all(),
+        source='channel',
+        write_only=True,
+        required=False,
+        allow_null=True
+    )
+    price_type_display = serializers.CharField(source='get_price_type_display', read_only=True)
+    
+    class Meta:
+        model = ProductPrice
+        fields = [
+            'id', 'price_type', 'price_type_display', 'channel', 'channel_id', 
+            'currency', 'amount', 'valid_from', 'valid_to', 
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'price_type_display']
 
 # --- NEW ProductImage Serializer ---
 class ProductImageSerializer(serializers.ModelSerializer):
@@ -32,7 +106,8 @@ class ProductSerializer(serializers.ModelSerializer):
     Serializer for Product model
     """
     created_by = serializers.ReadOnlyField(source='created_by.email')
-    price = serializers.FloatField()  # Explicitly use FloatField to ensure numeric values
+    price = serializers.FloatField(required=False)  # Keep for backward compatibility until fully migrated
+    prices = ProductPriceSerializer(many=True, read_only=True)
     images = ProductImageSerializer(many=True, read_only=True)
     tags = serializers.ListField(child=serializers.CharField(), required=False)
     attribute_values = serializers.SerializerMethodField(read_only=True)
@@ -45,11 +120,19 @@ class ProductSerializer(serializers.ModelSerializer):
     has_primary_image = serializers.SerializerMethodField(read_only=True)
     primary_image_url = serializers.SerializerMethodField(read_only=True)
     primary_asset = serializers.SerializerMethodField(read_only=True)
+    category = SimpleCategorySerializer(read_only=True)
+    category_id = serializers.PrimaryKeyRelatedField(
+        source='category',
+        queryset=Category.objects.all(),
+        required=False,
+        allow_null=True,
+        write_only=True
+    )
     
     class Meta:
         model = Product
         fields = [
-            'id', 'name', 'sku', 'description', 'price', 'category', 'brand',
+            'id', 'name', 'sku', 'description', 'price', 'prices', 'category', 'category_id', 'brand',
             'barcode', 'tags', 'attribute_values', 'is_active', 'is_archived', 'created_at',
             'updated_at', 'primary_image', 'completeness_percent', 'missing_fields',
             'assets', 'has_primary_image', 'primary_image_url', 'primary_asset', 'organization',
@@ -58,7 +141,66 @@ class ProductSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at', 'completeness_percent', 
                            'missing_fields', 'assets', 'has_primary_image', 'primary_image_url',
                            'primary_asset', 'organization', 'created_by', 'images',
-                           'primary_image_thumb', 'primary_image_large', 'attribute_values']
+                           'primary_image_thumb', 'primary_image_large', 'attribute_values',
+                           'prices', 'category']
+
+    # Helper method to get the default list price
+    def get_list_price(self, obj):
+        """Get the current list price for a product"""
+        try:
+            current_time = timezone.now()
+            # Get the most recent valid list price
+            price = obj.prices.filter(
+                price_type='list',
+                valid_from__lte=current_time,
+                valid_to__isnull=True
+            ).order_by('-created_at').first()
+            
+            if price:
+                return price.amount
+                
+            # Fallback to any list price if no current valid one
+            price = obj.prices.filter(price_type='list').order_by('-created_at').first()
+            if price:
+                return price.amount
+                
+            # If no prices found and we still have the old price field, use that
+            if hasattr(obj, 'price') and obj.price is not None:
+                return obj.price
+                
+            return Decimal('0.00')
+        except Exception as e:
+            print(f"Error getting list price: {e}")
+            return Decimal('0.00')
+            
+    def to_representation(self, instance):
+        """
+        Override to ensure we always have a price even if migrating and properly handle tags
+        """
+        representation = super().to_representation(instance)
+        
+        # During migration: if no prices exist yet but old price field exists
+        if not instance.prices.exists() and hasattr(instance, 'price') and instance.price is not None:
+            # Still include the old price field value
+            representation['price'] = float(instance.price)
+        else:
+            # Otherwise get the price from the prices relation
+            list_price = self.get_list_price(instance)
+            representation['price'] = float(list_price)
+        
+        # Ensure tags are properly decoded from JSON string to list
+        try:
+            if instance.tags:
+                if isinstance(instance.tags, str):
+                    representation['tags'] = json.loads(instance.tags)
+                elif not representation.get('tags'):
+                    # If tags field exists but isn't populated in representation
+                    representation['tags'] = instance.get_tags()
+        except (json.JSONDecodeError, Exception) as e:
+            print(f"Error decoding tags for product {instance.id}: {e}")
+            representation['tags'] = []
+            
+        return representation
 
     def get_primary_image_thumb(self, obj):
         """
@@ -82,37 +224,38 @@ class ProductSerializer(serializers.ModelSerializer):
         # In production, you'd resize images or use different versions
         return self.get_primary_image_thumb(obj)
 
-    def to_representation(self, instance):
-        """
-        Convert JSON string fields to Python objects during serialization
-        """
-        ret = super().to_representation(instance)
-        
-        # Handle tags
-        if instance.tags:
-            try:
-                # Check if tags is already a list (don't try to parse again)
-                if isinstance(instance.tags, list):
-                    ret['tags'] = instance.tags
-                else:
-                    ret['tags'] = json.loads(instance.tags)
-            except json.JSONDecodeError:
-                ret['tags'] = []
-        else:
-            ret['tags'] = []
-        
-        return ret
-
     def to_internal_value(self, data):
         """
         Convert Python objects to JSON strings for storage
         """
+        # Save the tags value before validation (which might modify it)
+        tags_data = data.get('tags')
+        
         # First perform the basic validation
         validated_data = super().to_internal_value(data)
         
-        # Handle tags
-        if 'tags' in data and not isinstance(data['tags'], str):
-            validated_data['tags'] = json.dumps(data['tags'])
+        # Handle tags - ensure they're properly stored as a JSON string
+        if 'tags' in data:
+            if isinstance(tags_data, list):
+                # Clean up tags - make sure they're all valid strings
+                cleaned_tags = [str(tag).strip() for tag in tags_data if tag]
+                validated_data['tags'] = json.dumps(cleaned_tags)
+            elif isinstance(tags_data, str):
+                # Handle case where tags might come as a JSON string already
+                try:
+                    # If it's valid JSON, use it directly
+                    parsed = json.loads(tags_data)
+                    if isinstance(parsed, list):
+                        validated_data['tags'] = tags_data
+                    else:
+                        # It's JSON but not a list, convert to a list with one item
+                        validated_data['tags'] = json.dumps([str(parsed)])
+                except json.JSONDecodeError:
+                    # Not valid JSON, treat as a single tag
+                    validated_data['tags'] = json.dumps([tags_data])
+            elif tags_data is None:
+                # Set to empty array if tags is explicitly null
+                validated_data['tags'] = '[]'
         
         return validated_data
 

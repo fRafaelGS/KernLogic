@@ -29,8 +29,17 @@ export const API_ENDPOINTS = {
         create: '/api/products/',
         update: (id: number) => `/api/products/${id}/`,
         delete: (id: number) => `/api/products/${id}/`,
-        categories: '/api/products/categories/',
+        categories: '/api/categories/',
         stats: '/api/products/stats/'
+    },
+    categories: {
+        list: '/api/categories/',
+        create: '/api/categories/',
+        update: (id: number) => `/api/categories/${id}/`,
+        delete: (id: number) => `/api/categories/${id}/`,
+        tree: '/api/categories/?as_tree=true',
+        move: '/api/categories/move/',
+        products: (id: number) => `/api/categories/${id}/products/`
     },
     dashboard: '/api/dashboard'
 }; 

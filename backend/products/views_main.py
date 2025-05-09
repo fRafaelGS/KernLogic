@@ -1,7 +1,39 @@
 from django.shortcuts import render
-from rest_framework import viewsets, permissions, status, filters
+from django.http import HttpResponse, Http404
+from django.conf import settings
+from django.db.models import Sum, Count, F, Q, Subquery, OuterRef
+from django.db.models.functions import Coalesce
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
+from django.contrib.auth import get_user_model
+from django.utils import timezone
+from decimal import Decimal
+import os
+import json
+import re
+import logging
+from datetime import datetime, timedelta
+
+from rest_framework import viewsets, status, permissions, filters
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError, PermissionDenied
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework.renderers import JSONRenderer
+from rest_framework.generics import get_object_or_404
+
+from .models import (
+    Product, ProductImage, Activity, ProductRelation, 
+    ProductAsset, ProductEvent, Attribute, AttributeValue,
+    AttributeGroup, AttributeGroupItem, ProductPrice, SalesChannel, Category
+)
+from .serializers import (
+    ProductSerializer, ProductImageSerializer, ActivitySerializer, 
+    ProductRelationSerializer, ProductStatsSerializer, IncompleteProductSerializer,
+    ProductAssetSerializer, ProductEventSerializer, AttributeValueSerializer,
+    AttributeValueDetailSerializer, AttributeGroupSerializer, AttributeGroupItemSerializer,
+    ProductPriceSerializer, SalesChannelSerializer, SimpleCategorySerializer
+)
 from django_filters.rest_framework import DjangoFilterBackend
 import sys
 
@@ -127,12 +159,29 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             qs = Product.objects.filter(created_by=user)
             
         # Additional filters from query parameters
-        category = self.request.query_params.get('category')
+        category_id = self.request.query_params.get('category_id')
+        category_name = self.request.query_params.get('category')  # For backwards compatibility
         brand = self.request.query_params.get('brand')
         is_active = self.request.query_params.get('is_active')
         
-        if category:
-            qs = qs.filter(category=category)
+        if category_id:
+            # Direct filter by category ID
+            qs = qs.filter(category_id=category_id)
+        elif category_name:
+            # For backwards compatibility - find category by name
+            from .models import Category
+            try:
+                category = Category.objects.filter(
+                    name=category_name,
+                    organization=get_user_organization(user)
+                ).first()
+                
+                if category:
+                    qs = qs.filter(category=category)
+            except Exception:
+                # If there's an error, just continue without this filter
+                pass
+                
         if brand:
             qs = qs.filter(brand=brand)
         if is_active is not None:
@@ -283,49 +332,70 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     def categories(self, request):
         """
         GET: Return a list of unique categories for dropdown menus.
-        POST: Create a new category by adding a product with that category.
+        POST: Create a new category by adding it directly to the Category model.
+        
+        This is a legacy endpoint maintained for backward compatibility.
+        New clients should use the dedicated CategoryViewSet instead.
         """
         if request.method == 'GET':
-            queryset = self.get_queryset()
-            categories = queryset.values_list('category', flat=True).distinct().order_by('category')
-            # Filter out None values
-            categories = [c for c in categories if c]
-            return Response(categories)
+            try:
+                # Get categories for current organization
+                categories = Category.objects.filter(
+                    organization=get_user_organization(request.user)
+                ).order_by('name')
+                
+                # Return serialized categories
+                serializer = SimpleCategorySerializer(categories, many=True)
+                return Response(serializer.data)
+            except Exception as e:
+                # Log the error
+                print(f"Error in ProductViewSet.categories: {str(e)}")
+                return Response(
+                    {"error": "Failed to retrieve categories. Please try again."},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
         
         elif request.method == 'POST':
-            # For POST, create a minimal product with the new category
-            category_name = request.data.get('category')
+            # For POST, create a new category
+            category_name = request.data.get('name')
+            parent_id = request.data.get('parent')
+            
             if not category_name:
                 return Response(
                     {"error": "Category name is required"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
                 
-            # Create a temporary product with this category
-            # We generate a random SKU with timestamp to avoid conflicts
-            import time
-            from random import randint
-            temp_sku = f"temp-cat-{int(time.time())}-{randint(1000, 9999)}"
-            
-            product_data = {
-                "name": f"Category Placeholder: {category_name}",
-                "sku": temp_sku,
-                "price": 0.01,
-                "category": category_name,
-                "is_active": False  # Make it inactive so it doesn't appear in regular products
-            }
-            
-            serializer = self.get_serializer(data=product_data)
-            if serializer.is_valid():
-                self.perform_create(serializer)
-                # Return the category name with success status
-                return Response(
-                    {"id": serializer.data['id'], "category": category_name},
-                    status=status.HTTP_201_CREATED
+            # Create new category
+            try:
+                # Check if we have a parent category
+                parent = None
+                if parent_id:
+                    try:
+                        parent = Category.objects.get(
+                            pk=parent_id,
+                            organization=get_user_organization(request.user)
+                        )
+                    except Category.DoesNotExist:
+                        return Response(
+                            {"error": f"Parent category with ID {parent_id} not found"},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                
+                # Create the category
+                category = Category.objects.create(
+                    name=category_name,
+                    parent=parent,
+                    organization=get_user_organization(request.user)
                 )
-            else:
+                
+                # Return the new category
+                serializer = SimpleCategorySerializer(category)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+                
+            except Exception as e:
                 return Response(
-                    {"error": "Failed to create category", "details": serializer.errors},
+                    {"error": f"Failed to create category: {str(e)}"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
@@ -482,23 +552,19 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             # Update each product's tags individually to handle JSON properly
             for product in products:
                 try:
-                    # Get existing tags
-                    existing_tags = []
-                    if product.tags:
-                        try:
-                            existing_tags = json.loads(product.tags)
-                            if not isinstance(existing_tags, list):
-                                existing_tags = []
-                        except json.JSONDecodeError:
-                            existing_tags = []
+                    # Get existing tags using the product method
+                    existing_tags = product.get_tags()
+                    
+                    # Clean new tags
+                    clean_tags = [str(tag).strip() for tag in tags if tag]
                     
                     # Add new tags (avoid duplicates)
-                    for tag in tags:
+                    for tag in clean_tags:
                         if tag not in existing_tags:
                             existing_tags.append(tag)
                     
-                    # Update the product
-                    product.tags = json.dumps(existing_tags)
+                    # Update the product using the set_tags method
+                    product.set_tags(existing_tags)
                     product.save(update_fields=['tags'])
                     updated_count += 1
                     
@@ -510,7 +576,7 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                         summary=f"Tags were added to product '{product.name}' in bulk",
                         payload={
                             "field": field,
-                            "added_tags": tags,
+                            "added_tags": clean_tags,
                             "bulk_operation": True
                         }
                     )
@@ -778,13 +844,14 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 for product in queryset:
                     if product.tags:
                         try:
-                            tags = json.loads(product.tags)
+                            # Use the product's get_tags method which handles errors
+                            tags = product.get_tags()
                             if isinstance(tags, list):
-                                all_tags.update(tags)
-                        except json.JSONDecodeError:
-                            pass
+                                # Sanitize tags before adding to the set
+                                clean_tags = [str(tag).strip() for tag in tags if tag]
+                                all_tags.update(clean_tags)
                         except Exception as e:
-                            print(f"Error parsing tags for product {product.id}: {str(e)}")
+                            print(f"Error extracting tags for product {product.id}: {str(e)}")
                 
                 # Filter tags by search term if provided
                 search_term = request.query_params.get('search', '').lower()
@@ -795,27 +862,33 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 return Response(sorted(all_tags))
             
             elif request.method == 'POST':
-                # Get the tag name from request data
-                tag_name = request.data.get('name')
-                if not tag_name:
+                # Get the tag name from request data and sanitize it
+                tag_data = request.data.get('name')
+                if not tag_data:
                     return Response(
                         {"error": "Tag name is required"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Sanitize the tag
+                tag_name = str(tag_data).strip()
+                if not tag_name:
+                    return Response(
+                        {"error": "Tag name cannot be empty"},
                         status=status.HTTP_400_BAD_REQUEST
                     )
                 
                 # First check if this tag already exists in any product
                 queryset = self.get_queryset()
                 for product in queryset:
-                    if product.tags:
-                        try:
-                            tags = json.loads(product.tags)
-                            if isinstance(tags, list) and tag_name in tags:
-                                # Tag already exists, return it
-                                return Response(tag_name, status=status.HTTP_200_OK)
-                        except json.JSONDecodeError:
-                            pass
-                        except Exception as e:
-                            print(f"Error checking tags for product {product.id}: {str(e)}")
+                    try:
+                        # Use the product's get_tags method
+                        tags = product.get_tags()
+                        if isinstance(tags, list) and any(str(t).strip() == tag_name for t in tags):
+                            # Tag already exists, return it
+                            return Response(tag_name, status=status.HTTP_200_OK)
+                    except Exception as e:
+                        print(f"Error checking tags for product {product.id}: {str(e)}")
                 
                 # If tag doesn't exist, just return the new tag name
                 return Response(tag_name, status=status.HTTP_201_CREATED)
@@ -828,7 +901,7 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 return Response({"error": f"Failed to process tag: {str(e)}"}, 
                                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    @action(detail=True, methods=['get'], url_path='related-list')
+    @action(detail=True, methods=['get'])
     def related_products(self, request, pk=None):
         """
         Return a list of related products based on the same category.
@@ -856,7 +929,8 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             return Response(serializer.data)
         
         # Otherwise, supplement with category-based recommendations
-        if product.category and product.category.strip():
+        if product.category:
+            # Get products in the same category
             category_matches = base_queryset.filter(
                 category=product.category,
                 is_active=True
@@ -870,16 +944,20 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 serializer = self.get_serializer(combined_products, many=True)
                 return Response(serializer.data)
                 
-            # If we still need more, try case-insensitive search
+            # If we still need more, try descendants of the category
             if len(combined_products) < 5:
-                # Look for more products with case-insensitive category
-                case_insensitive_matches = base_queryset.filter(
-                    category__iexact=product.category,
-                    is_active=True
-                ).exclude(pk__in=[p.id for p in combined_products])
-                
-                # Add to our list, up to 5 total
-                combined_products.extend(case_insensitive_matches[:5-len(combined_products)])
+                # Get all descendant categories
+                descendant_categories = product.category.get_descendants()
+                if descendant_categories:
+                    descendant_ids = [cat.id for cat in descendant_categories]
+                    descendant_matches = base_queryset.filter(
+                        category_id__in=descendant_ids,
+                        is_active=True
+                    ).exclude(
+                        pk__in=[p.id for p in combined_products]
+                    )[:5-len(combined_products)]
+                    
+                    combined_products.extend(descendant_matches)
                 
             # If we still need more, try without the is_active filter
             if len(combined_products) < 5:
@@ -902,6 +980,14 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         
         serializer = self.get_serializer(fallback_products, many=True)
         return Response(serializer.data)
+        
+    # Add an alias for related_products with the URL path that the frontend is using
+    @action(detail=True, methods=['get'], url_path='related-list')
+    def related_list(self, request, pk=None):
+        """
+        Alias for related_products action to maintain compatibility with frontend.
+        """
+        return self.related_products(request, pk)
 
     @action(detail=True, methods=['post'], url_path='related-add')
     def add_related_product(self, request, pk=None):
@@ -1061,6 +1147,171 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 {"error": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+    # New action for managing prices for a product
+    @action(detail=True, methods=['get', 'post'], url_path='prices')
+    def prices(self, request, pk=None):
+        """
+        GET: List prices for a product
+        POST: Create a new price for a product
+        """
+        product = self.get_object()
+        
+        if request.method == 'GET':
+            # Filter prices for this product
+            prices = ProductPrice.objects.filter(product=product)
+            
+            # Apply optional filters
+            price_type = request.query_params.get('price_type')
+            channel_id = request.query_params.get('channel_id')
+            currency = request.query_params.get('currency')
+            valid_only = request.query_params.get('valid_only')
+            
+            if price_type:
+                prices = prices.filter(price_type=price_type)
+            if channel_id:
+                prices = prices.filter(channel_id=channel_id)
+            if currency:
+                prices = prices.filter(currency=currency)
+            if valid_only and valid_only.lower() == 'true':
+                now = timezone.now()
+                prices = prices.filter(
+                    Q(valid_from__lte=now) & 
+                    (Q(valid_to__isnull=True) | Q(valid_to__gte=now))
+                )
+                
+            serializer = ProductPriceSerializer(prices, many=True)
+            return Response(serializer.data)
+        
+        elif request.method == 'POST':
+            # Set the product automatically
+            data = request.data.copy()
+            
+            # Validate the price data
+            serializer = ProductPriceSerializer(data=data)
+            if serializer.is_valid():
+                # Create the price with the correct product
+                price = serializer.save(
+                    product=product,
+                    organization=get_user_organization(request.user)
+                )
+                
+                # Record the price creation event
+                record(
+                    product=product,
+                    user=request.user,
+                    event_type="price_created",
+                    summary=f"Added {price.get_price_type_display()} price of {price.currency} {price.amount}",
+                    payload={
+                        "price_id": price.id,
+                        "price_type": price.price_type,
+                        "amount": str(price.amount),
+                        "currency": price.currency
+                    }
+                )
+                
+                return Response(
+                    ProductPriceSerializer(price).data,
+                    status=status.HTTP_201_CREATED
+                )
+            
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Action for managing individual prices
+    @action(detail=True, methods=['get', 'patch', 'delete'], url_path='prices/(?P<price_id>[^/.]+)')
+    def manage_price(self, request, pk=None, price_id=None):
+        """
+        GET, PATCH, DELETE operations for a specific price
+        """
+        product = self.get_object()
+        
+        # Make sure the price exists and belongs to this product
+        try:
+            price = ProductPrice.objects.get(id=price_id, product=product)
+        except ProductPrice.DoesNotExist:
+            return Response(
+                {"error": "Price not found for this product"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        if request.method == 'GET':
+            serializer = ProductPriceSerializer(price)
+            return Response(serializer.data)
+        
+        elif request.method == 'PATCH':
+            serializer = ProductPriceSerializer(price, data=request.data, partial=True)
+            if serializer.is_valid():
+                updated_price = serializer.save()
+                
+                # Record the price update event
+                record(
+                    product=product,
+                    user=request.user,
+                    event_type="price_updated",
+                    summary=f"Updated {updated_price.get_price_type_display()} price to {updated_price.currency} {updated_price.amount}",
+                    payload={
+                        "price_id": updated_price.id,
+                        "price_type": updated_price.price_type,
+                        "amount": str(updated_price.amount),
+                        "currency": updated_price.currency,
+                        "changes": serializer.validated_data
+                    }
+                )
+                
+                return Response(serializer.data)
+            
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        elif request.method == 'DELETE':
+            # Optional: Instead of deleting, you could set an end date
+            price_type = price.get_price_type_display()
+            price_amount = f"{price.currency} {price.amount}"
+            
+            # Delete the price
+            price.delete()
+            
+            # Record the deletion
+            record(
+                product=product,
+                user=request.user,
+                event_type="price_deleted",
+                summary=f"Deleted {price_type} price of {price_amount}",
+                payload={
+                    "price_id": price_id,
+                    "price_type": price.price_type,
+                    "amount": str(price.amount),
+                    "currency": price.currency
+                }
+            )
+            
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+    # Action to get sales channels
+    @action(detail=False, methods=['get', 'post'], url_path='sales-channels')
+    def sales_channels(self, request):
+        """
+        GET: List all sales channels
+        POST: Create a new sales channel
+        """
+        if request.method == 'GET':
+            channels = SalesChannel.objects.filter(
+                organization=get_user_organization(request.user)
+            )
+            serializer = SalesChannelSerializer(channels, many=True)
+            return Response(serializer.data)
+        
+        elif request.method == 'POST':
+            serializer = SalesChannelSerializer(data=request.data)
+            if serializer.is_valid():
+                channel = serializer.save(
+                    organization=get_user_organization(request.user)
+                )
+                return Response(
+                    SalesChannelSerializer(channel).data,
+                    status=status.HTTP_201_CREATED
+                )
+            
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 # Add endpoints for dashboard data
 class DashboardViewSet(viewsets.ViewSet):

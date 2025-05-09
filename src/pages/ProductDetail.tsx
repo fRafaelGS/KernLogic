@@ -3,10 +3,16 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Product, productService } from '@/services/productService';
 import { ProductDetailLayout } from '@/components/products/ProductDetailLayout';
-import { ProductDetailSidebar } from '@/components/products/ProductDetailSidebar';
+import ProductDetailSidebar from '@/components/products/ProductDetailSidebar';
 import { ProductDetailTabs } from '@/components/products/ProductDetailTabs';
 import { ProductDetailDescription } from '@/components/products/ProductDetailDescription';
-import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbSeparator, BreadcrumbList } from '@/components/ui/breadcrumb';
+import { 
+  Breadcrumb,
+  BreadcrumbList,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbSeparator 
+} from '@/components/ui/breadcrumb';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';

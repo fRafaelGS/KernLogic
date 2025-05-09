@@ -75,6 +75,32 @@ paths:
         '200':
           description: No response body
   /orgs/{org_id}/memberships/{id}/avatar/:
+    get:
+      operationId: orgs_memberships_avatar_retrieve
+      description: |-
+        Handle membership avatar uploads, viewing, and deletion.
+
+        - GET: Return the avatar URL
+        - POST: Upload a new avatar
+        - DELETE: Remove the existing avatar
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
     post:
       operationId: orgs_memberships_avatar_create
       description: |-
@@ -126,32 +152,6 @@ paths:
       - jwtAuth: []
       responses:
         '204':
-          description: No response body
-    get:
-      operationId: orgs_memberships_avatar_retrieve
-      description: |-
-        Handle membership avatar uploads, viewing, and deletion.
-
-        - GET: Return the avatar URL
-        - POST: Upload a new avatar
-        - DELETE: Remove the existing avatar
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        required: true
-      - in: path
-        name: org_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - orgs
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
           description: No response body
   /analytics/completeness-export/:
     get:
@@ -385,7 +385,10 @@ paths:
       operationId: products_categories_create
       description: |-
         GET: Return a list of unique categories for dropdown menus.
-        POST: Create a new category by adding a product with that category.
+        POST: Create a new category by adding it directly to the Category model.
+
+        This is a legacy endpoint maintained for backward compatibility.
+        New clients should use the dedicated CategoryViewSet instead.
       tags:
       - products
       requestBody:
@@ -413,7 +416,10 @@ paths:
       operationId: products_categories_retrieve
       description: |-
         GET: Return a list of unique categories for dropdown menus.
-        POST: Create a new category by adding a product with that category.
+        POST: Create a new category by adding it directly to the Category model.
+
+        This is a legacy endpoint maintained for backward compatibility.
+        New clients should use the dedicated CategoryViewSet instead.
       tags:
       - products
       security:
@@ -443,6 +449,51 @@ paths:
             schema:
               $ref: '#/components/schemas/ProductRequest'
         required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
+  /products/sales-channels/:
+    post:
+      operationId: products_sales_channels_create
+      description: |-
+        GET: List all sales channels
+        POST: Create a new sales channel
+      tags:
+      - products
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
+    get:
+      operationId: products_sales_channels_retrieve
+      description: |-
+        GET: List all sales channels
+        POST: Create a new sales channel
+      tags:
+      - products
       security:
       - jwtAuth: []
       responses:
@@ -545,24 +596,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Product'
           description: ''
-    delete:
-      operationId: products_destroy
-      description: Soft delete by setting is_archived=True or permanently delete if
-        requested
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Product.
-        required: true
-      tags:
-      - products
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
     get:
       operationId: products_retrieve
       description: API endpoint for managing product data.
@@ -584,6 +617,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/Product'
           description: ''
+    delete:
+      operationId: products_destroy
+      description: Soft delete by setting is_archived=True or permanently delete if
+        requested
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Product.
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /products/{id}/related-add/:
     post:
       operationId: products_related_add_create
@@ -702,6 +753,92 @@ paths:
       responses:
         '204':
           description: No response body
+  /products/{id}/prices/{price_id}/:
+    patch:
+      operationId: products_prices_partial_update
+      description: GET, PATCH, DELETE operations for a specific price
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Product.
+        required: true
+      - in: path
+        name: price_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - products
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProductRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProductRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProductRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
+    get:
+      operationId: products_prices_retrieve_2
+      description: GET, PATCH, DELETE operations for a specific price
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Product.
+        required: true
+      - in: path
+        name: price_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
+    delete:
+      operationId: products_prices_destroy
+      description: GET, PATCH, DELETE operations for a specific price
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Product.
+        required: true
+      - in: path
+        name: price_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /products/{id}/related/{related_id}/:
     patch:
       operationId: products_related_partial_update
@@ -762,9 +899,68 @@ paths:
       responses:
         '204':
           description: No response body
-  /products/{id}/related-list/:
+  /products/{id}/prices/:
+    post:
+      operationId: products_prices_create
+      description: |-
+        GET: List prices for a product
+        POST: Create a new price for a product
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Product.
+        required: true
+      tags:
+      - products
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
     get:
-      operationId: products_related_list_retrieve
+      operationId: products_prices_retrieve
+      description: |-
+        GET: List prices for a product
+        POST: Create a new price for a product
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Product.
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
+  /products/{id}/related_products/:
+    get:
+      operationId: products_related_products_retrieve
       description: |-
         Return a list of related products based on the same category.
         Excludes the source product from the results.
@@ -1074,46 +1270,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Attribute'
           description: ''
-    delete:
-      operationId: attributes_destroy
-      description: Delete an attribute. Staff only.
-      summary: Delete an attribute
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this attribute.
-        required: true
-      tags:
-      - attributes
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
-    get:
-      operationId: attributes_retrieve
-      description: Returns details of a specific attribute.
-      summary: Get a specific attribute
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this attribute.
-        required: true
-      tags:
-      - attributes
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Attribute'
-          description: ''
     put:
       operationId: attributes_update
       description: Update an existing attribute. Staff only.
@@ -1148,6 +1304,46 @@ paths:
               schema:
                 $ref: '#/components/schemas/Attribute'
           description: ''
+    get:
+      operationId: attributes_retrieve
+      description: Returns details of a specific attribute.
+      summary: Get a specific attribute
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this attribute.
+        required: true
+      tags:
+      - attributes
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Attribute'
+          description: ''
+    delete:
+      operationId: attributes_destroy
+      description: Delete an attribute. Staff only.
+      summary: Delete an attribute
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this attribute.
+        required: true
+      tags:
+      - attributes
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /attribute-groups/:
     post:
       operationId: attribute_groups_create
@@ -1265,46 +1461,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/AttributeGroup'
           description: ''
-    delete:
-      operationId: attribute_groups_destroy
-      description: Delete an attribute group. Staff only.
-      summary: Delete an attribute group
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this attribute group.
-        required: true
-      tags:
-      - attribute-groups
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
-    get:
-      operationId: attribute_groups_retrieve
-      description: Returns details of a specific attribute group.
-      summary: Get a specific attribute group
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this attribute group.
-        required: true
-      tags:
-      - attribute-groups
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AttributeGroup'
-          description: ''
     put:
       operationId: attribute_groups_update
       description: Update an existing attribute group. Staff only.
@@ -1339,6 +1495,46 @@ paths:
               schema:
                 $ref: '#/components/schemas/AttributeGroup'
           description: ''
+    get:
+      operationId: attribute_groups_retrieve
+      description: Returns details of a specific attribute group.
+      summary: Get a specific attribute group
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this attribute group.
+        required: true
+      tags:
+      - attribute-groups
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeGroup'
+          description: ''
+    delete:
+      operationId: attribute_groups_destroy
+      description: Delete an attribute group. Staff only.
+      summary: Delete an attribute group
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this attribute group.
+        required: true
+      tags:
+      - attribute-groups
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /attribute-groups/{id}/add-item/:
     post:
       operationId: attribute_groups_add_item_create
@@ -1435,6 +1631,184 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AttributeGroup'
+          description: ''
+  /categories/:
+    post:
+      operationId: categories_create
+      description: Create a new category with optional parent.
+      summary: Create a new category
+      tags:
+      - categories
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+          description: ''
+    get:
+      operationId: categories_list
+      description: Returns a hierarchical tree of categories for the current organization.
+      summary: List all categories
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - categories
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Category'
+          description: ''
+  /categories/move/:
+    post:
+      operationId: categories_move_create
+      description: Move a category to a new parent
+      tags:
+      - categories
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+          description: ''
+  /categories/{id}/:
+    patch:
+      operationId: categories_partial_update
+      description: Partially update an existing category.
+      summary: Partially update a category
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - categories
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCategoryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCategoryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCategoryRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+          description: ''
+    get:
+      operationId: categories_retrieve
+      description: Returns details of a specific category including its children.
+      summary: Get a specific category
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - categories
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+          description: ''
+    delete:
+      operationId: categories_destroy
+      description: Delete a category. This will fail if products are still assigned
+        to it.
+      summary: Delete a category
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - categories
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /categories/{id}/products/:
+    get:
+      operationId: categories_products_retrieve
+      description: Return products assigned to this category or any of its subcategories
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - categories
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
           description: ''
   /products/{product_pk}/assets/:
     post:
@@ -1574,58 +1948,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProductAsset'
           description: ''
-    delete:
-      operationId: products_assets_destroy
-      description: |-
-        Nested under /products/<product_pk>/assets/.
-        Handles upload, delete, reorder and set-primary.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this product asset.
-        required: true
-      - in: path
-        name: product_pk
-        schema:
-          type: integer
-        required: true
-      tags:
-      - products
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
-    get:
-      operationId: products_assets_retrieve
-      description: |-
-        Nested under /products/<product_pk>/assets/.
-        Handles upload, delete, reorder and set-primary.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this product asset.
-        required: true
-      - in: path
-        name: product_pk
-        schema:
-          type: integer
-        required: true
-      tags:
-      - products
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProductAsset'
-          description: ''
     put:
       operationId: products_assets_update
       description: |-
@@ -1666,6 +1988,58 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProductAsset'
           description: ''
+    get:
+      operationId: products_assets_retrieve
+      description: |-
+        Nested under /products/<product_pk>/assets/.
+        Handles upload, delete, reorder and set-primary.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this product asset.
+        required: true
+      - in: path
+        name: product_pk
+        schema:
+          type: integer
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductAsset'
+          description: ''
+    delete:
+      operationId: products_assets_destroy
+      description: |-
+        Nested under /products/<product_pk>/assets/.
+        Handles upload, delete, reorder and set-primary.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this product asset.
+        required: true
+      - in: path
+        name: product_pk
+        schema:
+          type: integer
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /products/{product_pk}/assets/{id}/set_primary/:
     post:
       operationId: products_assets_set_primary_create
@@ -1843,56 +2217,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/AttributeValue'
           description: ''
-    delete:
-      operationId: products_attributes_destroy
-      description: Delete an attribute value. Staff only.
-      summary: Delete an attribute value
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this attribute value.
-        required: true
-      - in: path
-        name: product_pk
-        schema:
-          type: integer
-        required: true
-      tags:
-      - products
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
-    get:
-      operationId: products_attributes_retrieve
-      description: Returns details of a specific attribute value.
-      summary: Get a specific attribute value
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this attribute value.
-        required: true
-      - in: path
-        name: product_pk
-        schema:
-          type: integer
-        required: true
-      tags:
-      - products
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AttributeValueDetail'
-          description: ''
     put:
       operationId: products_attributes_update
       description: Update an existing attribute value. Staff only.
@@ -1932,6 +2256,56 @@ paths:
               schema:
                 $ref: '#/components/schemas/AttributeValue'
           description: ''
+    get:
+      operationId: products_attributes_retrieve
+      description: Returns details of a specific attribute value.
+      summary: Get a specific attribute value
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this attribute value.
+        required: true
+      - in: path
+        name: product_pk
+        schema:
+          type: integer
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeValueDetail'
+          description: ''
+    delete:
+      operationId: products_attributes_destroy
+      description: Delete an attribute value. Staff only.
+      summary: Delete an attribute value
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this attribute value.
+        required: true
+      - in: path
+        name: product_pk
+        schema:
+          type: integer
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /products/{product_pk}/attribute-groups/:
     get:
       operationId: products_attribute_groups_list
@@ -2284,6 +2658,7 @@ paths:
       - reports
       security:
       - jwtAuth: []
+      - {}
       responses:
         '200':
           content:
@@ -2308,6 +2683,7 @@ paths:
       - reports
       security:
       - jwtAuth: []
+      - {}
       responses:
         '200':
           content:
@@ -2323,6 +2699,7 @@ paths:
       - analytics
       security:
       - jwtAuth: []
+      - {}
       responses:
         '200':
           description: No response body
@@ -2334,6 +2711,7 @@ paths:
       - analytics
       security:
       - jwtAuth: []
+      - {}
       responses:
         '200':
           description: No response body
@@ -2345,6 +2723,7 @@ paths:
       - analytics
       security:
       - jwtAuth: []
+      - {}
       responses:
         '200':
           description: No response body
@@ -2357,6 +2736,7 @@ paths:
       - analytics
       security:
       - jwtAuth: []
+      - {}
       responses:
         '200':
           description: No response body
@@ -2368,6 +2748,7 @@ paths:
       - analytics
       security:
       - jwtAuth: []
+      - {}
       responses:
         '200':
           description: No response body
@@ -2379,6 +2760,7 @@ paths:
       - analytics
       security:
       - jwtAuth: []
+      - {}
       responses:
         '200':
           description: No response body
@@ -2390,6 +2772,7 @@ paths:
       - analytics
       security:
       - jwtAuth: []
+      - {}
       responses:
         '200':
           description: No response body
@@ -2401,6 +2784,7 @@ paths:
       - analytics
       security:
       - jwtAuth: []
+      - {}
       responses:
         '200':
           description: No response body
@@ -2560,52 +2944,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Role'
           description: ''
-    delete:
-      operationId: orgs_roles_destroy
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this role.
-        required: true
-      - in: path
-        name: org_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - orgs
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
-    get:
-      operationId: orgs_roles_retrieve
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this role.
-        required: true
-      - in: path
-        name: org_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - orgs
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Role'
-          description: ''
     put:
       operationId: orgs_roles_update
       parameters:
@@ -2643,6 +2981,52 @@ paths:
               schema:
                 $ref: '#/components/schemas/Role'
           description: ''
+    get:
+      operationId: orgs_roles_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this role.
+        required: true
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+          description: ''
+    delete:
+      operationId: orgs_roles_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this role.
+        required: true
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /orgs/{org_id}/memberships/:
     post:
       operationId: orgs_memberships_create
@@ -2768,53 +3152,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Membership'
           description: ''
-    delete:
-      operationId: orgs_memberships_destroy
-      description: Remove a membership and log the action
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this membership.
-        required: true
-      - in: path
-        name: org_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - orgs
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
-    get:
-      operationId: orgs_memberships_retrieve
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this membership.
-        required: true
-      - in: path
-        name: org_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - orgs
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Membership'
-          description: ''
     put:
       operationId: orgs_memberships_update
       parameters:
@@ -2852,6 +3189,53 @@ paths:
               schema:
                 $ref: '#/components/schemas/Membership'
           description: ''
+    get:
+      operationId: orgs_memberships_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this membership.
+        required: true
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Membership'
+          description: ''
+    delete:
+      operationId: orgs_memberships_destroy
+      description: Remove a membership and log the action
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this membership.
+        required: true
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /orgs/{org_id}/memberships/{id}/accept/:
     post:
       operationId: orgs_memberships_accept_create
@@ -3432,6 +3816,39 @@ components:
       - target_id
       - target_type
       - timestamp
+    Category:
+      type: object
+      description: Serializer for hierarchical category model
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        parent:
+          type: integer
+          nullable: true
+        children:
+          type: string
+          readOnly: true
+      required:
+      - children
+      - id
+      - name
+    CategoryRequest:
+      type: object
+      description: Serializer for hierarchical category model
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        parent:
+          type: integer
+          nullable: true
+      required:
+      - name
     DataTypeEnum:
       enum:
       - text
@@ -3718,6 +4135,17 @@ components:
           type: integer
         attribute:
           type: integer
+    PatchedCategoryRequest:
+      type: object
+      description: Serializer for hierarchical category model
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        parent:
+          type: integer
+          nullable: true
     PatchedMembershipRequest:
       type: object
       properties:
@@ -3781,10 +4209,10 @@ components:
         price:
           type: number
           format: double
-        category:
-          type: string
+        category_id:
+          type: integer
+          writeOnly: true
           nullable: true
-          maxLength: 100
         brand:
           type: string
           nullable: true
@@ -3818,6 +4246,18 @@ components:
         permissions:
           type: object
           additionalProperties: {}
+    PriceTypeEnum:
+      enum:
+      - list
+      - cost
+      - msrp
+      - promo
+      type: string
+      description: |-
+        * `list` - List Price
+        * `cost` - Cost Price
+        * `msrp` - MSRP
+        * `promo` - Promotional Price
     Product:
       type: object
       description: Serializer for Product model
@@ -3837,10 +4277,15 @@ components:
         price:
           type: number
           format: double
+        prices:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductPrice'
+          readOnly: true
         category:
-          type: string
-          nullable: true
-          maxLength: 100
+          allOf:
+          - $ref: '#/components/schemas/SimpleCategory'
+          readOnly: true
         brand:
           type: string
           nullable: true
@@ -3912,6 +4357,7 @@ components:
       required:
       - assets
       - attribute_values
+      - category
       - completeness_percent
       - created_at
       - created_by
@@ -3921,7 +4367,7 @@ components:
       - missing_fields
       - name
       - organization
-      - price
+      - prices
       - primary_asset
       - primary_image_large
       - primary_image_thumb
@@ -4111,6 +4557,51 @@ components:
         is_primary:
           type: boolean
           description: Is this the main image for the product?
+    ProductPrice:
+      type: object
+      description: Serializer for product prices
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        price_type:
+          $ref: '#/components/schemas/PriceTypeEnum'
+        price_type_display:
+          type: string
+          readOnly: true
+        channel:
+          allOf:
+          - $ref: '#/components/schemas/SalesChannel'
+          readOnly: true
+        currency:
+          type: string
+          maxLength: 3
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        valid_from:
+          type: string
+          format: date-time
+        valid_to:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount
+      - channel
+      - created_at
+      - id
+      - price_type_display
+      - updated_at
     ProductPriceHistory:
       type: object
       properties:
@@ -4126,6 +4617,33 @@ components:
         user:
           type: string
           default: system
+    ProductPriceRequest:
+      type: object
+      description: Serializer for product prices
+      properties:
+        price_type:
+          $ref: '#/components/schemas/PriceTypeEnum'
+        channel_id:
+          type: integer
+          writeOnly: true
+          nullable: true
+        currency:
+          type: string
+          minLength: 1
+          maxLength: 3
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        valid_from:
+          type: string
+          format: date-time
+        valid_to:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - amount
     ProductRequest:
       type: object
       description: Serializer for Product model
@@ -4144,10 +4662,10 @@ components:
         price:
           type: number
           format: double
-        category:
-          type: string
+        category_id:
+          type: integer
+          writeOnly: true
           nullable: true
-          maxLength: 100
         brand:
           type: string
           nullable: true
@@ -4171,7 +4689,6 @@ components:
           nullable: true
       required:
       - name
-      - price
       - sku
     ProductVersion:
       type: object
@@ -4238,6 +4755,79 @@ components:
         permissions:
           type: object
           additionalProperties: {}
+      required:
+      - name
+    SalesChannel:
+      type: object
+      description: Serializer for sales channels
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        code:
+          type: string
+          maxLength: 50
+        name:
+          type: string
+          maxLength: 100
+        description:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+      required:
+      - code
+      - id
+      - name
+    SalesChannelRequest:
+      type: object
+      description: Serializer for sales channels
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 50
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+      required:
+      - code
+      - name
+    SimpleCategory:
+      type: object
+      description: Simplified category serializer for nesting in products
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        parent_name:
+          type: string
+          readOnly: true
+      required:
+      - id
+      - name
+      - parent_name
+    SimpleCategoryRequest:
+      type: object
+      description: Simplified category serializer for nesting in products
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        parent_id:
+          type: integer
+          writeOnly: true
+          nullable: true
       required:
       - name
     TokenObtainPair:

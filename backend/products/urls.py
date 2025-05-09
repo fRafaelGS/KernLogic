@@ -14,6 +14,8 @@ from products.views_readonly import (
     VersionViewSet,
     AttributeSetViewSet,
 )
+# Import the new CategoryViewSet
+from products.views_category import CategoryViewSet
 # Import the PDF export view
 from products.views.pdf_export import generate_product_pdf
 
@@ -27,6 +29,8 @@ router.register(r"attribute-sets", AttributeSetViewSet, basename="attribute-set"
 router.register(r"attributes", AttributeViewSet, basename="attribute")
 # Add top-level attribute-groups route
 router.register(r"attribute-groups", AttributeGroupViewSet, basename="attribute-group")
+# Register the new CategoryViewSet
+router.register(r"categories", CategoryViewSet, basename="category")
 
 # /api/products/<product_pk>/assets/…
 assets_router = NestedSimpleRouter(router, r"products", lookup="product")

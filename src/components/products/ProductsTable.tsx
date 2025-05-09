@@ -92,6 +92,7 @@ import { useUniqueCategories, useUniqueTags } from "@/hooks/useProductDerived";
 import { useProductColumns } from "@/hooks/useProductColumns";    
 import ProductRowDetails from "./productstable/ProductRowDetails";
 import { motion, AnimatePresence } from 'framer-motion';
+import { normalizeCategory, getCategoryNamePath } from '@/types/categories';
 
 // Define constants for fixed widths
 const ACTION_W = 112; // Width of action column in pixels
@@ -337,18 +338,60 @@ export function ProductsTable() {
     // Apply text search
     if (debouncedSearchTerm) {
       const lowerSearchTerm = debouncedSearchTerm.toLowerCase();
-      filtered = filtered.filter(product => 
-        product.name?.toLowerCase().includes(lowerSearchTerm) ||
-        product.sku?.toLowerCase().includes(lowerSearchTerm) ||
-        product.description?.toLowerCase().includes(lowerSearchTerm)
-      );
+      filtered = filtered.filter(product => {
+        // Check name, SKU, and description
+        if (
+          product.name?.toLowerCase().includes(lowerSearchTerm) ||
+          product.sku?.toLowerCase().includes(lowerSearchTerm) ||
+          product.description?.toLowerCase().includes(lowerSearchTerm)
+        ) {
+          return true;
+        }
+        
+        // Handle category search with normalization
+        if (product.category) {
+          const categoryName = normalizeCategory(product.category).name;
+          if (categoryName.toLowerCase().includes(lowerSearchTerm)) {
+            return true;
+          }
+        }
+        
+        return false;
+      });
     }
     // Apply dropdown filters
     if (filters.category && filters.category !== 'all') {
       if (filters.category === 'uncategorized') {
-        filtered = filtered.filter(product => !product.category || product.category.trim() === '');
+        filtered = filtered.filter(product => {
+          // Handle case where category is null/undefined
+          if (!product.category) return true; 
+          
+          // Handle case where category is an object with name property
+          if (product.category && typeof product.category === 'object') {
+            return !product.category.name || product.category.name.trim() === '';
+          }
+          
+          // Handle case where category is a string
+          if (typeof product.category === 'string') {
+            return product.category.trim() === '';
+          }
+          
+          return true;
+        });
       } else {
-        filtered = filtered.filter(product => product.category === filters.category);
+        filtered = filtered.filter(product => {
+          // Handle case where category is an object with name property
+          if (product.category && typeof product.category === 'object') {
+            return product.category.name === filters.category;
+          }
+          
+          // Handle case where category is a string
+          if (typeof product.category === 'string') {
+            return product.category === filters.category;
+          }
+          
+          return false; // If no category, it's not a match for a specific category filter
+        });
       }
     }
     if (filters.status !== 'all') {

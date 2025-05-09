@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo } from 'react';
-import { Product, productService, ProductAsset } from '@/services/productService';
+import { Product, productService, ProductAsset, ProductPrice } from '@/services/productService';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Copy, ImageIcon, AlertCircle, UploadCloud } from 'lucide-react';
@@ -11,12 +11,24 @@ import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { PricingModal } from './PricingModal';
+import { CategoryModal } from './CategoryModal';
+import { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbSeparator } from '@/components/ui/breadcrumb';
+import { Category as CategoryFromService, buildCategoryBreadcrumb } from '@/services/categoryService';
+import { formatCurrency } from '@/lib/utils';
+import { CategoryDisplay } from '../common/CategoryDisplay';
+import { normalizeCategory, Category } from '@/types/categories';
 
 // Mock user permissions - in a real app, these would come from auth context
 const hasEditPermission = true;
 
+// Extend the Product interface to include prices
+interface ExtendedProduct extends Product {
+  prices?: ProductPrice[];
+}
+
 interface ProductDetailSidebarProps {
-  product: Product;
+  product: ExtendedProduct;
 }
 
 // Helper function to format date for display and tooltip
@@ -61,6 +73,8 @@ const priceHistory = [
 export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showPricingModal, setShowPricingModal] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
   
   const createdDate = formatDate(product.created_at);
   const modifiedDate = formatDate(product.updated_at);
@@ -173,7 +187,7 @@ export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
       fileInputRef.current.value = '';
     }
   };
-  
+
   return (
     <Card className="overflow-hidden">
       <CardContent className="p-0">
@@ -239,20 +253,20 @@ export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
         
         {/* Core product fields */}
         <div className="p-4 space-y-3">
-          <h2 className="font-medium text-sm text-slate-500 uppercase tracking-wider mb-2">
+          <h2 className="font-medium text-sm text-slate-500 uppercase tracking-wider">
             Core Information
           </h2>
           
           {/* SKU with copy button */}
-          <div className="flex justify-between items-center group">
-            <span className="text-slate-500">SKU</span>
+          <div className="flex justify-between items-center bg-slate-50 rounded-md px-3 py-1.5 border border-slate-200">
+            <span className="text-slate-600 text-sm">SKU</span>
             <div className="flex items-center">
-              <code className="font-mono text-xs bg-slate-50 px-1.5 py-0.5 rounded">
+              <code className="font-mono text-xs bg-white px-1.5 py-0.5 rounded border border-slate-200">
                 {product.sku}
               </code>
               <button 
                 onClick={() => handleCopyToClipboard(product.sku, 'SKU')}
-                className="ml-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                className="ml-1.5"
                 aria-label="Copy SKU to clipboard"
               >
                 <Copy className="h-3.5 w-3.5 text-slate-400 hover:text-slate-700" />
@@ -261,37 +275,91 @@ export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
           </div>
           
           {/* Name */}
-          <div className="flex justify-between items-center">
-            <span className="text-slate-500">Name</span>
+          <div className="flex justify-between items-center bg-slate-50 rounded-md px-3 py-1.5 border border-slate-200">
+            <span className="text-slate-600 text-sm">Name</span>
             <span className="font-medium text-right text-sm max-w-[200px] truncate" title={product.name}>
               {product.name}
             </span>
           </div>
           
           {/* Category */}
-          <div className="flex justify-between items-center">
-            <span className="text-slate-500">Category</span>
-            <span className="font-medium text-right text-sm max-w-[200px] truncate" title={product.category}>
-              {product.category || '-'}
-            </span>
+          <div className="flex justify-between items-center mt-3 border-t border-slate-100 pt-3">
+            <h2 className="font-medium text-sm text-slate-500 uppercase tracking-wider">
+              Category
+            </h2>
+            {hasEditPermission && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs h-6"
+                onClick={() => setShowCategoryModal(true)}
+              >
+                Change
+              </Button>
+            )}
+          </div>
+          <div className="py-1.5 bg-slate-50 rounded-md px-3 mt-1 border border-slate-200">
+            <CategoryDisplay category={product.category} showBadge={false} />
           </div>
           
-          {/* Brand */}
-          <div className="flex justify-between items-center">
-            <span className="text-slate-500">Brand</span>
-            <span className="font-medium text-right text-sm">
-              {product.brand || '-'}
-            </span>
+          {/* Brand and GTIN in a 2-column layout */}
+          <div className="grid grid-cols-2 gap-2 mt-3 border-t border-slate-100 pt-3">
+            <div>
+              <h2 className="font-medium text-sm text-slate-500 uppercase tracking-wider mb-1">
+                Brand
+              </h2>
+              <div className="bg-slate-50 rounded-md px-3 py-1.5 border border-slate-200 h-full">
+                <span className="font-medium text-sm">
+                  {product.brand || '-'}
+                </span>
+              </div>
+            </div>
+            
+            <div>
+              <h2 className="font-medium text-sm text-slate-500 uppercase tracking-wider mb-1">
+                GTIN
+              </h2>
+              <div className="flex justify-between items-center bg-slate-50 rounded-md px-3 py-1.5 border border-slate-200 h-full">
+                <code className="font-mono text-xs">
+                  {product.barcode || 'Not specified'}
+                </code>
+                {product.barcode && (
+                  <div className="flex items-center">
+                    <button 
+                      onClick={() => handleCopyToClipboard(product.barcode || '', 'GTIN')}
+                      className="ml-1.5"
+                      aria-label="Copy GTIN to clipboard"
+                    >
+                      <Copy className="h-3.5 w-3.5 text-slate-400 hover:text-slate-700" />
+                    </button>
+                    {!isGtinValid && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <AlertCircle className="h-3.5 w-3.5 text-red-500 ml-1.5" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="text-xs">Invalid GTIN checksum</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
           
           {/* Tags */}
-          <div className="flex justify-between items-start">
-            <span className="text-slate-500 mt-1">Tags</span>
-            <div className="flex flex-wrap justify-end gap-1 max-w-[70%]">
+          <div className="mt-3 border-t border-slate-100 pt-3">
+            <h2 className="font-medium text-sm text-slate-500 uppercase tracking-wider mb-1">
+              Tags
+            </h2>
+            <div className="flex flex-wrap gap-1 bg-slate-50 rounded-md px-3 py-1.5 border border-slate-200">
               {product.tags && product.tags.length > 0 ? (
                 <>
                   {product.tags.slice(0, 3).map((tag, index) => (
-                    <Badge key={index} variant="outline" className="text-xs bg-primary-50 text-primary-700 border-primary-200">
+                    <Badge key={index} variant="outline" className="text-xs bg-white text-primary-700 border-primary-200">
                       {tag}
                     </Badge>
                   ))}
@@ -299,14 +367,14 @@ export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
                   {product.tags.length > 3 && (
                     <HoverCard>
                       <HoverCardTrigger asChild>
-                        <Badge variant="outline" className="text-xs bg-slate-50 text-slate-700 border-slate-200 cursor-pointer">
+                        <Badge variant="outline" className="text-xs bg-white text-slate-700 border-slate-200 cursor-pointer">
                           +{product.tags.length - 3} more
                         </Badge>
                       </HoverCardTrigger>
                       <HoverCardContent className="w-auto p-2">
                         <div className="flex flex-wrap gap-1">
                           {product.tags.slice(3).map((tag, index) => (
-                            <Badge key={index} variant="outline" className="text-xs bg-primary-50 text-primary-700 border-primary-200">
+                            <Badge key={index} variant="outline" className="text-xs bg-white text-primary-700 border-primary-200">
                               {tag}
                             </Badge>
                           ))}
@@ -316,114 +384,101 @@ export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
                   )}
                 </>
               ) : (
-                <span className="text-right text-sm text-slate-400">-</span>
+                <span className="text-slate-400 text-sm">No tags</span>
               )}
             </div>
           </div>
           
-          {/* GTIN/Barcode */}
-          <div className="flex justify-between items-center">
-            <span className="text-slate-500">GTIN</span>
-            <div className="flex items-center group">
-              <code className="font-mono text-xs">
-                {product.barcode || '-'}
-              </code>
-              {product.barcode && (
-                <>
-                  <button 
-                    onClick={() => handleCopyToClipboard(product.barcode || '', 'GTIN')}
-                    className="ml-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                    aria-label="Copy GTIN to clipboard"
-                  >
-                    <Copy className="h-3.5 w-3.5 text-slate-400 hover:text-slate-700" />
-                  </button>
-                  {!isGtinValid && (
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <AlertCircle className="h-3.5 w-3.5 text-red-500 ml-1.5" />
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p className="text-xs">Invalid GTIN checksum</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
+          {/* Price Section */}
+          <div className="flex justify-between items-center mt-3 border-t border-slate-100 pt-3">
+            <h2 className="font-medium text-sm text-slate-500 uppercase tracking-wider">
+              Pricing
+            </h2>
+            {hasEditPermission && (
+              <Button 
+                size="sm" 
+                variant="outline"
+                className="text-xs h-6" 
+                onClick={() => setShowPricingModal(true)}
+              >
+                Manage
+              </Button>
+            )}
+          </div>
+          
+          {product.prices && product.prices.length > 0 ? (
+            <>
+              <div className="space-y-1 mt-1 bg-slate-50 rounded-md px-3 py-1.5 border border-slate-200">
+                {product.prices.map((price) => (
+                  <div key={price.id} className="flex justify-between items-center">
+                    <span className="text-slate-600 text-sm">
+                      {price.price_type_display}
+                      {price.channel?.name && ` (${price.channel.name})`}:
+                    </span>
+                    <span className="font-medium text-primary-700">
+                      {formatCurrency(price.amount, price.currency)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="flex justify-between items-center mt-1 bg-slate-50 rounded-md px-3 py-1.5 border border-slate-200">
+              <span className="text-slate-600 text-sm">Price</span>
+              <span className="font-medium text-primary-700">
+                {product.price ? formatCurrency(product.price) : '—'}
+              </span>
+            </div>
+          )}
+          
+          {/* Status and metadata in compact layout */}
+          <div className="grid grid-cols-2 gap-2 mt-3 border-t border-slate-100 pt-3">
+            <div>
+              <h2 className="font-medium text-sm text-slate-500 uppercase tracking-wider mb-1">
+                Status
+              </h2>
+              <div className="bg-slate-50 rounded-md px-3 py-1.5 border border-slate-200 flex items-center">
+                <Badge
+                  className={cn(
+                    "px-2 py-0.5",
+                    product.is_active
+                      ? "bg-green-100 text-green-800 border border-green-200"
+                      : "bg-red-100 text-red-800 border border-red-200"
                   )}
-                </>
-              )}
+                >
+                  {product.is_active ? 'Active' : 'Inactive'}
+                </Badge>
+              </div>
+            </div>
+            
+            <div>
+              <h2 className="font-medium text-sm text-slate-500 uppercase tracking-wider mb-1">
+                Created
+              </h2>
+              <div className="bg-slate-50 rounded-md px-3 py-1.5 border border-slate-200">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-slate-600 text-xs">{createdDate.display}</span>
+                        <Avatar className="h-4 w-4">
+                          <AvatarImage src={`https://ui-avatars.com/api/?name=${encodeURIComponent(product.created_by || 'User')}&size=32`} />
+                          <AvatarFallback className="text-[8px]">{(product.created_by || 'U').charAt(0).toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{createdDate.relative} by {product.created_by || 'Unknown user'}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
             </div>
           </div>
           
-          {/* Price with history tooltip */}
-          <div className="flex justify-between items-center">
-            <span className="text-slate-500">Price</span>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className={`font-medium ${product.price > 0 ? 'text-green-600' : 'text-slate-400'}`}>
-                    ${(product.price || 0).toFixed(2)}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="left" className="max-w-xs">
-                  <div className="space-y-1">
-                    <p className="font-medium text-xs">Price history:</p>
-                    {priceHistory.length > 0 ? (
-                      <ul className="text-xs space-y-1">
-                        {priceHistory.slice(0, 5).map((entry, i) => (
-                          <li key={i} className="flex items-center gap-1">
-                            <span>{entry.date}</span>
-                            <span className="text-slate-500">${entry.oldPrice} → ${entry.newPrice}</span>
-                            <span className="text-xs text-slate-400">by {entry.user}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-xs text-slate-500">No price changes recorded</p>
-                    )}
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-          
-          {/* Status */}
-          <div className="flex justify-between items-center">
-            <span className="text-slate-500">Status</span>
-            <Badge
-              className={
-                product.is_active
-                  ? "bg-success-50 text-success-700 border border-success-200"
-                  : "bg-danger-50 text-danger-700 border border-danger-200"
-              }
-            >
-              {product.is_active ? 'Active' : 'Inactive'}
-            </Badge>
-          </div>
-          
-          {/* Created */}
-          <div className="flex justify-between items-center pt-4 border-t border-slate-100">
-            <span className="text-slate-500 text-xs">Created</span>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-slate-600 text-xs">{createdDate.display}</span>
-                    <Avatar className="h-4 w-4">
-                      <AvatarImage src={`https://ui-avatars.com/api/?name=${encodeURIComponent(product.created_by || 'User')}&size=32`} />
-                      <AvatarFallback className="text-[8px]">{(product.created_by || 'U').charAt(0).toUpperCase()}</AvatarFallback>
-                    </Avatar>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{createdDate.relative} by {product.created_by || 'Unknown user'}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-          
-          {/* Last Modified */}
-          <div className="flex justify-between items-center">
-            <span className="text-slate-500 text-xs">Last modified</span>
+          {/* Last modified in a compact row */}
+          <div className="flex justify-between items-center bg-slate-50 rounded-md px-3 py-1.5 border border-slate-200 mt-1">
+            <span className="text-slate-600 text-xs">Last modified</span>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -443,6 +498,32 @@ export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
           </div>
         </div>
       </CardContent>
+      
+      {/* Pricing Modal */}
+      <PricingModal 
+        open={showPricingModal} 
+        onOpenChange={setShowPricingModal}
+        productId={product.id || 0}
+        onPricesUpdated={() => window.location.reload()}
+      />
+
+      {/* Category Modal */}
+      <CategoryModal
+        open={showCategoryModal}
+        onOpenChange={setShowCategoryModal}
+        productId={product.id || 0}
+        currentCategoryId={
+          product.category 
+            ? (typeof product.category === 'object' 
+                ? product.category.id 
+                : undefined)
+            : undefined
+        }
+        onCategoryUpdated={() => window.location.reload()}
+      />
     </Card>
   );
-} 
+}
+
+// Add default export to provide the component in both ways
+export default ProductDetailSidebar; 

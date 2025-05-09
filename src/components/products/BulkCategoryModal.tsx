@@ -12,13 +12,14 @@ import { productService } from '@/services/productService';
 import { Loader2 } from "lucide-react";
 import { useToast } from '@/components/ui/use-toast';
 import AsyncCreatableSelect from 'react-select/async-creatable';
-import { GroupBase } from 'react-select';
+import { getCategoryTree } from '@/services/categoryService';
 
 interface BulkCategoryModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   selectedIds: number[];
   onSuccess: () => void;
+  parentCategoryId?: number;
 }
 
 interface CategoryOption {
@@ -30,7 +31,8 @@ export function BulkCategoryModal({
   open,
   onOpenChange,
   selectedIds,
-  onSuccess
+  onSuccess,
+  parentCategoryId
 }: BulkCategoryModalProps) {
   const [selectedCategory, setSelectedCategory] = useState<CategoryOption | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -60,6 +62,15 @@ export function BulkCategoryModal({
       });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Refresh category tree
+  const refreshCategoryTree = async () => {
+    try {
+      await getCategoryTree();
+    } catch (error) {
+      console.error('Error refreshing category tree:', error);
     }
   };
 
@@ -145,8 +156,13 @@ export function BulkCategoryModal({
             onCreateOption={async (inputValue) => {
               try {
                 setIsSubmitting(true);
-                const newCategory = await productService.createCategory({ name: inputValue });
+                const newCategory = await productService.createCategory({ 
+                  name: inputValue, 
+                  parentId: parentCategoryId 
+                });
                 setSelectedCategory({ label: newCategory.name, value: newCategory.id.toString() });
+                
+                await refreshCategoryTree();
               } catch (error) {
                 console.error('Error creating category:', error);
                 toast({

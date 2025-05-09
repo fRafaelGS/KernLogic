@@ -190,9 +190,30 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
         setCategoryOptions(options);
         // Set default category value if editing
         if (initialProduct?.category) {
-          const initialOption = options.find(opt => opt.label === initialProduct.category || opt.value === initialProduct.category);
-          if (initialOption) {
-            form.setValue('category', initialOption);
+          // Handle the case where category can be a string or an object
+          if (typeof initialProduct.category === 'object') {
+            const categoryObj = initialProduct.category;
+            const initialOption = options.find(opt => 
+              opt.value === categoryObj.id || 
+              opt.label === categoryObj.name
+            );
+            if (initialOption) {
+              form.setValue('category', initialOption);
+            } else {
+              // Create a new option if not found in the list
+              const newOption = { 
+                label: categoryObj.name, 
+                value: categoryObj.id 
+              };
+              form.setValue('category', newOption);
+            }
+          } else {
+            // Handle string category (legacy format)
+            const categoryStr = initialProduct.category as string;
+            const initialOption = options.find(opt => opt.label === categoryStr);
+            if (initialOption) {
+              form.setValue('category', initialOption);
+            }
           }
         }
       } catch (error) {
@@ -262,10 +283,16 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
               formData.append(key, value);
               console.log(`Set category as string: ${value}`);
             } else if (typeof value === 'object') {
-              // If it's an object from react-select, prefer the label property
-              const categoryValue = (value as any).label || (value as any).value || '';
-              formData.append(key, categoryValue);
-              console.log(`Set category from object: ${categoryValue}`);
+              // For category, we should send the ID to the backend
+              // The backend is expecting a category_id field for properly setting the category
+              const categoryId = (value as any).value || '';
+              formData.append('category_id', categoryId.toString());
+              console.log(`Set category_id from object: ${categoryId}`);
+              
+              // Also include the category name for backwards compatibility
+              const categoryName = (value as any).label || '';
+              formData.append(key, categoryName);
+              console.log(`Set category name: ${categoryName}`);
             }
           } else {
             formData.append(key, '');

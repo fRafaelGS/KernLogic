@@ -4,9 +4,10 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Table } from '@/components/ui/table';
-import { Product, productService } from '@/services/productService';
+import { Product, productService, PaginatedResponse } from '@/services/productService';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
+import { normalizeCategory } from '@/types/categories';
 
 export const Products: React.FC = () => {
     const [products, setProducts] = useState<Product[]>([]);
@@ -19,8 +20,15 @@ export const Products: React.FC = () => {
             console.log('Fetching products...');
             // Use fetchAll=true to get all products across all pages
             const data = await productService.getProducts({}, true);
-            console.log('Products fetched:', data.length);
-            setProducts(data);
+            console.log('Products fetched:', Array.isArray(data) ? data.length : data.results.length);
+            
+            // Handle both array and paginated response types
+            if (Array.isArray(data)) {
+                setProducts(data);
+            } else {
+                // If we get a paginated response, use the results array
+                setProducts(data.results);
+            }
         } catch (error) {
             toast.error('Failed to fetch products');
             console.error('Error fetching products:', error);
@@ -45,11 +53,15 @@ export const Products: React.FC = () => {
         }
     };
 
-    const filteredProducts = products.filter(product =>
-        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.category.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredProducts = products.filter(product => {
+        const searchTermLower = searchTerm.toLowerCase();
+        // Normalize category to safely access name property
+        const categoryName = normalizeCategory(product.category).name;
+        
+        return product.name.toLowerCase().includes(searchTermLower) ||
+               product.description.toLowerCase().includes(searchTermLower) ||
+               categoryName.toLowerCase().includes(searchTermLower);
+    });
 
     return (
         <DashboardLayout>
@@ -103,7 +115,7 @@ export const Products: React.FC = () => {
                                         >
                                             <td>{product.name}</td>
                                             <td>{product.sku}</td>
-                                            <td>{product.category}</td>
+                                            <td>{typeof product.category === 'string' ? product.category : product.category?.name || ''}</td>
                                             <td>${product.price.toFixed(2)}</td>
                                             <td>
                                                 <span className={`px-2 py-1 rounded-full text-xs ${

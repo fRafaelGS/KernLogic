@@ -1,6 +1,9 @@
     import axios, { AxiosError, AxiosProgressEvent } from 'axios';
     import { API_URL } from '@/config';
     import axiosInstance from '@/lib/axiosInstance';
+    import { IncompleteProduct } from './dashboardService';
+    import { getCategories as fetchCategories, createCategory as createCategoryService, Category as CategoryFromService } from './categoryService';
+    import { Category as ProductCategory } from '@/types/categories';
 
     // PRODUCTS_PATH should be empty string to work with the backend URL structure
     // The backend routes 'api/' to products.urls which registers the viewset at ''
@@ -65,7 +68,7 @@
         description: string;
         sku: string;
         price: number;
-        category: string;
+        category: string | ProductCategory;
         created_by?: string;
         created_at?: string;
         updated_at?: string;
@@ -267,6 +270,69 @@
         next: string | null;
         previous: string | null;
         results: T[];
+    }
+
+    /**
+     * Get product completeness data from backend
+     * @param productId The ID of the product
+     * @param organizationId The organization ID (may be needed depending on backend implementation)
+     */
+    const getProductCompleteness = async (
+      productId: number,
+      organizationId?: string | number
+    ): Promise<IncompleteProduct> => {
+      try {
+        // Option 2: Using a dedicated endpoint (preferred if available)
+        const endpoint = `${PRODUCTS_PATH}/${productId}/completeness/`;
+        console.log(`Trying to fetch from: ${endpoint}`);
+        const response = await axiosInstance.get(endpoint);
+        return response.data;
+      } catch (error) {
+        // If dedicated endpoint fails, try the generic endpoint with productId parameter
+        console.log(`Dedicated endpoint failed, trying generic with params`);
+        try {
+          const params = new URLSearchParams();
+          if (organizationId) {
+            params.append('organization_id', organizationId.toString());
+          }
+          params.append('product_id', productId.toString());
+          
+          const endpoint = `${PRODUCTS_PATH}/incomplete-products/?${params.toString()}`;
+          console.log(`Trying to fetch from: ${endpoint}`);
+          const response = await axiosInstance.get(endpoint);
+          
+          // Handle array response (in case the API returns an array of one item)
+          const data = Array.isArray(response.data) && response.data.length === 1 
+            ? response.data[0] 
+            : response.data;
+          
+          return data;
+        } catch (secondError) {
+          console.error('Failed to fetch product completeness data:', secondError);
+          throw secondError;
+        }
+      }
+    };
+
+    // Define the ProductPrice interface
+    export interface ProductPrice {
+        id: number;
+        price_type: 'list' | 'cost' | 'msrp' | 'promo';
+        price_type_display: string;
+        channel: {
+            id: number;
+            code: string;
+            name: string;
+            description: string | null;
+            is_active: boolean;
+        } | null;
+        channel_id?: number;
+        currency: string;
+        amount: number;
+        valid_from: string;
+        valid_to: string | null;
+        created_at: string;
+        updated_at: string;
     }
 
     export const productService = {
@@ -539,50 +605,11 @@
             await axiosInstance.delete(url);
         },
 
-        // Get all categories (Updated to use real API data)
-        getCategories: async (): Promise<Category[]> => {
-            console.log('Fetching categories from API...');
+        // Get all categories (Delegating to categoryService)
+        getCategories: async (): Promise<CategoryFromService[]> => {
+            console.log('Fetching categories using categoryService...');
             try {
-                const response = await axiosInstance.get(`${PRODUCTS_PATH}/categories/`);
-                
-                // Handle HTML response
-                if (isHtmlResponse(response.data)) {
-                    console.error('[getCategories] Received HTML response instead of JSON');
-                    return [];
-                }
-                
-                // Handle DRF browsable API response format
-                if (response.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
-                    // If it contains a "categories" URL property instead of actual data
-                    if (response.data.categories) {
-                        console.log('[getCategories] Detected API root, fetching actual categories list...');
-                        // Make a second request to get the actual categories list
-                        const categoriesResponse = await axiosInstance.get(response.data.categories);
-                        
-                        if (Array.isArray(categoriesResponse.data)) {
-                            // Transform the response to Category objects
-                            return categoriesResponse.data.map((categoryName: string) => ({
-                                id: categoryName,
-                                name: categoryName
-                            }));
-                        } else {
-                            console.error('[getCategories] Unexpected response format from categories URL');
-                            return [];
-                        }
-                    }
-                    return [];
-                }
-                
-                // The API returns an array of category names, we need to convert to objects
-                if (Array.isArray(response.data)) {
-                    return response.data.map((categoryName: string) => ({
-                        id: categoryName,
-                        name: categoryName
-                    }));
-                }
-                
-                console.error('[getCategories] Unexpected response format', response.data);
-                return [];
+                return await fetchCategories();
             } catch (error) {
                 console.error('Error fetching categories:', error);
                 // Return empty array as fallback
@@ -590,39 +617,32 @@
             }
         },
 
-        // Search categories (Updated to use real API data)
+        // Search categories (Should be updated to use categoryService's search or filter mechanism)
         searchCategories: async (inputValue: string): Promise<CategoryOption[]> => {
             console.log(`Searching categories for: "${inputValue}"`);
             try {
-                // Fetch all categories from the API
-                const response = await axiosInstance.get(`${PRODUCTS_PATH}/categories/`);
+                // Fetch all categories from the categoryService
+                const categories = await fetchCategories();
+                
                 // Filter categories based on input value
-                const filteredCategories = response.data
-                    .filter((categoryName: string) => 
-                        categoryName.toLowerCase().includes(inputValue.toLowerCase()))
-                    .map((categoryName: string) => ({
-                        label: categoryName,
-                        value: categoryName
+                return categories
+                    .filter(category => 
+                        category.name.toLowerCase().includes(inputValue.toLowerCase()))
+                    .map(category => ({
+                        label: category.name,
+                        value: category.id
                     }));
-                return filteredCategories;
             } catch (error) {
                 console.error('Error searching categories:', error);
                 return []; // Return empty array as fallback
             }
         },
 
-        // Create a new category (Updated to use real API)
-        createCategory: async (data: { name: string }): Promise<Category> => {
-            console.log('Creating category:', data);
+        // Create a new category (Delegating to categoryService)
+        createCategory: async (data: { name: string, parentId?: number }): Promise<CategoryFromService> => {
+            console.log('Creating category using categoryService:', data);
             try {
-                const response = await axiosInstance.post(`${PRODUCTS_PATH}/categories/`, {
-                    category: data.name
-                });
-                // The API returns { id: number, category: string }
-                return {
-                    id: response.data.category, // Use the category name as the ID
-                    name: response.data.category
-                };
+                return await createCategoryService(data.name, data.parentId);
             } catch (error) {
                 console.error('Error creating category:', error);
                 throw error; // Propagate error to be handled by the caller
@@ -1007,7 +1027,31 @@
                 
                 return response.data;
             } catch (error) {
-                console.error('Error fetching product versions:', error);
+                // Enhanced error handling with detailed information
+                if (axios.isAxiosError(error)) {
+                    const status = error.response?.status;
+                    const errorData = error.response?.data;
+                    
+                    console.error(`[getProductVersions] Server error (${status}):`, {
+                        message: error.message,
+                        url: `/api/products/${productId}/versions/`,
+                        response: errorData ? (typeof errorData === 'string' ? errorData.substring(0, 200) + '...' : errorData) : 'No response data'
+                    });
+                    
+                    // Log a warning that an "AttributeError" is typically a backend code issue
+                    if (typeof errorData === 'string' && errorData.includes('AttributeError')) {
+                        console.warn('[getProductVersions] AttributeError detected - This is likely a backend code issue that requires server-side fixing');
+                    }
+                    
+                    // For 500 errors specifically, we'll log even more details to help debug
+                    if (status === 500) {
+                        console.warn('[getProductVersions] Returning empty array due to server error (500)');
+                    }
+                } else {
+                    console.error('Error fetching product versions:', error);
+                }
+                
+                // Always return an empty array when there's an error to prevent UI crashes
                 return [];
             }
         },
@@ -1607,6 +1651,69 @@
             } catch (error) {
                 console.error('Error getting product suggestions:', error);
                 return [];
+            }
+        },
+
+        getProductCompleteness,
+
+        // Get all prices for a product
+        getPrices: async (productId: number): Promise<ProductPrice[]> => {
+            try {
+                const url = `${PRODUCTS_API_URL}/${productId}/prices/`;
+                const response = await axiosInstance.get(url);
+                
+                if (isHtmlResponse(response.data)) {
+                    console.error('[getPrices] Received HTML response instead of JSON');
+                    return [];
+                }
+                
+                // Handle different response formats
+                if (Array.isArray(response.data)) {
+                    return response.data;
+                } else if (response.data && response.data.results && Array.isArray(response.data.results)) {
+                    return response.data.results;
+                }
+                
+                return [];
+            } catch (error) {
+                console.error('Error fetching product prices:', error);
+                return [];
+            }
+        },
+
+        // Add a new price for a product
+        addPrice: async (productId: number, priceData: Omit<ProductPrice, 'id' | 'created_at' | 'updated_at' | 'price_type_display'>): Promise<ProductPrice | null> => {
+            try {
+                const url = `${PRODUCTS_API_URL}/${productId}/prices/`;
+                const response = await axiosInstance.post(url, priceData);
+                return response.data;
+            } catch (error) {
+                console.error('Error adding product price:', error);
+                throw error;
+            }
+        },
+
+        // Update an existing price
+        patchPrice: async (productId: number, priceId: number, priceData: Partial<ProductPrice>): Promise<ProductPrice | null> => {
+            try {
+                const url = `${PRODUCTS_API_URL}/${productId}/prices/${priceId}/`;
+                const response = await axiosInstance.patch(url, priceData);
+                return response.data;
+            } catch (error) {
+                console.error('Error updating product price:', error);
+                throw error;
+            }
+        },
+
+        // Delete a price
+        deletePrice: async (productId: number, priceId: number): Promise<boolean> => {
+            try {
+                const url = `${PRODUCTS_API_URL}/${productId}/prices/${priceId}/`;
+                await axiosInstance.delete(url);
+                return true;
+            } catch (error) {
+                console.error('Error deleting product price:', error);
+                throw error;
             }
         },
     }; 

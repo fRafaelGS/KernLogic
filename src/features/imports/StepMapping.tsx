@@ -37,12 +37,12 @@ const StepMapping: React.FC<StepMappingProps> = ({ sourceHeaders, onMappingCompl
     
     if (savedMapping) {
       try {
-        const parsedMapping = JSON.parse(savedMapping);
+        const parsedMapping = JSON.parse(savedMapping) as Record<string, string>;
         
         // Check if headers match saved mapping
         const savedHeaders = Object.keys(parsedMapping);
         const matchCount = savedHeaders.filter(h => sourceHeaders.includes(h)).length;
-        const matchPercentage = (matchCount / savedHeaders.length) * 100;
+        const matchPercentage = savedHeaders.length > 0 ? (matchCount / savedHeaders.length) * 100 : 0;
         
         // If 70% or more of headers match, use saved mapping
         if (matchPercentage >= 70) {
@@ -51,7 +51,7 @@ const StepMapping: React.FC<StepMappingProps> = ({ sourceHeaders, onMappingCompl
           // Only include mappings for headers that exist in current file
           for (const [source, target] of Object.entries(parsedMapping)) {
             if (sourceHeaders.includes(source)) {
-              filteredMapping[source] = target;
+              filteredMapping[source] = target as string;
             }
           }
           
@@ -102,7 +102,17 @@ const StepMapping: React.FC<StepMappingProps> = ({ sourceHeaders, onMappingCompl
 
   // Handle field mapping change
   const handleMappingChange = (source: string, target: string) => {
-    const newMapping = { ...mapping, [source]: target };
+    // If target is 'skip', it means "do not import" this field
+    const newMapping = { ...mapping };
+    
+    if (target === 'skip') {
+      // Remove the mapping if it exists
+      delete newMapping[source];
+    } else {
+      // Add or update the mapping
+      newMapping[source] = target;
+    }
+    
     setMapping(newMapping);
     checkRequiredFields(newMapping);
   };
@@ -173,14 +183,14 @@ const StepMapping: React.FC<StepMappingProps> = ({ sourceHeaders, onMappingCompl
                 <TableCell className="font-medium">{header}</TableCell>
                 <TableCell>
                   <Select
-                    value={mapping[header] || ''}
+                    value={mapping[header] || 'skip'}
                     onValueChange={(value) => handleMappingChange(header, value)}
                   >
                     <SelectTrigger className="w-[200px]">
                       <SelectValue placeholder="Select field" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">-- Do not import --</SelectItem>
+                      <SelectItem value="skip">-- Do not import --</SelectItem>
                       {API_FIELDS.map(field => (
                         <SelectItem key={field.id} value={field.id}>
                           {field.label}{field.required ? ' *' : ''}

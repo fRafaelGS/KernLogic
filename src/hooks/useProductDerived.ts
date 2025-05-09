@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import type { Product } from "@/services/productService";
+import { normalizeCategory } from "@/types/categories";
 
 /**
  * All distinct non-empty categories present in the given list.
@@ -10,7 +11,11 @@ export function useUniqueCategories(products: Product[]) {
 
     const set = new Set<string>(
       products
-        .map((p) => (p.category ?? "").trim())
+        .map((p) => {
+          // Normalize the category to safely access the name property
+          const categoryName = normalizeCategory(p.category).name.trim();
+          return categoryName; 
+        })
         .filter(Boolean),
     );
 

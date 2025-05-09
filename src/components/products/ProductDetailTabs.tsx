@@ -72,6 +72,8 @@ import { ENABLE_CUSTOM_ATTRIBUTES } from '@/config/featureFlags';
 import { PermissionGuard } from '@/components/common/PermissionGuard';
 // Update the imports to include FieldStatusModal
 import { FieldStatusModal } from './FieldStatusModal';
+// Add import for normalizeCategory
+import { normalizeCategory } from '@/types/categories';
 
 // ====== ATTRIBUTES INTERFACES (EXACT MATCH TO SPEC) ======
 // (Following exactly the backend shape specified in the requirements)
@@ -414,7 +416,6 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
   // Fetch versions from API
   const fetchVersions = async () => {
     if (!product.id) return;
-    
     setLoadingVersions(true);
     
     try {
@@ -430,29 +431,35 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
         // Don't override existing versions if we get an empty response
         if (versions.length === 0) {
           console.log('Using mock versions as fallback');
-          // Fallback to mock data if API fails
-          setVersions([
-            { id: 1, version: 'v1.0', timestamp: '2023-10-01T09:00:00Z', user: 'John Doe', summary: 'Initial version' },
-            { id: 2, version: 'v1.1', timestamp: '2023-10-05T14:30:00Z', user: 'John Doe', summary: 'Price update' },
-            { id: 3, version: 'v1.2', timestamp: '2023-10-12T11:45:00Z', user: 'Mike Johnson', summary: 'Description update' },
-            { id: 4, version: 'v1.3', timestamp: '2023-10-20T16:00:00Z', user: 'Mike Johnson', summary: 'Status change' },
-            { id: 5, version: 'v1.4', timestamp: '2023-11-05T09:15:00Z', user: 'John Doe', summary: 'Category update' },
-          ]);
+          // Fallback to mock data with a note that the data is mock
+          const mockData = [
+            { id: 1, version: 'v1.0', timestamp: new Date().toISOString(), user: 'System', summary: 'Version history unavailable' },
+            { id: 2, version: 'v1.1', timestamp: new Date(Date.now() - 86400000).toISOString(), user: 'System', summary: 'Initial product creation' },
+          ];
+          setVersions(mockData);
+          
+          // Add a warning toast that data is unavailable
+          toast("Version history limited", {
+            description: "We couldn't retrieve the full version history. The system will show limited information."
+          });
         }
       }
     } catch (error) {
       console.error('Error fetching versions:', error);
+      
       // Only use fallback if no existing data
       if (versions.length === 0) {
         console.log('Using mock versions due to error');
-        // Fallback to mock data if API fails
-        setVersions([
-          { id: 1, version: 'v1.0', timestamp: '2023-10-01T09:00:00Z', user: 'John Doe', summary: 'Initial version' },
-          { id: 2, version: 'v1.1', timestamp: '2023-10-05T14:30:00Z', user: 'John Doe', summary: 'Price update' },
-          { id: 3, version: 'v1.2', timestamp: '2023-10-12T11:45:00Z', user: 'Mike Johnson', summary: 'Description update' },
-          { id: 4, version: 'v1.3', timestamp: '2023-10-20T16:00:00Z', user: 'Mike Johnson', summary: 'Status change' },
-          { id: 5, version: 'v1.4', timestamp: '2023-11-05T09:15:00Z', user: 'John Doe', summary: 'Category update' },
-        ]);
+        // Fallback to mock data with clear indication it's placeholder data
+        const mockData = [
+          { id: 1, version: 'v1.0', timestamp: new Date().toISOString(), user: 'System', summary: 'Version history unavailable (server error)' },
+        ];
+        setVersions(mockData);
+        
+        // Add an error toast to inform the user
+        toast("Couldn't load version history", {
+          description: "There was a server error loading the version history. Please try again later."
+        });
       }
     } finally {
       setLoadingVersions(false);
@@ -524,16 +531,26 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
       // Log the category to debug
       console.log('Product category:', product.category);
       
-      // Check for common automotive/vehicle categories with null guard
-      const isAutomotive = Boolean(product.category) &&
+      // Use the normalizeCategory helper to handle both string and object formats
+      const normalizedCategory = normalizeCategory(product.category);
+      const categoryName = normalizedCategory.name;
+        
+      // Check for common automotive/vehicle categories
+      const isAutomotive = categoryName !== '' &&
         ['automotive', 'cars', 'vehicles', 'auto'].some(
-          cat => product.category!.toLowerCase().includes(cat)
+          cat => categoryName.toLowerCase().includes(cat)
         );
       
       // Get attribute set ID based on category or use a hardcoded value
-      const setId = product.category === 'Electronics' ? 1 : 
-                    product.category === 'Furniture' ? 2 : 
-                    isAutomotive ? 3 : 3; // Default to 3 (Automotive)
+      let setId = 3; // Default to 3 (Automotive)
+      
+      if (categoryName === 'Electronics') {
+        setId = 1;
+      } else if (categoryName === 'Furniture') {
+        setId = 2;
+      } else if (isAutomotive) {
+        setId = 3;
+      }
       
       console.log('Using attribute set ID:', setId);
       setAttributeSetId(setId);

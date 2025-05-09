@@ -284,12 +284,12 @@ export const EnhancedAddRelatedProductPanel: React.FC<EnhancedAddRelatedProductP
             <SelectContent>
               <SelectGroup>
                 <SelectLabel>Relationship Type</SelectLabel>
+                <SelectItem value="general">General</SelectItem>
                 <SelectItem value="accessory">Accessory</SelectItem>
                 <SelectItem value="variant">Variant</SelectItem>
                 <SelectItem value="frequently_bought_together">Bought Together</SelectItem>
                 <SelectItem value="replacement">Replacement</SelectItem>
                 <SelectItem value="similar">Similar</SelectItem>
-                <SelectItem value="general">General</SelectItem>
               </SelectGroup>
             </SelectContent>
           </Select>

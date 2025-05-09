@@ -73,187 +73,187 @@ export const App: React.FC = () => {
 
     return (
         <Router>
-            <AuthProvider>
-                <QueryClientProvider>
-                    <TooltipProvider>
-                        <Toaster 
-                          position="top-right"
-                          richColors
-                          toastOptions={{
-                            classNames: {
-                              toast: 'border border-enterprise-200 bg-white text-enterprise-900 shadow-lg',
-                              title: 'text-sm font-semibold',
-                              description: 'text-sm text-enterprise-600',
-                              actionButton:
-                                'bg-primary-600 text-white hover:bg-primary-700',
-                              cancelButton:
-                                'bg-enterprise-100 text-enterprise-700 hover:bg-enterprise-200',
-                            },
-                          }}
-                        />
-                        <Routes>
-                            {/* Marketing Routes */}
-                            <Route path="/" element={<LandingPage />} />
-                            <Route path="/marketing" element={<LandingPage />} />
-                            <Route path="/marketing/pricing" element={<PricingPage />} />
-                            <Route path="/marketing/product" element={<ProductPage />} />
-                            
-                            {/* Auth Routes */}
-                            <Route path="/login" element={<LoginPage />} />
-                            <Route path="/register" element={<RegisterPage />} />
-                            <Route path="/register/:orgId" element={<OrganizationRegisterPage />} />
-                            
-                            {/* Protected App Routes */}
-                            <Route
-                                path="/app"
-                                element={
-                                    <ProtectedRoute>
-                                        <DashboardLayout>
-                                            <DashboardPage />
-                                        </DashboardLayout>
-                                    </ProtectedRoute>
-                                }
-                            />
-                            <Route
-                                path="/app/products"
-                                element={
-                                    <ProtectedRoute>
-                                        <DashboardLayout>
-                                            <ProductsPage />
-                                        </DashboardLayout>
-                                    </ProtectedRoute>
-                                }
-                            />
-                            <Route
-                                path="/app/products/new"
-                                element={
-                                    <ProtectedRoute>
-                                        <DashboardLayout>
-                                            <NewProduct />
-                                        </DashboardLayout>
-                                    </ProtectedRoute>
-                                }
-                            />
-                            <Route
-                                path="/app/products/:id"
-                                element={
-                                    <ProtectedRoute>
-                                        <ProductDetail />
-                                    </ProtectedRoute>
-                                }
-                            />
-                            <Route
-                                path="/app/products/:id/edit"
-                                element={
-                                    <ProtectedRoute>
-                                        <DashboardLayout>
-                                            <EditProduct />
-                                        </DashboardLayout>
-                                    </ProtectedRoute>
-                                }
-                            />
-                            <Route
-                                path="/app/reports"
-                                element={
-                                    <ProtectedRoute>
-                                        <DashboardLayout>
-                                            <ReportsPage />
-                                        </DashboardLayout>
-                                    </ProtectedRoute>
-                                }
-                            />
-                            <Route
-                                path="/app/upload"
-                                element={
-                                    <ProtectedRoute>
-                                        <DashboardLayout>
-                                            <UploadPage />
-                                        </DashboardLayout>
-                                    </ProtectedRoute>
-                                }
-                            />
-                            <Route
-                                path="/app/documentation"
-                                element={
-                                    <ProtectedRoute>
-                                        <DashboardLayout>
-                                            <DocumentationPage />
-                                        </DashboardLayout>
-                                    </ProtectedRoute>
-                                }
-                            />
-                            <Route
-                                path="/app/team"
-                                element={
-                                    <ProtectedRoute>
-                                        <DashboardLayout>
-                                            <TeamPage />
-                                        </DashboardLayout>
-                                    </ProtectedRoute>
-                                }
-                            />
-                            <Route
-                                path="/app/team/history"
-                                element={
-                                    <ProtectedRoute>
-                                        <DashboardLayout>
-                                            <TeamHistoryPage />
-                                        </DashboardLayout>
-                                    </ProtectedRoute>
-                                }
-                            />
-                            <Route
-                                path="/app/settings"
-                                element={
-                                    <ProtectedRoute>
-                                        <DashboardLayout>
-                                            <SettingsPage />
-                                        </DashboardLayout>
-                                    </ProtectedRoute>
-                                }
-                            />
-                            {/* Attributes Page (with feature flag) */}
-                            {ENABLE_CUSTOM_ATTRIBUTES && (
-                              <Route
-                                  path="/app/settings/attributes"
-                                  element={
-                                      <ProtectedRoute>
-                                          <DashboardLayout>
-                                              <AttributesPage />
-                                          </DashboardLayout>
-                                      </ProtectedRoute>
-                                  }
-                              />
-                            )}
-                            {/* Attribute Groups Page (with feature flag) */}
-                            {ENABLE_ATTRIBUTE_GROUPS && (
-                              <Route
-                                  path="/app/settings/attribute-groups"
-                                  element={
-                                      <ProtectedRoute>
-                                          <DashboardLayout>
-                                              <AttributeGroupsPage />
-                                          </DashboardLayout>
-                                      </ProtectedRoute>
-                                  }
-                              />
-                            )}
-                            {/* UI Component Demo Routes */}
-                            <Route
-                                path="/app/ui/buttons"
-                                element={
-                                    <ProtectedRoute>
-                                        <ButtonDemo />
-                                    </ProtectedRoute>
-                                }
-                            />
-                            <Route path="/accept-invite/:membershipId" element={<AcceptInvitePage />} />
-                            <Route path="/set-password/:orgId" element={<SetPasswordPage />} />
-                            <Route path="*" element={<Navigate to="/" replace />} />
-                        </Routes>
-                    </TooltipProvider>
-                </QueryClientProvider>
-            </AuthProvider>
+          <AuthProvider>
+            <QueryClientProvider>
+              <TooltipProvider>
+                <Toaster 
+                  position="top-right"
+                  richColors
+                  toastOptions={{
+                    classNames: {
+                      toast: 'border border-enterprise-200 bg-white text-enterprise-900 shadow-lg',
+                      title: 'text-sm font-semibold',
+                      description: 'text-sm text-enterprise-600',
+                      actionButton:
+                        'bg-primary-600 text-white hover:bg-primary-700',
+                      cancelButton:
+                        'bg-enterprise-100 text-enterprise-700 hover:bg-enterprise-200',
+                    },
+                  }}
+                />
+                <Routes>
+                    {/* Marketing Routes */}
+                    <Route path="/" element={<LandingPage />} />
+                    <Route path="/marketing" element={<LandingPage />} />
+                    <Route path="/marketing/pricing" element={<PricingPage />} />
+                    <Route path="/marketing/product" element={<ProductPage />} />
+                    
+                    {/* Auth Routes */}
+                    <Route path="/login" element={<LoginPage />} />
+                    <Route path="/register" element={<RegisterPage />} />
+                    <Route path="/register/:orgId" element={<OrganizationRegisterPage />} />
+                    
+                    {/* Protected App Routes */}
+                    <Route
+                        path="/app"
+                        element={
+                            <ProtectedRoute>
+                                <DashboardLayout>
+                                    <DashboardPage />
+                                </DashboardLayout>
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/app/products"
+                        element={
+                            <ProtectedRoute>
+                                <DashboardLayout>
+                                    <ProductsPage />
+                                </DashboardLayout>
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/app/products/new"
+                        element={
+                            <ProtectedRoute>
+                                <DashboardLayout>
+                                    <NewProduct />
+                                </DashboardLayout>
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/app/products/:id"
+                        element={
+                            <ProtectedRoute>
+                                <ProductDetail />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/app/products/:id/edit"
+                        element={
+                            <ProtectedRoute>
+                                <DashboardLayout>
+                                    <EditProduct />
+                                </DashboardLayout>
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/app/reports"
+                        element={
+                            <ProtectedRoute>
+                                <DashboardLayout>
+                                    <ReportsPage />
+                                </DashboardLayout>
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/app/upload"
+                        element={
+                            <ProtectedRoute>
+                                <DashboardLayout>
+                                    <UploadPage />
+                                </DashboardLayout>
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/app/documentation"
+                        element={
+                            <ProtectedRoute>
+                                <DashboardLayout>
+                                    <DocumentationPage />
+                                </DashboardLayout>
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/app/team"
+                        element={
+                            <ProtectedRoute>
+                                <DashboardLayout>
+                                    <TeamPage />
+                                </DashboardLayout>
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/app/team/history"
+                        element={
+                            <ProtectedRoute>
+                                <DashboardLayout>
+                                    <TeamHistoryPage />
+                                </DashboardLayout>
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/app/settings"
+                        element={
+                            <ProtectedRoute>
+                                <DashboardLayout>
+                                    <SettingsPage />
+                                </DashboardLayout>
+                            </ProtectedRoute>
+                        }
+                    />
+                    {/* Attributes Page (with feature flag) */}
+                    {ENABLE_CUSTOM_ATTRIBUTES && (
+                      <Route
+                          path="/app/settings/attributes"
+                          element={
+                              <ProtectedRoute>
+                                  <DashboardLayout>
+                                      <AttributesPage />
+                                  </DashboardLayout>
+                              </ProtectedRoute>
+                          }
+                      />
+                    )}
+                    {/* Attribute Groups Page (with feature flag) */}
+                    {ENABLE_ATTRIBUTE_GROUPS && (
+                      <Route
+                          path="/app/settings/attribute-groups"
+                          element={
+                              <ProtectedRoute>
+                                  <DashboardLayout>
+                                      <AttributeGroupsPage />
+                                  </DashboardLayout>
+                              </ProtectedRoute>
+                          }
+                      />
+                    )}
+                    {/* UI Component Demo Routes */}
+                    <Route
+                        path="/app/ui/buttons"
+                        element={
+                            <ProtectedRoute>
+                                <ButtonDemo />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route path="/accept-invite/:membershipId" element={<AcceptInvitePage />} />
+                    <Route path="/set-password/:orgId" element={<SetPasswordPage />} />
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </TooltipProvider>
+            </QueryClientProvider>
+          </AuthProvider>
         </Router>
     );
 };

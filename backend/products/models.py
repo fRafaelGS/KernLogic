@@ -3,16 +3,64 @@ from django.conf import settings
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 import json
+from mptt.models import MPTTModel, TreeForeignKey
 
 User = get_user_model()
+
+# New SalesChannel model
+class SalesChannel(models.Model):
+    """
+    Represents a sales channel (e.g., website, marketplace, retail store)
+    """
+    code = models.CharField(max_length=50, unique=True)
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, db_index=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.code})"
+    
+    class Meta:
+        verbose_name = "Sales Channel"
+        verbose_name_plural = "Sales Channels"
+        ordering = ['name']
+        indexes = [
+            models.Index(fields=['code']),
+            models.Index(fields=['organization']),
+        ]
+
+# New hierarchical Category model
+class Category(MPTTModel):
+    """
+    Hierarchical category model for products
+    """
+    name = models.CharField(max_length=100)
+    parent = TreeForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='children')
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, db_index=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
+    class MPTTMeta:
+        order_insertion_by = ['name']
+
+    class Meta:
+        verbose_name = "Category"
+        verbose_name_plural = "Categories"
+        unique_together = [('name', 'parent', 'organization')]
 
 class Product(models.Model):
     # Basic Product Information (Required)
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
     sku = models.CharField(max_length=50)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
-    category = models.CharField(max_length=100, blank=True, null=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)  # Optional now - will be removed in future
+    category = TreeForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True)  # Updated to use Category model
     is_active = models.BooleanField(default=True)
     is_archived = models.BooleanField(default=False, db_index=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
@@ -589,3 +637,52 @@ class AttributeGroupItem(models.Model):
         
     def __str__(self):
         return f"{self.attribute.code} in {self.group.name} (Order: {self.order})"
+
+# New ProductPrice model for multiple price types
+class ProductPrice(models.Model):
+    """
+    Represents different types of prices for a product across sales channels
+    """
+    PRICE_TYPE_CHOICES = [
+        ('list', 'List Price'),
+        ('cost', 'Cost Price'),
+        ('msrp', 'MSRP'),
+        ('promo', 'Promotional Price'),
+    ]
+    
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="prices")
+    price_type = models.CharField(max_length=20, choices=PRICE_TYPE_CHOICES, default='list')
+    channel = models.ForeignKey(SalesChannel, on_delete=models.SET_NULL, null=True, blank=True)
+    currency = models.CharField(max_length=3, default="USD")
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    valid_from = models.DateTimeField(default=timezone.now)
+    valid_to = models.DateTimeField(null=True, blank=True)
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, db_index=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.get_price_type_display()} for {self.product.name}: {self.currency} {self.amount}"
+    
+    class Meta:
+        verbose_name = "Product Price"
+        verbose_name_plural = "Product Prices"
+        ordering = ['-created_at']
+        unique_together = [('product', 'price_type', 'channel', 'currency')]
+        indexes = [
+            models.Index(fields=['product']),
+            models.Index(fields=['price_type']),
+            models.Index(fields=['channel']),
+            models.Index(fields=['organization']),
+            models.Index(fields=['valid_from', 'valid_to']),
+        ]
+    
+    def is_valid(self, check_date=None):
+        """Check if price is currently valid based on date ranges"""
+        if check_date is None:
+            check_date = timezone.now()
+        
+        is_valid_from = self.valid_from is None or self.valid_from <= check_date
+        is_valid_to = self.valid_to is None or self.valid_to >= check_date
+        
+        return is_valid_from and is_valid_to

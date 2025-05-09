@@ -50,6 +50,7 @@ import {
   productService,
 } from "@/services/productService";
 import { productService as ps } from "@/services/productService"; // alias
+import { normalizeCategory } from '@/types/categories';
 
 /* ---------------------------------------------------------- */
 /*  Helper / shared types                                     */
@@ -388,7 +389,10 @@ export function useProductColumns({
       },
       cell: ({ row }) => {
         const rowIndex = row.index;
-        const categoryValue = row.getValue("category") as string | undefined;
+        const categoryRaw = row.getValue("category");
+        // Normalize the category to safely get the name
+        const normalizedCategory = normalizeCategory(categoryRaw as any);
+        const categoryValue = normalizedCategory.name;
         const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.columnId === 'category';
         
         // Find the current option object for the select value

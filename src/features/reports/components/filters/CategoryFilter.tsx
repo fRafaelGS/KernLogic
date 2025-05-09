@@ -1,6 +1,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import axiosInstance from '@/lib/axiosInstance';
+import { getCategories } from '@/services/categoryService';
+import { Category, normalizeCategory } from '@/types/categories';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -9,15 +10,10 @@ interface CategoryFilterProps {
   onChange: (value: string) => void;
 }
 
-interface Category {
-  id: number;
-  name: string;
-}
-
 const CategoryFilter: React.FC<CategoryFilterProps> = ({ value, onChange }) => {
   const { data: categories, isLoading } = useQuery({
     queryKey: ['categories'],
-    queryFn: () => axiosInstance.get<Category[]>('/api/analytics/categories/').then(res => res.data),
+    queryFn: getCategories,
     // Fallback mock data when the API is not available yet
     placeholderData: [
       { id: 1, name: 'Electronics' },
@@ -43,11 +39,15 @@ const CategoryFilter: React.FC<CategoryFilterProps> = ({ value, onChange }) => {
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All Categories</SelectItem>
-          {categories?.map((category) => (
-            <SelectItem key={category.id} value={category.name}>
-              {category.name}
-            </SelectItem>
-          ))}
+          {categories?.map((category) => {
+            // Normalize the category to ensure we get the name property consistently
+            const normalizedCategory = normalizeCategory(category);
+            return (
+              <SelectItem key={normalizedCategory.id} value={normalizedCategory.name}>
+                {normalizedCategory.name}
+              </SelectItem>
+            );
+          })}
         </SelectContent>
       </Select>
     </div>

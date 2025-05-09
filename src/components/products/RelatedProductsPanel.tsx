@@ -287,9 +287,15 @@ const RelatedProductsPanel: React.FC<RelatedProductsPanelProps> = ({
 
   // Handle adding a new related product - Now with dialog for notes
   const handleAddRelatedProduct = async (product: Product, relType: RelationshipType = 'general', notes: string = '') => {
-    // Optimistically update UI
+    console.log('Adding related product:', product);
+    
+    // Ensure product has all required properties for display
     const newProduct: EnhancedProduct = {
       ...product,
+      name: product.name || 'Unknown Product',
+      sku: product.sku || '',
+      price: product.price || 0,
+      is_active: true,
       relation: {
         id: 0, // Temporary ID
         product_id: productId,
@@ -302,10 +308,19 @@ const RelatedProductsPanel: React.FC<RelatedProductsPanelProps> = ({
       }
     };
     
-    setRelatedProducts(prev => [newProduct, ...prev]);
+    console.log('New product object for UI:', newProduct);
+    
+    // Update the state with the new product
+    setRelatedProducts(prev => {
+      console.log('Previous related products:', prev);
+      const updated = [newProduct, ...prev];
+      console.log('Updated related products:', updated);
+      return updated;
+    });
     
     // Call API to add the relation
     try {
+      console.log('Calling API to add relation');
       const success = await productService.toggleRelatedProduct(
         productId,
         product.id!,
@@ -314,10 +329,19 @@ const RelatedProductsPanel: React.FC<RelatedProductsPanelProps> = ({
         notes // Pass notes
       );
       
+      console.log('API response success:', success);
+      
       if (!success) {
         toast.error("Failed to add related product");
         // Revert the UI change on failure
         fetchRelatedProducts();
+      } else {
+        toast.success("Product added to related products");
+        
+        // Force a refresh to ensure we have the latest data
+        setTimeout(() => {
+          fetchRelatedProducts();
+        }, 500);
       }
     } catch (err) {
       console.error('Error adding related product:', err);
@@ -475,6 +499,11 @@ const RelatedProductsPanel: React.FC<RelatedProductsPanelProps> = ({
     activeIndex,
     activeIndex + maxProductsPerPage
   );
+  
+  console.log('All related products:', relatedProducts);
+  console.log('Visible products:', visibleProducts);
+  console.log('Current page:', currentPage, 'of', totalPages);
+  console.log('Active index:', activeIndex, 'Max per page:', maxProductsPerPage);
 
   // Handle pinning/unpinning a related product
   const handleTogglePin = async (productToUpdate: EnhancedProduct, isPinned: boolean) => {

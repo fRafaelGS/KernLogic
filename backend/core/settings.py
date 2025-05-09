@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     "django_filters",
     "teams",
     "orgs",
+    "mptt",
 ]
 
 # Custom middleware to exempt API routes from CSRF

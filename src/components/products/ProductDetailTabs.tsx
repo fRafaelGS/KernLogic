@@ -815,7 +815,14 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
       if (field.key === 'tags') {
         isComplete = Array.isArray(value) && value.length > 0;
       } else if (field.key === 'images') {
-        isComplete = Array.isArray(value) && value.length > 0 || !!product.primary_image_large;
+        // Enhanced image detection logic
+        const hasStandardImages = Array.isArray(value) && value.length > 0;
+        const hasPrimaryImage = !!product.primary_image || !!product.primary_image_large || !!product.primary_image_thumb || !!product.primary_image_url;
+        const hasAssetImages = Array.isArray(product.assets) && product.assets.some(asset => 
+          (asset.type?.toLowerCase().includes('image') || asset.asset_type?.toLowerCase().includes('image'))
+        );
+        
+        isComplete = hasStandardImages || hasPrimaryImage || hasAssetImages;
       } else if (field.key === 'price') {
         isComplete = typeof value === 'number' && value > 0;
       } else {
@@ -829,7 +836,7 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
     });
     
     // Process attribute values and identify mandatory attributes
-    const mandatoryAttributes = Array.isArray(attributes) && Array.isArray(availableAttributes)
+    const mandatoryAttributes = availableAttributes && Array.isArray(availableAttributes)
       ? availableAttributes
           .filter(attr => attr.isMandatory)
           .map(attrDef => {
@@ -1774,21 +1781,61 @@ export const ProductDetailTabs: React.FC<ProductDetailTabsProps> = ({ product, o
               {/* Missing fields */}
               {missingFields.length > 0 && (
                 <div className="mt-4">
-                  <div className="flex items-center">
+                  <h4 className="text-sm font-medium mb-2 flex items-center">
                     <AlertTriangle className="h-4 w-4 text-amber-500 mr-2" />
-                    <span className="text-sm font-medium">Missing information</span>
-                  </div>
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {missingFields.slice(0, 5).map((field, index) => (
-                      <Badge key={index} variant="outline" className="bg-slate-50">
-                        {field}
-                      </Badge>
-                    ))}
-                    {missingFields.length > 5 && (
-                      <Badge variant="outline" className="bg-slate-50">
-                        +{missingFields.length - 5} more
-                      </Badge>
-                    )}
+                    Missing information
+                  </h4>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {/* Group missing fields by type */}
+                    {(() => {
+                      // Separate standard fields from attributes for better organization
+                      const standardFields = missingFields.filter(field => !field.includes(':'));
+                      const attributeFields = missingFields.filter(field => field.includes(':'));
+                      
+                      return (
+                        <>
+                          {/* Standard fields */}
+                          {standardFields.map((field, index) => (
+                            <TooltipProvider key={`standard-${index}`}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge variant="outline" className="bg-slate-50 hover:bg-slate-100">
+                                    {field}
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom">
+                                  <p className="text-xs">Add {field.toLowerCase()} to improve completeness</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ))}
+                          
+                          {/* Show attributes count if there are any missing */}
+                          {attributeFields.length > 0 && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge variant="outline" className="bg-amber-50 text-amber-700 hover:bg-amber-100">
+                                    Attributes ({attributeFields.length})
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" className="w-60 p-2">
+                                  <p className="text-xs font-medium mb-1">Missing required attributes:</p>
+                                  <ul className="text-xs list-disc pl-4 space-y-1">
+                                    {attributeFields.slice(0, 5).map((field, index) => (
+                                      <li key={index}>{field}</li>
+                                    ))}
+                                    {attributeFields.length > 5 && (
+                                      <li>+{attributeFields.length - 5} more...</li>
+                                    )}
+                                  </ul>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               )}

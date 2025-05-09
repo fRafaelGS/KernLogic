@@ -281,7 +281,7 @@ export function Sidebar({ className, isMobile = false }: SidebarProps) {
       
       {/* Icon Rail / Navigation area */}
       <div className={cn(
-        "flex-1 flex flex-col",
+        "flex-1 flex flex-col overflow-auto",
         effectiveCollapsed 
           ? "items-center py-12 space-y-12" 
           : "px-4 py-6"
@@ -372,7 +372,7 @@ export function Sidebar({ className, isMobile = false }: SidebarProps) {
       </div>
       
       {/* User area */}
-      <div className="border-t border-enterprise-200 p-4">
+      <div className="mt-auto border-t border-enterprise-200 p-4 sticky bottom-0 bg-white">
         {effectiveCollapsed ? (
           <div className="flex justify-center">
             <TooltipProvider delayDuration={500}>

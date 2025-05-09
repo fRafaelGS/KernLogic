@@ -182,18 +182,26 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
       return isImageByExt || isImageByType;
     });
 
+    // Check if we have tags
+    const hasTags = product.tags && Array.isArray(product.tags) && product.tags.length > 0;
+
     // Create filtered missing fields array
     return productCompletenessDetails.missing_fields.filter(item => {
-      if (hasRealImages) {
-        const imageRelatedTerms = ["image", "photo", "picture"];
-        const isImageRelated = imageRelatedTerms.some(term => 
-          item.field.toLowerCase().includes(term)
-        );
-        return !isImageRelated;
+      const fieldLower = item.field.toLowerCase();
+      
+      // Filter out image-related fields if we have images
+      if (hasRealImages && ["image", "photo", "picture"].some(term => fieldLower.includes(term))) {
+        return false;
       }
+      
+      // Filter out tag-related fields if we have tags
+      if (hasTags && ["tag", "tags", "keyword", "keywords"].some(term => fieldLower.includes(term))) {
+        return false;
+      }
+      
       return true;
     });
-  }, [productCompletenessDetails?.missing_fields, assets]);
+  }, [productCompletenessDetails?.missing_fields, assets, product.tags]);
   
   // Load data when component mounts or product changes
   useEffect(() => {

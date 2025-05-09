@@ -11,7 +11,7 @@ import {
   ImageIcon, FileIcon, FileTypeIcon, FileTextIcon, Clipboard, CalendarIcon, 
   History, AlertTriangle, PlusIcon, PencilIcon, AlertCircle, RefreshCcw,
   Check, ChevronDown, ChevronRight, Save, X, Edit2, Calendar, Flag, Pin, InfoIcon,
-  List, Settings, Layers
+  List, Settings, Layers, Search
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -175,8 +175,8 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
       const url = (asset.url || '').toLowerCase();
       const type = (asset.type || '').toLowerCase();
       
-      const isImageByExt = /\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i.test(name) || 
-                          /\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i.test(url);
+      const isImageByExt = /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(name) || 
+                          /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(url);
       const isImageByType = type.includes('image/') && !type.includes('pdf');
       
       return isImageByExt || isImageByType;
@@ -202,6 +202,29 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
       return true;
     });
   }, [productCompletenessDetails?.missing_fields, assets, product.tags]);
+  
+  // Categorize missing fields by priority based on field type (core vs attribute)
+  const categorizedMissingFields = useMemo(() => {
+    if (!filteredMissingFields.length) return { critical: [], recommended: [], optional: [] };
+    
+    // Categorize based on whether it's a core field or an attribute
+    // Core fields are critical, attributes are optional
+    const critical = filteredMissingFields.filter(item => 
+      // If it doesn't have attribute_id or attribute_code, it's a core field
+      !item.attribute_id && !item.attribute_code
+    );
+    
+    // Fields with attribute_id or attribute_code are attributes
+    const attributeFields = filteredMissingFields.filter(item => 
+      item.attribute_id || item.attribute_code
+    );
+    
+    // Further categorize attributes by weight
+    const recommended = attributeFields.filter(item => item.weight >= 50);
+    const optional = attributeFields.filter(item => item.weight < 50);
+    
+    return { critical, recommended, optional };
+  }, [filteredMissingFields]);
   
   // Load data when component mounts or product changes
   useEffect(() => {
@@ -1691,6 +1714,228 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
     }
   }, [product.id, user?.organization_id]);
 
+  // Add a new state for the field status modal near other state declarations
+  const [isFieldStatusModalOpen, setIsFieldStatusModalOpen] = useState(false);
+  const [fieldStatusSearchTerm, setFieldStatusSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+
+  // Add debounce effect for search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(fieldStatusSearchTerm);
+    }, 300); // 300ms delay
+    
+    return () => clearTimeout(timer);
+  }, [fieldStatusSearchTerm]);
+
+  // Add a function to filter fields by search term
+  const getFilteredFieldCompleteness = useCallback((searchTerm: string = '') => {
+    if (!productCompletenessDetails?.field_completeness) return { complete: [], incomplete: [] };
+    
+    const normalizedSearchTerm = searchTerm.toLowerCase().trim();
+    
+    const filtered = productCompletenessDetails.field_completeness.filter(item => 
+      !normalizedSearchTerm || item.field.toLowerCase().includes(normalizedSearchTerm)
+    );
+    
+    // Group by complete/incomplete status
+    return {
+      complete: filtered.filter(item => item.complete),
+      incomplete: filtered.filter(item => !item.complete)
+    };
+  }, [productCompletenessDetails?.field_completeness]);
+
+  // Add function to export field status as CSV
+  const exportFieldStatusCSV = useCallback(() => {
+    if (!productCompletenessDetails?.field_completeness) return;
+    
+    // Create CSV content
+    const headers = ['Field', 'Status', 'Weight'];
+    const rows = productCompletenessDetails.field_completeness.map(item => [
+      item.field,
+      item.complete ? 'Complete' : 'Incomplete',
+      item.weight.toString()
+    ]);
+    
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.join(','))
+    ].join('\n');
+    
+    // Create download link
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `product-${product.id}-field-status.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }, [productCompletenessDetails?.field_completeness, product.id]);
+
+  // Add the FieldStatusModal component inside the ProductDetailTabs component
+  const FieldStatusModal = () => {
+    // Use searchable/filterable field list with debounced search term
+    const filteredFields = getFilteredFieldCompleteness(debouncedSearchTerm);
+    const [expandedSections, setExpandedSections] = useState<string[]>(['incomplete']);
+    
+    // Toggle a section's expanded state
+    const toggleSection = (section: string) => {
+      setExpandedSections(current => 
+        current.includes(section)
+          ? current.filter(s => s !== section)
+          : [...current, section]
+      );
+    };
+
+    return (
+      <Dialog open={isFieldStatusModalOpen} onOpenChange={setIsFieldStatusModalOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Field Status Breakdown</DialogTitle>
+            <DialogDescription>
+              Complete overview of all product data fields and their completion status.
+            </DialogDescription>
+          </DialogHeader>
+           
+          <div className="flex items-center justify-between gap-4 my-2" role="search">
+            <div className="relative flex-1">
+              <Input 
+                placeholder="Search fields..."
+                value={fieldStatusSearchTerm}
+                onChange={(e) => setFieldStatusSearchTerm(e.target.value)}
+                className="pl-8"
+                aria-label="Search fields"
+              />
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            </div>
+            
+            <Button 
+              variant="outline" 
+              size="sm"
+              type="button"
+              onClick={exportFieldStatusCSV}
+              aria-label="Export field status as CSV"
+            >
+              <FileIcon className="mr-2 h-4 w-4" />
+              Export CSV
+            </Button>
+          </div>
+           
+          <div className="flex-1 overflow-y-auto pr-2 mt-2 space-y-4" role="region" aria-label="Field status list">
+            {/* Incomplete Fields Section */}
+            {filteredFields.incomplete.length > 0 && (
+              <div className="border rounded-md overflow-hidden">
+                <button
+                  type="button"
+                  className={`w-full flex items-center justify-between p-3 text-left font-medium ${
+                    expandedSections.includes('incomplete') ? 'bg-red-50 text-red-700' : 'bg-slate-50'
+                  }`}
+                  onClick={() => toggleSection('incomplete')}
+                  aria-expanded={expandedSections.includes('incomplete')}
+                  aria-controls="incomplete-fields-section"
+                >
+                  <div className="flex items-center">
+                    <AlertCircle className="h-4 w-4 mr-2" />
+                    <span>Incomplete Fields ({filteredFields.incomplete.length})</span>
+                  </div>
+                  {expandedSections.includes('incomplete') ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </button>
+                
+                {expandedSections.includes('incomplete') && (
+                  <div id="incomplete-fields-section" className="space-y-2 p-3">
+                    {filteredFields.incomplete.map((item, index) => (
+                      <div
+                        key={`incomplete-${index}`}
+                        className="p-3 border rounded-md bg-red-50 border-red-200 flex justify-between items-center"
+                      >
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium text-red-700">{item.field}</span>
+                          <span className="text-xs text-red-500">Weight: {item.weight}</span>
+                        </div>
+                        <Badge variant="destructive" className="bg-red-600/10 text-red-700 border-red-600/30">
+                          <AlertCircle className="mr-1 h-3 w-3" /> Incomplete
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* Complete Fields Section */}
+            {filteredFields.complete.length > 0 && (
+              <div className="border rounded-md overflow-hidden">
+                <button
+                  type="button"
+                  className={`w-full flex items-center justify-between p-3 text-left font-medium ${
+                    expandedSections.includes('complete') ? 'bg-green-50 text-green-700' : 'bg-slate-50'
+                  }`}
+                  onClick={() => toggleSection('complete')}
+                  aria-expanded={expandedSections.includes('complete')}
+                  aria-controls="complete-fields-section"
+                >
+                  <div className="flex items-center">
+                    <Check className="h-4 w-4 mr-2" />
+                    <span>Complete Fields ({filteredFields.complete.length})</span>
+                  </div>
+                  {expandedSections.includes('complete') ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </button>
+                
+                {expandedSections.includes('complete') && (
+                  <div id="complete-fields-section" className="space-y-2 p-3">
+                    {filteredFields.complete.map((item, index) => (
+                      <div
+                        key={`complete-${index}`}
+                        className="p-3 border rounded-md bg-green-50 border-green-200 flex justify-between items-center"
+                      >
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium text-green-700">{item.field}</span>
+                          <span className="text-xs text-green-500">Weight: {item.weight}</span>
+                        </div>
+                        <Badge variant="outline" className="border-green-600 bg-green-100 text-green-700">
+                          <Check className="mr-1 h-3 w-3" /> Complete
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* No Results */}
+            {filteredFields.complete.length === 0 && filteredFields.incomplete.length === 0 && (
+              <div className="text-center py-8">
+                <Search className="h-10 w-10 mx-auto mb-2 text-muted-foreground/60" />
+                <p className="text-muted-foreground">No fields match your search criteria</p>
+              </div>
+            )}
+          </div>
+           
+          <DialogFooter className="mt-4">
+            <Button 
+              variant="outline" 
+              type="button"
+              onClick={() => setIsFieldStatusModalOpen(false)}
+              aria-label="Close dialog"
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  };
+
   return (
     <Tabs 
       value={activeTab} 
@@ -1793,61 +2038,145 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
                 
                 {/* Missing Information Section */}
                 {filteredMissingFields.length > 0 && (
-                  <div className="mb-6">
-                    <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
+                  <div className="mb-6 space-y-4">
+                    <h3 className="font-semibold text-lg mb-1 flex items-center gap-2">
                       <AlertTriangle className="h-4 w-4 text-amber-500" />
                       Missing information
                     </h3>
-                    <div className="flex flex-wrap gap-2">
-                      {filteredMissingFields.map((item, index) => (
-                        <Badge key={index} variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
-                          {item.field}
-                        </Badge>
-                      ))}
-                    </div>
+                    
+                    {/* Critical fields */}
+                    {categorizedMissingFields.critical.length > 0 && (
+                      <div className="border border-red-300 rounded-md p-3 bg-red-50">
+                        <h4 className="font-medium text-red-700 mb-2 flex items-center gap-1" aria-label="Critical gaps">
+                          <AlertCircle className="h-4 w-4" />
+                          Critical gaps
+                        </h4>
+                        <div className="flex flex-wrap gap-2">
+                          {categorizedMissingFields.critical.map((item, index) => (
+                            <Badge 
+                              key={`critical-${index}`} 
+                              variant="outline" 
+                              className="bg-red-50 text-red-700 border-red-300"
+                            >
+                              {item.field}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Recommended fields */}
+                    {categorizedMissingFields.recommended.length > 0 && (
+                      <div className="border border-amber-200 rounded-md p-3 bg-amber-50">
+                        <h4 className="font-medium text-amber-700 mb-2">
+                          Recommended
+                        </h4>
+                        <div className="flex flex-wrap gap-2">
+                          {categorizedMissingFields.recommended.map((item, index) => (
+                            <Badge 
+                              key={`recommended-${index}`} 
+                              variant="outline" 
+                              className="bg-amber-50 text-amber-700 border-amber-200"
+                            >
+                              {item.field}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Optional fields */}
+                    {categorizedMissingFields.optional.length > 0 && (
+                      <div className="border border-slate-200 rounded-md p-3 bg-slate-50">
+                        <h4 className="font-medium text-slate-700 mb-2">
+                          Optional
+                        </h4>
+                        <div className="flex flex-wrap gap-2">
+                          {categorizedMissingFields.optional.map((item, index) => (
+                            <Badge 
+                              key={`optional-${index}`} 
+                              variant="outline" 
+                              className="bg-slate-50 text-slate-700 border-slate-200"
+                            >
+                              {item.field}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
                 
-                {/* Detailed Field Status Section */}
-                <h3 className="font-semibold text-lg mb-3 border-b pb-2">Field Status Breakdown:</h3>
-                {productCompletenessDetails.field_completeness.length > 0 ? (
-                  <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2"> {/* Added scroll for long lists */}
-                    {productCompletenessDetails.field_completeness.map((item, index) => (
-                      <div 
-                        key={index} 
-                        className={`p-3 border rounded-md flex justify-between items-center transition-all duration-150 ease-in-out ${
-                          item.complete ? 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-700' : 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-700'
-                        }`}
+                {/* Field Status Breakdown Section */}
+                <h3 className="font-semibold text-lg mb-3 border-b pb-2 mt-6">Field Status Breakdown:</h3>
+                {isLoadingCompleteness ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-5 w-2/3" />
+                    <Skeleton className="h-10 w-full" />
+                  </div>
+                ) : productCompletenessDetails?.field_completeness.length ? (
+                  <div className="flex flex-col space-y-4">
+                    <div className="flex justify-between items-center">
+                      <p className="text-sm text-muted-foreground">
+                        {productCompletenessDetails.field_completeness.filter(item => item.complete).length} of {productCompletenessDetails.field_completeness.length} fields complete
+                      </p>
+                      
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        type="button"
+                        onClick={() => setIsFieldStatusModalOpen(true)}
+                        className="ml-auto"
                       >
-                        <span className={`text-sm font-medium ${item.complete ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
-                          {item.field}
-                        </span>
-                        {item.complete ? (
-                          <Badge variant="outline" className="border-green-600 bg-green-100 text-green-700 dark:bg-green-700/30 dark:text-green-300 dark:border-green-600/50">
-                            <Check className="mr-1 h-3 w-3" /> Complete
+                        <List className="h-4 w-4 mr-2" />
+                        View all field statuses ({productCompletenessDetails.field_completeness.length})
+                      </Button>
+                    </div>
+                    
+                    {/* Status Summary */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="border rounded-md p-3 bg-green-50 border-green-200">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center">
+                            <Check className="h-4 w-4 mr-2 text-green-600" />
+                            <span className="font-medium text-green-700">Complete</span>
+                          </div>
+                          <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300">
+                            {productCompletenessDetails.field_completeness.filter(item => item.complete).length}
                           </Badge>
-                        ) : (
-                          <Badge variant="destructive" className="bg-red-600/10 text-red-700 dark:bg-red-700/30 dark:text-red-300 border-red-600/30 dark:border-red-600/50">
-                            <AlertCircle className="mr-1 h-3 w-3" /> Incomplete
-                          </Badge>
-                        )}
+                        </div>
                       </div>
-                    ))}
+                      
+                      <div className="border rounded-md p-3 bg-red-50 border-red-200">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center">
+                            <AlertCircle className="h-4 w-4 mr-2 text-red-600" />
+                            <span className="font-medium text-red-700">Incomplete</span>
+                          </div>
+                          <Badge variant="outline" className="bg-red-100 text-red-700 border-red-300">
+                            {productCompletenessDetails.field_completeness.filter(item => !item.complete).length}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">No specific field completeness details are tracked for this product.</p>
                 )}
+                
+                {/* Field Status Modal */}
+                <FieldStatusModal />
+                
+                {/* CompletenessDrilldown component (keep this unchanged) */}
+                {showDrilldown && (
+                  <CompletenessDrilldown
+                    open={showDrilldown}
+                    onOpenChange={setShowDrilldown}
+                    percentage={productCompletenessDetails?.completeness || 0}
+                    fieldStatus={productCompletenessDetails?.field_completeness || []}
+                  />
+                )}
               </>
-            )}
-            
-            {/* CompletenessDrilldown component (keep this unchanged) */}
-            {showDrilldown && (
-              <CompletenessDrilldown
-                open={showDrilldown}
-                onOpenChange={setShowDrilldown}
-                percentage={productCompletenessDetails?.completeness || 0}
-                fieldStatus={productCompletenessDetails?.field_completeness || []}
-              />
             )}
           </CardContent>
         </Card>

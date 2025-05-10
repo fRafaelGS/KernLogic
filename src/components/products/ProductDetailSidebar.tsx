@@ -481,29 +481,31 @@ export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
               )}
             </div>
             
-            {/* Base price */}
+            {/* Display primary price */}
             <div className="bg-yellow-50 rounded p-2 mb-2">
-              <div className="text-2xl font-bold">
-                {product.default_price ? (
-                  formatCurrency(
-                    product.default_price.amount, 
-                    product.default_price.currency || 'USD'
-                  )
-                ) : (
-                  <span className="text-muted-foreground italic">No price set</span>
-                )}
-              </div>
-              {product.default_price && (
-                <div className="text-sm text-muted-foreground">
-                  {product.default_price.label || 'Base Price'}
+              {product.prices && product.prices.length > 0 ? (
+                <>
+                  <div className="text-2xl font-bold">
+                    {formatCurrency(
+                      product.prices[0].amount, 
+                      product.prices[0].currency || 'USD'
+                    )}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {product.prices[0].price_type_display || product.prices[0].price_type}
+                  </div>
+                </>
+              ) : (
+                <div className="text-xl text-muted-foreground italic">
+                  No price set
                 </div>
               )}
             </div>
             
             {/* Additional prices (up to 3) */}
-            {additionalPrices.length > 0 && (
+            {product.prices && product.prices.length > 1 && (
               <div className="space-y-2 mt-2">
-                {additionalPrices.map((price, index) => (
+                {product.prices.slice(1, 4).map((price, index) => (
                   <div key={`${price.price_type}-${index}`} className="bg-slate-50 rounded p-2 flex justify-between">
                     <div className="text-sm font-medium">
                       {price.price_type_display || price.price_type}
@@ -515,7 +517,7 @@ export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
                 ))}
                 
                 {/* View all prices button */}
-                {hasMorePrices && (
+                {product.prices && product.prices.length > 4 && (
                   <Button 
                     variant="outline" 
                     size="sm" 

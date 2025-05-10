@@ -385,8 +385,7 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
             </div>
           ) : (
             <div className="text-2xl font-bold">
-              {product.price ? `USD ${product.price.toFixed(2)}` : <span className="text-muted-foreground text-base">No price set</span>}
-              {product.price && <span className="text-sm ml-2 font-normal text-muted-foreground">(Legacy price)</span>}
+              <span className="text-muted-foreground text-base">No price set</span>
             </div>
           )}
           

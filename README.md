@@ -556,3 +556,79 @@ npm run test:e2e
 ## License
 
 [MIT](LICENSE)
+
+## Pricing Architecture
+
+KernLogic uses a comprehensive pricing system that allows for multiple price types per product,
+with support for different currencies, channels, and validity windows.
+
+### Price Endpoints
+
+```
+GET   /api/products/{product_id}/prices/  
+POST  /api/products/{product_id}/prices/  
+GET   /api/products/{product_id}/prices/{price_id}/  
+PATCH /api/products/{product_id}/prices/{price_id}/  
+DELETE /api/products/{product_id}/prices/{price_id}/  
+```
+
+### ProductPrice JSON Structure
+
+```json
+{
+  "id": 123,
+  "price_type": "wholesale",
+  "price_type_display": "Wholesale Price",
+  "currency": "EUR",
+  "channel": { "id": 2, "name": "E-Commerce" },
+  "amount": "15.50",
+  "valid_from": "2025-05-01T00:00:00Z",
+  "valid_to": "2025-06-01T00:00:00Z"
+}
+```
+
+### Price Types
+
+KernLogic supports multiple price types, including:
+
+- Base Price - The fundamental price
+- List Price - The standard retail price
+- Wholesale Price - For bulk orders
+- Custom price types can be defined in the system
+
+> **Note**: Legacy product.price and product.default_price fields have been deprecated.
+> All price data is now accessed through the product.prices array.
+
+### Serialization Handling
+
+When making changes to prices, the system needs to handle various Django model types that aren't JSON-serializable:
+
+1. **Currency objects**: Represented by their ISO code string in the API
+2. **Decimal values**: Used for precise price amounts, converted to strings for JSON
+3. **Date/Time objects**: Converted to ISO format strings
+
+The `record` function that tracks price changes uses a special serialization approach to convert model objects to JSON-compatible values:
+
+```python
+# Example of serialization handling in the manage_price endpoint
+def serialize_for_json(value):
+    if value is None:
+        return None
+    elif hasattr(value, 'iso_code'):  # Currency object
+        return value.iso_code
+    elif isinstance(value, Decimal):  # Decimal amount
+        return str(value)
+    elif hasattr(value, 'isoformat'):  # Datetime object
+        return value.isoformat()
+    elif hasattr(value, 'id'):  # Other model instance
+        return {'id': value.id, 'str': str(value)}
+    else:
+        # Try direct serialization or fall back to string
+        try:
+            json.dumps(value)
+            return value
+        except (TypeError, OverflowError):
+            return str(value)
+```
+
+This approach ensures that all price-related values can be properly recorded in the activity log and used throughout the system.

@@ -17,7 +17,6 @@
     'brand', 
     'tags', 
     'barcode', // GTIN
-    'price', 
     'is_active'
     ];
 
@@ -67,7 +66,6 @@
         name: string;
         description: string;
         sku: string;
-        price: number;
         // Category comes back from the API as a list of ancestors:
         //   []                 → no category
         //   [root, …, leaf]    → full path
@@ -98,14 +96,6 @@
         
         // Multiple prices (new model)
         prices?: ProductPrice[];
-
-        // Default price information
-        default_price?: {
-            amount: number;
-            currency: string;
-            price_type: string;
-            label: string;
-        };
     }
 
     export const PRODUCTS_API_URL = `/api/products`;
@@ -522,17 +512,19 @@
             const response = await axiosInstance.get(url);
             const product = response.data;
             
-            // Ensure prices are loaded if not already included
+            // Ensure the product has prices array (fetch separately if not included)
             if (!product.prices || product.prices.length === 0) {
                 try {
-                    const prices = await productService.getPrices(id);
-                    if (prices && prices.length > 0) {
-                        product.prices = prices;
-                        console.log(`Loaded ${prices.length} prices for product ${id}`);
-                    }
+                    product.prices = await productService.getPrices(id);
                 } catch (error) {
-                    console.error(`Error loading prices for product ${id}:`, error);
+                    console.error('Error fetching prices:', error);
+                    product.prices = [];
                 }
+            }
+            
+            // Handle category data structure
+            if (typeof product.category === 'string' && product.category !== '') {
+                product.category = { id: 0, name: product.category };
             }
             
             return product;
@@ -544,55 +536,22 @@
             console.log('Creating product at:', url);
             try {
                 // Handle FormData or regular object
+                let response;
                 if (product instanceof FormData) {
-                    console.log('Product data is FormData, preparing to send...');
+                    response = await axiosInstance.post(url, product);
+                } else {
+                    const productData = { ...product } as any; // Use type assertion to handle property assignments
                     
-                    // Debug: Log FormData contents
-                    console.log('FormData contents:');
-                    for (const pair of product.entries()) {
-                        console.log(`${pair[0]}: ${pair[1]}`);
+                    // Handle tags special case - if it's an array, stringify it
+                    if (Array.isArray(productData.tags)) {
+                        productData.tags = JSON.stringify(productData.tags);
                     }
                     
-                    // Get auth token for debugging
-                    const token = localStorage.getItem('access_token');
-                    console.log('Using auth token (first 15 chars):', token ? token.substring(0, 15) + '...' : 'none');
-                    
-                    const response = await axiosInstance.post(url, product, {
-                        headers: {
-                            'Content-Type': 'multipart/form-data',
-                        },
-                    });
-                    console.log('Create product response:', response.data);
-                    return response.data;
-                } else {
-                    // Regular object handling (existing code)
-                    console.log('Product data is regular object, converting to proper format...');
-                    const formattedProduct = {
-                        ...product,
-                        price: Number(product.price)
-                    };
-                    console.log('Formatted product data:', formattedProduct);
-                    const response = await axiosInstance.post(url, formattedProduct);
-                    console.log('Create product response:', response.data);
-                    return response.data;
+                    response = await axiosInstance.post(url, productData);
                 }
+                return response.data;
             } catch (error) {
                 console.error('Error creating product:', error);
-                
-                // More detailed error logging
-                if (axios.isAxiosError(error)) {
-                    console.error('Request config:', error.config);
-                    console.error('Response status:', error.response?.status);
-                    console.error('Response headers:', error.response?.headers);
-                    console.error('Response data:', error.response?.data);
-                    
-                    // Check if it's an authentication error
-                    if (error.response?.status === 401) {
-                        console.error('Authentication error - token may be invalid or expired');
-                        // You might want to trigger a re-login here
-                    }
-                }
-                
                 throw error;
             }
         },
@@ -1699,16 +1658,15 @@
 
         getProductCompleteness,
 
-        // Get all prices for a product
+        // Get prices for a product
         getPrices: async (productId: number): Promise<ProductPrice[]> => {
-            console.log(`Getting prices for product ${productId}`);
+            const url = `${PRODUCTS_PATH}/${productId}/prices/`;
             try {
-                const url = `${PRODUCTS_PATH}/${productId}/prices/`;
                 const response = await axiosInstance.get(url);
                 return response.data;
             } catch (error) {
-                console.error(`Error getting prices for product ${productId}:`, error);
-                throw error;
+                console.error('Error fetching prices:', error);
+                return [];
             }
         },
 

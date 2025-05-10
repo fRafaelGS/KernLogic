@@ -57,7 +57,7 @@ export function getProductPriceDisplay(product: Product): string {
     return `${formattedPrice} (${primaryPrice.price_type_display || primaryPrice.price_type})`
   }
   
-  // Fallback to legacy price
-  return formatPrice(product.price)
+  // No prices
+  return 'No price set'
 }
   

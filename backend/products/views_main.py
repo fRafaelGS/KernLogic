@@ -161,16 +161,7 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             # Regular users only see their own products
             qs = Product.objects.filter(created_by=user)
             
-        # Prefetch base prices into a .base_prices attribute for efficient access
-        qs = qs.prefetch_related(
-            Prefetch(
-                'prices', 
-                queryset=ProductPrice.objects.filter(price_type__code='base'),
-                to_attr='base_prices'
-            )
-        )
-        
-        # Also prefetch all prices into a .all_prices attribute for the side panel
+        # Prefetch all prices for efficient access
         qs = qs.prefetch_related(
             Prefetch(
                 'prices',
@@ -210,7 +201,6 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             qs = qs.filter(is_active=is_active_bool)
         
         # Filter out archived products and prefetch related data
-        # Don't add another base_prices prefetch as we already have one above
         return qs.filter(is_archived=False).prefetch_related('images')
 
     def perform_create(self, serializer):
@@ -1199,23 +1189,26 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         GET: List prices for a product
         POST: Create a new price for a product
         """
-        # Import from prices app to ensure we're using the updated serializer with PriceTypeSlugOrIdField
+        # Import the canonical price model and serializer
+        from prices.models import ProductPrice
         from prices.serializers import ProductPriceSerializer
         
         product = self.get_object()
         
         if request.method == 'GET':
             # Filter prices for this product
-            prices = ProductPrice._base_manager.filter(product=product)
+            prices = ProductPrice.objects.filter(product=product)
             
+            # Apply organization filter
+            organization = get_user_organization(request.user)
+            if organization:
+                prices = prices.filter(organization=organization)
+                
             # Apply optional filters
-            price_type = request.query_params.get('price_type')
             channel_id = request.query_params.get('channel_id')
             currency = request.query_params.get('currency')
             valid_only = request.query_params.get('valid_only')
             
-            if price_type:
-                prices = prices.filter(price_type=price_type)
             if channel_id:
                 prices = prices.filter(channel_id=channel_id)
             if currency:
@@ -1263,18 +1256,28 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 )
             
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+            
     # Action for managing individual prices
     @action(detail=True, methods=['get', 'patch', 'delete'], url_path='prices/(?P<price_id>[^/.]+)')
     def manage_price(self, request, pk=None, price_id=None):
         """
         GET, PATCH, DELETE operations for a specific price
         """
+        # Import the canonical price model and serializer
+        from prices.models import ProductPrice
+        from prices.serializers import ProductPriceSerializer
+        
         product = self.get_object()
         
         # Make sure the price exists and belongs to this product
         try:
-            price = ProductPrice.objects.get(id=price_id, product=product)
+            # Apply organization filter
+            organization = get_user_organization(request.user)
+            price_query = ProductPrice.objects.filter(id=price_id, product=product)
+            if organization:
+                price_query = price_query.filter(organization=organization)
+                
+            price = price_query.get()
         except ProductPrice.DoesNotExist:
             return Response(
                 {"error": "Price not found for this product"}, 
@@ -1290,6 +1293,37 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             if serializer.is_valid():
                 updated_price = serializer.save()
                 
+                # Create a JSON-serializable version of the changes
+                changes = {}
+                for key, value in serializer.validated_data.items():
+                    # Handle different types of non-serializable values
+                    if value is None:
+                        changes[key] = None
+                    elif key == 'currency' and hasattr(value, 'iso_code'):
+                        # Special case for currency - use ISO code
+                        changes[key] = value.iso_code
+                    elif hasattr(value, 'id') and callable(getattr(value, '__str__', None)):
+                        # Any model instance with an ID and string representation
+                        changes[key] = {
+                            'id': value.id,
+                            'str': str(value)
+                        }
+                    elif isinstance(value, Decimal):
+                        # Convert Decimal to string for JSON serialization
+                        changes[key] = str(value)
+                    elif hasattr(value, 'isoformat'):
+                        # Handle datetime and date objects via isoformat()
+                        changes[key] = value.isoformat()
+                    else:
+                        try:
+                            # Test if value is JSON serializable
+                            import json
+                            json.dumps(value)
+                            changes[key] = value
+                        except (TypeError, OverflowError):
+                            # Fall back to string representation
+                            changes[key] = str(value)
+                
                 # Record the price update event
                 record(
                     product=product,
@@ -1301,7 +1335,7 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                         "price_type": updated_price.price_type.code,
                         "amount": str(updated_price.amount),
                         "currency": updated_price.currency.iso_code,
-                        "changes": serializer.validated_data
+                        "changes": changes
                     }
                 )
                 

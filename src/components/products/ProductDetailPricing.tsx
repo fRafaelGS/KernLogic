@@ -12,7 +12,7 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { CalendarIcon, Clock, DollarSign, InfoIcon, PlusCircle, Trash2 } from 'lucide-react';
+import { CalendarIcon, Clock, DollarSign, InfoIcon, PlusCircle, Trash2, AlertCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { 
   AlertDialog,
@@ -37,6 +37,16 @@ import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { PriceSummaryBadge } from './PriceSummaryBadge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 
 interface ProductDetailPricingProps {
   product: Product; 
@@ -249,203 +259,189 @@ export function ProductDetailPricing({ product, onSave, readOnly = false }: Prod
         </CardHeader>
         
         <CardContent>
-          {/* Show legacy price if no price items exist */}
-          {prices.length === 0 && (
+          {/* Price list */}
+          {prices.length === 0 ? (
             <div className="mb-6">
-              <div className="bg-amber-50 p-4 rounded-md mb-4">
-                <p className="text-amber-800 text-sm">
-                  This product is using the legacy pricing model. Create a new price type to upgrade.
-                </p>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="legacy-price">Legacy Price</Label>
-                  <div className="flex items-center">
-                    <DollarSign className="h-4 w-4 mr-2 text-muted-foreground" />
-                    <Input
-                      id="legacy-price"
-                      type="number"
-                      value={product.price || 0}
-                      readOnly
-                    />
+              <Alert variant="default" className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>No prices defined</AlertTitle>
+                <AlertDescription>
+                  This product has no prices. Add a price to make it available for sale.
+                </AlertDescription>
+              </Alert>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {prices.map(price => (
+                <div
+                  key={price.id}
+                  className="border rounded-md overflow-hidden"
+                >
+                  {/* Price header */}
+                  <div
+                    className="flex items-center justify-between p-3 bg-muted/30 cursor-pointer"
+                    onClick={() => toggleExpandPrice(price.id)}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Badge variant={price.price_type === 'BASE' ? 'default' : 'outline'}>
+                        {price.price_type_display || getPriceTypeLabel(price.price_type)}
+                      </Badge>
+                      <span className="font-medium">{formatCurrency(price.amount, price.currency)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {price.valid_from && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Clock className="h-4 w-4 text-muted-foreground" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              Valid from: {new Date(price.valid_from).toLocaleDateString()}
+                              {price.valid_to ? ` until ${new Date(price.valid_to).toLocaleDateString()}` : ''}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                      {!readOnly && (
+                        <Button 
+                          type="button"
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            confirmDeletePrice(price);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
+                  
+                  {/* Expanded price details */}
+                  {expandedPriceId === price.id && (
+                    <div className="p-4 bg-white">
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                          <Label htmlFor={`price-type-${price.id}`}>Price Type</Label>
+                          <Select 
+                            value={price.price_type} 
+                            onValueChange={(value) => updatePrice(price.id, { price_type: value })}
+                            disabled={readOnly}
+                          >
+                            <SelectTrigger id={`price-type-${price.id}`}>
+                              <SelectValue placeholder="Select price type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {priceTypes.map(type => (
+                                <SelectItem key={type.code} value={type.code}>
+                                  {type.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        
+                        <div>
+                          <Label htmlFor={`price-amount-${price.id}`}>Amount</Label>
+                          <div className="flex items-center">
+                            <DollarSign className="h-4 w-4 mr-2 text-muted-foreground" />
+                            <Input
+                              id={`price-amount-${price.id}`}
+                              type="number"
+                              step="0.01"
+                              value={price.amount}
+                              onChange={(e) => {
+                                const amount = parseFloat(e.target.value) || 0;
+                                updatePrice(price.id, { amount });
+                              }}
+                              readOnly={readOnly}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor={`price-valid-from-${price.id}`}>Valid From</Label>
+                          <div className="flex items-center">
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  className={cn(
+                                    "w-full justify-start text-left font-normal",
+                                    !price.valid_from && "text-muted-foreground"
+                                  )}
+                                  disabled={readOnly}
+                                >
+                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                                  {price.valid_from ? (
+                                    format(new Date(price.valid_from), "PPP")
+                                  ) : (
+                                    <span>Pick a date</span>
+                                  )}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0">
+                                <Calendar
+                                  mode="single"
+                                  selected={price.valid_from ? new Date(price.valid_from) : undefined}
+                                  onSelect={(date) => {
+                                    if (date) {
+                                      updatePrice(price.id, { valid_from: date.toISOString() });
+                                    }
+                                  }}
+                                  initialFocus
+                                />
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <Label htmlFor={`price-valid-to-${price.id}`}>Valid To</Label>
+                          <div className="flex items-center">
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  className={cn(
+                                    "w-full justify-start text-left font-normal",
+                                    !price.valid_to && "text-muted-foreground"
+                                  )}
+                                  disabled={readOnly}
+                                >
+                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                                  {price.valid_to ? (
+                                    format(new Date(price.valid_to), "PPP")
+                                  ) : (
+                                    <span>No end date</span>
+                                  )}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0">
+                                <Calendar
+                                  mode="single"
+                                  selected={price.valid_to ? new Date(price.valid_to) : undefined}
+                                  onSelect={(date) => {
+                                    if (date) {
+                                      updatePrice(price.id, { valid_to: date.toISOString() });
+                                    }
+                                  }}
+                                  initialFocus
+                                />
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
+              ))}
             </div>
           )}
-          
-          {/* Price list */}
-          <div className="space-y-4">
-            {prices.map(price => (
-              <div
-                key={price.id}
-                className="border rounded-md overflow-hidden"
-              >
-                {/* Price header */}
-                <div
-                  className="flex items-center justify-between p-3 bg-muted/30 cursor-pointer"
-                  onClick={() => toggleExpandPrice(price.id)}
-                >
-                  <div className="flex items-center gap-2">
-                    <Badge variant={price.price_type === 'BASE' ? 'default' : 'outline'}>
-                      {price.price_type_display || getPriceTypeLabel(price.price_type)}
-                    </Badge>
-                    <span className="font-medium">{formatCurrency(price.amount, price.currency)}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {price.valid_from && (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Clock className="h-4 w-4 text-muted-foreground" />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            Valid from: {new Date(price.valid_from).toLocaleDateString()}
-                            {price.valid_to ? ` until ${new Date(price.valid_to).toLocaleDateString()}` : ''}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
-                    {!readOnly && (
-                      <Button 
-                        type="button"
-                        variant="ghost" 
-                        size="icon" 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          confirmDeletePrice(price);
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Expanded price details */}
-                {expandedPriceId === price.id && (
-                  <div className="p-4 bg-white">
-                    <div className="grid grid-cols-2 gap-4 mb-4">
-                      <div>
-                        <Label htmlFor={`price-type-${price.id}`}>Price Type</Label>
-                        <Select 
-                          value={price.price_type} 
-                          onValueChange={(value) => updatePrice(price.id, { price_type: value })}
-                          disabled={readOnly}
-                        >
-                          <SelectTrigger id={`price-type-${price.id}`}>
-                            <SelectValue placeholder="Select price type" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {priceTypes.map(type => (
-                              <SelectItem key={type.code} value={type.code}>
-                                {type.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      
-                      <div>
-                        <Label htmlFor={`price-amount-${price.id}`}>Amount</Label>
-                        <div className="flex items-center">
-                          <DollarSign className="h-4 w-4 mr-2 text-muted-foreground" />
-                          <Input
-                            id={`price-amount-${price.id}`}
-                            type="number"
-                            step="0.01"
-                            value={price.amount}
-                            onChange={(e) => {
-                              const amount = parseFloat(e.target.value) || 0;
-                              updatePrice(price.id, { amount });
-                            }}
-                            readOnly={readOnly}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor={`price-valid-from-${price.id}`}>Valid From</Label>
-                        <div className="flex items-center">
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                className={cn(
-                                  "w-full justify-start text-left font-normal",
-                                  !price.valid_from && "text-muted-foreground"
-                                )}
-                                disabled={readOnly}
-                              >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {price.valid_from ? (
-                                  format(new Date(price.valid_from), "PPP")
-                                ) : (
-                                  <span>Pick a date</span>
-                                )}
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0">
-                              <Calendar
-                                mode="single"
-                                selected={price.valid_from ? new Date(price.valid_from) : undefined}
-                                onSelect={(date) => {
-                                  if (date) {
-                                    updatePrice(price.id, { valid_from: date.toISOString() });
-                                  }
-                                }}
-                                initialFocus
-                              />
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-                      </div>
-                      
-                      <div>
-                        <Label htmlFor={`price-valid-to-${price.id}`}>Valid To</Label>
-                        <div className="flex items-center">
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                className={cn(
-                                  "w-full justify-start text-left font-normal",
-                                  !price.valid_to && "text-muted-foreground"
-                                )}
-                                disabled={readOnly}
-                              >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {price.valid_to ? (
-                                  format(new Date(price.valid_to), "PPP")
-                                ) : (
-                                  <span>No end date</span>
-                                )}
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0">
-                              <Calendar
-                                mode="single"
-                                selected={price.valid_to ? new Date(price.valid_to) : undefined}
-                                onSelect={(date) => {
-                                  if (date) {
-                                    updatePrice(price.id, { valid_to: date.toISOString() });
-                                  }
-                                }}
-                                initialFocus
-                              />
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
           
           {/* Add new price button */}
           {!readOnly && (

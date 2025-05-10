@@ -11,13 +11,14 @@
 .category-tree-content {
   display: flex;
   flex-direction: column;
-  max-height: 450px;
+  max-height: 350px;
 }
 
 /* Tree list container */
 .category-tree-list {
   flex: 1;
   overflow-y: auto;
+  max-height: 300px;
   scrollbar-width: thin;
 }
 
@@ -58,4 +59,4 @@
 
 .category-tree-list::-webkit-scrollbar-thumb:hover {
   background-color: rgba(0, 0, 0, 0.3);
-} 
+}

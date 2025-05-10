@@ -19,7 +19,9 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { FieldCompletenessEntry } from '@/services/dashboardService';
 
+// Keep this for backward compatibility during transition
 interface FieldStatus {
   key: string;
   label: string;
@@ -31,7 +33,7 @@ interface CompletenessDrilldownProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   percentage: number;
-  fieldStatus: FieldStatus[];
+  fieldStatus: FieldCompletenessEntry[] | FieldStatus[];
 }
 
 export const CompletenessDrilldown: React.FC<CompletenessDrilldownProps> = ({
@@ -40,16 +42,49 @@ export const CompletenessDrilldown: React.FC<CompletenessDrilldownProps> = ({
   percentage,
   fieldStatus
 }) => {
+  // Normalize field status entries to work with both old and new formats
+  const normalizedFields = fieldStatus.map(field => {
+    // Check if this is the new format (FieldCompletenessEntry from API)
+    if ('field' in field) {
+      return {
+        key: `field_${field.attribute_id || field.field}`,
+        label: field.field,
+        weight: field.weight,
+        complete: field.complete,
+        attribute_id: field.attribute_id,
+        attribute_code: field.attribute_code,
+        attribute_type: field.attribute_type
+      };
+    }
+    // Otherwise it's the old format (FieldStatus from client calculation)
+    return field;
+  });
+  
   // Group fields by completeness status and type
-  const completeFields = fieldStatus.filter(field => field.complete);
-  const incompleteFields = fieldStatus.filter(field => !field.complete);
+  const completeFields = normalizedFields.filter(field => field.complete);
+  const incompleteFields = normalizedFields.filter(field => !field.complete);
   
   // Separate standard fields from attribute fields
-  const standardFields = fieldStatus.filter(field => !field.key.startsWith('attr_'));
-  const attributeFields = fieldStatus.filter(field => field.key.startsWith('attr_'));
+  const standardFields = normalizedFields.filter(field => {
+    // For the old format
+    if (!('attribute_id' in field)) {
+      return !field.key.startsWith('attr_');
+    }
+    // For the new format
+    return !field.attribute_id;
+  });
+  
+  const attributeFields = normalizedFields.filter(field => {
+    // For the old format
+    if (!('attribute_id' in field)) {
+      return field.key.startsWith('attr_');
+    }
+    // For the new format
+    return !!field.attribute_id;
+  });
   
   // Calculate total weight
-  const totalWeight = fieldStatus.reduce((sum, field) => sum + field.weight, 0);
+  const totalWeight = normalizedFields.reduce((sum, field) => sum + field.weight, 0);
   
   // Get completeness level text
   const getCompletenessLevel = (pct: number) => {
@@ -70,7 +105,7 @@ export const CompletenessDrilldown: React.FC<CompletenessDrilldownProps> = ({
   };
   
   // Sort fields by weight (highest first) then by completeness
-  const sortFieldsByWeight = (fields: FieldStatus[]) => {
+  const sortFieldsByWeight = (fields: typeof normalizedFields) => {
     return [...fields].sort((a, b) => {
       // First by completeness (incomplete first)
       if (a.complete !== b.complete) {

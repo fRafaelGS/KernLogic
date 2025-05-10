@@ -5,11 +5,7 @@ import { TreeNode } from '@/types/categories';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import * as Popover from '@radix-ui/react-popover';
 import { useDebounce } from '@/hooks/useDebounce';
 import './../../styles/category-tree-select.css';
 
@@ -22,6 +18,7 @@ interface CategoryTreeSelectProps {
   createNewEnabled?: boolean;
   allowSelectParent?: boolean;
   parentCategory?: number | null;
+  onCreate?: (name: string) => Promise<void> | void;
 }
 
 interface TreeNodeRowProps {
@@ -50,7 +47,7 @@ const TreeNodeRow: React.FC<TreeNodeRowProps> = ({
   };
   
   return (
-    <li onClick={stopPropagation} onMouseDown={stopPropagation}>
+    <li data-node-label={node.label}>
       <div 
         className={`
           flex items-center py-1.5 px-2 rounded-md
@@ -75,7 +72,7 @@ const TreeNodeRow: React.FC<TreeNodeRowProps> = ({
         
         <button
           className="flex-1 text-left flex items-center"
-          onClick={() => onSelect(node)}
+          onClick={e => { e.stopPropagation(); onSelect(node); }}
           disabled={!allowSelectParent && hasChildren}
           aria-disabled={!allowSelectParent && hasChildren}
         >
@@ -123,7 +120,8 @@ export const CategoryTreeSelect: React.FC<CategoryTreeSelectProps> = ({
   disabled = false,
   createNewEnabled = true,
   allowSelectParent = true,
-  parentCategory = null
+  parentCategory = null,
+  onCreate,
 }) => {
   const { toast } = useToast();
   const [treeData, setTreeData] = useState<TreeNode[]>([]);
@@ -140,6 +138,8 @@ export const CategoryTreeSelect: React.FC<CategoryTreeSelectProps> = ({
   
   // Use a ref to check if mounted to avoid memory leaks
   const componentMounted = useRef(true);
+  
+  const [createParentPath, setCreateParentPath] = useState<string[]>([]);
   
   useEffect(() => {
     // Cleanup function
@@ -257,7 +257,29 @@ export const CategoryTreeSelect: React.FC<CategoryTreeSelectProps> = ({
     setIsOpen(false);
   };
 
-  // Create new category
+  // whenever selectedValue changes, build the breadcrumb path
+  useEffect(() => {
+    if (!createNewEnabled) return;
+    const path: string[] = [];
+    const findPath = (nodes: TreeNode[], target: string): boolean => {
+      for (const n of nodes) {
+        if (n.value.toString() === target) {
+          path.push(n.label);
+          return true;
+        }
+        if (n.children && findPath(n.children, target)) {
+          path.unshift(n.label);
+          return true;
+        }
+      }
+      return false;
+    };
+    if (selectedValue != null) {
+      findPath(treeData, selectedValue.toString());
+    }
+    setCreateParentPath(path);
+  }, [selectedValue, treeData, createNewEnabled]);
+
   const handleCreate = async () => {
     if (typeof newCategoryName !== 'string' || !newCategoryName.trim()) {
       toast({
@@ -267,36 +289,51 @@ export const CategoryTreeSelect: React.FC<CategoryTreeSelectProps> = ({
       });
       return;
     }
-    
     setIsCreating(true);
     try {
-      // Use the parent specified or the current selection as parent
-      const parent = parentCategory !== undefined 
-        ? parentCategory 
-        : (selectedValue || null);
-      
-      // Create the category
-      await createCategory(newCategoryName.trim(), parent as number | undefined);
-      
-      // Refresh the tree
-      const fresh = await getCategoryTree();
-      setTreeData(fresh);
-      
-      // Find and select the newly created category
-      const leaf = findLeafByName(fresh, newCategoryName.trim());
-      if (leaf) {
-        setSelectedLabel(leaf.label);
-        const newValue = !isNaN(Number(leaf.value)) ? Number(leaf.value) : leaf.value;
-        onChange(newValue);
+      if (onCreate) {
+        await onCreate(newCategoryName.trim());
+        setIsOpen(false);
+        setNewCategoryName('');
+      } else {
+        const parent = parentCategory !== undefined 
+          ? parentCategory 
+          : (selectedValue || null);
+        await createCategory(newCategoryName.trim(), parent as number | undefined);
+        const fresh = await getCategoryTree();
+        // 1) mark all ancestors expanded
+        const expandAncestors = (nodes: TreeNode[]): TreeNode[] => {
+          return nodes.map(n => {
+            if (createParentPath.includes(n.label) || n.label === newCategoryName.trim()) {
+              return {
+                ...n,
+                expanded: true,
+                children: n.children ? expandAncestors(n.children) : undefined
+              };
+            }
+            return n;
+          });
+        };
+        setTreeData(expandAncestors(fresh));
+        // 2) scroll the new node into view
+        setTimeout(() => {
+          const el = document.querySelector(`[data-node-label="${newCategoryName.trim()}"]`);
+          el?.scrollIntoView({ block: 'center' });
+        }, 50);
+        // Find and select the newly created category
+        const leaf = findLeafByName(fresh, newCategoryName.trim());
+        if (leaf) {
+          setSelectedLabel(leaf.label);
+          const newValue = !isNaN(Number(leaf.value)) ? Number(leaf.value) : leaf.value;
+          onChange(newValue);
+        }
+        setIsOpen(false);
+        setNewCategoryName('');
+        toast({
+          title: 'Success',
+          description: `Created category "${newCategoryName.trim()}"`,
+        });
       }
-      
-      // Reset state
-      setIsOpen(false);
-      setNewCategoryName('');
-      toast({
-        title: 'Success',
-        description: `Created category "${newCategoryName.trim()}"`,
-      });
     } catch (err) {
       toast({
         title: 'Error',
@@ -366,16 +403,11 @@ export const CategoryTreeSelect: React.FC<CategoryTreeSelectProps> = ({
   return (
     <div 
       className={`relative ${className}`}
-      onClick={stopPropagation}
-      onMouseDown={stopPropagation}
-      onMouseUp={stopPropagation}
-      onKeyDown={stopPropagation}
-      onKeyUp={stopPropagation}
       data-component="category-tree-select-container"
       data-testid="category-tree-select"
     >
-      <Popover open={isOpen} onOpenChange={setIsOpen}>
-        <PopoverTrigger asChild>
+      <Popover.Root open={isOpen} onOpenChange={setIsOpen}>
+        <Popover.Trigger asChild>
           <Button 
             variant="outline" 
             role="combobox" 
@@ -393,27 +425,27 @@ export const CategoryTreeSelect: React.FC<CategoryTreeSelectProps> = ({
             )}
             <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
-        </PopoverTrigger>
-        <PopoverContent 
-          className="min-w-[300px] max-w-[90vw] p-0" 
-          align="start"
-          onMouseDown={stopPropagation}
-          onClick={stopPropagation}
-          data-testid="category-popover"
-        >
-          <div 
-            className="flex flex-col h-full max-h-80"
-            onClick={stopPropagation}
-            onMouseDown={stopPropagation}
-            onKeyDown={stopPropagation}
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Content
+            side="bottom"
+            align="start"
+            sideOffset={8}
+            collisionPadding={16}
+            avoidCollisions
+            className="
+              bg-white rounded-lg shadow-lg z-[1000]
+              min-w-[300px] max-w-[90vw] max-h-[60vh]
+              overflow-hidden flex flex-col"
+            data-testid="category-popover"
           >
-            {/* Search section */}
-            <div className="p-2 border-b flex flex-col gap-2">
-              <div className="flex items-center gap-1 relative">
-                <Search className="h-4 w-4 absolute left-2.5 text-muted-foreground" />
+            {/* SEARCH - pinned to top */}
+            <div className="sticky top-0 z-20 bg-background border-b px-3 py-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Search categories..."
-                  className="pl-8"
+                  placeholder="Search categories…"
+                  className="pl-10 w-full"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   onClick={stopPropagation}
@@ -426,80 +458,12 @@ export const CategoryTreeSelect: React.FC<CategoryTreeSelectProps> = ({
                   data-testid="category-search-input"
                 />
               </div>
-              
-              {/* Create section */}
-              {createNewEnabled && (
-                <div className="flex gap-1">
-                  {isCreating ? (
-                    <>
-                      <Input
-                        placeholder="New category name..."
-                        value={newCategoryName}
-                        onChange={(e) => setNewCategoryName(e.target.value)}
-                        className="flex-1"
-                        disabled={isCreating && !newCategoryName.trim()}
-                        onKeyDown={e => {
-                          stopPropagation(e);
-                          if (e.key === 'Enter' && newCategoryName.trim()) {
-                            handleCreate();
-                          } else if (e.key === 'Escape') {
-                            setIsCreating(false);
-                            setNewCategoryName('');
-                          }
-                        }}
-                        onClick={stopPropagation}
-                        data-testid="new-category-input"
-                      />
-                      <Button 
-                        size="sm" 
-                        variant="primary" 
-                        disabled={!newCategoryName.trim() || isCreating}
-                        onClick={e => {
-                          stopPropagation(e);
-                          handleCreate();
-                        }}
-                        data-testid="create-category-button"
-                      >
-                        {isCreating ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Check className="h-4 w-4" />
-                        )}
-                      </Button>
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
-                        onClick={e => {
-                          stopPropagation(e);
-                          setIsCreating(false);
-                          setNewCategoryName('');
-                        }}
-                        data-testid="cancel-create-button"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </>
-                  ) : (
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      className="w-full flex items-center justify-center gap-1"
-                      onClick={e => {
-                        stopPropagation(e);
-                        setIsCreating(true);
-                      }}
-                      data-testid="new-category-button"
-                    >
-                      <Plus className="h-4 w-4" />
-                      <span>Create Category</span>
-                    </Button>
-                  )}
-                </div>
-              )}
             </div>
-            
-            {/* Tree content */}
-            <div className="overflow-y-auto p-2 max-h-[300px]" onClick={stopPropagation}>
+            {/* TREE - scrollable */}
+            <div
+              className="overflow-y-auto flex-1 p-2 overscroll-contain"
+              onWheel={e => e.stopPropagation()}
+            >
               {filteredData.length > 0 ? (
                 <ul className="list-none" data-testid="category-tree">
                   {filteredData.map(node => (
@@ -517,23 +481,6 @@ export const CategoryTreeSelect: React.FC<CategoryTreeSelectProps> = ({
               ) : searchTerm ? (
                 <div className="text-center py-4 text-muted-foreground">
                   <p>No categories match "{searchTerm}"</p>
-                  {createNewEnabled && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="mt-2"
-                      onClick={(e) => {
-                        stopPropagation(e);
-                        setNewCategoryName(searchTerm);
-                        setSearchTerm('');
-                        setIsCreating(true);
-                      }}
-                      data-testid="create-from-search"
-                    >
-                      <Plus className="h-3 w-3 mr-1" />
-                      Create "{searchTerm}"
-                    </Button>
-                  )}
                 </div>
               ) : (
                 <div className="text-center py-4 text-muted-foreground">
@@ -541,9 +488,46 @@ export const CategoryTreeSelect: React.FC<CategoryTreeSelectProps> = ({
                 </div>
               )}
             </div>
-          </div>
-        </PopoverContent>
-      </Popover>
+            {/* CREATE - pinned to bottom */}
+            {createNewEnabled && (
+              <div className="sticky bottom-0 z-20 bg-background border-t py-2 px-3">
+                {createParentPath.length > 0 && (
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Creating under: {createParentPath.join(' › ')}
+                  </p>
+                )}
+                <div className="flex items-center space-x-2">
+                  <Input
+                    value={newCategoryName}
+                    onChange={e => setNewCategoryName(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && newCategoryName.trim()) {
+                        handleCreate();
+                        setNewCategoryName('');
+                      }
+                    }}
+                    placeholder="New category name…"
+                    autoFocus={isOpen}
+                    className="flex-1"
+                    data-testid="new-category-input"
+                  />
+                  <Button
+                    size="sm"
+                    disabled={!newCategoryName.trim() || isCreating}
+                    onClick={() => {
+                      handleCreate();
+                      setNewCategoryName('');
+                    }}
+                    data-testid="create-category-button"
+                  >
+                    Create
+                  </Button>
+                </div>
+              </div>
+            )}
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
     </div>
   );
 }; 

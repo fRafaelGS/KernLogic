@@ -5,7 +5,7 @@ import * as categoryService from '@/services/categoryService';
 import { Category } from '@/services/categoryService';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
-import { CategoryTreeSelect } from '@/components/common/CategoryTreeSelect';
+import { CategoryTreeSelect } from '../categories/CategoryTreeSelect';
 
 interface CategoryModalProps {
   open: boolean;

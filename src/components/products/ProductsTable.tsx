@@ -78,7 +78,6 @@ import {
   PopoverContent, 
   PopoverTrigger 
 } from "@/components/ui/popover";
-import AsyncCreatableSelect from 'react-select/async-creatable';
 import { ActionMeta, OnChangeValue } from 'react-select';
 import { ProductsSearchBox } from './ProductsSearchBox';
 import { BulkTagModal } from './BulkTagModal';
@@ -94,6 +93,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { normalizeCategory, getCategoryNamePath } from '@/types/categories';
 import { Category as CategoryType } from '@/types/categories'; // Import the correct type
 import { SubcategoryManager } from '@/components/categories/SubcategoryManager/SubcategoryManager';
+import { getCategoryName } from '@/lib/utils'; 
 
 // Define constants for fixed widths
 const ACTION_W = 112; // Width of action column in pixels
@@ -125,6 +125,7 @@ interface Category {
   id: number | string;
   name: string;
   // Add other category fields if they exist
+  parent?: number | null;
 }
 
 // Add a type for tag objects that might be in the product.tags array
@@ -143,36 +144,6 @@ type ProductWithAttributeArray = Omit<Product, 'attributes'> & {
 };
 
 export function ProductsTable() {
-  // Helper function to safely get category name
-  const getCategoryName = (category: any): string => {
-    if (!category) return '';
-    
-    // Handle array of categories (new API format)
-    if (Array.isArray(category)) {
-      if (category.length === 0) return '';
-      const lastCategory = category[category.length - 1];
-      return lastCategory && typeof lastCategory === 'object' && lastCategory.name ? 
-        String(lastCategory.name) : '';
-    }
-    
-    // Handle object with name property
-    if (typeof category === 'object' && category !== null) {
-      return category.name ? String(category.name) : '';
-    }
-    
-    // Handle object with name property
-    if (typeof category === 'object' && category !== null) {
-      return (category as any).name ? String((category as any).name) : '';
-    }
-    
-    // Handle string
-    if (typeof category === 'string') {
-      return category;
-    }
-    
-    return '';
-  };
-
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -285,7 +256,7 @@ export function ProductsTable() {
     try {
       // Make the requests one at a time to avoid race conditions
       let fetchedProducts: Product[] = [];
-      let fetchedCategories: Category[] = [];
+      let fetchedCategories: any[] = [];
       
       try {
         // Use pagination instead of fetching all products
@@ -339,10 +310,29 @@ export function ProductsTable() {
       
       // Remove the eager asset loading and just set products directly
       setProducts(fetchedProducts);
-      const categoryOpts = fetchedCategories.map(c => ({ 
-        label: typeof c === 'object' ? c.name : c,
-        value: typeof c === 'object' ? c.id : c
-      }));
+      
+      // Create category options with proper type casting
+      const categoryOpts: CategoryOption[] = fetchedCategories.map(c => {
+        // Safely extract id and name
+        let categoryId: string | number;
+        let categoryName: string;
+        
+        if (typeof c === 'object' && c !== null) {
+          // Handle object with id and name properties
+          categoryId = typeof c.id === 'undefined' ? 0 : c.id;
+          categoryName = c.name || '';
+        } else {
+          // Handle primitive value
+          categoryId = c;
+          categoryName = String(c);
+        }
+        
+        return {
+          label: categoryName,
+          value: categoryId
+        };
+      });
+      
       setCategoryOptions(categoryOpts);
       
     } catch (err) {
@@ -363,7 +353,7 @@ export function ProductsTable() {
     fetchData();
   }, [fetchData]);
 
-  // Filter categories by search term
+  // Update the filterCategories function to properly handle Category type
   const filterCategories = (cats: CategoryType[], term: string): CategoryType[] => {
     if (!term) return cats;
     
@@ -395,13 +385,14 @@ export function ProductsTable() {
     let filtered = products.map(product => {
       // Handle the new API format where category is an array
       if (Array.isArray(product.category)) {
+        // Optionally, store the leaf separately if needed
         const lastCategory = product.category.length > 0 ? product.category[product.category.length - 1] : null;
         return {
           ...product,
-          // Store original category array in a separate property
-          _categoryArray: product.category,
-          // Replace category with a normalized object that has a name property
-          category: lastCategory || { id: 0, name: '', parent: null }
+          // Keep the full array for breadcrumb rendering
+          category: product.category,
+          // Optionally, add a leaf property if needed elsewhere
+          categoryLeaf: lastCategory || { id: 0, name: '', parent: null }
         };
       }
       return product;
@@ -419,16 +410,13 @@ export function ProductsTable() {
           return true;
         }
         
-        // Handle category search with full category path
-        if (product.category) {
-          // If category is an array of Category objects, join their names with >
-          const categoryName = Array.isArray(product.category) 
-            ? product.category.map(c => c.name).join(' > ')
-            : normalizeCategory(product.category).name;
+        // Handle category search with full category path - safely using our utility
+        const categoryName = Array.isArray(product.category) 
+          ? product.category.map(c => c.name).join(' > ')
+          : getCategoryName(product.category);
             
-          if (categoryName.toLowerCase().includes(lowerSearchTerm)) {
-            return true;
-          }
+        if (categoryName.toLowerCase().includes(lowerSearchTerm)) {
+          return true;
         }
         
         return false;
@@ -438,46 +426,15 @@ export function ProductsTable() {
     if (filters.category && filters.category !== 'all') {
       if (filters.category === 'uncategorized') {
         filtered = filtered.filter(product => {
-          // Handle case where category is null/undefined
-          if (!product.category) return true; 
-          
-          // Handle case where category is an object with name property
-          if (product.category && typeof product.category === 'object') {
-            return !product.category.name || product.category.name.trim() === '';
-          }
-          
-          // Handle case where category is a string
-          if (typeof product.category === 'string') {
-            return product.category.trim() === '';
-          }
-          
-          // Handle any category object safely
-          if (product.category && typeof product.category === 'object') {
-            // Safe access to name property
-            const name = product.category.name;
-            return !name || (typeof name === 'string' && name.trim() === '');
-          }
-          
-          // Handle case where category is a string
-          if (typeof product.category === 'string') {
-            return !product.category || product.category.trim() === '';
-          }
-          
-          return true;
+          // Use the utility function for clean type handling
+          const name = getCategoryName(product.category);
+          return name === '';  // uncategorized
         });
       } else {
         filtered = filtered.filter(product => {
-          // Handle case where category is an object with name property
-          if (product.category && typeof product.category === 'object') {
-            return product.category.name === filters.category;
-          }
-          
-          // Handle case where category is a string
-          if (typeof product.category === 'string') {
-            return product.category === filters.category;
-          }
-          
-          return false; // If no category, it's not a match for a specific category filter
+          // Use the utility function for clean type handling
+          const name = getCategoryName(product.category);
+          return name === filters.category;
         });
       }
     }
@@ -2139,7 +2096,7 @@ export function ProductsTable() {
                               )}
                               onClick={(e) => {
                                 const target = e.target as HTMLElement;
-                                const isActionClick = !!target.closest('button, input, [role="combobox"], [data-editable="true"]');
+                                const isActionClick = !!target.closest('button, input, [role="combobox"], [data-editable="true"], [data-editing="true"], [data-component="category-tree-select-container"]');
                                 
                                 // Don't do anything if clicking on an action element
                                 if (isActionClick) return;

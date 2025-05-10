@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
+import type { Category } from '@/types/categories';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -40,4 +41,30 @@ export function formatCurrency(amount: number | string, currency = 'USD'): strin
     // Fallback format
     return `${currency} ${numericAmount.toFixed(2)}`;
   }
+}
+
+/**
+ * Gets the category name from any category format
+ * @param raw - The category data in any supported format
+ * @returns The category name as a string, or empty string if no category
+ */
+export function getCategoryName(raw: string | Category | Record<string, any> | any[] | null | undefined): string {
+  if (!raw) return '';
+  
+  // Handle array of categories
+  if (Array.isArray(raw)) {
+    // take the leaf of the hierarchy (last element)
+    if (raw.length === 0) return '';
+    const leaf = raw[raw.length - 1];
+    // Safe property access with optional chaining
+    return typeof leaf === 'object' && leaf !== null ? leaf?.name ?? '' : String(leaf);
+  }
+  
+  // Handle object with name property
+  if (typeof raw === 'object' && raw !== null) {
+    return raw.name ?? '';
+  }
+  
+  // Handle string or any other value by converting to string
+  return String(raw).trim();
 }

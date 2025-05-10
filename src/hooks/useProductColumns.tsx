@@ -35,7 +35,6 @@ import {
   HoverCardTrigger,
   HoverCardContent,
 } from "@/components/ui/hover-card";
-import AsyncCreatableSelect from "react-select/async-creatable";
 import type { OnChangeValue } from "react-select";
 
 import {
@@ -58,7 +57,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { CategoryTreeSelect } from '@/components/common/CategoryTreeSelect';
+import { CategoryTreeSelect } from '@/components/categories/CategoryTreeSelect';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
 
 /* ---------------------------------------------------------- */
 /*  Helper / shared types                                     */
@@ -385,134 +385,83 @@ export function useProductColumns({
             className="p-0 hover:bg-transparent"
           >
             <span>Category</span>
-            {column.getIsSorted() === "asc" ? (
-              <ArrowUpDown className="ml-1 h-4 w-4" />
-            ) : column.getIsSorted() === "desc" ? (
-              <ArrowUpDown className="ml-1 h-4 w-4" />
-            ) : (
-              <ArrowUpDown className="ml-1 h-4 w-4 opacity-30" />
-            )}
+            <ArrowUpDown className="ml-1 h-4 w-4" />
           </Button>
         );
       },
       cell: ({ row }) => {
         const rowIndex = row.index;
         const categoryRaw = row.getValue("category");
+        console.log('ProductTable categoryRaw:', categoryRaw);
         const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.columnId === 'category';
-        
-        // Format the category path
-        let path = 'Uncategorized';
         let categoryId = null;
-        
-        // Safely handle different category formats and extract the ID
+        let categoryArray = Array.isArray(categoryRaw) ? categoryRaw : (categoryRaw ? [categoryRaw] : []);
         if (categoryRaw) {
           if (Array.isArray(categoryRaw) && categoryRaw.length > 0) {
-            // Handle array of categories - get the leaf category (last one)
             const leafCategory = categoryRaw[categoryRaw.length - 1];
             categoryId = leafCategory.id;
-            
-            // Format path from all categories in the array
-            path = categoryRaw
-              .filter(c => c && typeof c === 'object' && c.name)
-              .map(c => String(c.name))
-              .join(' > ');
           } else if (typeof categoryRaw === 'object' && categoryRaw !== null) {
-            // Handle object with id and name properties
             categoryId = (categoryRaw as any).id;
-            // Use name from the category object, not the ID
-            path = (categoryRaw as any).name ? String((categoryRaw as any).name) : 'Uncategorized';
+            categoryArray = [categoryRaw];
           } else if (typeof categoryRaw === 'string') {
-            // Handle string
-            path = categoryRaw;
+            categoryArray = [{ name: categoryRaw, id: null }];
           } else if (typeof categoryRaw === 'number') {
-            // If it's just a number (ID), use a placeholder until we can replace it
             categoryId = categoryRaw;
-            path = `Loading...`;
-            
-            // Asynchronously fetch the proper category name
-            (async () => {
-              try {
-                const categories = await getCategories();
-                const category = categories.find(c => c.id === categoryRaw);
-                if (category) {
-                  // Update with the full category object
-                  updateData(rowIndex, 'category', category);
-                }
-              } catch (error) {
-                console.error('Failed to fetch category data for ID:', categoryRaw, error);
-              }
-            })();
+            categoryArray = [];
           }
         }
-
         if (isEditing) {
           return (
             <div 
               className="min-w-[250px] p-1" 
-              onClick={(e) => e.stopPropagation()}
-              data-editing="true"
+              onClick={e => e.stopPropagation()}
+              onMouseDown={e => e.stopPropagation()} 
+              onKeyDown={e => e.stopPropagation()}
+              data-editing="true" 
               data-component="category-tree-select"
             >
               <CategoryTreeSelect
                 selectedValue={categoryId}
-                onChange={async (value) => {
-                  // Don't immediately update with just the ID
-                  // Instead, fetch the full category data
-                  try {
-                    if (value) {
-                      const valueId = typeof value === 'string' ? parseInt(value, 10) : value;
-                      const categories = await getCategories();
-                      // Find the selected category
-                      const selectedCategory = categories.find(c => c.id === valueId);
-                      if (selectedCategory) {
-                        // Update with the full category object
-                        updateData(rowIndex, 'category', selectedCategory);
-                        
-                        // Also update the product on the backend
-                        await updateProductCategory(row.original.id, valueId);
-                      } else {
-                        // Fallback if category not found - still attempt backend update
-                        updateData(rowIndex, 'category', { id: valueId, name: `Category ${value}` });
-                        await updateProductCategory(row.original.id, valueId);
-                      }
-                    } else {
-                      // Handle null selection (Uncategorized)
-                      updateData(rowIndex, 'category', null);
-                      await updateProductCategory(row.original.id, null);
-                    }
-                  } catch (error) {
-                    console.error('Error updating category:', error);
-                    toast({ 
-                      title: 'Error updating category', 
-                      description: 'Could not update category information',
-                      variant: 'destructive' 
-                    });
-                  }
-                }}
-                className="w-full"
-                placeholder="Search or select category..."
+                onChange={newId => updateData(rowIndex, 'category', newId)}
               />
             </div>
           );
         }
-        
+        // Read-only: show breadcrumb, and clicking the cell enters edit mode
         return (
-          <div 
-            className="truncate lg:whitespace-normal cursor-pointer hover:text-primary transition-colors p-1"
-            onClick={(e) => {
+          <div
+            className="min-w-[180px] cursor-pointer p-1 hover:bg-muted rounded"
+            title={Array.isArray(categoryRaw) ? categoryRaw.map(cat => (cat as any).name).join(' > ') : (typeof categoryRaw === 'object' && categoryRaw !== null && 'name' in categoryRaw ? (categoryRaw as any).name : categoryRaw || 'Uncategorized')}
+            onClick={e => {
               e.stopPropagation();
-              handleCellEdit(rowIndex, 'category', path);
+              handleCellEdit(rowIndex, 'category', categoryId);
             }}
-            data-editable="true"
+            tabIndex={0}
+            role="button"
+            aria-label="Edit category"
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleCellEdit(rowIndex, 'category', categoryId);
+              }
+            }}
           >
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="truncate max-w-xs">{path}</span>
-                </TooltipTrigger>
-                <TooltipContent side="top">{path}</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <Breadcrumb>
+              {Array.isArray(categoryRaw) && categoryRaw.length > 0 ? (
+                categoryRaw.map((cat, idx) => (
+                  <span key={cat.id || idx} className="truncate">
+                    {(cat as any).name}
+                    {idx < categoryRaw.length - 1 && <span className="mx-1">&gt;</span>}
+                  </span>
+                ))
+              ) : typeof categoryRaw === 'object' && categoryRaw !== null && 'name' in categoryRaw ? (
+                <span>{(categoryRaw as any).name}</span>
+              ) : typeof categoryRaw === 'string' ? (
+                <span>{categoryRaw}</span>
+              ) : (
+                <span className="text-muted-foreground">Uncategorized</span>
+              )}
+            </Breadcrumb>
           </div>
         );
       },
@@ -620,49 +569,51 @@ export function useProductColumns({
         });
 
         if (isEditing) {
-          function searchTags(inputValue: string) {
-            throw new Error("Function not implemented.");
-          }
-
           return (
             <div 
               className="min-w-[200px] p-1" 
               onClick={(e) => e.stopPropagation()}
               data-editing="true"
-              data-component="async-select"
             >
-              <AsyncCreatableSelect
-                isMulti
-                cacheOptions
-                defaultOptions={tagOptions}
-                classNamePrefix="react-select"
-                loadOptions={async (inputValue: string) => {
-                  const results = await searchTags(inputValue);
-                  // Filter out empty strings and ensure each result has a non-empty value and label
-                  const typedResults = (results ?? []) as { value: string; label: string }[];
-                  return typedResults.filter(result => 
-                    result?.value && 
-                    result.value.trim() !== '' &&
-                    result.label &&
-                    result.label.trim() !== ''
-                  );
+              <div 
+                className="flex flex-wrap gap-1 max-w-[150px] cursor-pointer group p-1"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // Start editing this cell
+                  handleCellEdit(rowIndex, 'tags', tags.length > 0 ? tags.join(',') : '');
                 }}
-                onCreateOption={(inputValue: string) => {
-                  if (!inputValue || inputValue.trim() === '') return;
-                  return handleCreateTagOption(inputValue);
-                }}
-                onChange={(newValue: OnChangeValue<{ label: string; value: string }, true>) => {
-                  const newTags = newValue ? newValue.map(option => option.value) : [];
-                  updateData(rowIndex, 'tags', newTags);
-                }}
-                value={currentTagOptions}
-                placeholder="Add or create tags..."
-                className="min-w-[200px]"
-                menuPortalTarget={document.body}
-                styles={{
-                  menuPortal: (base) => ({ ...base, zIndex: 9999 }),
-                }}
-              />
+                data-editable="true"
+              >
+                {tags && tags.length > 0 ? (
+                  <>
+                    {tags.slice(0, 2).map((tag, i) => (
+                      <Badge key={i} variant="outline" className="text-xs whitespace-nowrap">
+                        {tag}
+                      </Badge>
+                    ))}
+                    {tags.length > 2 && (
+                      <Badge variant="outline" className="text-xs">
+                        +{tags.length - 2}
+                      </Badge>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-slate-400 group-hover:text-primary transition-colors">
+                    Add tags
+                  </span>
+                )}
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-5 w-5 ml-1 opacity-0 group-hover:opacity-100"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleCellEdit(rowIndex, 'tags', tags.length > 0 ? tags.join(',') : '');
+                  }}
+                >
+                  <PlusIcon className="h-3 w-3" />
+                </Button>
+              </div>
             </div>
           );
         }

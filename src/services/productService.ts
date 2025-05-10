@@ -68,7 +68,12 @@
         description: string;
         sku: string;
         price: number;
-        category: string | ProductCategory;
+        // Category comes back from the API as a list of ancestors:
+        //   []                 → no category
+        //   [root, …, leaf]    → full path
+        // We also still allow your legacy string‐only clients in some places,
+        // so we keep string here too:
+        category: ProductCategory[] | ProductCategory | string;
         created_by?: string;
         created_at?: string;
         updated_at?: string;

@@ -6,7 +6,6 @@ import { z } from 'zod';
 import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { useToast } from '@/components/ui/use-toast';
-import AsyncCreatableSelect from 'react-select/async-creatable';
 import axios from 'axios';
 
 // UI components
@@ -39,6 +38,7 @@ import { CreatableSelect } from "@/components/ui/creatable-select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Spinner } from "@/components/ui/spinner";
 import { FileUpload } from "@/components/ui/file-upload";
+import { CategoryTreeSelect } from '../categories/CategoryTreeSelect';
 
 // Services
 import { productService, Product } from '@/services/productService';
@@ -520,29 +520,9 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
                     render={({ field }) => (
                       <FormItem>
                         <FormControl>
-                          <AsyncCreatableSelect<CategoryOption, false>
-                            cacheOptions
-                            defaultOptions={categoryOptions}
-                            loadOptions={productService.searchCategories}
-                            onCreateOption={async (inputValue) => {
-                              if (!inputValue) return;
-                              try {
-                                const newCategory = await productService.createCategory({ name: inputValue });
-                                const newOption = { label: newCategory.name, value: newCategory.id };
-                                setCategoryOptions((prev) => [...prev, newOption]);
-                                field.onChange(newOption);
-                                toast({ title: `Category "${inputValue}" created`, variant: "default" });
-                              } catch (error) {
-                                console.error("Failed to create category:", error);
-                                toast({ title: "Failed to create category", variant: "destructive" });
-                              }
-                            }}
-                            onChange={(option) => field.onChange(option)}
-                            value={field.value}
-                            placeholder="Select or create a category"
-                            getOptionLabel={(option) => option.label}
-                            getOptionValue={(option) => option.value.toString()}
-                            isLoading={isPending}
+                          <CategoryTreeSelect
+                            selectedValue={field.value?.value || field.value || null}
+                            onChange={id => field.onChange({ value: id })}
                           />
                         </FormControl>
                         <FormMessage />

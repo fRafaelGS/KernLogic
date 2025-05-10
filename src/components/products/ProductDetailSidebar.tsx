@@ -18,6 +18,7 @@ import { Category as CategoryFromService, buildCategoryBreadcrumb } from '@/serv
 import { formatCurrency } from '@/lib/utils';
 import { CategoryDisplay } from '../common/CategoryDisplay';
 import { normalizeCategory, Category } from '@/types/categories';
+import { CategoryTreeSelect } from '../categories/CategoryTreeSelect';
 
 // Mock user permissions - in a real app, these would come from auth context
 const hasEditPermission = true;
@@ -69,6 +70,13 @@ export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
   
   const createdDate = formatDate(product.created_at);
   const modifiedDate = formatDate(product.updated_at);
+  
+  // Extract and narrow the category trail to eliminate TypeScript errors
+  const categoryTrail: Category[] = Array.isArray(product.category) ? product.category : [];
+  // Extract single category for the fallback case
+  const singleCategory = !Array.isArray(product.category) && typeof product.category === 'object' && product.category !== null 
+    ? product.category as Category
+    : null;
   
   // Handle thumbnail display with improved priority for primary assets
   const thumbUrl = useMemo(() => {
@@ -289,44 +297,47 @@ export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
               </Button>
             )}
           </div>
-          <div className="py-1.5 bg-slate-50 rounded-md px-3 mt-1 border border-slate-200">
-            <nav aria-label="Product category" className="mb-1">
-              <Breadcrumb>
-                <BreadcrumbList>
-                  {Array.isArray(product.category) && ((product.category as unknown) as Category[]).map((cat, idx) => {
-                    const categories = (product.category as unknown) as Category[];
-                    return (
-                      <React.Fragment key={cat.id}>
-                        {idx > 0 && <BreadcrumbSeparator />}
-                        <BreadcrumbItem isCurrent={idx === categories.length - 1}>
-                          <span 
-                            className={idx === categories.length - 1 
-                              ? 'font-medium text-slate-900' 
-                              : 'text-slate-600 hover:underline cursor-pointer'
-                            }
-                            onClick={() => {
-                              if (idx < categories.length - 1) {
-                                window.location.href = `/products?category=${cat.id}`;
-                              }
-                            }}
-                          >
-                            {cat.name}
-                          </span>
-                        </BreadcrumbItem>
-                      </React.Fragment>
-                    );
-                  })}
-                  {!Array.isArray(product.category) && (
-                    <BreadcrumbItem isCurrent>
-                      <span className="font-medium text-slate-900">
-                        {normalizeCategory(product.category).name || 'Uncategorized'}
-                      </span>
-                    </BreadcrumbItem>
-                  )}
-                </BreadcrumbList>
-              </Breadcrumb>
-            </nav>
-          </div>
+          <Breadcrumb>
+            {categoryTrail.length > 0 ? (
+              categoryTrail.map((cat, idx) => (
+                <React.Fragment key={cat.id}>
+                  <BreadcrumbItem isCurrent={idx === categoryTrail.length - 1}>
+                    <span
+                      className={
+                        idx === categoryTrail.length - 1
+                          ? "font-medium text-slate-900"
+                          : "text-slate-600 hover:underline cursor-pointer"
+                      }
+                      onClick={() => {
+                        if (idx < categoryTrail.length - 1) {
+                          window.location.href = `/products?category=${cat.id}`;
+                        }
+                      }}
+                    >
+                      {cat.name}
+                    </span>
+                  </BreadcrumbItem>
+                  {idx < categoryTrail.length - 1 && <BreadcrumbSeparator />}
+                </React.Fragment>
+              ))
+            ) : singleCategory ? (
+              <BreadcrumbItem isCurrent>
+                <span>
+                  {singleCategory.name || "Uncategorized"}
+                </span>
+              </BreadcrumbItem>
+            ) : typeof product.category === "string" ? (
+              <BreadcrumbItem isCurrent>
+                <span>
+                  {product.category.trim() || "Uncategorized"}
+                </span>
+              </BreadcrumbItem>
+            ) : (
+              <BreadcrumbItem isCurrent>
+                <span className="text-muted-foreground">Uncategorized</span>
+              </BreadcrumbItem>
+            )}
+          </Breadcrumb>
           
           {/* Brand and GTIN in a 2-column layout */}
           <div className="grid grid-cols-2 gap-2 mt-3 border-t border-slate-100 pt-3">
@@ -539,11 +550,9 @@ export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
         onOpenChange={setShowCategoryModal}
         productId={product.id || 0}
         currentCategoryId={
-          product.category 
-            ? (typeof product.category === 'object' 
-                ? product.category.id 
-                : undefined)
-            : undefined
+          categoryTrail.length > 0
+            ? categoryTrail[categoryTrail.length - 1]?.id
+            : singleCategory?.id
         }
         onCategoryUpdated={() => window.location.reload()}
       />

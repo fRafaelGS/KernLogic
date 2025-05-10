@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Check, ChevronDown, ChevronRight, Folder, FolderOpen, Plus, Search, X, Loader2 } from 'lucide-react';
 import { getCategoryTree, createCategory } from '@/services/categoryService';
 import { TreeNode } from '@/types/categories';
@@ -21,7 +21,6 @@ interface CategoryTreeSelectProps {
   createNewEnabled?: boolean;
 }
 
-// A recursive component for each tree node
 interface TreeNodeRowProps {
   node: TreeNode;
   depth: number;
@@ -40,8 +39,13 @@ const TreeNodeRow: React.FC<TreeNodeRowProps> = ({
   const isSelected = node.value === selectedValue;
   const hasChildren = node.children && node.children.length > 0;
   
+  // Stop propagation for all events
+  const stopPropagation = (e: React.MouseEvent) => {
+    e.stopPropagation();
+  };
+  
   return (
-    <li>
+    <li onClick={stopPropagation} onMouseDown={stopPropagation}>
       <div 
         className={`
           flex items-center py-1.5 px-2 rounded-md
@@ -51,7 +55,8 @@ const TreeNodeRow: React.FC<TreeNodeRowProps> = ({
       >
         {hasChildren ? (
           <button 
-            onClick={() => onToggle(node)}
+            type="button"
+            onClick={e => { e.stopPropagation(); onToggle(node); }}
             className="p-0.5 mr-1.5 rounded-sm hover:bg-muted flex items-center justify-center"
             aria-label={node.expanded ? "Collapse" : "Expand"}
           >
@@ -120,6 +125,21 @@ export const CategoryTreeSelect: React.FC<CategoryTreeSelectProps> = ({
   
   // Selected category display name
   const [selectedLabel, setSelectedLabel] = useState<string>('');
+  
+  // Use a ref to check if mounted to avoid memory leaks
+  const componentMounted = useRef(true);
+  
+  useEffect(() => {
+    // Cleanup function
+    return () => {
+      componentMounted.current = false;
+    };
+  }, []);
+
+  // Event handler to stop propagation for all mouse and keyboard events
+  const stopPropagation = useCallback((e: React.MouseEvent | React.KeyboardEvent) => {
+    e.stopPropagation();
+  }, []);
 
   // Load tree data on component mount
   useEffect(() => {
@@ -195,12 +215,9 @@ export const CategoryTreeSelect: React.FC<CategoryTreeSelectProps> = ({
   // Handle node selection
   const handleSelect = (node: TreeNode) => {
     setSelectedLabel(node.label);
-    
-    // Convert to number if it's a numeric string
     const numericValue = !isNaN(Number(node.value)) 
       ? Number(node.value) 
       : node.value;
-    
     onChange(numericValue);
     setIsOpen(false);
   };
@@ -219,12 +236,10 @@ export const CategoryTreeSelect: React.FC<CategoryTreeSelectProps> = ({
     setIsCreating(true);
     try {
       const newCategory = await createCategory(newCategoryName.trim());
-      // Add the new category to the tree
       setTreeData(prev => [...prev, {
         label: newCategory.name,
         value: newCategory.id.toString()
       }]);
-      // Select the newly created category
       setSelectedLabel(newCategory.name);
       onChange(newCategory.id);
       setIsOpen(false);
@@ -249,38 +264,26 @@ export const CategoryTreeSelect: React.FC<CategoryTreeSelectProps> = ({
     if (!term.trim()) return nodes;
     
     const lowerTerm = term.toLowerCase();
-    
-    // Clone the nodes to avoid mutating the original
     const clonedNodes = JSON.parse(JSON.stringify(nodes));
-    
     return clonedNodes.filter(node => {
-      // Check if this node matches
       const nodeMatches = node.label.toLowerCase().includes(lowerTerm);
-      
-      // Check if any children match
       let childrenMatch = false;
       if (node.children && node.children.length > 0) {
         const matchingChildren = filterTreeBySearchTerm(node.children, term);
         childrenMatch = matchingChildren.length > 0;
-        
-        // If children match but node doesn't, replace children with only matching ones
         if (childrenMatch) {
           node.children = matchingChildren;
-          // Auto-expand when filtering
           node.expanded = true;
         }
       }
-      
       return nodeMatches || childrenMatch;
     });
   };
 
-  // Get filtered data based on search term
   const filteredData = searchTerm 
     ? filterTreeBySearchTerm(treeData, searchTerm)
     : treeData;
 
-  // Custom dropdown UI
   if (isLoading) {
     return (
       <div className={`relative w-full flex items-center border rounded-md px-3 py-2 h-10 bg-background ${className}`}>
@@ -301,52 +304,126 @@ export const CategoryTreeSelect: React.FC<CategoryTreeSelectProps> = ({
   }
 
   return (
-    <div className="category-tree-select">
+    <div 
+      className={`relative ${className}`}
+      onClick={stopPropagation}
+      onMouseDown={stopPropagation}
+      onMouseUp={stopPropagation}
+      onKeyDown={stopPropagation}
+      onKeyUp={stopPropagation}
+      data-component="category-tree-select-container"
+    >
       <Popover open={isOpen} onOpenChange={setIsOpen}>
         <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            role="combobox"
-            aria-expanded={isOpen}
-            className={`w-full justify-between ${selectedLabel ? 'text-foreground' : 'text-muted-foreground'} ${className}`}
+          <Button 
+            variant="outline" 
+            role="combobox" 
+            className={`w-full justify-between ${isOpen ? 'ring-2 ring-ring' : ''}`}
             disabled={disabled}
+            onClick={stopPropagation}
+            onMouseDown={stopPropagation}
+            aria-expanded={isOpen}
           >
-            <div className="flex items-center truncate">
-              {selectedLabel ? (
-                <>
-                  <FolderOpen size={18} className="mr-2 text-primary" />
-                  <span className="truncate font-medium">{selectedLabel}</span>
-                </>
-              ) : (
-                <span>{placeholder}</span>
-              )}
-            </div>
-            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-70" />
+            {selectedLabel ? (
+              <span className="truncate">{selectedLabel}</span>
+            ) : (
+              <span className="text-muted-foreground">{placeholder}</span>
+            )}
+            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[320px] p-0" align="start">
-          <div className="category-tree-content">
-            {/* Search bar */}
-            <div className="category-tree-search flex items-center border-b p-2 sticky top-0 bg-background z-10">
-              <Search className="h-4 w-4 text-muted-foreground mr-2" />
-              <Input
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search categories..."
-                className="h-8 border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-              />
-              {searchTerm && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 w-6 p-0 ml-1"
-                  onClick={() => setSearchTerm('')}
-                >
-                  <X className="h-3 w-3" />
-                </Button>
+        <PopoverContent 
+          className="w-72 p-0" 
+          align="start"
+          onMouseDown={stopPropagation}
+          onClick={stopPropagation}
+        >
+          <div className="flex flex-col h-full max-h-80">
+            {/* Search and Create Section */}
+            <div className="p-2 border-b flex flex-col gap-2">
+              <div className="flex items-center gap-1 relative">
+                <Search className="h-4 w-4 absolute left-2.5 text-muted-foreground" />
+                <Input
+                  placeholder="Search categories..."
+                  className="pl-8"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onClick={stopPropagation}
+                  onKeyDown={e => {
+                    stopPropagation(e);
+                    // If escape, clear search
+                    if (e.key === 'Escape') {
+                      setSearchTerm('');
+                    }
+                  }}
+                />
+              </div>
+              
+              {createNewEnabled && (
+                <div className="flex gap-1">
+                  {isCreating ? (
+                    <>
+                      <Input
+                        placeholder="New category name..."
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        className="flex-1"
+                        disabled={isCreating && !newCategoryName.trim()}
+                        onKeyDown={e => {
+                          stopPropagation(e);
+                          if (e.key === 'Enter' && newCategoryName.trim()) {
+                            handleCreate();
+                          } else if (e.key === 'Escape') {
+                            setIsCreating(false);
+                            setNewCategoryName('');
+                          }
+                        }}
+                        onClick={stopPropagation}
+                      />
+                      <Button 
+                        size="sm" 
+                        variant="primary" 
+                        disabled={!newCategoryName.trim() || isCreating}
+                        onClick={e => {
+                          stopPropagation(e);
+                          handleCreate();
+                        }}
+                      >
+                        {isCreating ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Check className="h-4 w-4" />
+                        )}
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={e => {
+                          stopPropagation(e);
+                          setIsCreating(false);
+                          setNewCategoryName('');
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </>
+                  ) : (
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="w-full flex items-center justify-center gap-1"
+                      onClick={e => {
+                        stopPropagation(e);
+                        setIsCreating(true);
+                      }}
+                    >
+                      <Plus className="h-4 w-4" />
+                      <span>Create Category</span>
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
-            
             {/* Tree content */}
             <div className="category-tree-list overflow-y-auto p-2 max-h-[300px]">
               {filteredData.length > 0 ? (
@@ -386,32 +463,6 @@ export const CategoryTreeSelect: React.FC<CategoryTreeSelectProps> = ({
                 </div>
               )}
             </div>
-            
-            {/* Create category section */}
-            {createNewEnabled && (
-              <div className="category-tree-create border-t p-2 bg-muted/30">
-                <div className="flex space-x-2">
-                  <Input
-                    value={newCategoryName}
-                    onChange={(e) => setNewCategoryName(e.target.value)}
-                    placeholder="New category name..."
-                    className="h-8"
-                  />
-                  <Button 
-                    size="sm" 
-                    disabled={!newCategoryName.trim() || isCreating}
-                    onClick={handleCreate}
-                    className="h-8"
-                  >
-                    {isCreating ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <Plus className="h-3 w-3" />
-                    )}
-                  </Button>
-                </div>
-              </div>
-            )}
           </div>
         </PopoverContent>
       </Popover>

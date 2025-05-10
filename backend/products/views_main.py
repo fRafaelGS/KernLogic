@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from django.http import HttpResponse, Http404
 from django.conf import settings
-from django.db.models import Sum, Count, F, Q, Subquery, OuterRef
+from django.db.models import Sum, Count, F, Q, Subquery, OuterRef, Prefetch
 from django.db.models.functions import Coalesce
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
@@ -109,7 +109,7 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     pagination_class = StandardResultsSetPagination
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'sku', 'description', 'brand', 'tags', 'barcode']
-    ordering_fields = ['name', 'created_at', 'price', 'brand']
+    ordering_fields = ['name', 'created_at', 'brand']
     ordering = ['-created_at']
     renderer_classes = [JSONRenderer]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
@@ -147,6 +147,9 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         Filter products to return only those created by the current user.
         Allow additional filtering by query parameters.
         """
+        from django.db.models import Prefetch
+        from prices.models import ProductPrice
+        
         user = self.request.user
         if not user.is_authenticated:
             return Product.objects.none()
@@ -188,8 +191,16 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             is_active_bool = is_active.lower() == 'true'
             qs = qs.filter(is_active=is_active_bool)
         
-        # Filter out archived products
-        return qs.filter(is_archived=False).prefetch_related('images')
+        # Filter out archived products and prefetch related data
+        # Optimization: prefetch base prices to avoid N+1 queries for default_price
+        return qs.filter(is_archived=False).prefetch_related(
+            'images',
+            Prefetch(
+                'prices', 
+                queryset=ProductPrice.objects.filter(price_type__code='base'),
+                to_attr='base_prices'
+            )
+        )
 
     def perform_create(self, serializer):
         """
@@ -227,9 +238,14 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         try:
             # Get the old product before update
             old_product = self.get_object()
+            
+            # Get the base price for the old product
+            old_base_price = old_product.prices.filter(price_type__code='base').first()
+            old_price_value = float(old_base_price.amount) if old_base_price else 0.0
+            
             old_data = {
                 "name": old_product.name,
-                "price": float(old_product.price),
+                "price": old_price_value,  # Get price from pricing table
                 "sku": old_product.sku,
                 "category": old_product.category,
                 "is_active": old_product.is_active
@@ -238,12 +254,16 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             # Save the updated product without modifying organization
             product = serializer.save()
             
+            # Get the base price for the updated product
+            base_price = product.prices.filter(price_type__code='base').first()
+            price_value = float(base_price.amount) if base_price else 0.0
+            
             # Collect changes
             changes = {}
             if old_product.name != product.name:
                 changes["name"] = {"old": old_product.name, "new": product.name}
-            if float(old_product.price) != float(product.price):
-                changes["price"] = {"old": float(old_product.price), "new": float(product.price)}
+            if old_price_value != price_value:
+                changes["price"] = {"old": old_price_value, "new": price_value}
             if old_product.sku != product.sku:
                 changes["sku"] = {"old": old_product.sku, "new": product.sku}
             if old_product.category != product.category:
@@ -315,8 +335,21 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         
         total_products = queryset.count()
         
-        total_value = queryset.aggregate(
-            total=Coalesce(Sum('price'), Decimal('0.00'))
+        # Calculate total value using pricing table instead of legacy price field
+        # First, get all base prices for the products
+        from django.db.models import Sum, F, DecimalField
+        from django.db.models.functions import Coalesce
+        
+        # Get all products with their base prices
+        product_ids = queryset.values_list('id', flat=True)
+        
+        # Calculate total from prices table
+        from products.models import ProductPrice
+        total_value = ProductPrice.objects.filter(
+            product_id__in=product_ids,
+            price_type__code='base'
+        ).aggregate(
+            total=Coalesce(Sum('amount'), Decimal('0.00'))
         )['total']
         
         data = {
@@ -1155,6 +1188,9 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         GET: List prices for a product
         POST: Create a new price for a product
         """
+        # Import from prices app to ensure we're using the updated serializer with PriceTypeSlugOrIdField
+        from prices.serializers import ProductPriceSerializer
+        
         product = self.get_object()
         
         if request.method == 'GET':
@@ -1350,13 +1386,20 @@ class DashboardViewSet(viewsets.ViewSet):
             # Calculate KPIs
             total_products = queryset.count()
             
-            # Calculate inventory value without using stock
-            inventory_value = queryset.aggregate(
-                total=Coalesce(Sum('price'), Decimal('0.00'))
-            )['total']
+            # Calculate inventory value using the new pricing model instead of the old price field
+            from prices.models import ProductPrice
             
-            # Convert Decimal to float to avoid serialization issues
-            inventory_value = float(inventory_value)
+            # Calculate current inventory value using the base price from ProductPrice table
+            current_value = Decimal('0.00')
+            for product in queryset:
+                try:
+                    # Get the base price for this product
+                    base_price = product.prices.filter(price_type__code='base').first()
+                    if base_price:
+                        current_value += base_price.amount
+                except Exception as e:
+                    print(f"Error calculating inventory value for product {product.id}: {str(e)}")
+                    continue
             
             # Count inactive products instead of low stock
             inactive_product_count = queryset.filter(is_active=False).count()
@@ -1428,7 +1471,7 @@ class DashboardViewSet(viewsets.ViewSet):
             # Prepare response data
             data = {
                 'total_products': total_products,
-                'inventory_value': inventory_value,
+                'inventory_value': current_value,
                 'inactive_product_count': inactive_product_count,
                 'team_members': team_members,
                 'data_completeness': round(avg_completeness, 1),
@@ -1531,9 +1574,19 @@ class DashboardViewSet(viewsets.ViewSet):
             
             # In a real app, we would use historical data for accurate trends
             # For now, we'll generate synthetic data based on current inventory value
-            current_value = queryset.aggregate(
-                total=Coalesce(Sum('price'), Decimal('0.00'))
-            )['total']
+            from prices.models import ProductPrice
+            
+            # Calculate current inventory value using the base price from ProductPrice table
+            current_value = Decimal('0.00')
+            for product in queryset:
+                try:
+                    # Get the base price for this product
+                    base_price = product.prices.filter(price_type__code='base').first()
+                    if base_price:
+                        current_value += base_price.amount
+                except Exception as e:
+                    print(f"Error calculating inventory value for product {product.id}: {str(e)}")
+                    continue
             
             # Generate date range
             dates = []

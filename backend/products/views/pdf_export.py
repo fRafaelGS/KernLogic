@@ -111,7 +111,7 @@ def generate_product_pdf(request, product_id):
             'category': product.category or 'N/A',
             'brand': product.brand or 'N/A',
             'gtin': product.barcode or 'N/A',
-            'price': product.price,
+            'price': get_base_price_for_pdf(product),
             'status': 'Active' if product.is_active else 'Inactive',
             'created_at': created_at,
             'updated_at': updated_at,
@@ -188,4 +188,16 @@ def format_attribute_value(value, data_type):
         else:
             return str(value)
     except Exception:
-        return str(value) 
+        return str(value)
+
+def get_base_price_for_pdf(product):
+    """Get the base price of a product for PDF export"""
+    try:
+        # Get the base price from pricing table
+        base_price = product.prices.filter(price_type__code='base').first()
+        if base_price:
+            return base_price.amount
+        return 'N/A'
+    except Exception as e:
+        logger.error(f"Error getting base price: {str(e)}")
+        return 'N/A' 

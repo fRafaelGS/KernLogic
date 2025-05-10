@@ -59,7 +59,6 @@ class Product(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
     sku = models.CharField(max_length=50)
-    price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)  # Optional now - will be removed in future
     category = TreeForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True)  # Updated to use Category model
     is_active = models.BooleanField(default=True)
     is_archived = models.BooleanField(default=False, db_index=True)
@@ -89,7 +88,6 @@ class Product(models.Model):
         indexes = [
             models.Index(fields=['sku']),
             models.Index(fields=['category']),
-            models.Index(fields=['price']),
             models.Index(fields=['brand']),
             models.Index(fields=['organization']),
             models.Index(fields=['organization', 'sku']),
@@ -147,7 +145,6 @@ class Product(models.Model):
             # Required fields (weight 2)
             'name': {'weight': 2, 'check': lambda: self.name is not None and self.name.strip() != ''},
             'sku': {'weight': 2, 'check': lambda: self.sku is not None and self.sku.strip() != ''},
-            'price': {'weight': 2, 'check': lambda: self.price is not None and self.price > 0},
             
             # Important fields (weight 1.5)
             'description': {'weight': 1.5, 'check': lambda: self.description is not None and self.description.strip() != ''},
@@ -243,8 +240,6 @@ class Product(models.Model):
             missing.append({'field': 'Name', 'weight': 2})
         if not self.sku or self.sku.strip() == '':
             missing.append({'field': 'SKU', 'weight': 2})
-        if not self.price or self.price <= 0:
-            missing.append({'field': 'Price', 'weight': 2})
         if not self.description or self.description.strip() == '':
             missing.append({'field': 'Description', 'weight': 1.5})
         if not self.category or self.category.strip() == '':
@@ -317,7 +312,6 @@ class Product(models.Model):
         all_fields = [
             {'field': 'Name', 'weight': 2, 'complete': bool(self.name and self.name.strip())},
             {'field': 'SKU', 'weight': 2, 'complete': bool(self.sku and self.sku.strip())},
-            {'field': 'Price', 'weight': 2, 'complete': bool(self.price and self.price > 0)},
             {'field': 'Description', 'weight': 1.5, 'complete': bool(self.description and self.description.strip())},
             {'field': 'Category', 'weight': 1.5, 'complete': bool(self.category and self.category.strip())},
             {'field': 'Brand', 'weight': 1, 'complete': bool(self.brand and self.brand.strip())},

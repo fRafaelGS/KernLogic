@@ -15,7 +15,33 @@ class PriceTypeSerializer(serializers.ModelSerializer):
         fields = ["id", "code", "label"]
 
 
+class PriceTypeSlugOrIdField(serializers.RelatedField):
+    """Custom field that accepts either the PriceType ID or code (slug)"""
+    
+    def to_representation(self, value):
+        """Return the code (slug) for the price type"""
+        return value.code
+    
+    def to_internal_value(self, data):
+        """Accept either an ID (integer) or code (string)"""
+        try:
+            # First, try to interpret as an integer (ID)
+            if isinstance(data, str) and data.isdigit():
+                price_type = PriceType.objects.get(id=int(data))
+                return price_type
+            elif isinstance(data, int):
+                price_type = PriceType.objects.get(id=data)
+                return price_type
+                
+            # If that fails, try as a code (string)
+            price_type = PriceType.objects.get(code=data)
+            return price_type
+        except (PriceType.DoesNotExist, ValueError):
+            raise serializers.ValidationError(f"PriceType with ID/code '{data}' does not exist")
+
+
 class ProductPriceSerializer(serializers.ModelSerializer):
+    price_type = PriceTypeSlugOrIdField(queryset=PriceType.objects.all())
     price_type_display = serializers.CharField(source="price_type.label", read_only=True)
     channel_name = serializers.CharField(source="channel.name", read_only=True)
     

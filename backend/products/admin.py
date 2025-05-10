@@ -41,11 +41,19 @@ if 'makemigrations' not in sys.argv and 'migrate' not in sys.argv:
 
     @admin.register(Product)
     class ProductAdmin(admin.ModelAdmin):
-        list_display = ('id', 'name', 'sku', 'price', 'organization', 'is_active', 'created_at')
+        list_display = ('id', 'name', 'sku', 'default_price', 'organization', 'is_active', 'created_at')
         list_filter = ('is_active', 'created_at', 'organization')
         search_fields = ('name', 'sku', 'description')
         readonly_fields = ('created_at', 'updated_at', 'created_by')
         inlines = [AttributeValueInline, ProductImageInline, ProductRelationInline, ProductAssetInline]
+        
+        def default_price(self, obj):
+            """Get the default price from the ProductPrice model"""
+            base_price = obj.prices.filter(price_type__code='base').first()
+            if base_price:
+                return f"{base_price.currency} {base_price.amount}"
+            return "N/A"
+        default_price.short_description = "Price"
         
         def get_queryset(self, request):
             qs = super().get_queryset(request)

@@ -106,7 +106,6 @@ class ProductSerializer(serializers.ModelSerializer):
     Serializer for Product model
     """
     created_by = serializers.ReadOnlyField(source='created_by.email')
-    price = serializers.FloatField(required=False)  # Keep for backward compatibility until fully migrated
     prices = ProductPriceSerializer(many=True, read_only=True)
     images = ProductImageSerializer(many=True, read_only=True)
     tags = serializers.ListField(child=serializers.CharField(), required=False)
@@ -128,11 +127,13 @@ class ProductSerializer(serializers.ModelSerializer):
         allow_null=True,
         write_only=True
     )
+    # Add default_price field to show the base price in list views
+    default_price = serializers.SerializerMethodField()
     
     class Meta:
         model = Product
         fields = [
-            'id', 'name', 'sku', 'description', 'price', 'prices', 'category', 'category_id', 'brand',
+            'id', 'name', 'sku', 'description', 'prices', 'default_price', 'category', 'category_id', 'brand',
             'barcode', 'tags', 'attribute_values', 'is_active', 'is_archived', 'created_at',
             'updated_at', 'primary_image', 'completeness_percent', 'missing_fields',
             'assets', 'has_primary_image', 'primary_image_url', 'primary_asset', 'organization',
@@ -142,7 +143,7 @@ class ProductSerializer(serializers.ModelSerializer):
                            'missing_fields', 'assets', 'has_primary_image', 'primary_image_url',
                            'primary_asset', 'organization', 'created_by', 'images',
                            'primary_image_thumb', 'primary_image_large', 'attribute_values',
-                           'prices', 'category']
+                           'prices', 'category', 'default_price']
 
     # Helper method to get the default list price
     def get_list_price(self, obj):
@@ -164,10 +165,6 @@ class ProductSerializer(serializers.ModelSerializer):
             if price:
                 return price.amount
                 
-            # If no prices found and we still have the old price field, use that
-            if hasattr(obj, 'price') and obj.price is not None:
-                return obj.price
-                
             return Decimal('0.00')
         except Exception as e:
             print(f"Error getting list price: {e}")
@@ -175,19 +172,13 @@ class ProductSerializer(serializers.ModelSerializer):
             
     def to_representation(self, instance):
         """
-        Override to ensure we always have a price even if migrating and properly handle tags
-        Also ensure category is properly represented as a list
+        Override to ensure properly handle tags and ensure category is properly represented
         """
         representation = super().to_representation(instance)
         
-        # During migration: if no prices exist yet but old price field exists
-        if not instance.prices.exists() and hasattr(instance, 'price') and instance.price is not None:
-            # Still include the old price field value
-            representation['price'] = float(instance.price)
-        else:
-            # Otherwise get the price from the prices relation
-            list_price = self.get_list_price(instance)
-            representation['price'] = float(list_price)
+        # Calculate a display price from the prices relation
+        list_price = self.get_list_price(instance)
+        representation['price'] = float(list_price)  # Keep 'price' in response for API compatibility
         
         # Ensure tags are properly decoded from JSON string to list
         try:
@@ -426,6 +417,54 @@ class ProductSerializer(serializers.ModelSerializer):
         # Get all ancestors including self, ordered from root to leaf
         ancestors = obj.category.get_ancestors(include_self=True)
         return CategorySerializer(ancestors, many=True).data
+
+    def get_default_price(self, obj):
+        """
+        Return the default price for the product from the new pricing model.
+        
+        The default price is determined by looking for a "base" price type.
+        
+        For performance, the ViewSet should use:
+        queryset = Product.objects.prefetch_related(
+            Prefetch('prices', 
+                  queryset=ProductPrice.objects.filter(price_type__code='base'),
+                  to_attr='base_prices')
+        )
+        """
+        # Use prefetched base_prices if available
+        base_list = getattr(obj, "base_prices", None)
+        if base_list:
+            price = base_list[0]
+            return {
+                "amount": str(price.amount),
+                "currency": price.currency.iso_code if hasattr(price.currency, 'iso_code') else price.currency,
+                "price_type": price.price_type.code if hasattr(price.price_type, 'code') else 'base',
+                "label": price.price_type.label if hasattr(price.price_type, 'label') else 'Base Price',
+                # Keep backward compatibility with the previous format
+                "currency_iso": price.currency.iso_code if hasattr(price.currency, 'iso_code') else price.currency,
+                "price_type_code": price.price_type.code if hasattr(price.price_type, 'code') else 'base',
+                "price_type_display": price.price_type.label if hasattr(price.price_type, 'label') else 'Base Price'
+            }
+        
+        # Try to get the base price from related prices if not prefetched
+        try:
+            base_price = obj.prices.filter(price_type__code='base').first()
+            if base_price:
+                return {
+                    "amount": str(base_price.amount),
+                    "currency": base_price.currency.iso_code if hasattr(base_price.currency, 'iso_code') else base_price.currency,
+                    "price_type": base_price.price_type.code if hasattr(base_price.price_type, 'code') else 'base',
+                    "label": base_price.price_type.label if hasattr(base_price.price_type, 'label') else 'Base Price',
+                    # Keep backward compatibility with the previous format
+                    "currency_iso": base_price.currency.iso_code if hasattr(base_price.currency, 'iso_code') else base_price.currency,
+                    "price_type_code": base_price.price_type.code if hasattr(base_price.price_type, 'code') else 'base',
+                    "price_type_display": base_price.price_type.label if hasattr(base_price.price_type, 'label') else 'Base Price'
+                }
+        except (AttributeError, Exception):
+            pass
+        
+        # No price available
+        return None
 
 class ProductRelationSerializer(serializers.ModelSerializer):
     """Serializer for product relations"""

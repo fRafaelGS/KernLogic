@@ -139,3 +139,6 @@
     visibility: hidden;
   }
 }
+
+/* Import category tree select styles */
+@import './styles/category-tree-select.css';

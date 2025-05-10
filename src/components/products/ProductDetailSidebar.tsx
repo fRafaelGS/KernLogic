@@ -61,15 +61,6 @@ const validateGTIN = (gtin: string | undefined): boolean => {
   return checkDigit === calculatedCheckDigit;
 };
 
-// Mock price history data
-const priceHistory = [
-  { date: '15 Nov 2023', oldPrice: '85.00', newPrice: '89.99', user: 'John Doe' },
-  { date: '25 Sep 2023', oldPrice: '79.99', newPrice: '85.00', user: 'Jane Smith' },
-  { date: '15 Aug 2023', oldPrice: '75.00', newPrice: '79.99', user: 'Mike Johnson' },
-  { date: '30 Jul 2023', oldPrice: '72.50', newPrice: '75.00', user: 'Jane Smith' },
-  { date: '10 Jun 2023', oldPrice: '69.99', newPrice: '72.50', user: 'John Doe' },
-];
-
 export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -299,7 +290,42 @@ export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
             )}
           </div>
           <div className="py-1.5 bg-slate-50 rounded-md px-3 mt-1 border border-slate-200">
-            <CategoryDisplay category={product.category} showBadge={false} />
+            <nav aria-label="Product category" className="mb-1">
+              <Breadcrumb>
+                <BreadcrumbList>
+                  {Array.isArray(product.category) && ((product.category as unknown) as Category[]).map((cat, idx) => {
+                    const categories = (product.category as unknown) as Category[];
+                    return (
+                      <React.Fragment key={cat.id}>
+                        {idx > 0 && <BreadcrumbSeparator />}
+                        <BreadcrumbItem isCurrent={idx === categories.length - 1}>
+                          <span 
+                            className={idx === categories.length - 1 
+                              ? 'font-medium text-slate-900' 
+                              : 'text-slate-600 hover:underline cursor-pointer'
+                            }
+                            onClick={() => {
+                              if (idx < categories.length - 1) {
+                                window.location.href = `/products?category=${cat.id}`;
+                              }
+                            }}
+                          >
+                            {cat.name}
+                          </span>
+                        </BreadcrumbItem>
+                      </React.Fragment>
+                    );
+                  })}
+                  {!Array.isArray(product.category) && (
+                    <BreadcrumbItem isCurrent>
+                      <span className="font-medium text-slate-900">
+                        {normalizeCategory(product.category).name || 'Uncategorized'}
+                      </span>
+                    </BreadcrumbItem>
+                  )}
+                </BreadcrumbList>
+              </Breadcrumb>
+            </nav>
           </div>
           
           {/* Brand and GTIN in a 2-column layout */}

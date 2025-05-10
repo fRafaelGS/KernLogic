@@ -120,7 +120,7 @@ class ProductSerializer(serializers.ModelSerializer):
     has_primary_image = serializers.SerializerMethodField(read_only=True)
     primary_image_url = serializers.SerializerMethodField(read_only=True)
     primary_asset = serializers.SerializerMethodField(read_only=True)
-    category = SimpleCategorySerializer(read_only=True)
+    category = serializers.SerializerMethodField()
     category_id = serializers.PrimaryKeyRelatedField(
         source='category',
         queryset=Category.objects.all(),
@@ -176,6 +176,7 @@ class ProductSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         """
         Override to ensure we always have a price even if migrating and properly handle tags
+        Also ensure category is properly represented as a list
         """
         representation = super().to_representation(instance)
         
@@ -199,6 +200,10 @@ class ProductSerializer(serializers.ModelSerializer):
         except (json.JSONDecodeError, Exception) as e:
             print(f"Error decoding tags for product {instance.id}: {e}")
             representation['tags'] = []
+        
+        # Ensure category is an array
+        if 'category' not in representation:
+            representation['category'] = []
             
         return representation
 
@@ -409,6 +414,18 @@ class ProductSerializer(serializers.ModelSerializer):
         except Exception as e:
             print(f"ERROR: Failed to get attribute values for product {obj.id}: {str(e)}")
             return []
+
+    def get_category(self, obj):
+        """
+        Return the full hierarchy for this product's category as an
+        ordered list [root, ..., leaf], or [] if none.
+        """
+        if not obj.category:
+            return []
+        
+        # Get all ancestors including self, ordered from root to leaf
+        ancestors = obj.category.get_ancestors(include_self=True)
+        return CategorySerializer(ancestors, many=True).data
 
 class ProductRelationSerializer(serializers.ModelSerializer):
     """Serializer for product relations"""

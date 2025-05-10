@@ -1,6 +1,6 @@
 import axiosInstance from '../lib/axiosInstance';
 import { API_URL, API_ENDPOINTS } from '../config';
-import { Category as CategoryType } from '@/types/categories';
+import { Category as CategoryType, TreeNode } from '@/types/categories';
 
 // Use the new categories endpoints instead of the legacy one
 const CATEGORIES_URL = API_ENDPOINTS.categories.list;
@@ -18,6 +18,77 @@ export interface Category {
   parent_name?: string;
   children?: Category[];
 }
+
+/**
+ * Transforms a category object to the format required by react-dropdown-tree-select
+ * @param category The category object from backend
+ * @returns A TreeNode formatted for the dropdown component
+ */
+export const transformCategoryToTreeNode = (
+  category: Category
+): TreeNode => {
+  return {
+    label: category.name,
+    value: category.id.toString(),
+    children: Array.isArray(category.children)
+      ? category.children.map(child => transformCategoryToTreeNode(child))
+      : undefined,
+    expanded: false, // Default collapsed
+  };
+};
+
+/**
+ * Finds a node in the tree by its ID
+ * @param nodes Array of tree nodes to search
+ * @param id ID to find
+ * @returns The found node or null
+ */
+export const findNodeById = (
+  nodes: TreeNode[], 
+  id: string | number
+): TreeNode | null => {
+  for (const node of nodes) {
+    if (node.value === id.toString()) {
+      return node;
+    }
+    if (node.children) {
+      const found = findNodeById(node.children, id);
+      if (found) return found;
+    }
+  }
+  return null;
+};
+
+/**
+ * Gets a breadcrumb path for a node in the tree
+ * @param nodes Tree nodes to search
+ * @param id ID of the node to find
+ * @returns Formatted breadcrumb path (e.g. "Parent > Child > Grandchild")
+ */
+export const getBreadcrumbPath = (
+  nodes: TreeNode[],
+  id: string | number
+): string => {
+  const findPath = (
+    currentNodes: TreeNode[],
+    targetId: string | number,
+    path: string[] = []
+  ): string[] | null => {
+    for (const node of currentNodes) {
+      if (node.value === targetId.toString()) {
+        return [...path, node.label];
+      }
+      if (node.children) {
+        const newPath = findPath(node.children, targetId, [...path, node.label]);
+        if (newPath) return newPath;
+      }
+    }
+    return null;
+  };
+  
+  const path = findPath(nodes, id);
+  return path ? path.join(' > ') : 'Uncategorized';
+};
 
 /**
  * Normalizes category data from different formats
@@ -100,30 +171,24 @@ export const createCategory = async (name: string, parentId?: number): Promise<C
 
 /**
  * Fetches the hierarchical category tree from the API
- * @returns Promise with category tree structure
+ * @returns Promise with category tree structure formatted for the tree select component
  */
-export const getCategoryTree = async (): Promise<Category[]> => {
+export const getCategoryTree = async (): Promise<TreeNode[]> => {
   try {
     const { data } = await axiosInstance.get(CATEGORIES_TREE_URL);
     
-    // Normalize the data to ensure consistent format
-    let categories: Category[] = [];
-    
+    // Transform data to the format needed by react-dropdown-tree-select
     if (Array.isArray(data)) {
-      // If we have a tree structure, we need to recursively normalize
-      const normalizeTree = (nodes: any[]): Category[] => {
-        return nodes.map(node => ({
-          ...normalizeCategoryData(node),
-          children: node.children ? normalizeTree(node.children) : []
-        }));
-      };
-      
-      categories = normalizeTree(data);
+      // Ensure we properly normalize each category before transforming
+      return data.map(category => {
+        const normalizedCategory = normalizeCategoryData(category);
+        return transformCategoryToTreeNode(normalizedCategory);
+      });
     } else {
       console.error('Unexpected category tree data format:', data);
     }
     
-    return categories;
+    return [];
   } catch (error) {
     console.error('Error fetching category tree:', error);
     return [];
@@ -139,10 +204,19 @@ export const updateProductCategory = async (productId: number, categoryId: numbe
   try {
     const url = `/api/products/${productId}/`;
     // Use category_id as that's the write-only field in the ProductSerializer
-    const response = await axiosInstance.patch(url, { 
-      category_id: categoryId 
-    });
-    return true;
+    // Make sure categoryId is properly formatted - use null if undefined or 0
+    const payload = {
+      category_id: categoryId === 0 ? null : categoryId
+    };
+    
+    console.log('Updating product category with payload:', payload);
+    
+    const response = await axiosInstance.patch(url, payload);
+    if (response.status >= 200 && response.status < 300) {
+      console.log('Category update successful', response.data);
+      return true;
+    }
+    return false;
   } catch (error) {
     console.error('Error updating product category:', error);
     throw error;
@@ -193,4 +267,37 @@ export const buildCategoryBreadcrumb = (
   }
   
   return breadcrumb;
+};
+
+/**
+ * Updates a category
+ * @param id The category ID to update
+ * @param data The updated category data
+ * @returns Promise with updated category
+ */
+export const updateCategory = async (id: number, data: { name: string; parent?: number | null }): Promise<Category> => {
+  try {
+    const url = `${CATEGORIES_URL}${id}/`;
+    const response = await axiosInstance.patch(url, data);
+    return normalizeCategoryData(response.data);
+  } catch (error) {
+    console.error('Error updating category:', error);
+    throw error;
+  }
+};
+
+/**
+ * Deletes a category
+ * @param id The category ID to delete
+ * @returns Promise resolving to true if successful
+ */
+export const deleteCategory = async (id: number): Promise<boolean> => {
+  try {
+    const url = `${CATEGORIES_URL}${id}/`;
+    await axiosInstance.delete(url);
+    return true;
+  } catch (error) {
+    console.error('Error deleting category:', error);
+    throw error;
+  }
 }; 

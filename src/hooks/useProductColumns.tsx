@@ -50,7 +50,15 @@ import {
   productService,
 } from "@/services/productService";
 import { productService as ps } from "@/services/productService"; // alias
+import { updateProductCategory, getCategories } from "@/services/categoryService"; // Import specific functions
 import { normalizeCategory } from '@/types/categories';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { CategoryTreeSelect } from '@/components/common/CategoryTreeSelect';
 
 /* ---------------------------------------------------------- */
 /*  Helper / shared types                                     */
@@ -390,67 +398,99 @@ export function useProductColumns({
       cell: ({ row }) => {
         const rowIndex = row.index;
         const categoryRaw = row.getValue("category");
-        // Normalize the category to safely get the name
-        const normalizedCategory = normalizeCategory(categoryRaw as any);
-        const categoryValue = normalizedCategory.name;
         const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.columnId === 'category';
         
-        // Find the current option object for the select value
-        const currentOption = categoryOptions.find(opt => opt.label === categoryValue) || 
-                             (categoryValue ? { label: categoryValue, value: categoryValue } : null);
+        // Format the category path
+        let path = 'Uncategorized';
+        let categoryId = null;
+        
+        // Safely handle different category formats and extract the ID
+        if (categoryRaw) {
+          if (Array.isArray(categoryRaw) && categoryRaw.length > 0) {
+            // Handle array of categories - get the leaf category (last one)
+            const leafCategory = categoryRaw[categoryRaw.length - 1];
+            categoryId = leafCategory.id;
+            
+            // Format path from all categories in the array
+            path = categoryRaw
+              .filter(c => c && typeof c === 'object' && c.name)
+              .map(c => String(c.name))
+              .join(' > ');
+          } else if (typeof categoryRaw === 'object' && categoryRaw !== null) {
+            // Handle object with id and name properties
+            categoryId = (categoryRaw as any).id;
+            // Use name from the category object, not the ID
+            path = (categoryRaw as any).name ? String((categoryRaw as any).name) : 'Uncategorized';
+          } else if (typeof categoryRaw === 'string') {
+            // Handle string
+            path = categoryRaw;
+          } else if (typeof categoryRaw === 'number') {
+            // If it's just a number (ID), use a placeholder until we can replace it
+            categoryId = categoryRaw;
+            path = `Loading...`;
+            
+            // Asynchronously fetch the proper category name
+            (async () => {
+              try {
+                const categories = await getCategories();
+                const category = categories.find(c => c.id === categoryRaw);
+                if (category) {
+                  // Update with the full category object
+                  updateData(rowIndex, 'category', category);
+                }
+              } catch (error) {
+                console.error('Failed to fetch category data for ID:', categoryRaw, error);
+              }
+            })();
+          }
+        }
 
         if (isEditing) {
           return (
             <div 
-              className="min-w-[150px] p-1" 
+              className="min-w-[250px] p-1" 
               onClick={(e) => e.stopPropagation()}
               data-editing="true"
-              data-component="async-select"
+              data-component="category-tree-select"
             >
-              <AsyncCreatableSelect
-                cacheOptions
-                defaultOptions={categoryOptions} // Show initially fetched categories
-                classNamePrefix="react-select"
-                loadOptions={async (inputValue: string) => {
-                  if (!inputValue) return [];
+              <CategoryTreeSelect
+                selectedValue={categoryId}
+                onChange={async (value) => {
+                  // Don't immediately update with just the ID
+                  // Instead, fetch the full category data
                   try {
-                    const results = await fetch(`/api/categories/search?q=${inputValue}`);
-                    const data = await results.json();
-                    return data.map((cat: any) => ({ 
-                      label: cat.name,
-                      value: cat.id
-                    }));
-                  } catch (err) {
-                    console.error("Error searching categories:", err);
-                    return [];
-                  }
-                }}
-                onCreateOption={async (inputValue) => {
-                  if (!inputValue) return;
-                  try {
-                    const response = await fetch('/api/categories', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ name: inputValue })
-                    });
-                    const newCategory = await response.json();
-                    const newOption = { label: newCategory.name, value: newCategory.id };
-                    setCategoryOptions((prev) => [...prev, newOption]);
-                    // Update the cell value immediately
-                    updateData(rowIndex, 'category', newCategory.name); // Update with name or ID based on backend
+                    if (value) {
+                      const valueId = typeof value === 'string' ? parseInt(value, 10) : value;
+                      const categories = await getCategories();
+                      // Find the selected category
+                      const selectedCategory = categories.find(c => c.id === valueId);
+                      if (selectedCategory) {
+                        // Update with the full category object
+                        updateData(rowIndex, 'category', selectedCategory);
+                        
+                        // Also update the product on the backend
+                        await updateProductCategory(row.original.id, valueId);
+                      } else {
+                        // Fallback if category not found - still attempt backend update
+                        updateData(rowIndex, 'category', { id: valueId, name: `Category ${value}` });
+                        await updateProductCategory(row.original.id, valueId);
+                      }
+                    } else {
+                      // Handle null selection (Uncategorized)
+                      updateData(rowIndex, 'category', null);
+                      await updateProductCategory(row.original.id, null);
+                    }
                   } catch (error) {
-                     console.error("Error creating category:", error);
-                     toast({ title: 'Failed to create category', variant: 'destructive' });
+                    console.error('Error updating category:', error);
+                    toast({ 
+                      title: 'Error updating category', 
+                      description: 'Could not update category information',
+                      variant: 'destructive' 
+                    });
                   }
                 }}
-                onChange={(newValue: OnChangeValue<CategoryOption, false>) => {
-                  if (newValue) {
-                    updateData(rowIndex, 'category', newValue.label); // Update with label or value based on backend
-                  }
-                }}
-                value={currentOption}
-                placeholder="Search or create..."
-                // Add styling if needed
+                className="w-full"
+                placeholder="Search or select category..."
               />
             </div>
           );
@@ -458,15 +498,21 @@ export function useProductColumns({
         
         return (
           <div 
-            className="truncate lg:whitespace-normal cursor-pointer hover:text-primary transition-colors p-1 text-ellipsis whitespace-nowrap overflow-hidden"
-            title={categoryValue || 'Uncategorized'}
+            className="truncate lg:whitespace-normal cursor-pointer hover:text-primary transition-colors p-1"
             onClick={(e) => {
               e.stopPropagation();
-              handleCellEdit(rowIndex, 'category', categoryValue || '');
+              handleCellEdit(rowIndex, 'category', path);
             }}
             data-editable="true"
           >
-            { (categoryValue || 'Uncategorized').length > 22 ? `${(categoryValue || 'Uncategorized').slice(0,22)}…` : (categoryValue || 'Uncategorized') }
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="truncate max-w-xs">{path}</span>
+                </TooltipTrigger>
+                <TooltipContent side="top">{path}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         );
       },

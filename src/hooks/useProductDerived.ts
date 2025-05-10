@@ -13,8 +13,10 @@ export function useUniqueCategories(products: Product[]) {
       products
         .map((p) => {
           // Normalize the category to safely access the name property
-          const categoryName = normalizeCategory(p.category).name.trim();
-          return categoryName; 
+          const category = normalizeCategory(p.category);
+          // Safe access to name property
+          const categoryName = category && category.name ? category.name.trim() : '';
+          return categoryName;
         })
         .filter(Boolean),
     );

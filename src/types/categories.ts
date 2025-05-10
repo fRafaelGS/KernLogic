@@ -1,3 +1,4 @@
+// Basic category structure from the backend
 export interface Category {
   id: number;
   name: string;
@@ -6,20 +7,52 @@ export interface Category {
   children?: Category[];
 }
 
+// Tree node structure for react-dropdown-tree-select
+export interface TreeNode {
+  label: string;
+  value: string;
+  children?: TreeNode[];
+  expanded?: boolean;
+  checked?: boolean;
+  disabled?: boolean;
+  className?: string;
+  tagClassName?: string;
+  actions?: any[];
+  // Any additional properties needed by the tree component
+}
+
+// Category selection option for simple selects
+export interface CategoryOption {
+  label: string;
+  value: string | number;
+}
+
 // Helper functions to normalize category data
-export function normalizeCategory(raw: string | Category | null | undefined): Category {
+export function normalizeCategory(raw: string | Category | Category[] | null | undefined): Category {
   if (!raw) {
     return { id: 0, name: '', parent: null };
   }
   
-  return typeof raw === 'string'
-    ? { id: 0, name: raw, parent: null }
-    : raw;
+  // Handle array of categories (take the last/most specific one)
+  if (Array.isArray(raw)) {
+    if (raw.length === 0) {
+      return { id: 0, name: '', parent: null };
+    }
+    return raw[raw.length - 1];
+  }
+  
+  // Handle string
+  if (typeof raw === 'string') {
+    return { id: 0, name: raw, parent: null };
+  }
+  
+  // Handle object
+  return raw;
 }
 
 // Function to build a breadcrumb trail for display
 export function buildCategoryBreadcrumb(
-  category: string | Category | null | undefined,
+  category: string | Category | Category[] | null | undefined,
   categories: Category[] = []
 ): Category[] {
   // Return empty array for null/undefined
@@ -46,7 +79,7 @@ export function buildCategoryBreadcrumb(
 
 // Function to get the full category name path
 export function getCategoryNamePath(
-  category: string | Category | null | undefined,
+  category: string | Category | Category[] | null | undefined,
   categories: Category[] = [],
   separator: string = ' > '
 ): string {

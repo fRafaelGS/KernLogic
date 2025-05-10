@@ -32,7 +32,7 @@ from .serializers import (
     ProductRelationSerializer, ProductStatsSerializer, IncompleteProductSerializer,
     ProductAssetSerializer, ProductEventSerializer, AttributeValueSerializer,
     AttributeValueDetailSerializer, AttributeGroupSerializer, AttributeGroupItemSerializer,
-    ProductPriceSerializer, SalesChannelSerializer, SimpleCategorySerializer
+    ProductPriceSerializer, SalesChannelSerializer, SimpleCategorySerializer, CategorySerializer
 )
 from django_filters.rest_framework import DjangoFilterBackend
 import sys
@@ -344,8 +344,8 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                     organization=get_user_organization(request.user)
                 ).order_by('name')
                 
-                # Return serialized categories
-                serializer = SimpleCategorySerializer(categories, many=True)
+                # Return serialized categories with full hierarchical structure
+                serializer = CategorySerializer(categories, many=True)
                 return Response(serializer.data)
             except Exception as e:
                 # Log the error
@@ -390,7 +390,7 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 )
                 
                 # Return the new category
-                serializer = SimpleCategorySerializer(category)
+                serializer = CategorySerializer(category)
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
                 
             except Exception as e:

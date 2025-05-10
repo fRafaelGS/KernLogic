@@ -81,7 +81,6 @@ import {
 import AsyncCreatableSelect from 'react-select/async-creatable';
 import { ActionMeta, OnChangeValue } from 'react-select';
 import { ProductsSearchBox } from './ProductsSearchBox';
-import { BulkCategoryModal } from './BulkCategoryModal';
 import { BulkTagModal } from './BulkTagModal';
 import { useDebounce } from "@/hooks/useDebounce";
 import { ProductsTableFallback } from "@/components/products/productstable/ProductsTableFallback";
@@ -93,6 +92,8 @@ import { useProductColumns } from "@/hooks/useProductColumns";
 import ProductRowDetails from "./productstable/ProductRowDetails";
 import { motion, AnimatePresence } from 'framer-motion';
 import { normalizeCategory, getCategoryNamePath } from '@/types/categories';
+import { Category as CategoryType } from '@/types/categories'; // Import the correct type
+import { SubcategoryManager } from '@/components/categories/SubcategoryManager/SubcategoryManager';
 
 // Define constants for fixed widths
 const ACTION_W = 112; // Width of action column in pixels
@@ -142,6 +143,36 @@ type ProductWithAttributeArray = Omit<Product, 'attributes'> & {
 };
 
 export function ProductsTable() {
+  // Helper function to safely get category name
+  const getCategoryName = (category: any): string => {
+    if (!category) return '';
+    
+    // Handle array of categories (new API format)
+    if (Array.isArray(category)) {
+      if (category.length === 0) return '';
+      const lastCategory = category[category.length - 1];
+      return lastCategory && typeof lastCategory === 'object' && lastCategory.name ? 
+        String(lastCategory.name) : '';
+    }
+    
+    // Handle object with name property
+    if (typeof category === 'object' && category !== null) {
+      return category.name ? String(category.name) : '';
+    }
+    
+    // Handle object with name property
+    if (typeof category === 'object' && category !== null) {
+      return (category as any).name ? String((category as any).name) : '';
+    }
+    
+    // Handle string
+    if (typeof category === 'string') {
+      return category;
+    }
+    
+    return '';
+  };
+
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -332,9 +363,49 @@ export function ProductsTable() {
     fetchData();
   }, [fetchData]);
 
+  // Filter categories by search term
+  const filterCategories = (cats: CategoryType[], term: string): CategoryType[] => {
+    if (!term) return cats;
+    
+    return cats.filter(cat => {
+      // Include if name matches
+      if (cat.name.toLowerCase().includes(term.toLowerCase())) {
+        return true;
+      }
+      
+      // Include if any children match (recursively)
+      if (cat.children?.length) {
+        const filteredChildren = filterCategories(cat.children, term);
+        if (filteredChildren.length) {
+          // Create a new category object with only matching children
+          return {
+            ...cat,
+            children: filteredChildren
+          };
+        }
+      }
+      
+      return false;
+    });
+  };
+
   // Update the filteredData tag filtering logic with proper type casting
   const filteredData = useMemo(() => {
-    let filtered = [...products];
+    // Create a safe copy of products with normalized categories
+    let filtered = products.map(product => {
+      // Handle the new API format where category is an array
+      if (Array.isArray(product.category)) {
+        const lastCategory = product.category.length > 0 ? product.category[product.category.length - 1] : null;
+        return {
+          ...product,
+          // Store original category array in a separate property
+          _categoryArray: product.category,
+          // Replace category with a normalized object that has a name property
+          category: lastCategory || { id: 0, name: '', parent: null }
+        };
+      }
+      return product;
+    });
     // Apply text search
     if (debouncedSearchTerm) {
       const lowerSearchTerm = debouncedSearchTerm.toLowerCase();
@@ -348,9 +419,13 @@ export function ProductsTable() {
           return true;
         }
         
-        // Handle category search with normalization
+        // Handle category search with full category path
         if (product.category) {
-          const categoryName = normalizeCategory(product.category).name;
+          // If category is an array of Category objects, join their names with >
+          const categoryName = Array.isArray(product.category) 
+            ? product.category.map(c => c.name).join(' > ')
+            : normalizeCategory(product.category).name;
+            
           if (categoryName.toLowerCase().includes(lowerSearchTerm)) {
             return true;
           }
@@ -374,6 +449,18 @@ export function ProductsTable() {
           // Handle case where category is a string
           if (typeof product.category === 'string') {
             return product.category.trim() === '';
+          }
+          
+          // Handle any category object safely
+          if (product.category && typeof product.category === 'object') {
+            // Safe access to name property
+            const name = product.category.name;
+            return !name || (typeof name === 'string' && name.trim() === '');
+          }
+          
+          // Handle case where category is a string
+          if (typeof product.category === 'string') {
+            return !product.category || product.category.trim() === '';
           }
           
           return true;
@@ -1273,6 +1360,7 @@ export function ProductsTable() {
   // Add these new state variables for modals
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showTagModal, setShowTagModal] = useState(false);
+  const [showSubcategoryManager, setShowSubcategoryManager] = useState(false);
   
   // Modal handlers
   const openBulkCategoryModal = useCallback(() => {
@@ -1281,6 +1369,13 @@ export function ProductsTable() {
   
   const openBulkTagModal = useCallback(() => {
     setShowTagModal(true);
+  }, []);
+  
+  const openSubcategoryManager = useCallback((e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    setShowSubcategoryManager(true);
   }, []);
   
   // Get selected product IDs helper
@@ -1458,6 +1553,14 @@ export function ProductsTable() {
               Refresh
             </Button>
 
+            {/* Add the SubcategoryManager here */}
+            <div className="flex items-center">
+              <SubcategoryManager 
+                isOpen={showSubcategoryManager}
+                onOpenChange={setShowSubcategoryManager}
+              />
+            </div>
+
             {/* Always show Bulk Actions but disable if no selection */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -1483,9 +1586,13 @@ export function ProductsTable() {
 
                 <DropdownMenuSeparator />
 
-                <DropdownMenuItem onClick={openBulkCategoryModal}>
-                  <FolderIcon className="mr-2 h-4 w-4 text-blue-600" />
-                  Assign Category
+                <DropdownMenuItem asChild>
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <SubcategoryManager 
+                      isOpen={showSubcategoryManager}
+                      onOpenChange={setShowSubcategoryManager}
+                    />
+                  </div>
                 </DropdownMenuItem>
 
                 <DropdownMenuItem onClick={openBulkTagModal}>
@@ -2192,16 +2299,6 @@ export function ProductsTable() {
       </div>
       
       {/* Add modals at the end */}
-      <BulkCategoryModal
-        open={showCategoryModal}
-        onOpenChange={setShowCategoryModal}
-        selectedIds={getSelectedProductIds()}
-        onSuccess={() => {
-          setRowSelection({});
-          forceReload();
-        }}
-      />
-      
       <BulkTagModal
         open={showTagModal}
         onOpenChange={setShowTagModal}

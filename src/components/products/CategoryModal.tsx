@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import * as categoryService from '@/services/categoryService';
 import { Category } from '@/services/categoryService';
 import { toast } from 'sonner';
-import { ChevronRight, FolderIcon, Loader2 } from 'lucide-react';
-import { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbSeparator } from '@/components/ui/breadcrumb';
+import { Loader2 } from 'lucide-react';
+import { CategoryTreeSelect } from '@/components/common/CategoryTreeSelect';
 
 interface CategoryModalProps {
   open: boolean;
@@ -24,187 +22,95 @@ export function CategoryModal({
   currentCategoryId,
   onCategoryUpdated 
 }: CategoryModalProps) {
-  // Store category tree
-  const [categories, setCategories] = useState<Category[]>([]);
-  // Selected category
+  // Selected category ID
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(currentCategoryId || null);
+  // Track full category data
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
-  // Loading state
-  const [loading, setLoading] = useState(false);
-  // Search term
-  const [searchTerm, setSearchTerm] = useState('');
-  // List of expanded category IDs (for UI state)
-  const [expandedIds, setExpandedIds] = useState<number[]>([]);
+  // Loading state for save operation
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Fetch categories when the modal opens
+  // When the modal opens, fetch the current category data if we only have an ID
   useEffect(() => {
-    if (open) {
-      fetchCategoryTree();
-    }
-  }, [open]);
-  
-  // Set initially selected category based on the current product category
-  useEffect(() => {
-    if (currentCategoryId && categories.length > 0) {
-      // Find the current category in the flat list
-      const findCategory = (cats: Category[]): Category | null => {
-        for (const cat of cats) {
-          if (cat.id === currentCategoryId) {
-            return cat;
+    if (open && currentCategoryId && !selectedCategory) {
+      const fetchCategoryData = async () => {
+        try {
+          const categories = await categoryService.getCategories();
+          const categoryData = categories.find(c => c.id === currentCategoryId);
+          if (categoryData) {
+            setSelectedCategory(categoryData);
           }
-          if (cat.children?.length) {
-            const found = findCategory(cat.children);
-            if (found) return found;
-          }
+        } catch (error) {
+          console.error('Error fetching category data:', error);
         }
-        return null;
       };
       
-      const currentCategory = findCategory(categories);
-      if (currentCategory) {
-        setSelectedCategory(currentCategory);
-        
-        // Expand parent categories
-        if (currentCategory.parent) {
-          // Find all parent IDs
-          const parentIds = getParentIds(categories, currentCategory.id);
-          setExpandedIds(parentIds);
+      fetchCategoryData();
+    }
+  }, [open, currentCategoryId, selectedCategory]);
+  
+  // Handle category selection from tree
+  const handleCategoryChange = async (categoryId: string | number) => {
+    // Ensure categoryId is a number
+    const id = typeof categoryId === 'string' ? parseInt(categoryId, 10) : categoryId;
+    setSelectedCategoryId(id);
+    
+    // Also fetch the full category data
+    if (id) {
+      try {
+        const categories = await categoryService.getCategories();
+        const categoryData = categories.find(c => c.id === id);
+        if (categoryData) {
+          setSelectedCategory(categoryData);
+        } else {
+          // Fallback if category not found
+          setSelectedCategory({ id, name: `Category ${id}` } as Category);
         }
+      } catch (error) {
+        console.error('Error fetching category data:', error);
       }
-    }
-  }, [currentCategoryId, categories]);
-  
-  // Get all parent IDs for a category
-  const getParentIds = (cats: Category[], categoryId: number, path: number[] = []): number[] => {
-    for (const cat of cats) {
-      if (cat.id === categoryId) {
-        return path;
-      }
-      if (cat.children?.length) {
-        const found = getParentIds(cat.children, categoryId, [...path, cat.id]);
-        if (found.length) return found;
-      }
-    }
-    return [];
-  };
-  
-  // Fetch category tree from API
-  const fetchCategoryTree = async () => {
-    setLoading(true);
-    try {
-      const categoryTree = await categoryService.getCategoryTree();
-      setCategories(categoryTree);
-    } catch (error) {
-      toast.error('Failed to fetch categories');
-      console.error('Error fetching categories:', error);
-    } finally {
-      setLoading(false);
+    } else {
+      setSelectedCategory(null);
     }
   };
   
   // Update product category
-  const handleUpdateCategory = async () => {
-    if (!productId || !selectedCategory) return;
+  const handleSubmit = async () => {
+    if (!productId) return;
     
-    setLoading(true);
+    setIsSubmitting(true);
     try {
-      const success = await categoryService.updateProductCategory(productId, selectedCategory.id);
+      const success = await categoryService.updateProductCategory(productId, selectedCategoryId);
       if (success) {
-        toast.success('Category updated successfully');
-        onCategoryUpdated(selectedCategory);
+        if (selectedCategory) {
+          // Use the already fetched category data
+          onCategoryUpdated(selectedCategory);
+          toast.success('Category updated successfully');
+        } else if (selectedCategoryId) {
+          // This is a fallback that should rarely be needed
+          const categories = await categoryService.getCategories();
+          const categoryData = categories.find(c => c.id === selectedCategoryId);
+          
+          if (categoryData) {
+            onCategoryUpdated(categoryData);
+            toast.success('Category updated successfully');
+          } else {
+            toast.error('Category updated but details not found');
+          }
+        } else {
+          // If category was set to null (uncategorized)
+          onCategoryUpdated({ id: 0, name: 'Uncategorized' } as Category);
+          toast.success('Category removed successfully');
+        }
         onOpenChange(false);
       }
     } catch (error) {
       toast.error('Failed to update category');
       console.error('Error updating category:', error);
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
-  
-  // Handle category selection
-  const handleSelectCategory = (category: Category) => {
-    setSelectedCategory(category);
-  };
-  
-  // Toggle category expansion
-  const toggleExpand = (categoryId: number) => {
-    setExpandedIds(prev => 
-      prev.includes(categoryId)
-        ? prev.filter(id => id !== categoryId)
-        : [...prev, categoryId]
-    );
-  };
-  
-  // Filter categories by search term
-  const filterCategories = (cats: Category[], term: string): Category[] => {
-    if (!term) return cats;
-    
-    return cats.filter(cat => {
-      // Include if name matches
-      if (cat.name.toLowerCase().includes(term.toLowerCase())) {
-        return true;
-      }
-      
-      // Include if any children match (recursively)
-      if (cat.children?.length) {
-        const filteredChildren = filterCategories(cat.children, term);
-        if (filteredChildren.length) {
-          // Create a new category object with only matching children
-          return {
-            ...cat,
-            children: filteredChildren
-          };
-        }
-      }
-      
-      return false;
-    });
-  };
-  
-  // Render a category and its children recursively
-  const renderCategory = (category: Category, depth = 0) => {
-    const isExpanded = expandedIds.includes(category.id);
-    const hasChildren = category.children && category.children.length > 0;
-    
-    return (
-      <div key={category.id} className="category-item">
-        <div 
-          className={`
-            flex items-center py-2 px-2 hover:bg-slate-100 rounded cursor-pointer
-            ${selectedCategory?.id === category.id ? 'bg-slate-100 font-medium' : ''}
-          `}
-          style={{ paddingLeft: `${depth * 12 + 8}px` }}
-          onClick={() => handleSelectCategory(category)}
-        >
-          {hasChildren && (
-            <ChevronRight
-              className={`h-4 w-4 mr-1 transition-transform ${isExpanded ? 'transform rotate-90' : ''}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleExpand(category.id);
-              }}
-            />
-          )}
-          {!hasChildren && <div className="w-5" />}
-          <FolderIcon className="h-4 w-4 mr-2 text-slate-400" />
-          <span>{category.name}</span>
-        </div>
-        
-        {/* Render children if expanded */}
-        {isExpanded && hasChildren && (
-          <div className="ml-2">
-            {category.children!.map(child => renderCategory(child, depth + 1))}
-          </div>
-        )}
-      </div>
-    );
-  };
-  
-  // Get filtered categories based on search term
-  const filteredCategories = searchTerm 
-    ? filterCategories(categories, searchTerm)
-    : categories;
-  
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
@@ -212,53 +118,40 @@ export function CategoryModal({
           <DialogTitle>Select Category</DialogTitle>
         </DialogHeader>
         
-        <div className="mb-4">
-          <Label htmlFor="search">Search Categories</Label>
-          <Input
-            id="search"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Type to search..."
-            className="mt-1"
+        <div className="pt-4 pb-6">
+          <CategoryTreeSelect
+            selectedValue={selectedCategoryId}
+            onChange={handleCategoryChange}
+            className="w-full"
+            placeholder="Search or select a category..."
+            disabled={isSubmitting}
+            createNewEnabled={true}
           />
-        </div>
-        
-        <div className="h-[300px] overflow-y-auto border rounded p-2">
-          {loading ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-              Loading categories...
-            </div>
-          ) : filteredCategories.length > 0 ? (
-            <div className="categories-tree">
-              {filteredCategories.map(category => renderCategory(category))}
-            </div>
-          ) : (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              No categories found.
-            </div>
-          )}
-        </div>
-        
-        <div className="mt-2">
+          
           {selectedCategory && (
-            <div className="text-sm">
-              Selected: <span className="font-medium">{selectedCategory.name}</span>
+            <div className="mt-2 p-2 bg-muted/40 rounded">
+              <span className="text-sm text-muted-foreground">Selected: </span>
+              <span className="text-sm font-medium">{selectedCategory.name}</span>
             </div>
           )}
         </div>
         
-        <DialogFooter className="mt-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+        <DialogFooter className="mt-4 flex justify-between">
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isSubmitting}
+          >
             Cancel
           </Button>
+          
           <Button
-            onClick={handleUpdateCategory}
-            disabled={!selectedCategory || loading}
+            onClick={handleSubmit}
+            disabled={isSubmitting}
           >
-            {loading ? (
+            {isSubmitting ? (
               <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Updating...
               </>
             ) : (

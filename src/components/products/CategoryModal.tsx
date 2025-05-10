@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import * as categoryService from '@/services/categoryService';
 import { Category } from '@/services/categoryService';
 import { toast } from 'sonner';
@@ -23,11 +24,15 @@ export function CategoryModal({
   currentCategoryId,
   onCategoryUpdated 
 }: CategoryModalProps) {
-  // Selected category ID
+  // Selected category ID - local state only
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(currentCategoryId || null);
   // Track full category data
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
-  // Loading state for save operation
+  // New category name
+  const [newCategoryName, setNewCategoryName] = useState("");
+  // Create at top level option
+  const [createAtTopLevel, setCreateAtTopLevel] = useState(false);
+  // Loading state for operations
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [treeKey, setTreeKey] = useState(0);
   
@@ -50,7 +55,7 @@ export function CategoryModal({
     }
   }, [open, currentCategoryId, selectedCategory]);
   
-  // Handle category selection from tree
+  // Handle category selection from tree - only updates local state
   const handleCategoryChange = async (raw: string | number) => {
     const id = typeof raw === 'string' ? +raw : raw;
     setSelectedCategoryId(id || null);
@@ -60,6 +65,8 @@ export function CategoryModal({
         const categories = await categoryService.getCategories();
         const categoryData = categories.find(c => c.id === id);
         setSelectedCategory(categoryData ?? { id, name: `Category ${id}` } as Category);
+        // If we select a category, disable the "create at top level" option
+        setCreateAtTopLevel(false);
       } catch (error) {
         console.error('Error fetching category data:', error);
       }
@@ -68,17 +75,21 @@ export function CategoryModal({
     }
   };
   
-  // NEW: create a category under the currently selected parent (or root)
-  const handleCreateCategory = async (name: string) => {
-    if (!name.trim()) {
+  // Create a new category
+  const handleCreateCategory = async () => {
+    if (!newCategoryName.trim()) {
       toast.error('Please enter a name');
       return;
     }
+    
     setIsSubmitting(true);
     try {
-      await categoryService.createCategory(name.trim(), selectedCategoryId || undefined);
+      // Use either null (top level) or the selected category ID as parent
+      const parentId = createAtTopLevel ? null : selectedCategoryId;
+      await categoryService.createCategory(newCategoryName.trim(), parentId || undefined);
       setTreeKey(k => k + 1);
-      toast.success(`Created category “${name.trim()}”`);
+      toast.success(`Created category "${newCategoryName.trim()}"`);
+      setNewCategoryName("");
     } catch (err) {
       console.error(err);
       toast.error('Failed to create category');
@@ -87,8 +98,8 @@ export function CategoryModal({
     }
   };
   
-  // Update product category
-  const handleSubmit = async () => {
+  // Save the selected category to the product
+  const handleSave = async () => {
     if (!productId) return;
     
     setIsSubmitting(true);
@@ -119,16 +130,14 @@ export function CategoryModal({
           <DialogTitle>Select or Create Category</DialogTitle>
         </DialogHeader>
         
-        <div className="space-y-6 py-4">
+        <div className="space-y-4 py-4">
           <CategoryTreeSelect
             key={treeKey}
             selectedValue={selectedCategoryId}
             onChange={handleCategoryChange}
-            onCreate={handleCreateCategory}
             className="w-full"
             placeholder="Search or select a category..."
             disabled={isSubmitting}
-            createNewEnabled={true}
           />
           
           {selectedCategory && (
@@ -141,6 +150,46 @@ export function CategoryModal({
               </p>
             </div>
           )}
+          
+          <div className="space-y-2 border-t pt-4">
+            <p className="text-sm font-medium">Create new category</p>
+            <div className="flex items-center gap-2">
+              <Input
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                placeholder="New category name..."
+                disabled={isSubmitting}
+                className="flex-1"
+              />
+              <Button
+                variant="outline"
+                onClick={handleCreateCategory}
+                disabled={!newCategoryName.trim() || isSubmitting}
+              >
+                Create
+              </Button>
+            </div>
+            
+            <div className="flex items-center gap-2 mt-2">
+              <Checkbox
+                id="create-top-level"
+                checked={createAtTopLevel}
+                onCheckedChange={(checked) => {
+                  setCreateAtTopLevel(!!checked);
+                  if (checked) {
+                    setSelectedCategoryId(null);
+                    setSelectedCategory(null);
+                  }
+                }}
+              />
+              <label 
+                htmlFor="create-top-level" 
+                className="text-sm cursor-pointer"
+              >
+                Create at top-level (no parent)
+              </label>
+            </div>
+          </div>
         </div>
         
         <DialogFooter className="flex justify-between">
@@ -153,7 +202,7 @@ export function CategoryModal({
           </Button>
           
           <Button
-            onClick={handleSubmit}
+            onClick={handleSave}
             disabled={isSubmitting}
           >
             {isSubmitting ? (

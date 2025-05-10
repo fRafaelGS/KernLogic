@@ -188,6 +188,18 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
 
     // Check if we have tags
     const hasTags = product.tags && Array.isArray(product.tags) && product.tags.length > 0;
+    
+    // Check if we have a valid category (supporting both hierarchical and legacy formats)
+    const hasCategory = 
+      // Check hierarchical category (array format)
+      (Array.isArray(product.category) && product.category.length > 0) || 
+      // Check object format category
+      (typeof product.category === 'object' && product.category !== null && 'id' in product.category) ||
+      // Check legacy string format
+      (typeof product.category === 'string' && product.category.trim() !== '');
+      
+    // Check if we have a GTIN/barcode
+    const hasBarcode = product.barcode && product.barcode.trim() !== '';
 
     // Create filtered missing fields array
     return productCompletenessDetails.missing_fields.filter(item => {
@@ -203,24 +215,39 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
         return false;
       }
       
+      // Filter out category-related fields if we have a category
+      if (hasCategory && ["category", "categories"].some(term => fieldLower.includes(term))) {
+        return false;
+      }
+      
+      // Filter out GTIN/barcode-related fields if we have a barcode
+      if (hasBarcode && ["gtin", "barcode", "upc", "ean"].some(term => fieldLower.includes(term))) {
+        return false;
+      }
+      
       return true;
     });
-  }, [productCompletenessDetails?.missing_fields, assets, product.tags]);
+  }, [productCompletenessDetails?.missing_fields, assets, product.tags, product.category, product.barcode]);
   
   // Categorize missing fields by priority based on field type (core vs attribute)
   const categorizedMissingFields = useMemo(() => {
     if (!filteredMissingFields.length) return { critical: [], recommended: [], optional: [] };
     
-    // Categorize based on whether it's a core field or an attribute
-    // Core fields are critical, attributes are optional
+    // Critical fields explicitly include core fields and specific attributes like GTIN and Category
     const critical = filteredMissingFields.filter(item => 
-      // If it doesn't have attribute_id or attribute_code, it's a core field
-      !item.attribute_id && !item.attribute_code
+      // Core fields don't have attribute_id or attribute_code
+      (!item.attribute_id && !item.attribute_code) ||
+      // Also include any field related to GTIN/barcode or Category as critical 
+      // regardless of whether it's a core field or attribute
+      ["gtin", "barcode", "upc", "ean", "category", "categories"].some(term => 
+        item.field.toLowerCase().includes(term)
+      )
     );
     
-    // Fields with attribute_id or attribute_code are attributes
+    // Other fields with attribute_id or attribute_code that aren't already in critical
     const attributeFields = filteredMissingFields.filter(item => 
-      item.attribute_id || item.attribute_code
+      (item.attribute_id || item.attribute_code) && 
+      !critical.some(criticalItem => criticalItem.field === item.field)
     );
     
     // Further categorize attributes by weight
@@ -1697,17 +1724,34 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
             setIsLoadingCompleteness(false);
             return;
           }
+          
+          // Log product structure to help debug category and GTIN issues
+          console.log('Product structure for completeness check:', {
+            id: product.id,
+            hasCategory: !!product.category,
+            categoryType: Array.isArray(product.category) ? 'array' : typeof product.category,
+            categoryLength: Array.isArray(product.category) ? product.category.length : 'N/A',
+            hasBarcode: !!product.barcode,
+            barcode: product.barcode
+          });
             
           // Use the dashboardService to fetch product completeness with organization_id and product_id
-          const data = await dashboardService.getIncompleteProducts({
+          const completenessData = await dashboardService.getIncompleteProducts({
             organization_id: organizationId,
             product_id: product.id
           });
           
           // If data array is returned (expected), take the first element
-          if (Array.isArray(data) && data.length > 0) {
-            setProductCompletenessDetails(data[0]);
-          } else if (data.length === 0) {
+          if (Array.isArray(completenessData) && completenessData.length > 0) {
+            setProductCompletenessDetails(completenessData[0]);
+            
+            // Log the completeness details to debug
+            console.log('Product completeness details:', {
+              completeness: completenessData[0].completeness,
+              missingFieldsCount: completenessData[0].missing_fields_count,
+              missingFields: completenessData[0].missing_fields.map(f => f.field)
+            });
+          } else if (completenessData.length === 0) {
             // Handle case where no data is returned
             console.error('No completeness data found for this product');
             toast.error('Completeness data not found for this product');

@@ -15,7 +15,6 @@ interface CategoryTreeSelectProps {
   className?: string;
   placeholder?: string;
   disabled?: boolean;
-  createNewEnabled?: boolean;
   allowSelectParent?: boolean;
   parentCategory?: number | null;
   onCreate?: (name: string) => Promise<void> | void;
@@ -118,7 +117,6 @@ export const CategoryTreeSelect: React.FC<CategoryTreeSelectProps> = ({
   className = '',
   placeholder = 'Select category...',
   disabled = false,
-  createNewEnabled = true,
   allowSelectParent = true,
   parentCategory = null,
   onCreate,
@@ -129,8 +127,6 @@ export const CategoryTreeSelect: React.FC<CategoryTreeSelectProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isOpen, setIsOpen] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
   
   // Selected category display name
@@ -138,8 +134,6 @@ export const CategoryTreeSelect: React.FC<CategoryTreeSelectProps> = ({
   
   // Use a ref to check if mounted to avoid memory leaks
   const componentMounted = useRef(true);
-  
-  const [createParentPath, setCreateParentPath] = useState<string[]>([]);
   
   useEffect(() => {
     // Cleanup function
@@ -257,94 +251,6 @@ export const CategoryTreeSelect: React.FC<CategoryTreeSelectProps> = ({
     setIsOpen(false);
   };
 
-  // whenever selectedValue changes, build the breadcrumb path
-  useEffect(() => {
-    if (!createNewEnabled) return;
-    const path: string[] = [];
-    const findPath = (nodes: TreeNode[], target: string): boolean => {
-      for (const n of nodes) {
-        if (n.value.toString() === target) {
-          path.push(n.label);
-          return true;
-        }
-        if (n.children && findPath(n.children, target)) {
-          path.unshift(n.label);
-          return true;
-        }
-      }
-      return false;
-    };
-    if (selectedValue != null) {
-      findPath(treeData, selectedValue.toString());
-    }
-    setCreateParentPath(path);
-  }, [selectedValue, treeData, createNewEnabled]);
-
-  const handleCreate = async () => {
-    if (typeof newCategoryName !== 'string' || !newCategoryName.trim()) {
-      toast({
-        title: 'Error',
-        description: 'Category name cannot be empty',
-        variant: 'destructive',
-      });
-      return;
-    }
-    setIsCreating(true);
-    try {
-      if (onCreate) {
-        await onCreate(newCategoryName.trim());
-        setIsOpen(false);
-        setNewCategoryName('');
-      } else {
-        const parent = parentCategory !== undefined 
-          ? parentCategory 
-          : (selectedValue || null);
-        await createCategory(newCategoryName.trim(), parent as number | undefined);
-        const fresh = await getCategoryTree();
-        // 1) mark all ancestors expanded
-        const expandAncestors = (nodes: TreeNode[]): TreeNode[] => {
-          return nodes.map(n => {
-            if (createParentPath.includes(n.label) || n.label === newCategoryName.trim()) {
-              return {
-                ...n,
-                expanded: true,
-                children: n.children ? expandAncestors(n.children) : undefined
-              };
-            }
-            return n;
-          });
-        };
-        setTreeData(expandAncestors(fresh));
-        // 2) scroll the new node into view
-        setTimeout(() => {
-          const el = document.querySelector(`[data-node-label="${newCategoryName.trim()}"]`);
-          el?.scrollIntoView({ block: 'center' });
-        }, 50);
-        // Find and select the newly created category
-        const leaf = findLeafByName(fresh, newCategoryName.trim());
-        if (leaf) {
-          setSelectedLabel(leaf.label);
-          const newValue = !isNaN(Number(leaf.value)) ? Number(leaf.value) : leaf.value;
-          onChange(newValue);
-        }
-        setIsOpen(false);
-        setNewCategoryName('');
-        toast({
-          title: 'Success',
-          description: `Created category "${newCategoryName.trim()}"`,
-        });
-      }
-    } catch (err) {
-      toast({
-        title: 'Error',
-        description: 'Failed to create category',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsCreating(false);
-    }
-  };
-
   // Filter tree based on search term
   const filterTreeBySearchTerm = useCallback((nodes: TreeNode[], term: string): TreeNode[] => {
     if (!term.trim()) return nodes;
@@ -435,96 +341,61 @@ export const CategoryTreeSelect: React.FC<CategoryTreeSelectProps> = ({
             avoidCollisions
             className="
               bg-white rounded-lg shadow-lg z-[1000]
-              min-w-[300px] max-w-[90vw] max-h-[60vh]
-              overflow-hidden flex flex-col"
+              min-w-[300px] max-w-[90vw]
+              max-h-[var(--radix-popper-available-height)] overflow-auto
+              flex flex-col
+            "
             data-testid="category-popover"
           >
-            {/* SEARCH - pinned to top */}
-            <div className="sticky top-0 z-20 bg-background border-b px-3 py-2">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Search categories…"
-                  className="pl-10 w-full"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  onClick={stopPropagation}
-                  onKeyDown={e => {
-                    stopPropagation(e);
-                    if (e.key === 'Escape') {
-                      setSearchTerm('');
-                    }
-                  }}
-                  data-testid="category-search-input"
-                />
-              </div>
-            </div>
-            {/* TREE - scrollable */}
-            <div
-              className="overflow-y-auto flex-1 p-2 overscroll-contain"
-              onWheel={e => e.stopPropagation()}
-            >
-              {filteredData.length > 0 ? (
-                <ul className="list-none" data-testid="category-tree">
-                  {filteredData.map(node => (
-                    <TreeNodeRow
-                      key={node.value}
-                      node={node}
-                      depth={0}
-                      selectedValue={selectedValue?.toString() || null}
-                      onToggle={toggleNode}
-                      onSelect={handleSelect}
-                      allowSelectParent={allowSelectParent}
-                    />
-                  ))}
-                </ul>
-              ) : searchTerm ? (
-                <div className="text-center py-4 text-muted-foreground">
-                  <p>No categories match "{searchTerm}"</p>
-                </div>
-              ) : (
-                <div className="text-center py-4 text-muted-foreground">
-                  <p>No categories available</p>
-                </div>
-              )}
-            </div>
-            {/* CREATE - pinned to bottom */}
-            {createNewEnabled && (
-              <div className="sticky bottom-0 z-20 bg-background border-t py-2 px-3">
-                {createParentPath.length > 0 && (
-                  <p className="text-xs text-muted-foreground mb-1">
-                    Creating under: {createParentPath.join(' › ')}
-                  </p>
-                )}
-                <div className="flex items-center space-x-2">
+            <div className="flex flex-col h-full">
+              {/* 1) Sticky search header */}
+              <div className="sticky top-0 z-20 bg-background border-b px-3 py-2 flex-shrink-0">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <Input
-                    value={newCategoryName}
-                    onChange={e => setNewCategoryName(e.target.value)}
+                    placeholder="Search categories…"
+                    className="pl-10 w-full"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onClick={stopPropagation}
                     onKeyDown={e => {
-                      if (e.key === 'Enter' && newCategoryName.trim()) {
-                        handleCreate();
-                        setNewCategoryName('');
+                      stopPropagation(e);
+                      if (e.key === 'Escape') {
+                        setSearchTerm('');
                       }
                     }}
-                    placeholder="New category name…"
-                    autoFocus={isOpen}
-                    className="flex-1"
-                    data-testid="new-category-input"
+                    data-testid="category-search-input"
                   />
-                  <Button
-                    size="sm"
-                    disabled={!newCategoryName.trim() || isCreating}
-                    onClick={() => {
-                      handleCreate();
-                      setNewCategoryName('');
-                    }}
-                    data-testid="create-category-button"
-                  >
-                    Create
-                  </Button>
                 </div>
               </div>
-            )}
+
+              {/* 2) Tree list fills remaining space */}
+              <div className="flex-1 overflow-y-auto p-2 overscroll-contain">
+                {filteredData.length > 0 ? (
+                  <ul className="list-none" data-testid="category-tree">
+                    {filteredData.map(node => (
+                      <TreeNodeRow
+                        key={node.value}
+                        node={node}
+                        depth={0}
+                        selectedValue={selectedValue?.toString() || null}
+                        onToggle={toggleNode}
+                        onSelect={handleSelect}
+                        allowSelectParent={allowSelectParent}
+                      />
+                    ))}
+                  </ul>
+                ) : searchTerm ? (
+                  <div className="text-center py-4 text-muted-foreground">
+                    <p>No categories match "{searchTerm}"</p>
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-muted-foreground">
+                    <p>No categories available</p>
+                  </div>
+                )}
+              </div>
+            </div>
           </Popover.Content>
         </Popover.Portal>
       </Popover.Root>

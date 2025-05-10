@@ -1,3 +1,6 @@
+/* Import category tree select styles */
+@import './styles/category-tree-select.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -135,6 +138,3 @@
     visibility: hidden;
   }
 }
-
-/* Import category tree select styles */
-@import './styles/category-tree-select.css';

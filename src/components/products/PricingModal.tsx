@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { formatCurrency } from '@/lib/utils';
 import { productService, ProductPrice } from '@/services/productService';
 import { toast } from 'sonner';
+import { usePriceMetadata } from '@/hooks/usePriceMetadata';
+import { Loader2 } from 'lucide-react';
 
 interface PricingModalProps {
   open: boolean;
@@ -18,33 +20,18 @@ interface PricingModalProps {
   onPricesUpdated: () => void;
 }
 
-// Define available price types
-const PRICE_TYPES = [
-  { value: 'list', label: 'List Price' },
-  { value: 'cost', label: 'Cost Price' },
-  { value: 'msrp', label: 'MSRP' },
-  { value: 'promo', label: 'Promotional Price' },
-];
-
-// Define available currencies
-const CURRENCIES = [
-  { value: 'USD', label: 'USD ($)' },
-  { value: 'EUR', label: 'EUR (€)' },
-  { value: 'GBP', label: 'GBP (£)' },
-  { value: 'CAD', label: 'CAD (C$)' },
-];
-
 export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }: PricingModalProps) {
+  // Use the price metadata hook
+  const { priceTypes, currencies, channels, loading: metaLoading, error: metaError } = usePriceMetadata();
+  
   // Store prices
   const [prices, setPrices] = useState<ProductPrice[]>([]);
-  // Store available sales channels
-  const [channels, setChannels] = useState<{ id: number; name: string }[]>([]);
   // Loading state
   const [loading, setLoading] = useState(false);
   
   // New price form state
   const [newPrice, setNewPrice] = useState({
-    price_type: 'list',
+    price_type_id: 0, // Store the numeric ID
     channel_id: null as number | null,
     currency: 'USD',
     amount: '',
@@ -58,12 +45,47 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
   // Active tab
   const [activeTab, setActiveTab] = useState('current');
   
+  // Reset form when switching between add and edit modes
+  useEffect(() => {
+    if (!editingPrice) {
+      // Default to first price type if available
+      const defaultPriceTypeId = priceTypes.length > 0 ? priceTypes[0].id : 0;
+      
+      setNewPrice({
+        price_type_id: defaultPriceTypeId, 
+        channel_id: null,
+        currency: 'USD',
+        amount: '',
+        valid_from: new Date().toISOString().slice(0, 10),
+        valid_to: null,
+      });
+    } else {
+      // When editing, we need to find the price_type_id from the price_type string
+      const priceTypeId = priceTypes.find(pt => pt.code === editingPrice.price_type)?.id || 0;
+      
+      setNewPrice({
+        price_type_id: priceTypeId,
+        channel_id: editingPrice.channel_id || null,
+        currency: editingPrice.currency,
+        amount: editingPrice.amount.toString(),
+        valid_from: editingPrice.valid_from,
+        valid_to: editingPrice.valid_to,
+      });
+    }
+  }, [editingPrice, priceTypes]);
+  
+  // Set default price type once priceTypes are loaded
+  useEffect(() => {
+    if (priceTypes.length > 0 && newPrice.price_type_id === 0) {
+      // Default to first price type
+      setNewPrice(prev => ({ ...prev, price_type_id: priceTypes[0].id }));
+    }
+  }, [priceTypes, newPrice.price_type_id]);
+  
   // Fetch prices when the modal opens
   useEffect(() => {
     if (open && productId) {
       fetchPrices();
-      // Fetch sales channels (optional - if your API supports this)
-      // fetchSalesChannels();
     }
   }, [open, productId]);
   
@@ -91,7 +113,10 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
   
   // Handle price type selection
   const handlePriceTypeChange = (value: string) => {
-    setNewPrice(prev => ({ ...prev, price_type: value }));
+    setNewPrice(prev => ({ 
+      ...prev, 
+      price_type_id: parseInt(value, 10)
+    }));
   };
   
   // Handle channel selection
@@ -107,6 +132,13 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
     setNewPrice(prev => ({ ...prev, currency: value }));
   };
   
+  // Get the code for a price type ID
+  const getPriceTypeCode = (priceTypeId: number): string => {
+    const priceType = priceTypes.find(pt => pt.id === priceTypeId);
+    // Return the code from the database, or 'list' as a default if not found
+    return priceType?.code || 'list';
+  };
+  
   // Add a new price
   const handleAddPrice = async () => {
     if (!productId || !newPrice.amount) {
@@ -116,21 +148,29 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
     
     setLoading(true);
     try {
-      // Convert amount to number
-      const priceData = {
-        ...newPrice,
-        amount: parseFloat(newPrice.amount),
-      };
+      // Get the price type code from the ID
+      const priceTypeCode = getPriceTypeCode(newPrice.price_type_id);
       
-      await productService.addPrice(productId, priceData as any); // Use 'any' to bypass type checking for now
+      await productService.addPrice(productId, {
+        price_type: priceTypeCode,
+        currency: newPrice.currency,
+        channel_id: newPrice.channel_id,
+        amount: parseFloat(newPrice.amount),
+        valid_from: newPrice.valid_from,
+        valid_to: newPrice.valid_to,
+        channel: null  // Required by the interface
+      });
+      
       toast.success('Price added successfully');
       
       // Refresh prices
       fetchPrices();
       
       // Reset form
+      const defaultPriceTypeId = priceTypes.length > 0 ? priceTypes[0].id : 0;
+        
       setNewPrice({
-        price_type: 'list',
+        price_type_id: defaultPriceTypeId,
         channel_id: null,
         currency: 'USD',
         amount: '',
@@ -146,6 +186,53 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
     } finally {
       setLoading(false);
     }
+  };
+  
+  // Update an existing price
+  const handleUpdatePrice = async () => {
+    if (!productId || !editingPrice || !newPrice.amount) {
+      toast.error('Please enter an amount');
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      // Get the price type code from the ID
+      const priceTypeCode = getPriceTypeCode(newPrice.price_type_id);
+      
+      await productService.patchPrice(productId, editingPrice.id, {
+        price_type: priceTypeCode,
+        currency: newPrice.currency,
+        channel_id: newPrice.channel_id,
+        amount: parseFloat(newPrice.amount),
+        valid_from: newPrice.valid_from,
+        valid_to: newPrice.valid_to,
+        channel: null  // Include channel to match the interface
+      });
+      
+      toast.success('Price updated successfully');
+      
+      // Refresh prices
+      fetchPrices();
+      
+      // Exit edit mode
+      setEditingPrice(null);
+      setActiveTab('current');
+      
+      // Call the onPricesUpdated callback
+      onPricesUpdated();
+    } catch (error) {
+      toast.error('Failed to update price');
+      console.error('Error updating price:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Start editing a price
+  const handleEditPrice = (price: ProductPrice) => {
+    setEditingPrice(price);
+    setActiveTab('add'); // Reuse the add tab for editing
   };
   
   // Delete a price
@@ -172,20 +259,59 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
   
   // Check if form is valid
   const isFormValid = () => {
-    return newPrice.price_type && newPrice.currency && newPrice.amount !== '';
+    return newPrice.price_type_id > 0 && newPrice.currency && newPrice.amount !== '';
   };
+  
+  // Cancel editing
+  const handleCancelEdit = () => {
+    setEditingPrice(null);
+    setActiveTab('current');
+  };
+  
+  // Show loading indicator if metadata is still loading
+  if (metaLoading) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[650px]">
+          <div className="py-8 flex flex-col items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
+            <p className="text-muted-foreground">Loading price metadata...</p>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+  
+  // Show error if there was a problem loading metadata
+  if (metaError) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[650px]">
+          <div className="py-8 flex flex-col items-center justify-center">
+            <p className="text-destructive mb-2">Error loading price data</p>
+            <p className="text-muted-foreground text-sm">Please try again later</p>
+            <Button variant="outline" onClick={() => onOpenChange(false)} className="mt-4">
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
   
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[650px]">
         <DialogHeader>
-          <DialogTitle>Manage Product Prices</DialogTitle>
+          <DialogTitle>
+            {editingPrice ? 'Edit Product Price' : 'Manage Product Prices'}
+          </DialogTitle>
         </DialogHeader>
         
         <Tabs defaultValue="current" value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="current">Current Prices</TabsTrigger>
-            <TabsTrigger value="add">Add New Price</TabsTrigger>
+            <TabsTrigger value="add">{editingPrice ? 'Edit Price' : 'Add New Price'}</TabsTrigger>
           </TabsList>
           
           <TabsContent value="current" className="mt-4">
@@ -216,7 +342,14 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
                           {price.valid_to && ` - ${new Date(price.valid_to).toLocaleDateString()}`}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right space-x-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => handleEditPrice(price)}
+                        >
+                          Edit
+                        </Button>
                         <Button 
                           variant="destructive" 
                           size="sm" 
@@ -242,16 +375,16 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
                 <div>
                   <Label htmlFor="price_type">Price Type</Label>
                   <Select 
-                    value={newPrice.price_type} 
+                    value={newPrice.price_type_id.toString()} 
                     onValueChange={handlePriceTypeChange}
                   >
                     <SelectTrigger id="price_type">
                       <SelectValue placeholder="Select price type" />
                     </SelectTrigger>
                     <SelectContent>
-                      {PRICE_TYPES.map((type) => (
-                        <SelectItem key={type.value} value={type.value}>
-                          {type.label}
+                      {Array.isArray(priceTypes) && priceTypes.map((pt) => (
+                        <SelectItem key={pt.id} value={pt.id.toString()}>
+                          {pt.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -269,7 +402,7 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Channels</SelectItem>
-                      {channels.map((channel) => (
+                      {Array.isArray(channels) && channels.map((channel) => (
                         <SelectItem key={channel.id} value={channel.id.toString()}>
                           {channel.name}
                         </SelectItem>
@@ -288,9 +421,9 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
                       <SelectValue placeholder="Select currency" />
                     </SelectTrigger>
                     <SelectContent>
-                      {CURRENCIES.map((currency) => (
-                        <SelectItem key={currency.value} value={currency.value}>
-                          {currency.label}
+                      {Array.isArray(currencies) && currencies.map((c) => (
+                        <SelectItem key={c.iso_code} value={c.iso_code}>
+                          {c.iso_code} ({c.symbol})
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -335,13 +468,30 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
                 </div>
               </div>
               
-              <div className="mt-6 flex justify-end">
-                <Button
-                  onClick={handleAddPrice}
-                  disabled={!isFormValid() || loading}
-                >
-                  Add Price
-                </Button>
+              <div className="mt-6 flex justify-end space-x-2">
+                {editingPrice ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={handleCancelEdit}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleUpdatePrice}
+                      disabled={!isFormValid() || loading}
+                    >
+                      Update Price
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    onClick={handleAddPrice}
+                    disabled={!isFormValid() || loading}
+                  >
+                    Add Price
+                  </Button>
+                )}
               </div>
             </Card>
           </TabsContent>

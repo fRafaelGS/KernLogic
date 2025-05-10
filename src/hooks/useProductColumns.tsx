@@ -19,6 +19,7 @@ import {
   PencilIcon,
   TrashIcon,
   type LucideIcon,
+  InfoIcon,
 } from "lucide-react";
 
 import {
@@ -764,83 +765,83 @@ export function useProductColumns({
     /**********  PRICE **************************************************/
     {
       accessorKey: 'price',
-      header: ({column}) => {
-        return (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-            className="p-0 hover:bg-transparent"
-          >
-            <span>Price</span>
-            {column.getIsSorted() === "asc" ? (
-              <ArrowUpDown className="ml-1 h-4 w-4" />
-            ) : column.getIsSorted() === "desc" ? (
-              <ArrowUpDown className="ml-1 h-4 w-4" />
-            ) : (
-              <ArrowUpDown className="ml-1 h-4 w-4 opacity-30" />
-            )}
-          </Button>
-        );
-      },
-      cell: ({ row, column, table }) => {
-        const rowIndex = row.index;
-        const value = row.getValue('price');
+      size: 128,
+      header: ({ column }) => (
+        <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")} className="px-0">
+          <span>Price</span>
+          <ArrowUpDown className="ml-1 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row, table }) => {
+        // First check if product has prices array from new model
+        const prices = row.original.prices;
+        // Get value either from base price in prices array or fallback to legacy price field
+        const basePrice = prices?.find(p => p.price_type === 'BASE');
+        const value = basePrice ? basePrice.amount : row.getValue('price');
         const formattedValue = typeof value === 'number' ? formatPrice(value) : formatPrice(0);
-        const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.columnId === 'price';
-
+        const isEditing = editingCell?.rowIndex === row.index && editingCell?.columnId === 'price';
+        
         return isEditing ? (
-          <div className="flex space-x-2 p-1" onClick={(e) => e.stopPropagation()} data-editing="true">
-            <div className="relative w-full min-w-[100px]">
-              <span className="absolute left-2 top-1/2 -translate-y-1/2">$</span>
-              <Input
-                className="h-8 w-full pl-6"
-                autoFocus
-                value={editValue}
-                onChange={handlePriceCellChange}
-                onKeyDown={handleKeyDown}
-                type="number"
-                step="0.01"
-                min="0"
+          <div className="relative flex items-center w-full">
+            <Input
+              value={editValue}
+              onChange={handlePriceCellChange}
+              onKeyDown={handleKeyDown}
+              autoFocus
+              className="h-8 w-24 px-2"
+            />
+            <div className="absolute right-0 flex items-center space-x-1">
+              <IconBtn
+                tooltip="Save"
+                icon={CheckIcon}
+                onClick={handleSaveCellEdit}
+              />
+              <IconBtn
+                tooltip="Cancel"
+                icon={XIcon}
+                onClick={handleCancelEdit}
               />
             </div>
-            <Button 
-              size="sm" 
-              variant="ghost" 
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleSaveCellEdit();
-              }}
-            >
-              <CheckIcon className="h-4 w-4" />
-            </Button>
-            <Button 
-              size="sm" 
-              variant="ghost" 
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleCancelEdit();
-              }}
-            >
-              <XIcon className="h-4 w-4" />
-            </Button>
           </div>
         ) : (
-          <div 
-            className="cursor-pointer hover:text-primary transition-colors p-1"
-            title={formattedValue}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleCellEdit(rowIndex, 'price', value?.toString() || '0');
-            }}
-            data-editable="true"
+          <div
+            className="cursor-text pr-10"
+            onClick={() => handleCellEdit(row.index, 'price', value?.toString() || '0')}
           >
-            {formattedValue}
+            <div className="flex items-center">
+              <span className="tabular-nums text-right">{formattedValue}</span>
+              
+              {/* Show price type badge for additional prices */}
+              {prices && prices.length > 1 && (
+                <div className="ml-2 text-xs font-medium text-muted-foreground">
+                  +{prices.length - 1}
+                </div>
+              )}
+              
+              {/* Show tooltip with all price types when hovering */}
+              {prices && prices.length > 0 && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <InfoIcon className="ml-1 h-3 w-3 text-muted-foreground" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <div className="space-y-1">
+                        {prices.map(price => (
+                          <div key={price.id} className="flex justify-between gap-3 text-xs">
+                            <span>{price.price_type_display || price.price_type}:</span>
+                            <span className="font-medium">{formatPrice(price.amount)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </div>
           </div>
         );
       },
-      enableSorting: true,
     },
     /**********  STATUS **************************************************/
     {

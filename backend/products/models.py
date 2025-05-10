@@ -643,17 +643,10 @@ class ProductPrice(models.Model):
     """
     Represents different types of prices for a product across sales channels
     """
-    PRICE_TYPE_CHOICES = [
-        ('list', 'List Price'),
-        ('cost', 'Cost Price'),
-        ('msrp', 'MSRP'),
-        ('promo', 'Promotional Price'),
-    ]
-    
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="prices")
-    price_type = models.CharField(max_length=20, choices=PRICE_TYPE_CHOICES, default='list')
+    price_type = models.ForeignKey('prices.PriceType', on_delete=models.PROTECT, related_name="product_app_prices", db_column='price_type_id')
     channel = models.ForeignKey(SalesChannel, on_delete=models.SET_NULL, null=True, blank=True)
-    currency = models.CharField(max_length=3, default="USD")
+    currency = models.ForeignKey('prices.Currency', on_delete=models.PROTECT, related_name="product_app_prices", to_field='iso_code', db_column='currency_id')
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     valid_from = models.DateTimeField(default=timezone.now)
     valid_to = models.DateTimeField(null=True, blank=True)
@@ -662,7 +655,7 @@ class ProductPrice(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     def __str__(self):
-        return f"{self.get_price_type_display()} for {self.product.name}: {self.currency} {self.amount}"
+        return f"{self.price_type.label} for {self.product.name}: {self.currency.symbol}{self.amount}"
     
     class Meta:
         verbose_name = "Product Price"
@@ -676,13 +669,3 @@ class ProductPrice(models.Model):
             models.Index(fields=['organization']),
             models.Index(fields=['valid_from', 'valid_to']),
         ]
-    
-    def is_valid(self, check_date=None):
-        """Check if price is currently valid based on date ranges"""
-        if check_date is None:
-            check_date = timezone.now()
-        
-        is_valid_from = self.valid_from is None or self.valid_from <= check_date
-        is_valid_to = self.valid_to is None or self.valid_to >= check_date
-        
-        return is_valid_from and is_valid_to

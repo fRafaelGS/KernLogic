@@ -95,6 +95,9 @@
         
         // Assets
         assets?: ProductAsset[];
+        
+        // Multiple prices (new model)
+        prices?: ProductPrice[];
     }
 
     export const PRODUCTS_API_URL = `/api/products`;
@@ -322,7 +325,7 @@
     // Define the ProductPrice interface
     export interface ProductPrice {
         id: number;
-        price_type: 'list' | 'cost' | 'msrp' | 'promo';
+        price_type: string; // Changed from union type to any string to allow dynamic price types
         price_type_display: string;
         channel: {
             id: number;
@@ -1719,6 +1722,39 @@
             } catch (error) {
                 console.error('Error deleting product price:', error);
                 throw error;
+            }
+        },
+
+        // Get all price types
+        getPriceTypes: async (): Promise<{ id: number; code: string; label: string }[]> => {
+            try {
+                const { data } = await axiosInstance.get('/api/price-types/');
+                return data;
+            } catch (error) {
+                console.error('Error fetching price types:', error);
+                return [];
+            }
+        },
+
+        // Get all currencies
+        getCurrencies: async (): Promise<{ iso_code: string; symbol: string; name: string; decimals: number }[]> => {
+            try {
+                const { data } = await axiosInstance.get('/api/currencies/');
+                return data;
+            } catch (error) {
+                console.error('Error fetching currencies:', error);
+                return [];
+            }
+        },
+
+        // Get all sales channels
+        getSalesChannels: async (): Promise<{ id: number; name: string }[]> => {
+            try {
+                const { data } = await axiosInstance.get('/api/sales-channels/');
+                return data;
+            } catch (error) {
+                console.error('Error fetching sales channels:', error);
+                return [];
             }
         },
     }; 

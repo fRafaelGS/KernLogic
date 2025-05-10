@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     "teams",
     "orgs",
     "mptt",
+    "prices",
 ]
 
 # Custom middleware to exempt API routes from CSRF

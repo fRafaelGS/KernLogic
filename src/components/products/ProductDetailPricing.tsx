@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -30,26 +30,12 @@ import {
   TooltipProvider,
   TooltipTrigger, 
 } from '@/components/ui/tooltip';
-import { Product } from '@/services/productService';
+import { Product, ProductPrice, productService } from '@/services/productService';
 import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-
-interface PriceOption {
-  id: string;
-  name: string;
-  price: number;
-  compareAtPrice?: number;
-  cost?: number;
-  margin?: number;
-  profit?: number;
-  isDefault: boolean;
-  taxable: boolean;
-  startDate?: Date | null;
-  endDate?: Date | null;
-}
 
 interface ProductDetailPricingProps {
   product: Product; 
@@ -58,166 +44,142 @@ interface ProductDetailPricingProps {
 }
 
 export function ProductDetailPricing({ product, onSave, readOnly = false }: ProductDetailPricingProps) {
-  const [priceOptions, setPriceOptions] = useState<PriceOption[]>([
-    {
-      id: '1',
-      name: 'Default',
-      price: product.price || 0,
-      compareAtPrice: product.compareAtPrice,
-      cost: product.cost || 0,
-      isDefault: true,
-      taxable: true
-    },
-    {
-      id: '2',
-      name: 'Wholesale',
-      price: (product.price || 0) * 0.7,
-      cost: product.cost || 0,
-      isDefault: false,
-      taxable: true
-    }
-  ]);
+  // State for price types and currencies (from backend)
+  const [priceTypes, setPriceTypes] = useState<{ id: number; code: string; label: string }[]>([]);
+  const [currencies, setCurrencies] = useState<{ iso_code: string; symbol: string; name: string; decimals: number }[]>([]);
+  const [loadingPrices, setLoadingPrices] = useState(false);
+  const [prices, setPrices] = useState<ProductPrice[]>(product.prices || []);
   
-  const [expandedOptionId, setExpandedOptionId] = useState<string | null>(null);
+  // State for managing UI
+  const [expandedPriceId, setExpandedPriceId] = useState<number | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [optionToDelete, setOptionToDelete] = useState<PriceOption | null>(null);
+  const [priceToDelete, setPriceToDelete] = useState<ProductPrice | null>(null);
   const [selectedCurrency, setSelectedCurrency] = useState('USD');
   const [defaultTaxRate, setDefaultTaxRate] = useState(8.5);
   const [isTaxIncluded, setIsTaxIncluded] = useState(false);
   
-  // Calculate profit and margin for a price option
-  const calculateProfitMetrics = (option: PriceOption): { profit: number, margin: number } => {
-    const price = option.price || 0;
-    const cost = option.cost || 0;
-    
-    const profit = price - cost;
-    const margin = price > 0 ? (profit / price) * 100 : 0;
-    
-    return { profit, margin };
-  };
-  
   // Format currency value
-  const formatCurrency = (value: number): string => {
+  const formatCurrency = (value: number, currencyCode: string = selectedCurrency): string => {
+    const currency = currencies.find(c => c.iso_code === currencyCode);
+    const decimals = currency?.decimals || 2;
+    
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: selectedCurrency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
+      currency: currencyCode,
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals
     }).format(value);
   };
   
-  // Toggle expanded state of a price option
-  const toggleExpandOption = (optionId: string) => {
-    if (expandedOptionId === optionId) {
-      setExpandedOptionId(null);
+  // Load price types, currencies, and prices
+  useEffect(() => {
+    const loadData = async () => {
+      setLoadingPrices(true);
+      try {
+        // Load price types
+        const types = await productService.getPriceTypes();
+        setPriceTypes(types);
+        
+        // Load currencies
+        const currencyList = await productService.getCurrencies();
+        setCurrencies(currencyList);
+        
+        // Load prices if not already in product object
+        if (!product.prices && product.id) {
+          const productPrices = await productService.getPrices(product.id);
+          setPrices(productPrices);
+        }
+      } catch (error) {
+        console.error('Error loading pricing data:', error);
+        toast.error('Failed to load pricing data');
+      } finally {
+        setLoadingPrices(false);
+      }
+    };
+    
+    loadData();
+  }, [product.id, product.prices]);
+  
+  // Toggle expanded state of a price
+  const toggleExpandPrice = (priceId: number) => {
+    if (expandedPriceId === priceId) {
+      setExpandedPriceId(null);
     } else {
-      setExpandedOptionId(optionId);
+      setExpandedPriceId(priceId);
     }
   };
   
   // Add a new price option
-  const addPriceOption = () => {
-    if (readOnly) return;
+  const addNewPrice = async () => {
+    if (readOnly || !product.id) return;
     
-    const newOption: PriceOption = {
-      id: `option-${Date.now()}`,
-      name: `Option ${priceOptions.length + 1}`,
-      price: 0,
-      cost: 0,
-      isDefault: false,
-      taxable: true
-    };
-    
-    setPriceOptions([...priceOptions, newOption]);
-    setExpandedOptionId(newOption.id);
-    
-    toast.success('New price option added');
-  };
-  
-  // Update a price option
-  const updatePriceOption = (optionId: string, updates: Partial<PriceOption>) => {
-    if (readOnly) return;
-    
-    let updatedOptions = priceOptions.map(option => {
-      if (option.id === optionId) {
-        const updatedOption = { ...option, ...updates };
-        
-        // Calculate profit and margin if price or cost changed
-        if ('price' in updates || 'cost' in updates) {
-          const metrics = calculateProfitMetrics(updatedOption);
-          updatedOption.profit = metrics.profit;
-          updatedOption.margin = metrics.margin;
-        }
-        
-        // If this option is being set as default, make sure no other option is default
-        if (updates.isDefault) {
-          priceOptions.forEach(opt => {
-            if (opt.id !== optionId && opt.isDefault) {
-              opt.isDefault = false;
-            }
-          });
-        }
-        
-        return updatedOption;
-      }
-      return option;
-    });
-    
-    // For the case when we're updating isDefault, we need to ensure only one is default
-    if (updates.isDefault) {
-      updatedOptions = updatedOptions.map(option => 
-        option.id === optionId 
-          ? { ...option, isDefault: true } 
-          : { ...option, isDefault: false }
-      );
-    }
-    
-    setPriceOptions(updatedOptions);
-    
-    // If this is the default option, update the product price
-    const defaultOption = updatedOptions.find(opt => opt.isDefault);
-    if (defaultOption) {
-      const updatedProduct = {
-        ...product,
-        price: defaultOption.price,
-        compareAtPrice: defaultOption.compareAtPrice,
-        cost: defaultOption.cost
+    try {
+      // Create default new price object
+      const newPrice = {
+        price_type: priceTypes[0]?.code || 'BASE',
+        currency: selectedCurrency,
+        amount: 0,
+        valid_from: new Date().toISOString(),
+        valid_to: null,
+        channel: null
       };
       
-      if (onSave) {
-        onSave(updatedProduct).catch(() => {
-          toast.error('Failed to save price changes');
-        });
+      const createdPrice = await productService.addPrice(product.id, newPrice);
+      if (createdPrice) {
+        setPrices(prev => [...prev, createdPrice]);
+        setExpandedPriceId(createdPrice.id);
+        toast.success('New price added');
       }
+    } catch (error) {
+      console.error('Error adding new price:', error);
+      toast.error('Failed to add new price');
     }
   };
   
-  // Initialize price option delete
-  const confirmDeleteOption = (option: PriceOption) => {
+  // Update an existing price
+  const updatePrice = async (priceId: number, updates: Partial<ProductPrice>) => {
+    if (readOnly || !product.id) return;
+    
+    try {
+      const updatedPrice = await productService.patchPrice(product.id, priceId, updates);
+      if (updatedPrice) {
+        setPrices(prev => prev.map(p => p.id === priceId ? updatedPrice : p));
+        toast.success('Price updated');
+      }
+    } catch (error) {
+      console.error('Error updating price:', error);
+      toast.error('Failed to update price');
+    }
+  };
+  
+  // Initialize price delete
+  const confirmDeletePrice = (price: ProductPrice) => {
     if (readOnly) return;
     
-    if (option.isDefault) {
-      toast.error('Cannot delete the default price option');
-      return;
-    }
-    
-    setOptionToDelete(option);
+    setPriceToDelete(price);
     setIsDeleteDialogOpen(true);
   };
   
-  // Delete a price option
-  const deletePriceOption = () => {
-    if (!optionToDelete || readOnly) return;
+  // Delete a price
+  const deletePrice = async () => {
+    if (!priceToDelete || readOnly || !product.id) return;
     
-    const updatedOptions = priceOptions.filter(option => option.id !== optionToDelete.id);
-    setPriceOptions(updatedOptions);
-    setIsDeleteDialogOpen(false);
-    
-    toast.success(`"${optionToDelete.name}" price option deleted`);
+    try {
+      await productService.deletePrice(product.id, priceToDelete.id);
+      setPrices(prev => prev.filter(p => p.id !== priceToDelete.id));
+      setIsDeleteDialogOpen(false);
+      toast.success(`Price deleted successfully`);
+    } catch (error) {
+      console.error('Error deleting price:', error);
+      toast.error('Failed to delete price');
+    }
   };
   
-  // Default price option
-  const defaultOption = priceOptions.find(option => option.isDefault) || priceOptions[0];
+  // Get display name for a price type
+  const getPriceTypeLabel = (typeCode: string): string => {
+    const type = priceTypes.find(t => t.code === typeCode);
+    return type?.label || typeCode;
+  };
   
   // Calculate tax amount for display
   const calculateTax = (price: number): number => {
@@ -226,6 +188,17 @@ export function ProductDetailPricing({ product, onSave, readOnly = false }: Prod
       : price * (defaultTaxRate / 100);
   };
   
+  if (loadingPrices) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Pricing</CardTitle>
+          <CardDescription>Loading pricing data...</CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+  
   return (
     <div className="space-y-6">
       {/* Main pricing card */}
@@ -233,8 +206,8 @@ export function ProductDetailPricing({ product, onSave, readOnly = false }: Prod
         <CardHeader className="pb-3">
           <div className="flex justify-between items-start">
             <div>
-              <CardTitle>Main price</CardTitle>
-              <CardDescription>Default product pricing information</CardDescription>
+              <CardTitle>Product Pricing</CardTitle>
+              <CardDescription>Manage different price types for this product</CardDescription>
             </div>
             <div className="flex items-center">
               <Select value={selectedCurrency} onValueChange={setSelectedCurrency}>
@@ -242,513 +215,285 @@ export function ProductDetailPricing({ product, onSave, readOnly = false }: Prod
                   <SelectValue placeholder="Currency" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="USD">USD ($)</SelectItem>
-                  <SelectItem value="EUR">EUR (€)</SelectItem>
-                  <SelectItem value="GBP">GBP (£)</SelectItem>
-                  <SelectItem value="CAD">CAD ($)</SelectItem>
-                  <SelectItem value="AUD">AUD ($)</SelectItem>
+                  {currencies.map(currency => (
+                    <SelectItem key={currency.iso_code} value={currency.iso_code}>
+                      {currency.iso_code} ({currency.symbol})
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
         </CardHeader>
+        
         <CardContent>
-          <div className="space-y-6">
-            {/* Main price fields */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-1.5">
-                <Label htmlFor="price">Price</Label>
-                <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-500" />
-                  <Input
-                    id="price"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={defaultOption?.price || 0}
-                    onChange={(e) => updatePriceOption(defaultOption.id, { price: parseFloat(e.target.value) })}
-                    className="pl-9"
-                    disabled={readOnly}
-                  />
-                </div>
-                {defaultOption && defaultOption.compareAtPrice && defaultOption.compareAtPrice > defaultOption.price && (
-                  <p className="text-sm text-green-600 mt-1">
-                    Discount: {((1 - defaultOption.price / defaultOption.compareAtPrice) * 100).toFixed(0)}% off
-                  </p>
-                )}
+          {/* Show legacy price if no price items exist */}
+          {prices.length === 0 && (
+            <div className="mb-6">
+              <div className="bg-amber-50 p-4 rounded-md mb-4">
+                <p className="text-amber-800 text-sm">
+                  This product is using the legacy pricing model. Create a new price type to upgrade.
+                </p>
               </div>
               
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="compareAtPrice">Compare-at price</Label>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <InfoIcon className="h-4 w-4 text-slate-400" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="max-w-xs">Original or MSRP price to show as a comparison. Usually displayed as a strikethrough.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-                <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-500" />
-                  <Input
-                    id="compareAtPrice"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={defaultOption?.compareAtPrice || ''}
-                    onChange={(e) => updatePriceOption(
-                      defaultOption.id, 
-                      { compareAtPrice: e.target.value ? parseFloat(e.target.value) : undefined }
-                    )}
-                    className="pl-9"
-                    placeholder="No compare price"
-                    disabled={readOnly}
-                  />
-                </div>
-              </div>
-            </div>
-            
-            {/* Cost and profit area */}
-            <div>
-              <div className="flex justify-between items-center mb-3">
-                <Label>Cost & Margin</Label>
-                {defaultOption && (
-                  <Badge variant="outline" className="font-normal">
-                    Margin: {defaultOption.margin ? defaultOption.margin.toFixed(1) : '0'}%
-                  </Badge>
-                )}
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="cost">Cost per item</Label>
-                  <div className="relative">
-                    <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-500" />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="legacy-price">Legacy Price</Label>
+                  <div className="flex items-center">
+                    <DollarSign className="h-4 w-4 mr-2 text-muted-foreground" />
                     <Input
-                      id="cost"
+                      id="legacy-price"
                       type="number"
-                      step="0.01"
-                      min="0"
-                      value={defaultOption?.cost || ''}
-                      onChange={(e) => updatePriceOption(
-                        defaultOption.id, 
-                        { cost: e.target.value ? parseFloat(e.target.value) : undefined }
-                      )}
-                      className="pl-9"
-                      placeholder="Enter cost"
-                      disabled={readOnly}
+                      value={product.price || 0}
+                      readOnly
                     />
                   </div>
                 </div>
-                
-                <div className="space-y-1.5">
-                  <Label>Profit</Label>
-                  <Input
-                    value={formatCurrency((defaultOption?.profit || 0))}
-                    className="bg-slate-50"
-                    readOnly
-                  />
-                </div>
-                
-                <div className="space-y-1.5">
-                  <Label>Margin</Label>
-                  <Input
-                    value={`${(defaultOption?.margin || 0).toFixed(1)}%`}
-                    className="bg-slate-50"
-                    readOnly
-                  />
-                </div>
               </div>
             </div>
-            
-            {/* Tax settings */}
-            <div className="pt-2">
-              <Separator className="mb-4" />
-              
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <h3 className="text-sm font-medium">Tax settings</h3>
-                    <p className="text-sm text-slate-500">Configure how taxes apply to this product</p>
+          )}
+          
+          {/* Price list */}
+          <div className="space-y-4">
+            {prices.map(price => (
+              <div
+                key={price.id}
+                className="border rounded-md overflow-hidden"
+              >
+                {/* Price header */}
+                <div
+                  className="flex items-center justify-between p-3 bg-muted/30 cursor-pointer"
+                  onClick={() => toggleExpandPrice(price.id)}
+                >
+                  <div className="flex items-center gap-2">
+                    <Badge variant={price.price_type === 'BASE' ? 'default' : 'outline'}>
+                      {price.price_type_display || getPriceTypeLabel(price.price_type)}
+                    </Badge>
+                    <span className="font-medium">{formatCurrency(price.amount, price.currency)}</span>
                   </div>
-                  <Switch
-                    checked={defaultOption?.taxable}
-                    onCheckedChange={(checked) => {
-                      updatePriceOption(defaultOption.id, { taxable: checked });
-                    }}
-                    disabled={readOnly}
-                  />
+                  <div className="flex items-center gap-2">
+                    {price.valid_from && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Clock className="h-4 w-4 text-muted-foreground" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            Valid from: {new Date(price.valid_from).toLocaleDateString()}
+                            {price.valid_to ? ` until ${new Date(price.valid_to).toLocaleDateString()}` : ''}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                    {!readOnly && (
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          confirmDeletePrice(price);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
                 
-                {defaultOption?.taxable && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="taxRate">Default tax rate (%)</Label>
-                      <Input
-                        id="taxRate"
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        max="100"
-                        value={defaultTaxRate}
-                        onChange={(e) => setDefaultTaxRate(parseFloat(e.target.value))}
-                        disabled={readOnly}
-                      />
-                    </div>
-                    
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <Label htmlFor="taxCalculation">Tax calculation</Label>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <InfoIcon className="h-4 w-4 text-slate-400" />
-                            </TooltipTrigger>
-                            <TooltipContent side="right">
-                              <p className="max-w-xs">
-                                <strong>Tax included:</strong> The entered price includes tax.<br />
-                                <strong>Tax excluded:</strong> Tax will be added to the entered price.
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
+                {/* Expanded price details */}
+                {expandedPriceId === price.id && (
+                  <div className="p-4 bg-white">
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <Label htmlFor={`price-type-${price.id}`}>Price Type</Label>
+                        <Select 
+                          value={price.price_type} 
+                          onValueChange={(value) => updatePrice(price.id, { price_type: value })}
+                          disabled={readOnly}
+                        >
+                          <SelectTrigger id={`price-type-${price.id}`}>
+                            <SelectValue placeholder="Select price type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {priceTypes.map(type => (
+                              <SelectItem key={type.code} value={type.code}>
+                                {type.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
-                      <Select 
-                        value={isTaxIncluded ? 'included' : 'excluded'} 
-                        onValueChange={(value) => setIsTaxIncluded(value === 'included')}
-                        disabled={readOnly}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select tax calculation" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="excluded">Tax excluded from price</SelectItem>
-                          <SelectItem value="included">Tax included in price</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    {defaultOption && (
-                      <div className="md:col-span-2 grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-md">
-                        <div>
-                          <p className="text-sm text-slate-500 mb-1">Net Price</p>
-                          <p className="font-medium">
-                            {isTaxIncluded 
-                              ? formatCurrency(defaultOption.price - calculateTax(defaultOption.price))
-                              : formatCurrency(defaultOption.price)
-                            }
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-slate-500 mb-1">Final Price (with tax)</p>
-                          <p className="font-medium">
-                            {isTaxIncluded
-                              ? formatCurrency(defaultOption.price)
-                              : formatCurrency(defaultOption.price + calculateTax(defaultOption.price))
-                            }
-                          </p>
+                      
+                      <div>
+                        <Label htmlFor={`price-amount-${price.id}`}>Amount</Label>
+                        <div className="flex items-center">
+                          <DollarSign className="h-4 w-4 mr-2 text-muted-foreground" />
+                          <Input
+                            id={`price-amount-${price.id}`}
+                            type="number"
+                            step="0.01"
+                            value={price.amount}
+                            onChange={(e) => {
+                              const amount = parseFloat(e.target.value) || 0;
+                              updatePrice(price.id, { amount });
+                            }}
+                            readOnly={readOnly}
+                          />
                         </div>
                       </div>
-                    )}
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor={`price-valid-from-${price.id}`}>Valid From</Label>
+                        <div className="flex items-center">
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  "w-full justify-start text-left font-normal",
+                                  !price.valid_from && "text-muted-foreground"
+                                )}
+                                disabled={readOnly}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {price.valid_from ? (
+                                  format(new Date(price.valid_from), "PPP")
+                                ) : (
+                                  <span>Pick a date</span>
+                                )}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                              <Calendar
+                                mode="single"
+                                selected={price.valid_from ? new Date(price.valid_from) : undefined}
+                                onSelect={(date) => {
+                                  if (date) {
+                                    updatePrice(price.id, { valid_from: date.toISOString() });
+                                  }
+                                }}
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor={`price-valid-to-${price.id}`}>Valid To</Label>
+                        <div className="flex items-center">
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  "w-full justify-start text-left font-normal",
+                                  !price.valid_to && "text-muted-foreground"
+                                )}
+                                disabled={readOnly}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {price.valid_to ? (
+                                  format(new Date(price.valid_to), "PPP")
+                                ) : (
+                                  <span>No end date</span>
+                                )}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                              <Calendar
+                                mode="single"
+                                selected={price.valid_to ? new Date(price.valid_to) : undefined}
+                                onSelect={(date) => {
+                                  if (date) {
+                                    updatePrice(price.id, { valid_to: date.toISOString() });
+                                  }
+                                }}
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
-            </div>
+            ))}
           </div>
-        </CardContent>
-      </Card>
-      
-      {/* Additional price options */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex justify-between items-start">
-            <div>
-              <CardTitle>Additional price options</CardTitle>
-              <CardDescription>Define different pricing for various sales channels or customers</CardDescription>
-            </div>
-            {!readOnly && (
-              <Button variant="outline" size="sm" onClick={addPriceOption}>
-                <PlusCircle className="h-4 w-4 mr-1" />
-                Add price option
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {priceOptions.length <= 1 ? (
-            <div className="text-center py-8 text-slate-500">
-              <div className="mx-auto w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
-                <DollarSign className="h-6 w-6 text-slate-400" />
-              </div>
-              <h3 className="text-sm font-medium mb-1">No additional price options</h3>
-              <p className="text-sm text-slate-400 max-w-md mx-auto mb-4">
-                Create price options for different channels like wholesale, retail, or special promotions.
-              </p>
-              {!readOnly && (
-                <Button variant="outline" onClick={addPriceOption}>
-                  <PlusCircle className="h-4 w-4 mr-1" />
-                  Add your first price option
-                </Button>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {priceOptions.filter(option => !option.isDefault).map((option) => (
-                <Card key={option.id} className={cn(
-                  "border",
-                  expandedOptionId === option.id ? "border-primary-500" : "border-slate-200"
-                )}>
-                  <CardContent className="p-0">
-                    <div className="p-4 cursor-pointer" onClick={() => toggleExpandOption(option.id)}>
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{option.name}</span>
-                          {option.startDate && option.endDate && (
-                            <Badge variant="outline" className="font-normal text-xs">
-                              <Clock className="h-3 w-3 mr-1" />
-                              Limited time
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="font-medium">{formatCurrency(option.price)}</span>
-                          {!readOnly && (
-                            <Button 
-                              variant="ghost" 
-                              size="icon"
-                              className="h-8 w-8 text-slate-400 hover:text-red-500"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                confirmDeleteOption(option);
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {expandedOptionId === option.id && (
-                      <div className="p-4 pt-0 border-t border-slate-100 mt-2">
-                        <div className="space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                              <Label htmlFor={`name-${option.id}`}>Name</Label>
-                              <Input
-                                id={`name-${option.id}`}
-                                value={option.name}
-                                onChange={(e) => updatePriceOption(option.id, { name: e.target.value })}
-                                disabled={readOnly}
-                              />
-                            </div>
-                            
-                            <div className="space-y-1.5">
-                              <Label htmlFor={`price-${option.id}`}>Price</Label>
-                              <div className="relative">
-                                <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-500" />
-                                <Input
-                                  id={`price-${option.id}`}
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  value={option.price}
-                                  onChange={(e) => updatePriceOption(option.id, { price: parseFloat(e.target.value) })}
-                                  className="pl-9"
-                                  disabled={readOnly}
-                                />
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                              <Label htmlFor={`compareAtPrice-${option.id}`}>Compare-at price</Label>
-                              <div className="relative">
-                                <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-500" />
-                                <Input
-                                  id={`compareAtPrice-${option.id}`}
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  value={option.compareAtPrice || ''}
-                                  onChange={(e) => updatePriceOption(
-                                    option.id, 
-                                    { compareAtPrice: e.target.value ? parseFloat(e.target.value) : undefined }
-                                  )}
-                                  className="pl-9"
-                                  placeholder="No compare price"
-                                  disabled={readOnly}
-                                />
-                              </div>
-                            </div>
-                            
-                            <div className="space-y-1.5">
-                              <Label htmlFor={`cost-${option.id}`}>Cost per item</Label>
-                              <div className="relative">
-                                <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-500" />
-                                <Input
-                                  id={`cost-${option.id}`}
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  value={option.cost || ''}
-                                  onChange={(e) => updatePriceOption(
-                                    option.id, 
-                                    { cost: e.target.value ? parseFloat(e.target.value) : undefined }
-                                  )}
-                                  className="pl-9"
-                                  placeholder="Enter cost"
-                                  disabled={readOnly}
-                                />
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {/* Schedule */}
-                          <div className="space-y-3 pt-2">
-                            <div className="flex items-center justify-between">
-                              <Label>Price schedule</Label>
-                              {(option.startDate || option.endDate) && !readOnly && (
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm"
-                                  className="h-8 text-slate-500"
-                                  onClick={() => updatePriceOption(option.id, { startDate: null, endDate: null })}
-                                >
-                                  Clear dates
-                                </Button>
-                              )}
-                            </div>
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div className="space-y-1.5">
-                                <Label htmlFor={`start-date-${option.id}`}>Start date</Label>
-                                <Popover>
-                                  <PopoverTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      className={cn(
-                                        "w-full justify-start text-left font-normal",
-                                        !option.startDate && "text-slate-500"
-                                      )}
-                                      disabled={readOnly}
-                                    >
-                                      <CalendarIcon className="mr-2 h-4 w-4" />
-                                      {option.startDate ? format(option.startDate, "PPP") : "Select date"}
-                                    </Button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-auto p-0">
-                                    <Calendar
-                                      mode="single"
-                                      selected={option.startDate || undefined}
-                                      onSelect={(date) => updatePriceOption(option.id, { startDate: date })}
-                                      initialFocus
-                                    />
-                                  </PopoverContent>
-                                </Popover>
-                              </div>
-                              
-                              <div className="space-y-1.5">
-                                <Label htmlFor={`end-date-${option.id}`}>End date</Label>
-                                <Popover>
-                                  <PopoverTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      className={cn(
-                                        "w-full justify-start text-left font-normal",
-                                        !option.endDate && "text-slate-500"
-                                      )}
-                                      disabled={readOnly}
-                                    >
-                                      <CalendarIcon className="mr-2 h-4 w-4" />
-                                      {option.endDate ? format(option.endDate, "PPP") : "Select date"}
-                                    </Button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-auto p-0">
-                                    <Calendar
-                                      mode="single"
-                                      selected={option.endDate || undefined}
-                                      onSelect={(date) => updatePriceOption(option.id, { endDate: date })}
-                                      initialFocus
-                                    />
-                                  </PopoverContent>
-                                </Popover>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {/* Options */}
-                          <div className="pt-2">
-                            <div className="flex flex-col space-y-2">
-                              {!readOnly && (
-                                <div className="flex items-center space-x-2">
-                                  <Switch 
-                                    id={`default-${option.id}`}
-                                    checked={option.isDefault}
-                                    onCheckedChange={(checked) => {
-                                      if (checked) {
-                                        updatePriceOption(option.id, { isDefault: true });
-                                      }
-                                    }}
-                                  />
-                                  <Label htmlFor={`default-${option.id}`}>Make this the default price</Label>
-                                </div>
-                              )}
-                              
-                              <div className="flex items-center space-x-2">
-                                <Switch 
-                                  id={`taxable-${option.id}`}
-                                  checked={option.taxable}
-                                  onCheckedChange={(checked) => {
-                                    updatePriceOption(option.id, { taxable: checked });
-                                  }}
-                                  disabled={readOnly}
-                                />
-                                <Label htmlFor={`taxable-${option.id}`}>Taxable</Label>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {/* Summary */}
-                          <div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-100">
-                            <div>
-                              <span className="text-sm text-slate-500">Profit:</span>{' '}
-                              <span className="font-medium">{formatCurrency(option.profit || 0)}</span>
-                            </div>
-                            <div>
-                              <span className="text-sm text-slate-500">Margin:</span>{' '}
-                              <span className="font-medium">{(option.margin || 0).toFixed(1)}%</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+          
+          {/* Add new price button */}
+          {!readOnly && (
+            <Button 
+              variant="outline" 
+              className="w-full mt-4" 
+              onClick={addNewPrice}
+              disabled={!product.id}
+            >
+              <PlusCircle className="h-4 w-4 mr-2" />
+              Add Price
+            </Button>
           )}
         </CardContent>
       </Card>
       
-      {/* Delete confirmation */}
+      {/* Tax settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Tax Settings</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="tax-rate">Default Tax Rate (%)</Label>
+                <div className="text-sm text-muted-foreground">
+                  Applied when calculating tax inclusive/exclusive prices
+                </div>
+              </div>
+              <Input
+                id="tax-rate"
+                type="number"
+                step="0.1"
+                className="w-[120px]"
+                value={defaultTaxRate}
+                onChange={(e) => setDefaultTaxRate(parseFloat(e.target.value) || 0)}
+                disabled={readOnly}
+              />
+            </div>
+            
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="tax-included">Prices Include Tax</Label>
+                <div className="text-sm text-muted-foreground">
+                  Whether the displayed prices include tax
+                </div>
+              </div>
+              <Switch
+                id="tax-included"
+                checked={isTaxIncluded}
+                onCheckedChange={setIsTaxIncluded}
+                disabled={readOnly}
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+      
+      {/* Delete confirmation dialog */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete price option</AlertDialogTitle>
+            <AlertDialogTitle>Delete Price</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete the "{optionToDelete?.name}" price option?
-              This action cannot be undone.
+              Are you sure you want to delete this price? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={deletePriceOption}>
+            <AlertDialogAction onClick={deletePrice}>
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

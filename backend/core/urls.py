@@ -151,6 +151,9 @@ urlpatterns = [
     # Teams API
     path('api/', include('teams.urls')),
     
+    # Prices API
+    path('api/', include('prices.urls')),
+    
     # Accounts API - add this line to include accounts URLs
     path('api/', include('accounts.urls')),
     

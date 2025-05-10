@@ -127,30 +127,58 @@ export function getCategoryName(raw: unknown): string {
 }
 
 /**
- * Returns true if the category hierarchy (array/object/string)
- * contains the filterValue anywhere, or matches empty for uncategorized.
+ * Returns true if the category hierarchy contains the filterValue,
+ * or if filterValue === "" (uncategorized) and there is NO valid category.
  */
 export function matchesCategoryFilter(raw: unknown, filterValue: string): boolean {
-  // uncategorized special case
+  console.log("matchesCategoryFilter called with:", { raw, filterValue });
+  
+  // UNCATEGORIZED: no category whatsoever
   if (filterValue === "") {
-    // no category or empty string
-    return !raw || (typeof raw === "string" && raw.trim() === "") || (Array.isArray(raw) && raw.length === 0);
+    console.log("Checking for uncategorized");
+    
+    // raw null/undefined
+    if (raw == null) {
+      console.log("raw is null/undefined -> true");
+      return true;
+    }
+    // raw empty string
+    if (typeof raw === "string" && raw.trim() === "") {
+      console.log("raw is empty string -> true");
+      return true;
+    }
+    // raw empty array
+    if (Array.isArray(raw) && raw.length === 0) {
+      console.log("raw is empty array -> true");
+      return true;
+    }
+    // raw object but no name
+    if (typeof raw === "object" && raw !== null && !("name" in raw)) {
+      console.log("raw is object without name property -> true");
+      return true;
+    }
+    console.log("Not uncategorized -> false");
+    return false;
   }
 
-  // normalize to array of names
+  // ANY OTHER CATEGORY: gather all names
   const names: string[] = [];
   if (Array.isArray(raw)) {
     raw.forEach(node => {
-      if (typeof node === "object" && node !== null && "name" in node) {
-        names.push((node as any).name);
+      if (node && typeof node === "object" && "name" in node) {
+        const n = (node as any).name;
+        if (typeof n === "string") names.push(n);
       }
     });
-  } else if (typeof raw === "object" && raw !== null && "name" in raw) {
-    names.push((raw as any).name);
+  } else if (raw && typeof raw === "object" && "name" in raw) {
+    const n = (raw as any).name;
+    if (typeof n === "string") names.push(n);
   } else if (typeof raw === "string") {
     names.push(raw);
   }
 
-  // match any
-  return names.includes(filterValue);
+  console.log("Category names found:", names, "Looking for:", filterValue);
+  const result = names.includes(filterValue);
+  console.log("Match result:", result);
+  return result;
 }

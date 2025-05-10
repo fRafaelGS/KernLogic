@@ -1360,8 +1360,30 @@ export function ProductsTable() {
     key: K,
     value: FilterState[K]
   ) => {
+    // Debug logging for category
+    if (key === 'category') {
+      console.log("handleFilterChange - Category value:", value);
+    }
+    
     // Update the filters state
     setFilters(prev => ({ ...prev, [key]: value }));
+    
+    // Special handling for category filter
+    if (key === 'category') {
+      const categoryColumn = table.getColumn('category');
+      if (categoryColumn) {
+        const categoryValue = value as string;
+        console.log("Setting category column filter to:", categoryValue === 'uncategorized' ? '""' : categoryValue);
+        
+        if (categoryValue === 'all') {
+          categoryColumn.setFilterValue(undefined);
+        } else if (categoryValue === 'uncategorized') {
+          categoryColumn.setFilterValue("");
+        } else {
+          categoryColumn.setFilterValue(categoryValue);
+        }
+      }
+    }
     
     // Special handling for tags filter
     if (key === 'tags') {
@@ -1618,14 +1640,11 @@ export function ProductsTable() {
               <Select
                 value={filters.category || "all"}
                 onValueChange={(value) => {
-                  // Update our local filter state
-                  handleFilterChange('category', value);
+                  // Debug logging
+                  console.log("Top filter - Selected category value:", value);
                   
-                  // Also set the corresponding table column filter
-                  const col = table.getColumn("category")!;
-                  if (value === "all") col.setFilterValue(undefined);
-                  else if (value === "uncategorized") col.setFilterValue("");
-                  else col.setFilterValue(value);
+                  // Update our local filter state and column filter in one call
+                  handleFilterChange('category', value);
                 }}
               >
                 <SelectTrigger id="category-filter">
@@ -1800,10 +1819,11 @@ export function ProductsTable() {
                                         <Select
                                           value={(table.getColumn("category")?.getFilterValue() as string) ?? "all"}
                                           onValueChange={(v) => {
-                                            const col = table.getColumn("category")!;
-                                            if (v === "all") col.setFilterValue(undefined);
-                                            else if (v === "uncategorized") col.setFilterValue("");
-                                            else col.setFilterValue(v);
+                                            // Debug logging
+                                            console.log("Column header filter - Selected category value:", v);
+                                            
+                                            // Update our local filter state and column filter in one call
+                                            handleFilterChange('category', v);
                                           }}
                                         >
                                           <SelectTrigger className="h-7 text-xs">

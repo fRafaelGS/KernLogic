@@ -319,7 +319,7 @@ export function ProductDetailAttributes({ product, onSave, readOnly = false }: P
         </div>
         
         {!readOnly && (
-          <Button variant="default" size="sm" onClick={() => setIsNewAttributeDialogOpen(true)}>
+          <Button variant="primary" size="sm" onClick={() => setIsNewAttributeDialogOpen(true)}>
             <Plus className="h-4 w-4 mr-1" />
             Add Attribute
           </Button>
@@ -670,7 +670,11 @@ export function ProductDetailAttributes({ product, onSave, readOnly = false }: P
       {attributes.length === 0 && !readOnly && !searchTerm && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Suggested attributes for {product.category}</CardTitle>
+            <CardTitle className="text-sm">Suggested attributes for {typeof product.category === 'string' 
+              ? product.category 
+              : Array.isArray(product.category) 
+                ? (product.category.length > 0 ? product.category[product.category.length - 1].name : '')
+                : product.category?.name || ''}</CardTitle>
           </CardHeader>
           <CardContent>
             {mockTemplates.find(t => t.name === product.category) ? (
@@ -705,7 +709,11 @@ export function ProductDetailAttributes({ product, onSave, readOnly = false }: P
               </div>
             ) : (
               <p className="text-sm text-slate-500">
-                No attribute templates found for {product.category || 'this category'}.
+                No attribute templates found for {typeof product.category === 'string'
+                  ? product.category
+                  : Array.isArray(product.category)
+                    ? (product.category.length > 0 ? product.category[product.category.length - 1].name : '')
+                    : product.category?.name || 'this category'}.
               </p>
             )}
           </CardContent>

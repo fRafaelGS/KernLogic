@@ -306,9 +306,15 @@ const RelatedProductsCarousel: React.FC<RelatedProductsCarouselProps> = ({
                   
                   <div className="mt-auto">
                     <p className="font-semibold">{formatCurrency(product.price)}</p>
-                    {product.category && (
-                      <Badge className="mt-2">{product.category}</Badge>
-                    )}
+                    {typeof product.category === 'string' 
+                      ? (
+                        <Badge className="mt-2">{product.category}</Badge>
+                      ) : Array.isArray(product.category) 
+                        ? (
+                          <Badge className="mt-2">{product.category.length > 0 ? product.category[product.category.length - 1].name : ''}</Badge>
+                        ) : (
+                          <Badge className="mt-2">{product.category?.name || ''}</Badge>
+                        )}
                   </div>
                 </CardContent>
               </Card>

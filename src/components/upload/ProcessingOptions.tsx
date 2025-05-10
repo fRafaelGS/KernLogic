@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -87,7 +86,7 @@ export function ProcessingOptions() {
         </Tabs>
         
         <div className="mt-6 flex justify-end">
-          <Button variant="default">Apply Settings</Button>
+          <Button variant="primary">Apply Settings</Button>
         </div>
       </CardContent>
     </Card>

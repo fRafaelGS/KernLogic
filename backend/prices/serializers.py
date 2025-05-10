@@ -44,12 +44,14 @@ class ProductPriceSerializer(serializers.ModelSerializer):
     price_type = PriceTypeSlugOrIdField(queryset=PriceType.objects.all())
     price_type_display = serializers.CharField(source="price_type.label", read_only=True)
     channel_name = serializers.CharField(source="channel.name", read_only=True)
+    label = serializers.CharField(source="price_type.label", read_only=True)
+    currency = serializers.SlugRelatedField(slug_field="iso_code", queryset=Currency.objects.all())
     
     class Meta:
         model = ProductPrice
         fields = [
-            "id", "price_type", "price_type_display", "currency", 
+            "id", "price_type", "price_type_display", "label", "currency", 
             "channel", "channel_name", "amount", "valid_from", 
             "valid_to", "created_at", "updated_at"
         ]
-        read_only_fields = ["id", "created_at", "updated_at"] 
+        read_only_fields = ["id", "created_at", "updated_at", "price_type_display", "label"] 

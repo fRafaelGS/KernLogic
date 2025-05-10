@@ -10,6 +10,8 @@ from kernlogic.utils import get_user_organization
 from django.core.validators import MinValueValidator
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from prices.serializers import PriceTypeSlugOrIdField  # local import to avoid circular refs
+from prices.models import PriceType, Currency
 
 # --- NEW CategorySerializer ---
 class CategorySerializer(serializers.ModelSerializer):
@@ -65,7 +67,19 @@ class SalesChannelSerializer(serializers.ModelSerializer):
 
 # --- NEW ProductPrice Serializer ---
 class ProductPriceSerializer(serializers.ModelSerializer):
-    """Serializer for product prices"""
+    """Serializer for product prices (unified payload)"""
+    # Use the slug-or-id field so that writes accept either and reads always return the code.
+    price_type = PriceTypeSlugOrIdField(queryset=PriceType.objects.all())
+    # Human-readable label for UI – duplicate of price_type_display for clarity
+    label = serializers.CharField(source='price_type.label', read_only=True)
+    price_type_display = serializers.CharField(source='price_type.label', read_only=True)  # keep for BC
+
+    # Always expose currency as ISO code string (e.g. "USD") to match frontend formatCurrency util
+    currency = serializers.SlugRelatedField(
+        slug_field='iso_code',
+        queryset=Currency.objects.all()
+    )
+
     channel = SalesChannelSerializer(read_only=True)
     channel_id = serializers.PrimaryKeyRelatedField(
         queryset=SalesChannel.objects.all(),
@@ -74,16 +88,15 @@ class ProductPriceSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True
     )
-    price_type_display = serializers.CharField(source='get_price_type_display', read_only=True)
     
     class Meta:
         model = ProductPrice
         fields = [
-            'id', 'price_type', 'price_type_display', 'channel', 'channel_id', 
-            'currency', 'amount', 'valid_from', 'valid_to', 
-            'created_at', 'updated_at'
+            'id', 'price_type', 'price_type_display', 'label',
+            'channel', 'channel_id', 'currency', 'amount',
+            'valid_from', 'valid_to', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'price_type_display']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'price_type_display', 'label']
 
 # --- NEW ProductImage Serializer ---
 class ProductImageSerializer(serializers.ModelSerializer):
@@ -433,17 +446,13 @@ class ProductSerializer(serializers.ModelSerializer):
         """
         # Use prefetched base_prices if available
         base_list = getattr(obj, "base_prices", None)
-        if base_list:
+        if base_list and base_list:
             price = base_list[0]
             return {
-                "amount": str(price.amount),
+                "amount": price.amount,
                 "currency": price.currency.iso_code if hasattr(price.currency, 'iso_code') else price.currency,
                 "price_type": price.price_type.code if hasattr(price.price_type, 'code') else 'base',
                 "label": price.price_type.label if hasattr(price.price_type, 'label') else 'Base Price',
-                # Keep backward compatibility with the previous format
-                "currency_iso": price.currency.iso_code if hasattr(price.currency, 'iso_code') else price.currency,
-                "price_type_code": price.price_type.code if hasattr(price.price_type, 'code') else 'base',
-                "price_type_display": price.price_type.label if hasattr(price.price_type, 'label') else 'Base Price'
             }
         
         # Try to get the base price from related prices if not prefetched
@@ -451,19 +460,15 @@ class ProductSerializer(serializers.ModelSerializer):
             base_price = obj.prices.filter(price_type__code='base').first()
             if base_price:
                 return {
-                    "amount": str(base_price.amount),
+                    "amount": base_price.amount,
                     "currency": base_price.currency.iso_code if hasattr(base_price.currency, 'iso_code') else base_price.currency,
                     "price_type": base_price.price_type.code if hasattr(base_price.price_type, 'code') else 'base',
                     "label": base_price.price_type.label if hasattr(base_price.price_type, 'label') else 'Base Price',
-                    # Keep backward compatibility with the previous format
-                    "currency_iso": base_price.currency.iso_code if hasattr(base_price.currency, 'iso_code') else base_price.currency,
-                    "price_type_code": base_price.price_type.code if hasattr(base_price.price_type, 'code') else 'base',
-                    "price_type_display": base_price.price_type.label if hasattr(base_price.price_type, 'label') else 'Base Price'
                 }
-        except (AttributeError, Exception):
-            pass
+        except Exception as e:
+            print(f"Error getting base price: {e}")
         
-        # No price available
+        # Fallback: no base price
         return None
 
 class ProductRelationSerializer(serializers.ModelSerializer):

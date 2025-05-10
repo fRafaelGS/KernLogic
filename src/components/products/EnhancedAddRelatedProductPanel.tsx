@@ -399,8 +399,12 @@ export const EnhancedAddRelatedProductPanel: React.FC<EnhancedAddRelatedProductP
                           
                           <div className="ml-2 flex items-center space-x-2">
                             {product.category && (
-                              <Badge variant="outline" className="whitespace-nowrap">
-                                {product.category}
+                              <Badge variant="outline" className="ml-2 whitespace-nowrap">
+                                {typeof product.category === 'string' 
+                                  ? product.category 
+                                  : Array.isArray(product.category) 
+                                    ? (product.category.length > 0 ? product.category[product.category.length - 1].name : '')
+                                    : product.category.name || ''}
                               </Badge>
                             )}
                           </div>

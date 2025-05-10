@@ -98,6 +98,14 @@
         
         // Multiple prices (new model)
         prices?: ProductPrice[];
+
+        // Default price information
+        default_price?: {
+            amount: number;
+            currency: string;
+            price_type: string;
+            label: string;
+        };
     }
 
     export const PRODUCTS_API_URL = `/api/products`;
@@ -343,6 +351,18 @@
         updated_at: string;
     }
 
+    // --- Price API payload shapes -----------------------------------------
+    export type AddPricePayload = {
+        price_type: string | number; // code or id
+        currency: string;            // ISO code, e.g. "USD"
+        amount: number;              // decimal value
+        channel_id?: number | null;  // optional FK to sales channel
+        valid_from: string;          // ISO date (YYYY-MM-DD)
+        valid_to?: string | null;    // optional ISO date
+    };
+
+    export type UpdatePricePayload = Partial<AddPricePayload>;
+
     export const productService = {
         // Get all products with optional pagination support
         getProducts: async (
@@ -500,7 +520,22 @@
         getProduct: async (id: number): Promise<Product> => {
             const url = `${PRODUCTS_PATH}/${id}/`;
             const response = await axiosInstance.get(url);
-            return response.data;
+            const product = response.data;
+            
+            // Ensure prices are loaded if not already included
+            if (!product.prices || product.prices.length === 0) {
+                try {
+                    const prices = await productService.getPrices(id);
+                    if (prices && prices.length > 0) {
+                        product.prices = prices;
+                        console.log(`Loaded ${prices.length} prices for product ${id}`);
+                    }
+                } catch (error) {
+                    console.error(`Error loading prices for product ${id}:`, error);
+                }
+            }
+            
+            return product;
         },
 
         // Create a new product
@@ -1666,31 +1701,19 @@
 
         // Get all prices for a product
         getPrices: async (productId: number): Promise<ProductPrice[]> => {
+            console.log(`Getting prices for product ${productId}`);
             try {
-                const url = `${PRODUCTS_API_URL}/${productId}/prices/`;
+                const url = `${PRODUCTS_PATH}/${productId}/prices/`;
                 const response = await axiosInstance.get(url);
-                
-                if (isHtmlResponse(response.data)) {
-                    console.error('[getPrices] Received HTML response instead of JSON');
-                    return [];
-                }
-                
-                // Handle different response formats
-                if (Array.isArray(response.data)) {
-                    return response.data;
-                } else if (response.data && response.data.results && Array.isArray(response.data.results)) {
-                    return response.data.results;
-                }
-                
-                return [];
+                return response.data;
             } catch (error) {
-                console.error('Error fetching product prices:', error);
-                return [];
+                console.error(`Error getting prices for product ${productId}:`, error);
+                throw error;
             }
         },
 
         // Add a new price for a product
-        addPrice: async (productId: number, priceData: Omit<ProductPrice, 'id' | 'created_at' | 'updated_at' | 'price_type_display'>): Promise<ProductPrice | null> => {
+        addPrice: async (productId: number, priceData: AddPricePayload): Promise<ProductPrice | null> => {
             try {
                 const url = `${PRODUCTS_API_URL}/${productId}/prices/`;
                 const response = await axiosInstance.post(url, priceData);

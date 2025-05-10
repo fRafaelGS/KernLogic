@@ -161,6 +161,24 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             # Regular users only see their own products
             qs = Product.objects.filter(created_by=user)
             
+        # Prefetch base prices into a .base_prices attribute for efficient access
+        qs = qs.prefetch_related(
+            Prefetch(
+                'prices', 
+                queryset=ProductPrice.objects.filter(price_type__code='base'),
+                to_attr='base_prices'
+            )
+        )
+        
+        # Also prefetch all prices into a .all_prices attribute for the side panel
+        qs = qs.prefetch_related(
+            Prefetch(
+                'prices',
+                queryset=ProductPrice.objects.all(),
+                to_attr='all_prices'
+            )
+        )
+            
         # Additional filters from query parameters
         category_id = self.request.query_params.get('category_id')
         category_name = self.request.query_params.get('category')  # For backwards compatibility
@@ -192,15 +210,8 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             qs = qs.filter(is_active=is_active_bool)
         
         # Filter out archived products and prefetch related data
-        # Optimization: prefetch base prices to avoid N+1 queries for default_price
-        return qs.filter(is_archived=False).prefetch_related(
-            'images',
-            Prefetch(
-                'prices', 
-                queryset=ProductPrice.objects.filter(price_type__code='base'),
-                to_attr='base_prices'
-            )
-        )
+        # Don't add another base_prices prefetch as we already have one above
+        return qs.filter(is_archived=False).prefetch_related('images')
 
     def perform_create(self, serializer):
         """
@@ -1195,7 +1206,7 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         
         if request.method == 'GET':
             # Filter prices for this product
-            prices = ProductPrice.objects.filter(product=product)
+            prices = ProductPrice._base_manager.filter(product=product)
             
             # Apply optional filters
             price_type = request.query_params.get('price_type')
@@ -1237,12 +1248,12 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                     product=product,
                     user=request.user,
                     event_type="price_created",
-                    summary=f"Added {price.get_price_type_display()} price of {price.currency} {price.amount}",
+                    summary=f"Added {price.price_type.label} price of {price.currency.iso_code} {price.amount}",
                     payload={
                         "price_id": price.id,
-                        "price_type": price.price_type,
+                        "price_type": price.price_type.code,
                         "amount": str(price.amount),
-                        "currency": price.currency
+                        "currency": price.currency.iso_code
                     }
                 )
                 
@@ -1284,12 +1295,12 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                     product=product,
                     user=request.user,
                     event_type="price_updated",
-                    summary=f"Updated {updated_price.get_price_type_display()} price to {updated_price.currency} {updated_price.amount}",
+                    summary=f"Updated {updated_price.price_type.label} price to {updated_price.currency.iso_code} {updated_price.amount}",
                     payload={
                         "price_id": updated_price.id,
-                        "price_type": updated_price.price_type,
+                        "price_type": updated_price.price_type.code,
                         "amount": str(updated_price.amount),
-                        "currency": updated_price.currency,
+                        "currency": updated_price.currency.iso_code,
                         "changes": serializer.validated_data
                     }
                 )
@@ -1300,8 +1311,8 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         
         elif request.method == 'DELETE':
             # Optional: Instead of deleting, you could set an end date
-            price_type = price.get_price_type_display()
-            price_amount = f"{price.currency} {price.amount}"
+            price_type = price.price_type.label
+            price_amount = f"{price.currency.iso_code} {price.amount}"
             
             # Delete the price
             price.delete()
@@ -1314,9 +1325,9 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 summary=f"Deleted {price_type} price of {price_amount}",
                 payload={
                     "price_id": price_id,
-                    "price_type": price.price_type,
+                    "price_type": price.price_type.code,
                     "amount": str(price.amount),
-                    "currency": price.currency
+                    "currency": price.currency.iso_code
                 }
             )
             

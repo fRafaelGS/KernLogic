@@ -187,7 +187,11 @@ export const AddRelatedProductPanel: React.FC<AddRelatedProductPanelProps> = ({
                 </div>
                 {product.category && (
                   <Badge variant="outline" className="ml-2 whitespace-nowrap">
-                    {product.category}
+                    {typeof product.category === 'string' 
+                      ? product.category 
+                      : Array.isArray(product.category) 
+                        ? (product.category.length > 0 ? product.category[product.category.length - 1].name : '')
+                        : product.category.name}
                   </Badge>
                 )}
               </div>

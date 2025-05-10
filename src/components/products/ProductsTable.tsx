@@ -94,6 +94,7 @@ import { normalizeCategory, getCategoryNamePath } from '@/types/categories';
 import { Category as CategoryType } from '@/types/categories'; // Import the correct type
 import { SubcategoryManager } from '@/components/categories/SubcategoryManager/SubcategoryManager';
 import { getCategoryName, matchesCategoryFilter } from '@/lib/utils';
+import { PriceSummaryBadge } from './PriceSummaryBadge';
 
 // Define constants for fixed widths
 const ACTION_W = 112; // Width of action column in pixels

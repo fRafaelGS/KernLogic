@@ -1,9 +1,10 @@
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency } from '../lib/utils';
 
 // Types for product price data
 export interface ProductPrice {
   amount: string;
   currency_iso: string;
+  currency?: string; // Add the currency property
   price_type_code: string;
   price_type_display?: string; // Add display name for price type
 }

@@ -60,6 +60,8 @@ import {
 } from "@/components/ui/tooltip"
 import { CategoryTreeSelect } from '@/components/categories/CategoryTreeSelect';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
+import { formatPrice, getProductPriceDisplay } from "@/utils/formatPrice";
+import { PriceSummaryBadge } from "@/components/products/PriceSummaryBadge";
 
 /* ---------------------------------------------------------- */
 /*  Helper / shared types                                     */
@@ -116,18 +118,6 @@ export interface UseProductColumnsOpts {
     onClick(): void;
   }>;
 }
-
-
-
-/* ---------------------------------------------------------- */
-/*  Currency formatter                                        */
-/* ---------------------------------------------------------- */
-const formatPrice = (n: number) =>
-  Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-  }).format(n);
 
 /* ---------------------------------------------------------- */
 /*  The Hook                                                  */
@@ -207,12 +197,6 @@ export function useProductColumns({
         </Button>
       ),
       cell: ({ row }) => {
-        console.log('ROW IMAGE DATA:', {
-          thumb: row.original.primary_image_thumb,
-          large: row.original.primary_image_large,
-          images: row.original.images
-        });
-        
         // Add a local images variable with correct typing
         const images = (row.original.images as ProductImage[]) || [];
 
@@ -223,7 +207,6 @@ export function useProductColumns({
           row.original.primary_image ||
           images.find(i => i.is_primary)?.url ||
           images[0]?.url;
-
 
         return (
           <div className="flex items-center space-x-2">
@@ -274,7 +257,7 @@ export function useProductColumns({
       ),
       cell: ({ row }) => {
         const rowIdx = row.index;
-        const value = row.getValue<string>("sku") ?? "";
+        const value = row.getValue("sku") as string ?? "";
         const isEditing =
           editingCell?.rowIndex === rowIdx && editingCell.columnId === "sku";
 
@@ -332,7 +315,7 @@ export function useProductColumns({
       ),
       cell: ({ row }) => {
         const rowIdx = row.index;
-        const value = row.getValue<string>("name") ?? "";
+        const value = row.getValue("name") as string ?? "";
         const isEditing =
           editingCell?.rowIndex === rowIdx && editingCell.columnId === "name";
 
@@ -392,7 +375,7 @@ export function useProductColumns({
       },
       cell: ({ row }) => {
         const rowIndex = row.index;
-        const raw = row.getValue<Category[] | Category | string>("category");
+        const raw = row.getValue("category") as Category[] | Category | string;
         console.log('ProductTable categoryRaw:', raw);
         const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.columnId === 'category';
         
@@ -764,33 +747,39 @@ export function useProductColumns({
     },
     /**********  PRICE **************************************************/
     {
-      accessorKey: 'price',
-      size: 128,
+      accessorKey: "price",
       header: ({ column }) => (
-        <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")} className="px-0">
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="p-0 hover:bg-transparent"
+        >
           <span>Price</span>
-          <ArrowUpDown className="ml-1 h-4 w-4" />
+          <ArrowUpDown className="ml-1 h-4 w-4 opacity-70" />
         </Button>
       ),
-      cell: ({ row, table }) => {
-        // First check if product has prices array from new model
-        const prices = row.original.prices;
-        // Get value either from base price in prices array or fallback to legacy price field
-        const basePrice = prices?.find(p => p.price_type === 'BASE');
-        const value = basePrice ? basePrice.amount : row.getValue('price');
-        const formattedValue = typeof value === 'number' ? formatPrice(value) : formatPrice(0);
-        const isEditing = editingCell?.rowIndex === row.index && editingCell?.columnId === 'price';
+      cell: ({ row, column, table }) => {
+        const rowIndex = row.index;
+        const columnId = column.id;
+        const isEditing =
+          editingCell?.rowIndex === rowIndex && editingCell?.columnId === columnId;
+        
+        // Check for multiple prices
+        const hasPrices = row.original.prices && row.original.prices.length > 0;
         
         return isEditing ? (
-          <div className="relative flex items-center w-full">
+          <div className="flex items-center">
             <Input
+              type="number"
+              min="0"
+              step="0.01"
               value={editValue}
               onChange={handlePriceCellChange}
               onKeyDown={handleKeyDown}
               autoFocus
-              className="h-8 w-24 px-2"
+              className="w-20 h-8"
             />
-            <div className="absolute right-0 flex items-center space-x-1">
+            <div className="flex ml-1">
               <IconBtn
                 tooltip="Save"
                 icon={CheckIcon}
@@ -805,40 +794,19 @@ export function useProductColumns({
           </div>
         ) : (
           <div
-            className="cursor-text pr-10"
-            onClick={() => handleCellEdit(row.index, 'price', value?.toString() || '0')}
+            className="cursor-pointer"
+            onClick={() => {
+              if (!hasPrices) {
+                // Only allow direct editing of the legacy price field if no prices array
+                handleCellEdit(rowIndex, columnId, row.original.price?.toString() || "0");
+              }
+            }}
           >
-            <div className="flex items-center">
-              <span className="tabular-nums text-right">{formattedValue}</span>
-              
-              {/* Show price type badge for additional prices */}
-              {prices && prices.length > 1 && (
-                <div className="ml-2 text-xs font-medium text-muted-foreground">
-                  +{prices.length - 1}
-                </div>
-              )}
-              
-              {/* Show tooltip with all price types when hovering */}
-              {prices && prices.length > 0 && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <InfoIcon className="ml-1 h-3 w-3 text-muted-foreground" />
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <div className="space-y-1">
-                        {prices.map(price => (
-                          <div key={price.id} className="flex justify-between gap-3 text-xs">
-                            <span>{price.price_type_display || price.price_type}:</span>
-                            <span className="font-medium">{formatPrice(price.amount)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
-            </div>
+            {hasPrices ? (
+              <PriceSummaryBadge product={row.original} />
+            ) : (
+              <div className="px-1 py-1">{formatPrice(row.original.price || 0)}</div>
+            )}
           </div>
         );
       },

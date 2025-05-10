@@ -36,6 +36,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { PriceSummaryBadge } from './PriceSummaryBadge';
 
 interface ProductDetailPricingProps {
   product: Product; 
@@ -85,9 +86,14 @@ export function ProductDetailPricing({ product, onSave, readOnly = false }: Prod
         setCurrencies(currencyList);
         
         // Load prices if not already in product object
-        if (!product.prices && product.id) {
+        if (!product.prices || product.prices.length === 0) {
+          console.log('Fetching product prices from API:', product.id);
           const productPrices = await productService.getPrices(product.id);
+          console.log('API returned prices:', productPrices);
           setPrices(productPrices);
+        } else {
+          console.log('Using prices from product object:', product.prices);
+          setPrices(product.prices);
         }
       } catch (error) {
         console.error('Error loading pricing data:', error);
@@ -121,7 +127,7 @@ export function ProductDetailPricing({ product, onSave, readOnly = false }: Prod
         amount: 0,
         valid_from: new Date().toISOString(),
         valid_to: null,
-        channel: null
+        channel_id: null
       };
       
       const createdPrice = await productService.addPrice(product.id, newPrice);
@@ -141,7 +147,18 @@ export function ProductDetailPricing({ product, onSave, readOnly = false }: Prod
     if (readOnly || !product.id) return;
     
     try {
-      const updatedPrice = await productService.patchPrice(product.id, priceId, updates);
+      // Only send changed fields by diffing against current price state
+      const current = prices.find(p => p.id === priceId);
+      if (!current) return;
+
+      const diff: Partial<ProductPrice> = {};
+      Object.entries(updates).forEach(([k, v]) => {
+        // @ts-ignore
+        if (v !== (current as any)[k]) diff[k as keyof ProductPrice] = v as any;
+      });
+      if (Object.keys(diff).length === 0) return;
+
+      const updatedPrice = await productService.patchPrice(product.id, priceId, diff);
       if (updatedPrice) {
         setPrices(prev => prev.map(p => p.id === priceId ? updatedPrice : p));
         toast.success('Price updated');
@@ -207,7 +224,12 @@ export function ProductDetailPricing({ product, onSave, readOnly = false }: Prod
           <div className="flex justify-between items-start">
             <div>
               <CardTitle>Product Pricing</CardTitle>
-              <CardDescription>Manage different price types for this product</CardDescription>
+              <CardDescription>
+                Manage different price types for this product
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <PriceSummaryBadge product={product} />
+                </div>
+              </CardDescription>
             </div>
             <div className="flex items-center">
               <Select value={selectedCurrency} onValueChange={setSelectedCurrency}>
@@ -287,6 +309,7 @@ export function ProductDetailPricing({ product, onSave, readOnly = false }: Prod
                     )}
                     {!readOnly && (
                       <Button 
+                        type="button"
                         variant="ghost" 
                         size="icon" 
                         onClick={(e) => {
@@ -427,6 +450,7 @@ export function ProductDetailPricing({ product, onSave, readOnly = false }: Prod
           {/* Add new price button */}
           {!readOnly && (
             <Button 
+              type="button"
               variant="outline" 
               className="w-full mt-4" 
               onClick={addNewPrice}
@@ -492,8 +516,8 @@ export function ProductDetailPricing({ product, onSave, readOnly = false }: Prod
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={deletePrice}>
+            <AlertDialogCancel type="button">Cancel</AlertDialogCancel>
+            <AlertDialogAction type="button" onClick={deletePrice}>
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

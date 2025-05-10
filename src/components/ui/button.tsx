@@ -79,6 +79,8 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   }, ref) => {
     const Comp = asChild ? Slot : "button"
     
+    const resolvedType = !asChild && !props.type ? 'button' : props.type
+
     return (
       <Comp
         className={cn(buttonVariants({ 
@@ -90,6 +92,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         }))}
         ref={ref}
         disabled={disabled || isLoading}
+        type={resolvedType as any}
         {...props}
       >
         {isLoading ? (

@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -165,7 +164,7 @@ export function FileUpload() {
       {uploadedFile && !isUploading && (
         <CardFooter className="flex justify-end space-x-2">
           <Button
-            variant="default"
+            variant="primary"
           >
             Start Processing
           </Button>

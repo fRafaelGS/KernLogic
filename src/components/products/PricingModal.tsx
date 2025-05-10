@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { usePriceMetadata } from '@/hooks/usePriceMetadata';
 import { Loader2 } from 'lucide-react';
 import { AlertTriangle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 interface PricingModalProps {
   open: boolean;
@@ -50,7 +51,7 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
   const [editingPrice, setEditingPrice] = useState<ProductPrice | null>(null);
   
   // Active tab
-  const [activeTab, setActiveTab] = useState('current');
+  const [activeTab, setActiveTab] = useState<'table' | 'add'>('table');
   
   // Reset form when switching between add and edit modes
   useEffect(() => {
@@ -75,8 +76,8 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
         channel_id: editingPrice.channel_id || null,
         currency: editingPrice.currency,
         amount: editingPrice.amount.toString(),
-        valid_from: editingPrice.valid_from,
-        valid_to: editingPrice.valid_to,
+        valid_from: editingPrice.valid_from ? editingPrice.valid_from.slice(0, 10) : new Date().toISOString().slice(0, 10),
+        valid_to: editingPrice.valid_to ? editingPrice.valid_to.slice(0, 10) : null,
       });
     }
   }, [editingPrice, priceTypes]);
@@ -175,19 +176,23 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
       // Get the price type code from the ID
       const priceTypeCode = getPriceTypeCode(newPrice.price_type_id);
       
-      await productService.addPrice(productId, {
+      const validFromISO = new Date(newPrice.valid_from).toISOString();
+      const validToISO = newPrice.valid_to ? new Date(newPrice.valid_to).toISOString() : null;
+
+      const created = await productService.addPrice(productId, {
         price_type: priceTypeCode,
         currency: newPrice.currency,
         channel_id: newPrice.channel_id,
         amount: parseFloat(newPrice.amount),
-        valid_from: newPrice.valid_from,
-        valid_to: newPrice.valid_to,
-        channel: null  // Required by the interface
+        valid_from: validFromISO,
+        valid_to: validToISO
       });
+      
+      if (created) setPrices(prev => [...prev, created]);
       
       toast.success('Price added successfully');
       
-      // Refresh prices
+      // Refresh list from server in background
       fetchPrices();
       
       // Reset form
@@ -201,6 +206,9 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
         valid_from: new Date().toISOString().slice(0, 10),
         valid_to: null,
       });
+      
+      // Switch back to table view to show the new row
+      setActiveTab('table');
       
       // Call the onPricesUpdated callback
       onPricesUpdated();
@@ -224,15 +232,26 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
       // Get the price type code from the ID
       const priceTypeCode = getPriceTypeCode(newPrice.price_type_id);
       
-      await productService.patchPrice(productId, editingPrice.id, {
-        price_type: priceTypeCode,
-        currency: newPrice.currency,
-        channel_id: newPrice.channel_id,
-        amount: parseFloat(newPrice.amount),
-        valid_from: newPrice.valid_from,
-        valid_to: newPrice.valid_to,
-        channel: null  // Include channel to match the interface
-      });
+      const validFromISO = new Date(newPrice.valid_from).toISOString();
+      const validToISO = newPrice.valid_to ? new Date(newPrice.valid_to).toISOString() : null;
+
+      // Build diff payload – include only changed fields
+      const payload: any = {};
+      if (editingPrice.price_type !== priceTypeCode) payload.price_type = priceTypeCode;
+      if (editingPrice.currency !== newPrice.currency) payload.currency = newPrice.currency;
+      if ((editingPrice.channel_id || null) !== newPrice.channel_id) payload.channel_id = newPrice.channel_id;
+      const newAmount = parseFloat(newPrice.amount);
+      if (editingPrice.amount !== newAmount) payload.amount = newAmount;
+      if (editingPrice.valid_from?.slice(0,10) !== newPrice.valid_from) payload.valid_from = validFromISO;
+      if ((editingPrice.valid_to ? editingPrice.valid_to.slice(0,10) : null) !== newPrice.valid_to) payload.valid_to = validToISO;
+
+      if (Object.keys(payload).length === 0) {
+        toast.info('No changes to update');
+        setLoading(false);
+        return;
+      }
+
+      await productService.patchPrice(productId, editingPrice.id, payload);
       
       toast.success('Price updated successfully');
       
@@ -241,7 +260,7 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
       
       // Exit edit mode
       setEditingPrice(null);
-      setActiveTab('current');
+      setActiveTab('table');
       
       // Call the onPricesUpdated callback
       onPricesUpdated();
@@ -289,7 +308,7 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
   // Cancel editing
   const handleCancelEdit = () => {
     setEditingPrice(null);
-    setActiveTab('current');
+    setActiveTab('table');
   };
   
   // Show loading indicator if metadata is still loading
@@ -339,34 +358,59 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
 
   // Update the component to use default_price
   const PricingDetails = ({ product }: { product: Product }) => {
-    // Handle the case where default_price might not exist in the Product type
-    const defaultPrice = (product as any).default_price || null;
+    // Get all prices from the product or from the prices state
+    const allPrices = product.prices || [];
+    const priceCount = allPrices.length;
     
-    // Fallback to regular price if default_price is not present
-    const price = defaultPrice ? 
-      { amount: defaultPrice.amount, currency: defaultPrice.currency_iso } : 
-      { amount: product.price, currency: 'USD' };
+    // Get base price if available
+    const basePrice = allPrices.find(p => p.price_type === 'BASE');
+    
+    // Get list price if available
+    const listPrice = allPrices.find(p => p.price_type === 'LIST');
+    
+    // Choose which price to display as primary
+    const primaryPrice = basePrice || listPrice || (allPrices.length > 0 ? allPrices[0] : null);
     
     return (
       <div className="w-full grid gap-2">
         <div className="flex flex-col">
-          <div className="text-sm font-medium">Current Base Price</div>
-          <div className="text-2xl font-bold">
-            {price && price.amount ? (
-              <>
-                {price.currency} {typeof price.amount === 'string' ? parseFloat(price.amount).toFixed(2) : price.amount.toFixed(2)}
-              </>
+          <div className="text-sm font-medium">Current Pricing</div>
+          
+          {primaryPrice ? (
+            <div className="text-2xl font-bold">
+              {primaryPrice.currency} {typeof primaryPrice.amount === 'string' ? parseFloat(primaryPrice.amount).toFixed(2) : primaryPrice.amount.toFixed(2)}
+              <span className="text-sm ml-2 font-normal text-muted-foreground">
+                ({primaryPrice.price_type_display || primaryPrice.price_type})
+              </span>
+            </div>
+          ) : (
+            <div className="text-2xl font-bold">
+              {product.price ? `USD ${product.price.toFixed(2)}` : <span className="text-muted-foreground text-base">No price set</span>}
+              {product.price && <span className="text-sm ml-2 font-normal text-muted-foreground">(Legacy price)</span>}
+            </div>
+          )}
+          
+          {/* Add pricing summary information */}
+          <div className="mt-2 flex items-center">
+            {priceCount > 0 ? (
+              <Badge variant="outline" className="mr-2">
+                {priceCount} {priceCount === 1 ? 'price' : 'prices'} available
+              </Badge>
             ) : (
-              <span className="text-muted-foreground text-base">No price set</span>
+              <Badge variant="outline" className="bg-amber-50 text-amber-800">No prices defined</Badge>
             )}
           </div>
-          {defaultPrice ? 
-            <PriceSource priceData={defaultPrice} /> : 
-            <div className="text-amber-500 text-xs mt-1 flex items-center">
-              <AlertTriangle className="h-3 w-3 mr-1" />
-              Using regular price field
+          
+          {/* Always show price type summary, regardless of count */}
+          {priceCount > 0 && (
+            <div className="mt-1 text-xs text-muted-foreground flex flex-wrap gap-1">
+              {allPrices.map((p, idx) => (
+                <Badge variant="secondary" key={idx} className="text-xs">
+                  {p.price_type_display || p.price_type}
+                </Badge>
+              ))}
             </div>
-          }
+          )}
         </div>
       </div>
     );
@@ -408,7 +452,7 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
             </Card>
             
             {/* Tabs for price table and add new price */}
-            <Tabs defaultValue="table">
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'table' | 'add')} defaultValue="table">
               <TabsList className="grid grid-cols-2">
                 <TabsTrigger value="table">Price Table</TabsTrigger>
                 <TabsTrigger value="add">Add New Price</TabsTrigger>
@@ -444,6 +488,7 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
                           </TableCell>
                           <TableCell className="text-right space-x-2">
                             <Button 
+                              type="button"
                               variant="outline" 
                               size="sm" 
                               onClick={() => handleEditPrice(price)}
@@ -451,6 +496,7 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
                               Edit
                             </Button>
                             <Button 
+                              type="button"
                               variant="destructive" 
                               size="sm" 
                               onClick={() => handleDeletePrice(price.id)}
@@ -572,12 +618,14 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
                     {editingPrice ? (
                       <>
                         <Button
+                          type="button"
                           variant="outline"
                           onClick={handleCancelEdit}
                         >
                           Cancel
                         </Button>
                         <Button
+                          type="button"
                           onClick={handleUpdatePrice}
                           disabled={!isFormValid() || loading}
                         >
@@ -586,6 +634,7 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
                       </>
                     ) : (
                       <Button
+                        type="button"
                         onClick={handleAddPrice}
                         disabled={!isFormValid() || loading}
                       >
@@ -604,7 +653,7 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
         )}
         
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Close
           </Button>
         </DialogFooter>

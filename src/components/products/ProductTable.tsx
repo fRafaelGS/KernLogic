@@ -8,6 +8,8 @@ import {
   TableRow 
 } from '@/components/ui/table';
 import { useProductPrice, ProductWithPrice } from '@/hooks/useProductPrice';
+import { InfoIcon } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface ProductTableProps {
   products: ProductWithPrice[];

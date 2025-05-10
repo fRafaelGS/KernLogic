@@ -2,7 +2,7 @@ import React, { useState, useRef, useMemo } from 'react';
 import { Product, productService, ProductAsset, ProductPrice } from '@/services/productService';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Copy, ImageIcon, AlertCircle, UploadCloud } from 'lucide-react';
+import { Copy, ImageIcon, AlertCircle, UploadCloud, MoreHorizontal } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent } from '@/components/ui/card';
@@ -26,6 +26,7 @@ const hasEditPermission = true;
 // Extend the Product interface to include prices
 interface ExtendedProduct extends Product {
   prices?: ProductPrice[];
+  all_prices?: ProductPrice[];
 }
 
 interface ProductDetailSidebarProps {
@@ -186,6 +187,47 @@ export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
       fileInputRef.current.value = '';
     }
   };
+
+  // Get additional prices (excluding the base price)
+  const additionalPrices = useMemo(() => {
+    // First check if we have all_prices prefetched array
+    if (product.all_prices && Array.isArray(product.all_prices) && product.all_prices.length > 0) {
+      // Filter out the base price and get up to 3 other prices
+      return product.all_prices
+        .filter(price => price.price_type !== 'base' && price.price_type_display !== 'Base Price')
+        .slice(0, 3);
+    }
+    
+    // Fallback to the prices array if all_prices is not available
+    if (!product.prices || product.prices.length === 0) return [];
+    
+    // Filter out the base price and get up to 3 other prices
+    return product.prices
+      .filter(price => price.price_type !== 'base' && price.price_type_display !== 'Base Price')
+      .slice(0, 3);
+  }, [product.all_prices, product.prices]);
+  
+  const hasMorePrices = useMemo(() => {
+    // First check if we have all_prices prefetched array
+    if (product.all_prices && Array.isArray(product.all_prices)) {
+      // Count how many non-base prices exist
+      const nonBasePricesCount = product.all_prices.filter(
+        price => price.price_type !== 'base' && price.price_type_display !== 'Base Price'
+      ).length;
+      
+      return nonBasePricesCount > 3;
+    }
+    
+    // Fallback to prices array
+    if (!product.prices) return false;
+    
+    // Count how many non-base prices exist
+    const nonBasePricesCount = product.prices.filter(
+      price => price.price_type !== 'base' && price.price_type_display !== 'Base Price'
+    ).length;
+    
+    return nonBasePricesCount > 3;
+  }, [product.all_prices, product.prices]);
 
   return (
     <Card className="overflow-hidden">
@@ -426,47 +468,67 @@ export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
             </div>
           </div>
           
-          {/* Price Section */}
-          <div className="flex justify-between items-center mt-3 border-t border-slate-100 pt-3">
-            <h2 className="font-medium text-sm text-slate-500 uppercase tracking-wider">
-              Pricing
-            </h2>
-            {hasEditPermission && (
-              <Button 
-                size="sm" 
-                variant="outline"
-                className="text-xs h-6" 
-                onClick={() => setShowPricingModal(true)}
-              >
-                Manage
-              </Button>
-            )}
-          </div>
-          
-          {product.prices && product.prices.length > 0 ? (
-            <>
-              <div className="space-y-1 mt-1 bg-slate-50 rounded-md px-3 py-1.5 border border-slate-200">
-                {product.prices.map((price) => (
-                  <div key={price.id} className="flex justify-between items-center">
-                    <span className="text-slate-600 text-sm">
-                      {price.price_type_display}
-                      {price.channel?.name && ` (${price.channel.name})`}:
-                    </span>
-                    <span className="font-medium text-primary-700">
-                      {formatCurrency(price.amount, price.currency)}
-                    </span>
+          {/* PRICING section */}
+          <div>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-2">
+                PRICING
+              </h3>
+              {hasEditPermission && (
+                <Button variant="ghost" size="sm" onClick={() => setShowPricingModal(true)}>
+                  Manage
+                </Button>
+              )}
+            </div>
+            
+            {/* Base price */}
+            <div className="bg-yellow-50 rounded p-2 mb-2">
+              <div className="text-2xl font-bold">
+                {product.default_price ? (
+                  formatCurrency(
+                    product.default_price.amount, 
+                    product.default_price.currency || 'USD'
+                  )
+                ) : (
+                  <span className="text-muted-foreground italic">No price set</span>
+                )}
+              </div>
+              {product.default_price && (
+                <div className="text-sm text-muted-foreground">
+                  {product.default_price.label || 'Base Price'}
+                </div>
+              )}
+            </div>
+            
+            {/* Additional prices (up to 3) */}
+            {additionalPrices.length > 0 && (
+              <div className="space-y-2 mt-2">
+                {additionalPrices.map((price, index) => (
+                  <div key={`${price.price_type}-${index}`} className="bg-slate-50 rounded p-2 flex justify-between">
+                    <div className="text-sm font-medium">
+                      {price.price_type_display || price.price_type}
+                    </div>
+                    <div className="font-semibold">
+                      {formatCurrency(price.amount, price.currency || 'USD')}
+                    </div>
                   </div>
                 ))}
+                
+                {/* View all prices button */}
+                {hasMorePrices && (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full mt-1" 
+                    onClick={() => setShowPricingModal(true)}
+                  >
+                    <MoreHorizontal className="h-4 w-4 mr-2" />
+                    View all prices
+                  </Button>
+                )}
               </div>
-            </>
-          ) : (
-            <div className="flex justify-between items-center mt-1 bg-slate-50 rounded-md px-3 py-1.5 border border-slate-200">
-              <span className="text-slate-600 text-sm">Price</span>
-              <span className="font-medium text-primary-700">
-                {product.price ? formatCurrency(product.price) : '—'}
-              </span>
-            </div>
-          )}
+            )}
+          </div>
           
           {/* Status and metadata in compact layout */}
           <div className="grid grid-cols-2 gap-2 mt-3 border-t border-slate-100 pt-3">

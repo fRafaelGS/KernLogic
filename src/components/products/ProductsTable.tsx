@@ -93,7 +93,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { normalizeCategory, getCategoryNamePath } from '@/types/categories';
 import { Category as CategoryType } from '@/types/categories'; // Import the correct type
 import { SubcategoryManager } from '@/components/categories/SubcategoryManager/SubcategoryManager';
-import { getCategoryName } from '@/lib/utils'; 
+import { getCategoryName, matchesCategoryFilter } from '@/lib/utils';
 
 // Define constants for fixed widths
 const ACTION_W = 112; // Width of action column in pixels
@@ -244,6 +244,9 @@ export function ProductsTable() {
 
   // Function to fetch products and categories
   const fetchData = useCallback(async () => {
+    // eslint-disable-next-line no-console
+    console.log('fetchData called - initializing product data load');
+    
     if (!isAuthenticated) return;
     
     // Guard against double-firing on mount
@@ -310,6 +313,18 @@ export function ProductsTable() {
       
       // Remove the eager asset loading and just set products directly
       setProducts(fetchedProducts);
+      
+      if (typeof window !== 'undefined') {
+        // expose for console testing:
+        // eslint-disable-next-line no-console
+        console.log('Loaded products, exposing to window.__products');
+        // @ts-ignore
+        window.__products = fetchedProducts;
+        // @ts-ignore
+        window.getCategoryName = getCategoryName;
+        // @ts-ignore
+        window.matchesCategoryFilter = (raw: unknown, filterValue: string) => matchesCategoryFilter(raw, filterValue);
+      }
       
       // Create category options with proper type casting
       const categoryOpts: CategoryOption[] = fetchedCategories.map(c => {
@@ -422,27 +437,6 @@ export function ProductsTable() {
         return false;
       });
     }
-    // Apply dropdown filters
-    if (filters.category && filters.category !== 'all') {
-      if (filters.category === 'uncategorized') {
-        filtered = filtered.filter(product => {
-          // Use the utility function for clean type handling
-          const name = getCategoryName(product.category);
-          return name === '';  // uncategorized
-        });
-      } else {
-        filtered = filtered.filter(product => {
-          // Use the utility function for clean type handling
-          const name = getCategoryName(product.category);
-          return name === filters.category;
-        });
-      }
-    }
-    if (filters.status !== 'all') {
-      filtered = filtered.filter(product => 
-        filters.status === 'active' ? product.is_active : !product.is_active
-      );
-    }
     // Apply numeric range filters
     if (filters.minPrice) {
       const min = parseFloat(filters.minPrice);
@@ -467,21 +461,21 @@ export function ProductsTable() {
         
         // Check if ALL filter tags match (AND logic instead of OR)
         const hasAllTags = filters.tags.every(filterTag => {
-          const found = product.tags.some(productTag => {
-            // String comparison
+          const found = product.tags.some((productTag: any) => {
+            // Handle tag as string
             if (typeof productTag === 'string') {
               return productTag === filterTag;
             }
             
-            // Object comparison with type safety
+            // Handle tag as object
             if (productTag && typeof productTag === 'object') {
               // Safe access with type assertion
-              const tag = productTag as any;
+              const tagObj = productTag as any;
               return (
-                (tag.id !== undefined && String(tag.id) === filterTag) || 
-                (tag.name !== undefined && String(tag.name) === filterTag) ||
-                (tag.value !== undefined && String(tag.value) === filterTag) ||
-                (tag.label !== undefined && String(tag.label) === filterTag)
+                (tagObj.id !== undefined && String(tagObj.id) === filterTag) || 
+                (tagObj.name !== undefined && String(tagObj.name) === filterTag) ||
+                (tagObj.value !== undefined && String(tagObj.value) === filterTag) ||
+                (tagObj.label !== undefined && String(tagObj.label) === filterTag)
               );
             }
             
@@ -493,6 +487,14 @@ export function ProductsTable() {
         
         return hasAllTags;
       });
+    }
+    
+    // Apply dropdown filters
+    // Category filtering is now handled by React Table
+    if (filters.status !== 'all') {
+      filtered = filtered.filter(product => 
+        filters.status === 'active' ? product.is_active : !product.is_active
+      );
     }
     
     return filtered;
@@ -634,6 +636,8 @@ export function ProductsTable() {
 
   // --- Derived Data ---
   const uniqueCategories = useUniqueCategories(products);
+  // eslint-disable-next-line no-console
+  console.log('uniqueCategories derived from products:', uniqueCategories);
   
   // Update the updateData function to use the productRowMap instead of the table reference
   const updateData = useCallback(async (rowIndex: number, columnId: string, value: any) => {
@@ -1139,25 +1143,31 @@ export function ProductsTable() {
         
         // Check if any of the filter tags exist in the row's tags
         return filterValue.some(filterTag => 
-          tags.some((tag: any) => {
+          tags.some((productTag: any) => {
             // Handle tag as string
-            if (typeof tag === 'string') {
-              return tag === filterTag;
+            if (typeof productTag === 'string') {
+              return productTag === filterTag;
             }
             
             // Handle tag as object
-            if (tag && typeof tag === 'object') {
+            if (productTag && typeof productTag === 'object') {
+              // Safe access with type assertion
+              const tagObj = productTag as any;
               return (
-                String(tag.id) === filterTag ||
-                String(tag.name) === filterTag ||
-                String(tag.value) === filterTag ||
-                String(tag.label) === filterTag
+                (tagObj.id !== undefined && String(tagObj.id) === filterTag) || 
+                (tagObj.name !== undefined && String(tagObj.name) === filterTag) ||
+                (tagObj.value !== undefined && String(tagObj.value) === filterTag) ||
+                (tagObj.label !== undefined && String(tagObj.label) === filterTag)
               );
             }
             
             return false;
           })
         );
+      },
+      categoryFilter: (row: Row<Product>, columnId: string, filterValue: any): boolean => {
+        if (!filterValue) return true;
+        return matchesCategoryFilter(row.getValue(columnId), filterValue as string);
       }
     } as Record<string, FilterFn<Product>>,
     enableRowSelection: true,
@@ -1606,8 +1616,17 @@ export function ProductsTable() {
             <div className="space-y-2">
               <Label htmlFor="category-filter">Category</Label>
               <Select
-                value={filters.category}
-                onValueChange={(value) => handleFilterChange('category', value)}
+                value={filters.category || "all"}
+                onValueChange={(value) => {
+                  // Update our local filter state
+                  handleFilterChange('category', value);
+                  
+                  // Also set the corresponding table column filter
+                  const col = table.getColumn("category")!;
+                  if (value === "all") col.setFilterValue(undefined);
+                  else if (value === "uncategorized") col.setFilterValue("");
+                  else col.setFilterValue(value);
+                }}
               >
                 <SelectTrigger id="category-filter">
                   <SelectValue placeholder="All Categories" />
@@ -1779,10 +1798,12 @@ export function ProductsTable() {
                                     if (columnId === 'category') {
                                       return (
                                         <Select
-                                          value={(table.getColumn(columnId)?.getFilterValue() as string) ?? ''}
-                                          onValueChange={(value) => {
-                                            column.setFilterValue(value);
-                                            handleColumnFilterChange(columnId, value === 'all' ? '' : value);
+                                          value={(table.getColumn("category")?.getFilterValue() as string) ?? "all"}
+                                          onValueChange={(v) => {
+                                            const col = table.getColumn("category")!;
+                                            if (v === "all") col.setFilterValue(undefined);
+                                            else if (v === "uncategorized") col.setFilterValue("");
+                                            else col.setFilterValue(v);
                                           }}
                                         >
                                           <SelectTrigger className="h-7 text-xs">

@@ -1,27 +1,24 @@
 import { useMemo } from "react";
 import type { Product } from "@/services/productService";
-import { normalizeCategory } from "@/types/categories";
 
-/**
- * All distinct non-empty categories present in the given list.
- */
+/** Extract **all** category names (roots + children) for the dropdown */
 export function useUniqueCategories(products: Product[]) {
   return useMemo(() => {
-    if (!Array.isArray(products)) return [];
-
-    const set = new Set<string>(
-      products
-        .map((p) => {
-          // Normalize the category to safely access the name property
-          const category = normalizeCategory(p.category);
-          // Safe access to name property
-          const categoryName = category && category.name ? category.name.trim() : '';
-          return categoryName;
-        })
-        .filter(Boolean),
-    );
-
-    return Array.from(set);
+    const names = new Set<string>();
+    for (const p of products) {
+      const raw = p.category;
+      if (Array.isArray(raw)) {
+        // add every ancestor's name
+        raw.forEach(c => {
+          if (typeof c === "object" && c?.name) {
+            names.add(c.name);
+          }
+        });
+      } else if (typeof raw === "object" && raw?.name) {
+        names.add(raw.name);
+      }
+    }
+    return Array.from(names).sort();
   }, [products]);
 }
 

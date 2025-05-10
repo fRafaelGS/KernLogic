@@ -2,7 +2,7 @@
 /*  src/hooks/useProductColumns.tsx                           */
 /* ---------------------------------------------------------- */
 import React, { useMemo } from "react";
-import type { ColumnDef, Row } from "@tanstack/react-table";
+import type { ColumnDef, Row, FilterFn } from "@tanstack/react-table";
 import {
   ArrowUpDown,
   ArrowUp,
@@ -50,7 +50,7 @@ import {
 } from "@/services/productService";
 import { productService as ps } from "@/services/productService"; // alias
 import { updateProductCategory, getCategories } from "@/services/categoryService"; // Import specific functions
-import { normalizeCategory } from '@/types/categories';
+import { normalizeCategory, Category } from '@/types/categories';
 import {
   Tooltip,
   TooltipContent,
@@ -391,25 +391,23 @@ export function useProductColumns({
       },
       cell: ({ row }) => {
         const rowIndex = row.index;
-        const categoryRaw = row.getValue("category");
-        console.log('ProductTable categoryRaw:', categoryRaw);
+        const raw = row.getValue<Category[] | Category | string>("category");
+        console.log('ProductTable categoryRaw:', raw);
         const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.columnId === 'category';
+        
+        // Determine category ID for editing
         let categoryId = null;
-        let categoryArray = Array.isArray(categoryRaw) ? categoryRaw : (categoryRaw ? [categoryRaw] : []);
-        if (categoryRaw) {
-          if (Array.isArray(categoryRaw) && categoryRaw.length > 0) {
-            const leafCategory = categoryRaw[categoryRaw.length - 1];
+        if (raw) {
+          if (Array.isArray(raw) && raw.length > 0) {
+            const leafCategory = raw[raw.length - 1];
             categoryId = leafCategory.id;
-          } else if (typeof categoryRaw === 'object' && categoryRaw !== null) {
-            categoryId = (categoryRaw as any).id;
-            categoryArray = [categoryRaw];
-          } else if (typeof categoryRaw === 'string') {
-            categoryArray = [{ name: categoryRaw, id: null }];
-          } else if (typeof categoryRaw === 'number') {
-            categoryId = categoryRaw;
-            categoryArray = [];
+          } else if (typeof raw === 'object' && raw !== null) {
+            categoryId = (raw as any).id;
+          } else if (typeof raw === 'number') {
+            categoryId = raw;
           }
         }
+        
         if (isEditing) {
           return (
             <div 
@@ -427,11 +425,12 @@ export function useProductColumns({
             </div>
           );
         }
+        
         // Read-only: show breadcrumb, and clicking the cell enters edit mode
         return (
           <div
             className="min-w-[180px] cursor-pointer p-1 hover:bg-muted rounded"
-            title={Array.isArray(categoryRaw) ? categoryRaw.map(cat => (cat as any).name).join(' > ') : (typeof categoryRaw === 'object' && categoryRaw !== null && 'name' in categoryRaw ? (categoryRaw as any).name : categoryRaw || 'Uncategorized')}
+            title={Array.isArray(raw) ? raw.map(cat => (cat as any).name).join(' > ') : (typeof raw === 'object' && raw !== null && 'name' in raw ? (raw as any).name : raw || 'Uncategorized')}
             onClick={e => {
               e.stopPropagation();
               handleCellEdit(rowIndex, 'category', categoryId);
@@ -446,26 +445,29 @@ export function useProductColumns({
               }
             }}
           >
-            <Breadcrumb>
-              {Array.isArray(categoryRaw) && categoryRaw.length > 0 ? (
-                categoryRaw.map((cat, idx) => (
-                  <span key={cat.id || idx} className="truncate">
-                    {(cat as any).name}
-                    {idx < categoryRaw.length - 1 && <span className="mx-1">&gt;</span>}
-                  </span>
-                ))
-              ) : typeof categoryRaw === 'object' && categoryRaw !== null && 'name' in categoryRaw ? (
-                <span>{(categoryRaw as any).name}</span>
-              ) : typeof categoryRaw === 'string' ? (
-                <span>{categoryRaw}</span>
-              ) : (
-                <span className="text-muted-foreground">Uncategorized</span>
-              )}
-            </Breadcrumb>
+            {Array.isArray(raw) && raw.length > 0 ? (
+              <Breadcrumb>
+                {raw.map((cat, i, arr) => (
+                  <React.Fragment key={typeof cat === 'object' ? cat.id : i}>
+                    <span className="truncate">{typeof cat === 'object' ? cat.name : cat}</span>
+                    {i < arr.length - 1 && <span className="mx-1">&gt;</span>}
+                  </React.Fragment>
+                ))}
+              </Breadcrumb>
+            ) : typeof raw === 'object' && raw !== null && 'name' in raw ? (
+              <span>{(raw as any).name}</span>
+            ) : typeof raw === 'string' ? (
+              <span>{raw}</span>
+            ) : (
+              <span className="text-muted-foreground">Uncategorized</span>
+            )}
           </div>
         );
       },
       enableSorting: true,
+      enableColumnFilter: true,
+      // Use our custom categoryFilter registered in the table's filterFns
+      filterFn: "categoryFilter" as any,
     },
     /**********  BRAND **************************************************/
     {

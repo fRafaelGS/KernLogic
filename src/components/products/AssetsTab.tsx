@@ -4,7 +4,7 @@ import {
   FileIcon, FileSpreadsheet, FileText, ImageIcon, 
   Upload, X, CheckCircle2, AlertCircle, RefreshCw, 
   ChevronDown, ChevronRight, MoreHorizontal, Download, 
-  Archive, Trash2, Edit2, Filter, PlusCircle, FolderDown
+  Archive, Trash2, Edit2, Filter, PlusCircle, FolderDown, Package, Loader2, Tag
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -12,10 +12,13 @@ import { cn } from '@/lib/utils';
 import { Product, ProductAsset, productService, AssetBundle } from '@/services/productService';
 import axiosInstance from '@/lib/axiosInstance';
 import { PRODUCTS_API_URL } from '@/services/productService';
+import { useToast } from '@/components/ui/use-toast';
+import { DateRange } from 'react-day-picker';
+import { Toast } from '@/components/ui/toast';
 
 // UI Components
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -38,6 +41,25 @@ import {
 import { Input } from '@/components/ui/input';
 import { Calendar } from '@/components/ui/calendar';
 import { Drawer, DrawerContent, DrawerTrigger } from '@/components/ui/drawer';
+import { DatePickerWithRange } from '@/components/ui/date-range-picker';
+import { TagInput } from '@/components/ui/tag-input';
+import { Label } from '@/components/ui/label';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Separator } from "@/components/ui/separator"
+import {
+  ChevronUp,
+  FileTypeIcon,
+  Calendar as CalendarIcon,
+  Tag as TagIcon,
+  Search as SearchIcon,
+  SlidersHorizontal,
+  ChevronLeft,
+} from "lucide-react"
 
 // Feature flag for the asset gallery
 const ENABLE_ASSET_GALLERY = true;
@@ -64,6 +86,8 @@ interface UploadingAsset {
 }
 
 export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) => {
+  const { toast } = useToast();
+
   // Only proceed if feature flag is enabled
   if (!ENABLE_ASSET_GALLERY) {
     return (
@@ -99,6 +123,9 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
   const [bundleName, setBundleName] = useState('');
   const [bundles, setBundles] = useState<AssetBundle[]>([]);
   const [bundlesLoading, setBundlesLoading] = useState(false);
+
+  // Add state for the sidebar expanded status
+  const [sidebarExpanded, setSidebarExpanded] = useState(false);
 
   /* ------------------------------------------------------------------ *
    * fetchAssets() is wrapped in useCallback so the identity is stable; *
@@ -314,7 +341,11 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
   // Handle file drop
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (!product?.id) {
-      toast.error('Cannot upload files - product ID is missing');
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Cannot upload files - product ID is missing'
+      });
       return;
     }
     
@@ -391,7 +422,10 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
         return newAssets;
       });
       
-      toast.success(`${asset.name} uploaded successfully`);
+      toast({
+        title: 'Success',
+        description: `${asset.name} uploaded successfully`
+      });
       
       // Remove upload item immediately on success
       setUploading(prev => prev.filter(item => item.id !== upload.id));
@@ -408,7 +442,11 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
       }
       
       updateUploadStatus(upload.id, 'error', errorMessage);
-      toast.error(errorMessage);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: errorMessage
+      });
     }
   };
 
@@ -538,7 +576,11 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     
     // Only allow images to be set as primary
     if (!isImageAsset(asset)) {
-      toast.error('Only image files can be set as primary');
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Only image files can be set as primary'
+      });
       return;
     }
     
@@ -565,7 +607,10 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
       console.log(`[makeAssetPrimary] setAssetPrimary result: ${success ? 'success' : 'failure'}`);
       
       if (success) {
-        toast.success('Primary image updated');
+        toast({
+          title: 'Success',
+          description: 'Primary image updated'
+        });
         
         // If onAssetUpdate is provided, pass the updated assets to the parent component
         if (onAssetUpdate) {
@@ -589,13 +634,21 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
         }
       } else {
         console.error('[makeAssetPrimary] Failed to set asset as primary');
-        toast.error('Failed to set as primary image');
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: 'Failed to set as primary image'
+        });
         // Revert optimistic update
         setAssets(oldAssets);
       }
     } catch (error) {
       console.error('[makeAssetPrimary] Error setting asset as primary:', error);
-      toast.error('An error occurred while setting the primary image');
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'An error occurred while setting the primary image'
+      });
       // Revert optimistic update
       setAssets(oldAssets);
     } finally {
@@ -622,10 +675,17 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
         return newSelected;
       });
       
-      toast.success('Asset deleted');
+      toast({
+        title: 'Success',
+        description: 'Asset deleted'
+      });
     } catch (err) {
       console.error('Error deleting asset:', err);
-      toast.error('Failed to delete asset');
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to delete asset'
+      });
     }
   };
 
@@ -648,10 +708,17 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
         )
       );
       
-      toast.success('Asset archived');
+      toast({
+        title: 'Success',
+        description: 'Asset archived'
+      });
     } catch (err) {
       console.error('Error archiving asset:', err);
-      toast.error('Failed to archive asset');
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to archive asset'
+      });
     }
   };
 
@@ -661,7 +728,11 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     
     // Validate the new name
     if (!newName.trim()) {
-      toast.error('Asset name cannot be empty');
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Asset name cannot be empty'
+      });
       return;
     }
     
@@ -685,17 +756,28 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
       setAssetToRename(null);
       setNewAssetName('');
       
-      toast.success('Asset renamed successfully');
+      toast({
+        title: 'Success',
+        description: 'Asset renamed successfully'
+      });
     } catch (err) {
       console.error('Error renaming asset:', err);
-      toast.error('Failed to rename asset');
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to rename asset'
+      });
     }
   };
 
   // Download an asset
   const downloadAsset = (asset: ProductAsset) => {
     if (!asset.url) {
-      toast.error('Asset URL is missing');
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Asset URL is missing'
+      });
       return;
     }
     
@@ -710,7 +792,11 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
   // Download selected assets
   const downloadSelectedAssets = () => {
     if (selectedAssets.size === 0) {
-      toast.error('No assets selected');
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'No assets selected'
+      });
       return;
     }
     
@@ -718,13 +804,20 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
       .filter(asset => selectedAssets.has(asset.id))
       .forEach(downloadAsset);
     
-    toast.success(`Downloading ${selectedAssets.size} assets`);
+    toast({
+      title: 'Success',
+      description: `Downloading ${selectedAssets.size} assets`
+    });
   };
 
   // Archive selected assets
   const archiveSelectedAssets = async () => {
     if (!product?.id || selectedAssets.size === 0) {
-      toast.error('No assets selected');
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'No assets selected'
+      });
       return;
     }
     
@@ -756,10 +849,17 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
       setSelectedAssets(new Set());
       setAllSelected(false);
       
-      toast.success(`${selectedAssets.size} assets archived`);
+      toast({
+        title: 'Success',
+        description: `${selectedAssets.size} assets archived`
+      });
     } catch (err) {
       console.error('Error archiving assets:', err);
-      toast.error('Failed to archive assets');
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to archive assets'
+      });
     }
   };
 
@@ -859,55 +959,108 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     return <FileIcon className="h-5 w-5 text-slate-500" />;
   };
 
-  // Fetch bundles
-  useEffect(() => {
-    if (!product?.id) return
-    setBundlesLoading(true)
-    productService.getAssetBundles(product.id)
-      .then(setBundles)
-      .catch(() => setBundles([]))
-      .finally(() => setBundlesLoading(false))
-  }, [product?.id])
+  // Function to fetch bundles
+  const fetchBundles = useCallback(async () => {
+    if (!product?.id) return;
+    
+    setBundlesLoading(true);
+    try {
+      const bundlesList = await productService.getAssetBundles(product.id);
+      setBundles(bundlesList);
+    } catch (error) {
+      console.error('Failed to fetch asset bundles:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to load asset bundles'
+      });
+    } finally {
+      setBundlesLoading(false);
+    }
+  }, [product?.id, toast]);
 
-  // Filtering logic
+  // Fetch bundles on mount and when product changes
+  useEffect(() => {
+    if (product?.id) {
+      fetchBundles();
+    }
+  }, [product?.id, fetchBundles]);
+
+  // Define filteredAssets using useMemo
   const filteredAssets = useMemo(() => {
     return assets.filter(asset => {
-      // File type filter
-      if (filters.types.size > 0 && !filters.types.has(getFileType(asset))) return false
-      // Search filter
-      if (filters.search && !asset.name.toLowerCase().includes(filters.search.toLowerCase())) return false
-      // Date range filter
-      if (filters.dateFrom && new Date(asset.uploaded_at) < filters.dateFrom) return false
-      if (filters.dateTo && new Date(asset.uploaded_at) > filters.dateTo) return false
-      return true
-    })
-  }, [assets, filters])
+      // Type filter
+      if (filters.types.size > 0) {
+        const assetType = getFileType(asset).toLowerCase();
+        if (!filters.types.has(assetType)) {
+          return false;
+        }
+      }
 
-  // Select All operates on filteredAssets
+      // Date filter
+      if (filters.dateFrom && new Date(asset.uploaded_at) < filters.dateFrom) {
+        return false;
+      }
+      if (filters.dateTo) {
+        // Add one day to dateTo to include the end date (user expectation for date ranges)
+        const endDate = new Date(filters.dateTo);
+        endDate.setDate(endDate.getDate() + 1);
+        if (new Date(asset.uploaded_at) > endDate) {
+          return false;
+        }
+      }
+
+      // Name search
+      if (filters.search && !asset.name.toLowerCase().includes(filters.search.toLowerCase())) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [assets, filters]);
+
+  // Update the toggleSelectAllFiltered function
   const toggleSelectAllFiltered = () => {
-    if (allSelected) {
-      setSelectedAssets(new Set())
+    if (selectedAssets.size === filteredAssets.length) {
+      // If all filtered assets are selected, deselect all filtered assets
+      setSelectedAssets(prev => {
+        const newSelection = new Set(prev);
+        filteredAssets.forEach(asset => {
+          newSelection.delete(asset.id);
+        });
+        return newSelection;
+      });
     } else {
-      setSelectedAssets(new Set(filteredAssets.map(asset => asset.id)))
+      // Otherwise, select all filtered assets
+      setSelectedAssets(prev => {
+        const newSelection = new Set(prev);
+        filteredAssets.forEach(asset => {
+          newSelection.add(asset.id);
+        });
+        return newSelection;
+      });
     }
-    setAllSelected(!allSelected)
-  }
-
-  // --- Filter Sidebar UI ---
-  const fileTypes = [
-    { key: 'image', label: 'Image' },
-    { key: 'pdf', label: 'PDF' },
-    { key: 'spreadsheet', label: 'Spreadsheet' },
-    { key: 'document', label: 'Document' },
-    { key: 'unknown', label: 'Other' }
-  ]
+  };
 
   // Render loading UI
   if (loading) {
     return (
       <div className="p-6 space-y-6">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold">Assets</h2>
+          <h2 className="text-2xl font-bold">Assets</h2>
+          <Button 
+            variant="outline" 
+            onClick={() => setFilterSidebarOpen(true)}
+            className="flex items-center gap-2"
+          >
+            <Filter className="h-4 w-4" />
+            Filters
+            {(filters.types.size > 0 || filters.search || filters.dateFrom || filters.dateTo) && (
+              <Badge variant="secondary" className="ml-1 h-5 px-1.5">
+                {filters.types.size + (filters.search ? 1 : 0) + (filters.dateFrom || filters.dateTo ? 1 : 0)}
+              </Badge>
+            )}
+          </Button>
         </div>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -947,461 +1100,750 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
   }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Filter Sidebar Drawer */}
-      <Drawer open={filterSidebarOpen} onOpenChange={setFilterSidebarOpen}>
-        <DrawerTrigger asChild>
-          <Button variant="outline" size="sm" className="mb-4" onClick={() => setFilterSidebarOpen(true)}>
-            <Filter className="h-4 w-4 mr-2" /> Filters
-          </Button>
-        </DrawerTrigger>
-        <DrawerContent className="w-72 p-4">
-          <h3 className="font-bold mb-2">Filter Assets</h3>
-          <div className="mb-4">
-            <label className="block text-xs font-medium mb-1">File Types</label>
-            {fileTypes.map(ft => (
-              <div key={ft.key} className="flex items-center mb-1">
-                <Checkbox
-                  checked={filters.types.has(ft.key)}
-                  onCheckedChange={checked => {
-                    setFilters(f => {
-                      const next = new Set(f.types)
-                      checked ? next.add(ft.key) : next.delete(ft.key)
-                      return { ...f, types: next }
-                    })
-                  }}
-                  id={`ftype-${ft.key}`}
-                  className="mr-2"
-                />
-                <label htmlFor={`ftype-${ft.key}`} className="text-sm">{ft.label}</label>
-              </div>
-            ))}
+    <div className="p-6 space-y-8">
+      {/* Main layout with collapsible sidebar and content */}
+      <div className="flex">
+        {/* Collapsible sidebar: narrow when collapsed, wide when expanded */}
+        <aside 
+          className={`border-r bg-background transition-all duration-200 ease-in-out relative h-[calc(100vh-120px)] ${sidebarExpanded ? 'w-72' : 'w-14'}`}
+          onMouseEnter={() => setSidebarExpanded(true)}
+          onMouseLeave={() => setSidebarExpanded(false)}
+          role="complementary"
+          aria-label="Asset filters"
+        >
+          {/* Collapsed state - make it more compact */}
+          <div className={`${sidebarExpanded ? 'hidden' : 'flex'} h-full flex-col items-center pt-4`}>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => setSidebarExpanded(true)} 
+                    className="h-10 w-10 rounded-full"
+                  >
+                    <Filter className="h-5 w-5" />
+                    <span className="sr-only">Expand filters</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  <p>Filters</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
-          <div className="mb-4">
-            <label className="block text-xs font-medium mb-1">Filename</label>
-            <Input
-              value={filters.search}
-              onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
-              placeholder="Search by name"
-              className="w-full"
-            />
-          </div>
-          <div className="mb-4">
-            <label className="block text-xs font-medium mb-1">Uploaded From</label>
-            <Calendar
-              mode="single"
-              selected={filters.dateFrom}
-              onSelect={date => setFilters(f => ({ ...f, dateFrom: date }))}
-              className="mb-2"
-            />
-            <label className="block text-xs font-medium mb-1 mt-2">To</label>
-            <Calendar
-              mode="single"
-              selected={filters.dateTo}
-              onSelect={date => setFilters(f => ({ ...f, dateTo: date }))}
-            />
-          </div>
-          <Button variant="outline" size="sm" onClick={() => setFilters({ types: new Set(), search: '', dateFrom: null, dateTo: null })}>
-            Clear Filters
-          </Button>
-        </DrawerContent>
-      </Drawer>
 
-      {/* Bulk actions toolbar */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        <div className="flex items-center">
-          <Checkbox 
-            id="select-all" 
-            checked={allSelected}
-            onCheckedChange={toggleSelectAllFiltered}
-            className="mr-2"
-          />
-          <label htmlFor="select-all" className="text-sm font-medium">
-            Select All
-          </label>
-          <span className="ml-4 text-sm text-muted-foreground">
-            {selectedAssets.size} selected
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={downloadSelectedAssets}
-            disabled={selectedAssets.size === 0}
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Download
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={archiveSelectedAssets}
-            disabled={selectedAssets.size === 0}
-          >
-            <Archive className="h-4 w-4 mr-2" />
-            Archive
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => setBundleDialogOpen(true)}
-            disabled={selectedAssets.size === 0}
-          >
-            <PlusCircle className="h-4 w-4 mr-2" />
-            Create Bundle
-          </Button>
-        </div>
-      </div>
-      
-      {/* Dropzone area */}
-      <div
-        {...getRootProps()}
-        className={cn(
-          "border-2 border-dashed rounded-lg p-8 text-center transition-colors",
-          isDragActive ? "border-primary bg-primary/5" : "border-muted-foreground/25 hover:border-primary/50"
-        )}
-      >
-        <input {...getInputProps()} />
-        <Upload className="h-10 w-10 text-muted-foreground mx-auto mb-4" />
-        <h3 className="text-lg font-medium mb-1">Drag files here or click to upload</h3>
-        <p className="text-sm text-muted-foreground mb-2">
-          Upload images, PDFs, spreadsheets, and other documents
-        </p>
-        <Button variant="outline" size="sm" type="button">
-          Select Files
-        </Button>
-      </div>
-      
-      {/* Upload progress indicators */}
-      {uploading.length > 0 && (
-        <div className="space-y-3 mt-6">
-          <h3 className="text-sm font-medium">Uploads in progress</h3>
-          
-          {uploading.map(upload => (
-            <div 
-              key={upload.id} 
-              className="flex items-center border rounded-md p-3 gap-3"
-            >
-              <div className="w-12 h-12 bg-muted rounded flex items-center justify-center shrink-0">
-                {getAssetIcon(upload.file.type.split('/')[0])}
+          {/* Expanded state - more compact header */}
+          <div className={`${sidebarExpanded ? 'block' : 'hidden'} h-full overflow-hidden`}>
+            <div className="p-3 border-b flex items-center justify-between">
+              <div className="flex items-center gap-1">
+                <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
+                <h3 className="font-medium text-sm">Filter Assets</h3>
               </div>
-              
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{upload.file.name}</p>
-                
-                {upload.status === 'uploading' && (
-                  <>
-                    <Progress value={upload.progress} className="h-2 mt-1 mb-1" />
-                    <p className="text-xs text-muted-foreground">
-                      Uploading... {upload.progress}%
-                    </p>
-                  </>
+              <div className="flex items-center gap-1">
+                {(filters.types.size > 0 || filters.search || filters.dateFrom || filters.dateTo) && (
+                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                    {filters.types.size + (filters.search ? 1 : 0) + (filters.dateFrom || filters.dateTo ? 1 : 0)}
+                  </Badge>
                 )}
-                
-                {upload.status === 'error' && (
-                  <p className="text-xs text-red-500">
-                    {upload.error || 'Upload failed'}
-                  </p>
-                )}
-                
-                {upload.status === 'success' && (
-                  <p className="text-xs text-green-500">
-                    Upload complete
-                  </p>
-                )}
-              </div>
-              
-              {upload.status === 'error' && (
                 <Button 
                   variant="ghost" 
-                  size="icon"
-                  onClick={() => retryUpload(upload)}
+                  size="icon" 
+                  onClick={() => setSidebarExpanded(false)}
+                  className="h-7 w-7"
                 >
-                  <RefreshCw className="h-4 w-4" />
-                  <span className="sr-only">Retry</span>
+                  <ChevronLeft className="h-4 w-4" />
+                  <span className="sr-only">Collapse filters</span>
                 </Button>
-              )}
-              
-              <Button 
-                variant="ghost" 
-                size="icon"
-                onClick={() => cancelUpload(upload.id)}
-              >
-                <X className="h-4 w-4" />
-                <span className="sr-only">Cancel</span>
-              </Button>
+              </div>
             </div>
-          ))}
-        </div>
-      )}
-      
-      {/* Asset grid: show filteredAssets */}
-      {filteredAssets.length === 0 && !uploading.length ? (
-        <div className="text-center p-8 bg-muted/40 rounded-lg mt-6">
-          <FileIcon className="h-10 w-10 text-muted-foreground mx-auto mb-4" />
-          <h3 className="text-lg font-medium mb-1">No assets match these filters</h3>
-          <p className="text-sm text-muted-foreground">
-            Try adjusting your filters or upload new files.
-          </p>
-        </div>
-      ) : (
-        <div className="mt-8">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {filteredAssets
-              .sort((a, b) => {
-                if (a.is_primary && !b.is_primary) return -1
-                if (!a.is_primary && b.is_primary) return 1
-                return new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime()
-              })
-              .map(asset => (
-                <Card key={asset.id} className={cn(
-                  "overflow-hidden group",
-                  asset.is_primary && isImageAsset(asset) && "ring-2 ring-primary" // Only add primary ring for images
-                )}>
-                  <div className="relative">
-                    {/* Asset preview */}
-                    <div className="aspect-square bg-muted flex items-center justify-center">
-                      {isImageAsset(asset) ? (
-                        <img 
-                          src={asset.url} 
-                          alt={asset.name}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            console.error(`Image load error for ${asset.url}`);
-                            (e.target as HTMLImageElement).src = 'https://placehold.co/600x600?text=Error';
-                          }}
-                        />
-                      ) : (
-                        <div className="text-center p-4 flex flex-col items-center justify-center h-full">
-                          {getAssetIcon(asset.type)}
-                          <p className="text-xs text-muted-foreground mt-2 font-medium">
-                            {getFileType(asset).toUpperCase()}
-                          </p>
-                          <p className="text-sm mt-1 max-w-full truncate px-2">
-                            {asset.name}
-                          </p>
-                        </div>
+
+            {/* More compact scroll area and content */}
+            <ScrollArea className="h-[calc(100vh-160px)]">
+              <div className="px-4 py-4 space-y-4">
+                {/* File Types Filter - more compact */}
+                <Collapsible defaultOpen className="space-y-2">
+                  <CollapsibleTrigger className="flex items-center justify-between w-full text-sm font-medium hover:text-primary transition-colors">
+                    <div className="flex items-center gap-2">
+                      <FileTypeIcon className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">File Types</span>
+                      {filters.types.size > 0 && (
+                        <Badge variant="secondary" className="h-5 px-1.5 text-xs">{filters.types.size}</Badge>
                       )}
                     </div>
-                    
-                    {/* Checkbox overlay */}
-                    <div className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Checkbox 
-                        checked={selectedAssets.has(asset.id)}
-                        onCheckedChange={() => toggleAssetSelection(asset.id)}
-                      />
+                    <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="pt-2 space-y-1.5">
+                    {['Image', 'PDF', 'Spreadsheet', 'Document', 'Other'].map(fileType => (
+                      <div key={fileType} className="flex items-center pl-4 group hover:bg-muted/50 rounded-md p-1">
+                        <Checkbox 
+                          id={`filetype-${fileType.toLowerCase()}`}
+                          checked={filters.types.has(fileType.toLowerCase())}
+                          onCheckedChange={(checked) => {
+                            setFilters(f => {
+                              const newTypes = new Set(f.types);
+                              if (checked) {
+                                newTypes.add(fileType.toLowerCase());
+                              } else {
+                                newTypes.delete(fileType.toLowerCase());
+                              }
+                              return { ...f, types: newTypes };
+                            });
+                          }}
+                          aria-label={`Filter by ${fileType} files`}
+                          className="focus:ring-1 focus:ring-primary/20 h-3.5 w-3.5"
+                        />
+                        <Label 
+                          htmlFor={`filetype-${fileType.toLowerCase()}`}
+                          className="ml-2 text-xs group-hover:text-foreground cursor-pointer"
+                        >
+                          {fileType}
+                        </Label>
+                      </div>
+                    ))}
+                  </CollapsibleContent>
+                </Collapsible>
+
+                <Separator className="my-1" />
+
+                {/* Date Range Filter - more compact */}
+                <Collapsible defaultOpen className="space-y-2">
+                  <CollapsibleTrigger className="flex items-center justify-between w-full text-sm font-medium hover:text-primary transition-colors">
+                    <div className="flex items-center gap-2">
+                      <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">Upload Date</span>
+                      {(filters.dateFrom || filters.dateTo) && (
+                        <Badge variant="secondary" className="h-5 px-1.5 text-xs">Active</Badge>
+                      )}
                     </div>
+                    <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="pt-2 space-y-2">
+                    <div className="pl-4">
+                      <Label className="text-xs mb-1 block">Date Range</Label>
+                      <div className="w-full">
+                        <DatePickerWithRange
+                          className="scale-90 origin-top-left"
+                          date={filters.dateFrom && filters.dateTo ? { from: filters.dateFrom, to: filters.dateTo } : undefined}
+                          setDate={(dateRange) => {
+                            setFilters(f => ({
+                              ...f,
+                              dateFrom: dateRange?.from || null,
+                              dateTo: dateRange?.to || null
+                            }))
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+
+                <Separator className="my-1" />
+
+                {/* Search Filter - more compact */}
+                <Collapsible defaultOpen className="space-y-2">
+                  <CollapsibleTrigger className="flex items-center justify-between w-full text-sm font-medium hover:text-primary transition-colors">
+                    <div className="flex items-center gap-2">
+                      <SearchIcon className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">Search</span>
+                      {filters.search && (
+                        <Badge variant="secondary" className="h-5 px-1.5 text-xs">Active</Badge>
+                      )}
+                    </div>
+                    <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="pt-2">
+                    <div className="pl-4">
+                      <div className="space-y-1">
+                        <Label htmlFor="asset-search" className="text-xs">Name Search</Label>
+                        <div className="relative">
+                          <SearchIcon className="h-3 w-3 absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+                          <Input
+                            id="asset-search"
+                            value={filters.search}
+                            onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
+                            placeholder="Search by name"
+                            className="pl-7 py-1 h-7 text-xs"
+                            aria-label="Search assets by name"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+
+                <Separator className="my-1" />
+
+                {/* Clear Filters Button - more compact */}
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setFilters({ 
+                    types: new Set(), 
+                    search: '', 
+                    dateFrom: null, 
+                    dateTo: null
+                  })}
+                  className="w-full h-7 text-xs"
+                  disabled={!filters.types.size && !filters.search && !filters.dateFrom && !filters.dateTo}
+                >
+                  Clear All Filters
+                </Button>
+              </div>
+            </ScrollArea>
+          </div>
+        </aside>
+
+        {/* Main content area - more compact */}
+        <main className="flex-1 p-4">
+          {/* Header with title - more compact */}
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-bold">Assets</h2>
+            
+            {/* Mobile filter toggle */}
+            <div className="flex items-center gap-2 md:hidden">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setSidebarExpanded(!sidebarExpanded)}
+                className="flex items-center gap-2 h-8"
+              >
+                <Filter className="h-3 w-3" />
+                Filters
+                {(filters.types.size > 0 || filters.search || filters.dateFrom || filters.dateTo) && (
+                  <Badge variant="secondary" className="ml-1 h-4 px-1.5 text-xs">
+                    {filters.types.size + (filters.search ? 1 : 0) + (filters.dateFrom || filters.dateTo ? 1 : 0)}
+                  </Badge>
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {/* Bulk actions toolbar - more compact */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
+            <div className="flex items-center">
+              <Checkbox 
+                id="select-all" 
+                checked={selectedAssets.size > 0 && selectedAssets.size === filteredAssets.length}
+                onCheckedChange={toggleSelectAllFiltered}
+                className="mr-2 h-3.5 w-3.5"
+              />
+              <label htmlFor="select-all" className="text-xs font-medium">
+                Select All
+              </label>
+              <span className="ml-2 text-xs text-muted-foreground">
+                {selectedAssets.size} of {filteredAssets.length} selected
+              </span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={downloadSelectedAssets}
+                disabled={selectedAssets.size === 0}
+                className="h-7 text-xs"
+              >
+                <Download className="h-3 w-3 mr-1" />
+                Download
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={archiveSelectedAssets}
+                disabled={selectedAssets.size === 0}
+                className="h-7 text-xs"
+              >
+                <Archive className="h-3 w-3 mr-1" />
+                Archive
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setBundleDialogOpen(true)}
+                disabled={selectedAssets.size === 0}
+                className="h-7 text-xs"
+              >
+                <PlusCircle className="h-3 w-3 mr-1" />
+                Create Bundle
+              </Button>
+            </div>
+          </div>
+          
+          {/* Dropzone area - more compact */}
+          <div
+            {...getRootProps()}
+            className={cn(
+              "border-2 border-dashed rounded-lg p-6 text-center transition-colors mb-4",
+              isDragActive ? "border-primary bg-primary/5" : "border-muted-foreground/25 hover:border-primary/50"
+            )}
+          >
+            <input {...getInputProps()} />
+            <Upload className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+            <h3 className="text-base font-medium mb-1">Drag files here or click to upload</h3>
+            <p className="text-xs text-muted-foreground mb-2">
+              Upload images, PDFs, spreadsheets, and other documents
+            </p>
+            <Button variant="outline" size="sm" type="button" className="text-xs h-7">
+              Select Files
+            </Button>
+          </div>
+          
+          {/* Upload progress indicators */}
+          {uploading.length > 0 && (
+            <div className="space-y-4 mt-8 mb-10">
+              <h3 className="text-sm font-medium">Uploads in progress</h3>
+              
+              {uploading.map(upload => (
+                <div 
+                  key={upload.id} 
+                  className="flex items-center border rounded-md p-3 gap-3"
+                >
+                  <div className="w-12 h-12 bg-muted rounded flex items-center justify-center shrink-0">
+                    {getAssetIcon(upload.file.type.split('/')[0])}
                   </div>
                   
-                  <CardContent className="p-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          {getAssetIcon(asset.type)}
-                          <h3 className="text-sm font-medium truncate">{asset.name}</h3>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{upload.file.name}</p>
+                    
+                    {upload.status === 'uploading' && (
+                      <>
+                        <Progress value={upload.progress} className="h-2 mt-1 mb-1" />
+                        <p className="text-xs text-muted-foreground">
+                          Uploading... {upload.progress}%
+                        </p>
+                      </>
+                    )}
+                    
+                    {upload.status === 'error' && (
+                      <p className="text-xs text-red-500">
+                        {upload.error || 'Upload failed'}
+                      </p>
+                    )}
+                    
+                    {upload.status === 'success' && (
+                      <p className="text-xs text-green-500">
+                        Upload complete
+                      </p>
+                    )}
+                  </div>
+                  
+                  {upload.status === 'error' && (
+                    <Button 
+                      variant="ghost" 
+                      size="icon"
+                      onClick={() => retryUpload(upload)}
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                      <span className="sr-only">Retry</span>
+                    </Button>
+                  )}
+                  
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    onClick={() => cancelUpload(upload.id)}
+                  >
+                    <X className="h-4 w-4" />
+                    <span className="sr-only">Cancel</span>
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+          
+          {/* Asset grid - smaller cards and spacing */}
+          {filteredAssets.length === 0 && !uploading.length ? (
+            <div className="text-center p-6 bg-muted/40 rounded-lg mt-4">
+              <FileIcon className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+              <h3 className="text-base font-medium mb-1">No assets match these filters</h3>
+              <p className="text-xs text-muted-foreground">
+                Try adjusting your filters or upload new files.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {filteredAssets
+                  .sort((a, b) => {
+                    if (a.is_primary && !b.is_primary) return -1
+                    if (!a.is_primary && b.is_primary) return 1
+                    return new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime()
+                  })
+                  .map(asset => (
+                    <Card key={asset.id} className={cn(
+                      "overflow-hidden group rounded-md shadow-sm min-w-0",
+                      asset.is_primary && isImageAsset(asset) && "ring-1 ring-primary" // Only add primary ring for images
+                    )}>
+                      <div className="relative p-3 pb-2">
+                        {/* Asset preview - more compact */}
+                        <div className="aspect-[4/3] bg-muted flex items-center justify-center rounded-md overflow-hidden">
+                          {isImageAsset(asset) ? (
+                            <img 
+                              src={asset.url} 
+                              alt={asset.name}
+                              className="w-full h-auto max-h-32 object-contain"
+                              onError={(e) => {
+                                console.error(`Image load error for ${asset.url}`);
+                                (e.target as HTMLImageElement).src = 'https://placehold.co/600x600?text=Error';
+                              }}
+                            />
+                          ) : (
+                            <div className="text-center p-3 flex flex-col items-center justify-center h-full">
+                              {getAssetIcon(asset.type)}
+                              <p className="text-xs text-muted-foreground mt-1 font-medium">
+                                {getFileType(asset).toUpperCase()}
+                              </p>
+                              <p className="text-xs mt-1 max-w-full truncate px-2">
+                                {asset.name}
+                              </p>
+                            </div>
+                          )}
                         </div>
                         
-                        <div className="mt-1 text-xs text-muted-foreground space-y-1">
-                          <p>{formatFileSize(asset.size)}</p>
-                          <div className="flex items-center justify-between">
-                            <span>{formatDate(asset.uploaded_at)}</span>
-                            
-                            {/* Add the primary button - only for images */}
-                            {asset.is_primary && isImageAsset(asset) ? (
-                              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
-                                <CheckCircle2 className="h-3 w-3 mr-1" />
-                                Primary
-                              </Badge>
-                            ) : isImageAsset(asset) ? (
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="px-2 py-0 h-6 text-xs hover:bg-primary/10 hover:text-primary"
-                                onClick={() => makeAssetPrimary(asset)}
-                              >
-                                Set as Primary
-                              </Button>
-                            ) : null}
-                          </div>
+                        {/* Checkbox overlay */}
+                        <div className="absolute top-4 left-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Checkbox 
+                            checked={selectedAssets.has(asset.id)}
+                            onCheckedChange={() => toggleAssetSelection(asset.id)}
+                            className="h-3.5 w-3.5"
+                          />
                         </div>
                       </div>
                       
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreHorizontal className="h-4 w-4" />
-                            <span className="sr-only">Asset menu</span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => downloadAsset(asset)}>
-                            <Download className="h-4 w-4 mr-2" />
-                            Download
-                          </DropdownMenuItem>
+                      <CardContent className="p-3 pt-2 space-y-2">
+                        <div className="flex items-start justify-between gap-1">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1">
+                              {getAssetIcon(asset.type)}
+                              <h3 className="text-xs font-medium truncate">{asset.name}</h3>
+                            </div>
+                            
+                            <div className="mt-1 text-xs text-muted-foreground space-y-1">
+                              <p className="text-[10px]">{formatFileSize(asset.size)}</p>
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px]">{formatDate(asset.uploaded_at)}</span>
+                                
+                                {/* Primary image badge or button - more compact */}
+                                {asset.is_primary && isImageAsset(asset) ? (
+                                  <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 h-4 px-1 text-[10px]">
+                                    <CheckCircle2 className="h-2 w-2 mr-0.5" />
+                                    Primary
+                                  </Badge>
+                                ) : isImageAsset(asset) ? (
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="px-1 py-0 h-4 text-[10px] hover:bg-primary/10 hover:text-primary"
+                                    onClick={() => makeAssetPrimary(asset)}
+                                  >
+                                    Set as Primary
+                                  </Button>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
                           
-                          {/* Only show Set as Primary for images that aren't already primary */}
-                          {!asset.is_primary && isImageAsset(asset) && (
-                            <DropdownMenuItem onClick={() => makeAssetPrimary(asset)}>
-                              <CheckCircle2 className="h-4 w-4 mr-2" />
-                              Set as Primary
-                            </DropdownMenuItem>
-                          )}
-                          
-                          {/* Add Rename option */}
-                          <DropdownMenuItem 
-                            onClick={() => {
-                              setAssetToRename(asset);
-                              setNewAssetName(asset.name);
-                            }}
-                          >
-                            <Edit2 className="h-4 w-4 mr-2" />
-                            Rename
-                          </DropdownMenuItem>
-                          
-                          <DropdownMenuItem onClick={() => archiveAsset(asset.id)}>
-                            <Archive className="h-4 w-4 mr-2" />
-                            Archive
-                          </DropdownMenuItem>
-                          
-                          <DropdownMenuItem 
-                            onClick={() => deleteAsset(asset.id)}
-                            className="text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-          </div>
-        </div>
-      )}
-      
-      {/* Rename Asset Dialog */}
-      <Dialog 
-        open={!!assetToRename} 
-        onOpenChange={(open) => {
-          if (!open) {
-            setAssetToRename(null);
-            setNewAssetName('');
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Rename Asset</DialogTitle>
-            <DialogDescription>
-              Change the name of this asset.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="flex items-center gap-4 py-4">
-            {assetToRename && (
-              <div className="flex-shrink-0 w-12 h-12 bg-slate-100 rounded flex items-center justify-center">
-                {getAssetIcon(assetToRename.type)}
+                          {/* Asset dropdown menu - more compact */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-6 w-6">
+                                <MoreHorizontal className="h-3 w-3" />
+                                <span className="sr-only">Asset menu</span>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-36">
+                              <DropdownMenuItem onClick={() => downloadAsset(asset)} className="text-xs">
+                                <Download className="h-3 w-3 mr-2" />
+                                Download
+                              </DropdownMenuItem>
+                              
+                              {/* Only show Set as Primary for images that aren't already primary */}
+                              {!asset.is_primary && isImageAsset(asset) && (
+                                <DropdownMenuItem onClick={() => makeAssetPrimary(asset)} className="text-xs">
+                                  <CheckCircle2 className="h-3 w-3 mr-2" />
+                                  Set as Primary
+                                </DropdownMenuItem>
+                              )}
+                              
+                              {/* Add Rename option */}
+                              <DropdownMenuItem 
+                                onClick={() => {
+                                  setAssetToRename(asset);
+                                  setNewAssetName(asset.name);
+                                }}
+                                className="text-xs"
+                              >
+                                <Edit2 className="h-3 w-3 mr-2" />
+                                Rename
+                              </DropdownMenuItem>
+                              
+                              <DropdownMenuItem onClick={() => archiveAsset(asset.id)} className="text-xs">
+                                <Archive className="h-3 w-3 mr-2" />
+                                Archive
+                              </DropdownMenuItem>
+                              
+                              <DropdownMenuItem 
+                                onClick={() => deleteAsset(asset.id)}
+                                className="text-destructive text-xs"
+                              >
+                                <Trash2 className="h-3 w-3 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
               </div>
-            )}
-            <div className="flex-grow">
-              <Input
-                value={newAssetName}
-                onChange={(e) => setNewAssetName(e.target.value)}
-                placeholder="Enter new name"
-                className="w-full"
-                autoFocus
-              />
             </div>
-          </div>
+          )}
           
-          <DialogFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                setAssetToRename(null);
-                setNewAssetName('');
+          {/* Bundles Section */}
+          <div className="mt-16 border-t pt-10">
+            <h2 className="text-xl font-semibold mb-8">Asset Bundles</h2>
+            
+            {/* Rename Asset Dialog */}
+            <Dialog 
+              open={!!assetToRename} 
+              onOpenChange={(open) => {
+                if (!open) {
+                  setAssetToRename(null);
+                  setNewAssetName('');
+                }
               }}
             >
-              Cancel
-            </Button>
-            <Button 
-              onClick={() => assetToRename && renameAsset(assetToRename, newAssetName)}
-              disabled={!newAssetName.trim() || (assetToRename && newAssetName === assetToRename.name)}
-            >
-              Save Changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Bundle Dialog */}
-      <Dialog open={bundleDialogOpen} onOpenChange={setBundleDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Create Asset Bundle</DialogTitle>
-            <DialogDescription>
-              Group selected assets into a named bundle for download or sharing.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="mb-4">
-            <label className="block text-xs font-medium mb-1">Bundle Name</label>
-            <Input value={bundleName} onChange={e => setBundleName(e.target.value)} placeholder="e.g. Press Kit May 2025" />
-          </div>
-          <div className="mb-4">
-            <label className="block text-xs font-medium mb-1">Assets</label>
-            <ul className="text-xs max-h-32 overflow-y-auto">
-              {assets.filter(a => selectedAssets.has(a.id)).map(a => (
-                <li key={a.id}>{a.name}</li>
-              ))}
-            </ul>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setBundleDialogOpen(false)}>Cancel</Button>
-            <Button
-              onClick={async () => {
-                if (!bundleName.trim() || selectedAssets.size === 0) return
-                await productService.createAssetBundle(product.id, bundleName, Array.from(selectedAssets))
-                setBundleDialogOpen(false)
-                setBundleName('')
-                setSelectedAssets(new Set())
-                // Refresh bundles
-                setBundlesLoading(true)
-                productService.getAssetBundles(product.id).then(setBundles).finally(() => setBundlesLoading(false))
-              }}
-              disabled={!bundleName.trim() || selectedAssets.size === 0}
-            >
-              Create Bundle
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Bundles Section */}
-      <div className="mt-10">
-        <h3 className="font-bold mb-2 flex items-center gap-2">
-          <FolderDown className="h-5 w-5" /> Bundles
-        </h3>
-        {bundlesLoading ? (
-          <div className="text-muted-foreground text-sm">Loading bundles…</div>
-        ) : bundles.length === 0 ? (
-          <div className="text-muted-foreground text-sm">No bundles yet.</div>
-        ) : (
-          <div className="space-y-2">
-            {bundles.map(bundle => (
-              <div key={bundle.id} className="flex items-center justify-between border rounded p-2">
-                <div>
-                  <div className="font-medium">{bundle.name}</div>
-                  <div className="text-xs text-muted-foreground">{bundle.asset_ids.length} assets • {formatDate(bundle.created_at)}</div>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Rename Asset</DialogTitle>
+                  <DialogDescription>
+                    Change the name of this asset.
+                  </DialogDescription>
+                </DialogHeader>
+                
+                <div className="flex items-center gap-4 py-4">
+                  {assetToRename && (
+                    <div className="flex-shrink-0 w-12 h-12 bg-slate-100 rounded flex items-center justify-center">
+                      {getAssetIcon(assetToRename.type)}
+                    </div>
+                  )}
+                  <div className="flex-grow">
+                    <Input
+                      value={newAssetName}
+                      onChange={(e) => setNewAssetName(e.target.value)}
+                      placeholder="Enter new name"
+                      className="w-full"
+                      autoFocus
+                    />
+                  </div>
                 </div>
-                <Button size="icon" variant="ghost" onClick={() => productService.downloadAssetBundle(product.id, bundle.id)}>
-                  <Download className="h-4 w-4" />
+                
+                <DialogFooter>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setAssetToRename(null);
+                      setNewAssetName('');
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={() => assetToRename && renameAsset(assetToRename, newAssetName)}
+                    disabled={!newAssetName.trim() || (assetToRename && newAssetName === assetToRename.name)}
+                  >
+                    Save Changes
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Bundle Dialog */}
+            <Dialog open={bundleDialogOpen} onOpenChange={setBundleDialogOpen}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Create Asset Bundle</DialogTitle>
+                  <DialogDescription>
+                    Create a bundle with the selected assets. This allows you to download multiple assets as a single ZIP file.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="bundle-name">Bundle Name</Label>
+                    <Input 
+                      id="bundle-name"
+                      value={bundleName}
+                      onChange={(e) => setBundleName(e.target.value)}
+                      placeholder="Enter a name for this bundle"
+                    />
+                  </div>
+                  
+                  <div>
+                    <h4 className="text-sm font-medium mb-2">Selected Assets ({selectedAssets.size})</h4>
+                    {selectedAssets.size === 0 ? (
+                      <p className="text-sm text-muted-foreground">No assets selected</p>
+                    ) : (
+                      <div className="max-h-40 overflow-y-auto border rounded-md p-2">
+                        <ul className="space-y-1">
+                          {Array.from(selectedAssets).map(assetId => {
+                            const asset = assets.find(a => a.id === assetId);
+                            return asset ? (
+                              <li key={asset.id} className="text-sm flex items-center">
+                                <span className="w-4 h-4 mr-2 flex-shrink-0">
+                                  {getAssetIcon(asset.type)}
+                                </span>
+                                <span className="truncate">{asset.name}</span>
+                              </li>
+                            ) : null;
+                          })}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setBundleDialogOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={async () => {
+                      if (!bundleName.trim()) {
+                        alert('Please enter a bundle name');
+                        return;
+                      }
+                      
+                      if (selectedAssets.size === 0) {
+                        alert('Please select at least one asset');
+                        return;
+                      }
+                      
+                      try {
+                        const newBundle = await productService.createAssetBundle(
+                          product.id,
+                          bundleName.trim(),
+                          Array.from(selectedAssets)
+                        );
+                        
+                        // Refresh bundles
+                        fetchBundles();
+                        
+                        // Reset and close dialog
+                        setBundleName('');
+                        setBundleDialogOpen(false);
+                        
+                        // Clear selection
+                        setSelectedAssets(new Set());
+                        
+                        toast({
+                          title: 'Success',
+                          description: `"${bundleName}" bundle was created successfully`
+                        });
+                      } catch (error) {
+                        console.error('Failed to create bundle:', error);
+                        toast({
+                          variant: 'destructive',
+                          title: 'Error',
+                          description: 'Failed to create asset bundle'
+                        });
+                      }
+                    }}
+                    disabled={!bundleName.trim() || selectedAssets.size === 0}
+                  >
+                    Create Bundle
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Bundles list */}
+            {bundlesLoading ? (
+              <div className="flex items-center justify-center p-12">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : bundles.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-10">
+                {bundles.map(bundle => {
+                  // Find assets in this bundle
+                  const bundleAssets = assets.filter(asset => 
+                    bundle.asset_ids.includes(asset.id)
+                  );
+                  
+                  return (
+                    <Card key={bundle.id} className="overflow-hidden rounded-lg shadow min-w-0">
+                      <CardHeader className="p-6 pb-3">
+                        <div className="flex justify-between items-start">
+                          <CardTitle className="text-lg font-medium">{bundle.name}</CardTitle>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => productService.downloadAssetBundle(product.id, bundle.id)}
+                            title="Download bundle"
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <CardDescription className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">
+                            {formatDate(bundle.created_at)}
+                          </span>
+                          <span className="text-xs bg-muted px-2 py-0.5 rounded-full">
+                            {bundle.asset_ids.length} assets
+                          </span>
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="p-6 pt-2 space-y-2">
+                        <div className="flex flex-wrap gap-1">
+                          {bundleAssets.slice(0, 5).map(asset => (
+                            <div 
+                              key={asset.id} 
+                              className="w-10 h-10 bg-muted rounded flex items-center justify-center overflow-hidden"
+                              title={asset.name}
+                            >
+                              {isImageAsset(asset) ? (
+                                <img 
+                                  src={asset.url}
+                                  alt={asset.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                getAssetIcon(asset.type)
+                              )}
+                            </div>
+                          ))}
+                          {bundle.asset_ids.length > 5 && (
+                            <div className="w-10 h-10 bg-muted rounded flex items-center justify-center text-xs font-medium">
+                              +{bundle.asset_ids.length - 5}
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center p-12 bg-muted/40 rounded-lg">
+                <Package className="h-10 w-10 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-medium mb-1">No Asset Bundles Yet</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Select multiple assets and click "Create Bundle" to create your first bundle.
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={() => setBundleDialogOpen(true)}
+                  disabled={selectedAssets.size === 0}
+                >
+                  <PlusCircle className="h-4 w-4 mr-2" />
+                  Create Bundle
                 </Button>
               </div>
-            ))}
+            )}
           </div>
-        )}
+        </main>
       </div>
     </div>
   );

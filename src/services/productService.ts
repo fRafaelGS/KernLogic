@@ -1761,4 +1761,11 @@
             const url = `${PRODUCTS_API_URL}/${productId}/asset-bundles/${bundleId}/download/`
             window.open(url, '_blank')
         },
+
+        // Update an asset with new properties
+        updateAsset: async (productId: number, assetId: number, data: Partial<ProductAsset>): Promise<ProductAsset> => {
+            const url = `${PRODUCTS_API_URL}/${productId}/assets/${assetId}/`;
+            const response = await axiosInstance.patch(url, data);
+            return response.data;
+        },
     }; 

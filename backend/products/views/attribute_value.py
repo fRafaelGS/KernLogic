@@ -81,11 +81,33 @@ class AttributeValueViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         return AttributeValueSerializer
     
     def perform_create(self, serializer):
-        """Set organization and created_by from request user"""
+        """Assign implicit product from nested URL and save.
+
+        Front-end uses the nested route `/api/products/<product_pk>/attributes/` and
+        does **not** include a `product` field in the JSON body. DRF will mark
+        that field as required unless we inject it here.  We resolve the
+        product based on the `<product_pk>` path parameter and supply it to
+        `serializer.save()` along with tenant and creator info.
+        """
+
         organization = get_user_organization(self.request.user)
+
+        # Retrieve product pk from nested router kwargs.
+        product_pk = self.kwargs.get('product_pk') or self.kwargs.get('product_id')
+
+        product_obj = None
+        if product_pk is not None:
+            product_obj = get_object_or_404(
+                Product.objects.filter(organization=organization),
+                pk=product_pk,
+            )
+
         serializer.save(
             organization=organization,
-            created_by=self.request.user
+            product=product_obj or serializer.validated_data.get('product'),
+            locale=self.request.query_params.get('locale') or serializer.validated_data.get('locale'),
+            channel=self.request.query_params.get('channel') or serializer.validated_data.get('channel'),
+            created_by=self.request.user,
         )
 
     @action(detail=False, methods=['post'])

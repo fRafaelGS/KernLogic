@@ -5,10 +5,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { PlusIcon, PencilIcon, Save, X, Trash2 } from 'lucide-react'
-import { useAttributes, useUpdateAttribute, useAttributeGroups, useDeleteAttribute } from './api'
+import { useAttributes, useUpdateAttribute, useAttributeGroups, useDeleteAttribute, useCreateAttribute, useAllAttributes } from './api'
 import type { Attribute, AttributeGroup } from './types'
 import { cn } from '@/lib/utils'
 import LocaleChannelSelector from '@/features/attributes/LocaleChannelSelector'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
 
 interface ProductAttributesPanelProps {
   productId: string
@@ -36,6 +37,8 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
   const { data: groupsData = [] } = useAttributeGroups(productId)
   const deleteMutation = useDeleteAttribute(productId, selectedLocale, selectedChannel)
   const deleteGlobalMutation = useDeleteAttribute(productId, null, null)
+  const createMutation = useCreateAttribute(productId, selectedLocale, selectedChannel)
+  const { data: allAttributes = [] } = useAllAttributes()
 
   // local editing state
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -135,6 +138,13 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
 
   const visibleGroupNames = filterGroup ? [filterGroup] : groupNames
 
+  // -------------------------------------------------------------
+  // Add-attribute dialog state
+  // -------------------------------------------------------------
+  const [addDialogGroup, setAddDialogGroup] = useState<string | null>(null)
+  const [newAttrId, setNewAttrId] = useState<number | null>(null)
+  const [newAttrValue, setNewAttrValue] = useState<string>('')
+
   if (isPending) {
     return (
       <div className='space-y-2'>
@@ -197,7 +207,7 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
                   className='h-8 w-8 p-0'
                   onClick={e => {
                     e.stopPropagation()
-                    // TODO: open add attribute dialog
+                    setAddDialogGroup(groupName)
                   }}
                   aria-label={`Add attribute to ${groupName}`}
                 >
@@ -324,6 +334,63 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
           )
         })}
       </Accordion>
+
+      {/* Add Attribute Dialog */}
+      {addDialogGroup && (
+        <Dialog open onOpenChange={open => { if (!open) { setAddDialogGroup(null); setNewAttrId(null); setNewAttrValue('') } }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add attribute to {addDialogGroup}</DialogTitle>
+              <DialogDescription>Select an attribute from the group and enter its value.</DialogDescription>
+            </DialogHeader>
+
+            {/* Attribute select */}
+            <div className='space-y-2'>
+              <label className='block text-sm font-medium'>Attribute</label>
+              <select
+                className='w-full border rounded px-2 py-1'
+                value={newAttrId ?? ''}
+                onChange={e => setNewAttrId(Number(e.target.value))}
+              >
+                <option value='' disabled>Select attribute…</option>
+                {(() => {
+                  const grp = groupsData.find(g => g.name === addDialogGroup)
+                  if (!grp) return null
+                  // Filter attributeIds already present in product
+                  const presentIds = new Set(data?.attributes.map(a => (a as any).attribute ?? a.id))
+                  return grp.items
+                    .filter(item => !presentIds.has(item.attribute))
+                    .map(item => {
+                      const attrMeta = allAttributes.find(a => a.id === String(item.attribute) || Number(a.id) === item.attribute)
+                      const label = (attrMeta?.attribute_label as any) || (attrMeta as any)?.label || attrMeta?.name || (attrMeta as any)?.code || attrMeta?.attribute_code || `Attr ${item.attribute}`
+                      return <option key={item.attribute} value={item.attribute}>{label}</option>
+                    })
+                })()}
+              </select>
+
+              <label className='block text-sm font-medium'>Value</label>
+              <Input value={newAttrValue} onChange={e => setNewAttrValue(e.target.value)} />
+            </div>
+
+            <DialogFooter className='mt-4'>
+              <Button
+                onClick={() => {
+                  if (!newAttrId || newAttrValue.trim() === '') return
+                  createMutation.mutate({ attributeId: newAttrId, value: newAttrValue.trim() }, {
+                    onSuccess: () => setAddDialogGroup(null)
+                  })
+                }}
+                disabled={!newAttrId || newAttrValue.trim() === '' || createMutation.isPending}
+              >
+                Add
+              </Button>
+              <DialogClose asChild>
+                <Button variant='outline'>Cancel</Button>
+              </DialogClose>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   )
 } 

@@ -99,4 +99,38 @@ export function useAttributeGroups(productId: string) {
     },
     enabled: Boolean(productId)
   })
+}
+
+export function useCreateAttribute(productId: string, locale?: string, channel?: string) {
+  const queryClient = useQueryClient()
+  return useMutation<Attribute, Error, { attributeId: number; value: string }>({
+    mutationFn: async ({ attributeId, value }) => {
+      const params: Record<string,string> = {}
+      if (locale) params.locale = locale
+      if (channel) params.channel = channel
+      const payload = {
+        attribute: attributeId,
+        product: Number(productId),
+        value
+      }
+      const { data } = await axiosInstance.post<Attribute>(`/api/products/${productId}/attributes/`, payload, { params })
+      return data
+    },
+    onSuccess: () => {
+      toast.success('Attribute added')
+      queryClient.invalidateQueries()
+    },
+    onError: () => toast.error('Failed to add attribute')
+  })
+}
+
+export function useAllAttributes() {
+  return useQuery<Attribute[], Error>({
+    queryKey: ['allAttributes'],
+    queryFn: async () => {
+      const { data } = await axiosInstance.get('/api/attributes/')
+      return data
+    },
+    staleTime: 10 * 60 * 1000
+  })
 } 

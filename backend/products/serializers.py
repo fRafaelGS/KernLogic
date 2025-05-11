@@ -546,7 +546,11 @@ class AttributeValueSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'organization', 'created_by')
         extra_kwargs = {
             'attribute': {'read_only': False},
-            'product': {'read_only': False}
+            # When using nested product endpoints the product FK is implied by
+            # the URL; therefore it must **not** be required on the payload to
+            # pass serializer validation.  Still keep it writable for the
+            # flat `/api/attributes/` endpoint.
+            'product': {'read_only': False},
         }
 
     def validate(self, data):

@@ -1,0 +1,413 @@
+import { useState } from 'react'
+import { usePricingData, Price } from './usePricingData'
+import { PricingForm } from './PricingForm'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerClose,
+} from '@/components/ui/drawer'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Edit, Trash2, Plus, Filter, Search, Calculator } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
+import { useToast } from '@/components/ui/use-toast'
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog'
+
+interface PriceTabProps {
+  productId: number
+}
+
+export function PriceTab({ productId }: PriceTabProps) {
+  const { toast } = useToast()
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [selectedPrice, setSelectedPrice] = useState<Price | null>(null)
+  const [selectedRows, setSelectedRows] = useState<number[]>([])
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [priceToDelete, setPriceToDelete] = useState<number | null>(null)
+  
+  const {
+    prices,
+    isLoading,
+    error,
+    summary,
+    filters,
+    setFilters,
+    refresh,
+    formatPrice,
+    getPriceTypeLabel,
+    priceTypes,
+    channels,
+    currencies
+  } = usePricingData(productId)
+
+  const handleAddPrice = () => {
+    setSelectedPrice(null)
+    setDrawerOpen(true)
+  }
+
+  const handleEditPrice = (price: Price) => {
+    setSelectedPrice(price)
+    setDrawerOpen(true)
+  }
+
+  const handleDeletePrice = async (id: number) => {
+    try {
+      // Mock implementation - replace with actual API call
+      // await productService.deletePrice(productId, id)
+      console.log('Deleting price:', id)
+      toast({ title: 'Price deleted successfully' })
+      refresh()
+    } catch (error) {
+      toast({ 
+        title: 'Failed to delete price',
+        variant: 'destructive'
+      })
+    }
+    setDeleteDialogOpen(false)
+    setPriceToDelete(null)
+  }
+
+  const confirmDelete = (id: number) => {
+    setPriceToDelete(id)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleBulkDelete = async () => {
+    try {
+      // Mock implementation - replace with actual API call
+      // This would need to be implemented on the backend
+      console.log('Bulk deleting prices:', selectedRows)
+      toast({ title: `${selectedRows.length} prices deleted successfully` })
+      setSelectedRows([])
+      refresh()
+    } catch (error) {
+      toast({
+        title: 'Failed to delete prices',
+        variant: 'destructive'
+      })
+    }
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedRows.length === prices.length) {
+      setSelectedRows([])
+    } else {
+      setSelectedRows(prices.map(p => p.id))
+    }
+  }
+
+  const toggleSelectRow = (id: number) => {
+    if (selectedRows.includes(id)) {
+      setSelectedRows(selectedRows.filter(rowId => rowId !== id))
+    } else {
+      setSelectedRows([...selectedRows, id])
+    }
+  }
+
+  if (error) {
+    return (
+      <Card className="mb-6">
+        <CardContent className="py-10 text-center">
+          <div className="text-destructive mb-2">Failed to load prices</div>
+          <Button onClick={refresh}>Try Again</Button>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Summary Card */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="col-span-1 md:col-span-3">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xl flex items-center">
+              <Calculator className="mr-2 h-5 w-5" />
+              Pricing Summary
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="bg-muted p-4 rounded-md">
+                <div className="text-sm text-muted-foreground">Min Price</div>
+                {isLoading ? (
+                  <Skeleton className="h-8 w-24 mt-1" />
+                ) : (
+                  <div className="text-2xl font-semibold">
+                    {summary.min !== null ? formatPrice(summary.min, 'USD') : 'N/A'}
+                  </div>
+                )}
+              </div>
+              <div className="bg-muted p-4 rounded-md">
+                <div className="text-sm text-muted-foreground">Avg Price</div>
+                {isLoading ? (
+                  <Skeleton className="h-8 w-24 mt-1" />
+                ) : (
+                  <div className="text-2xl font-semibold">
+                    {summary.avg !== null ? formatPrice(summary.avg, 'USD') : 'N/A'}
+                  </div>
+                )}
+              </div>
+              <div className="bg-muted p-4 rounded-md">
+                <div className="text-sm text-muted-foreground">Max Price</div>
+                {isLoading ? (
+                  <Skeleton className="h-8 w-24 mt-1" />
+                ) : (
+                  <div className="text-2xl font-semibold">
+                    {summary.max !== null ? formatPrice(summary.max, 'USD') : 'N/A'}
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6 flex flex-col items-center justify-center h-full">
+            <p className="text-sm text-muted-foreground mb-2">Total Prices</p>
+            <div className="text-3xl font-bold mb-4">{summary.total}</div>
+            <Button onClick={handleAddPrice} className="w-full">
+              <Plus className="mr-2 h-4 w-4" />
+              Add Price
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filter Bar */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search prices..."
+                className="pl-9"
+                value={filters.search}
+                onChange={e => setFilters({ ...filters, search: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4 md:w-2/5">
+              <Select
+                value={filters.currency}
+                onValueChange={value => setFilters({ ...filters, currency: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Currency" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Currencies</SelectItem>
+                  {currencies.map(currency => (
+                    <SelectItem 
+                      key={currency.id || currency.code || `currency-${Math.random()}`} 
+                      value={currency.code || `currency-${Math.random()}`}
+                    >
+                      {currency.code || 'Unknown'} ({currency.name || currency.symbol || 'Unknown'})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={filters.channel}
+                onValueChange={value => setFilters({ ...filters, channel: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Channel" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Channels</SelectItem>
+                  {channels.map(channel => (
+                    <SelectItem 
+                      key={channel.id || `channel-${Math.random()}`} 
+                      value={channel.id.toString() || `channel-${Math.random()}`}
+                    >
+                      {channel.name || 'Unknown'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Data Table */}
+      <Card>
+        <CardContent className="p-0">
+          <div className="flex justify-between items-center p-4 border-b">
+            <div className="flex items-center space-x-2">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              <span className="font-medium">Prices</span>
+              {selectedRows.length > 0 && (
+                <Badge variant="secondary">{selectedRows.length} selected</Badge>
+              )}
+            </div>
+            {selectedRows.length > 0 && (
+              <Button variant="destructive" size="sm" onClick={handleBulkDelete}>
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete Selected
+              </Button>
+            )}
+          </div>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-12">
+                    <Checkbox 
+                      checked={selectedRows.length === prices.length && prices.length > 0} 
+                      onCheckedChange={toggleSelectAll}
+                      aria-label="Select all"
+                    />
+                  </TableHead>
+                  <TableHead>Price Type</TableHead>
+                  <TableHead>Channel</TableHead>
+                  <TableHead>Currency</TableHead>
+                  <TableHead className="text-right">Value</TableHead>
+                  <TableHead className="w-24">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  Array.from({ length: 5 }).map((_, index) => (
+                    <TableRow key={index}>
+                      <TableCell><Skeleton className="h-4 w-4" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                      <TableCell><Skeleton className="h-8 w-16" /></TableCell>
+                    </TableRow>
+                  ))
+                ) : prices.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="h-32 text-center">
+                      <div className="flex flex-col items-center justify-center">
+                        <p className="text-muted-foreground mb-2">No prices found</p>
+                        <Button variant="outline" size="sm" onClick={handleAddPrice}>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add your first price
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  prices.map(price => (
+                    <TableRow key={price.id} className="group">
+                      <TableCell>
+                        <Checkbox 
+                          checked={selectedRows.includes(price.id)} 
+                          onCheckedChange={() => toggleSelectRow(price.id)}
+                          aria-label={`Select price ${price.id}`}
+                        />
+                      </TableCell>
+                      <TableCell>{getPriceTypeLabel(price.priceType)}</TableCell>
+                      <TableCell>
+                        {channels.find(c => c.id.toString() === price.channel)?.name || price.channel}
+                      </TableCell>
+                      <TableCell>{price.currencyCode}</TableCell>
+                      <TableCell className="text-right font-medium">
+                        {price.formattedValue}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleEditPrice(price)}
+                            className="h-8 w-8"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => confirmDelete(price.id)}
+                            className="h-8 w-8 text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Add/Edit Price Drawer */}
+      <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>{selectedPrice ? 'Edit Price' : 'Add New Price'}</DrawerTitle>
+            <DrawerDescription>
+              {selectedPrice 
+                ? 'Update the price details below' 
+                : 'Fill out the form to add a new price for this product'}
+            </DrawerDescription>
+          </DrawerHeader>
+          <div className="px-4 py-2">
+            <PricingForm
+              productId={productId}
+              initialData={selectedPrice || undefined}
+              onSuccess={() => {
+                setDrawerOpen(false)
+                refresh()
+              }}
+            />
+          </div>
+          <DrawerFooter>
+            <DrawerClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DrawerClose>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the selected price.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => priceToDelete && handleDeletePrice(priceToDelete)}
+              className="bg-red-500 hover:bg-red-600"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
+} 

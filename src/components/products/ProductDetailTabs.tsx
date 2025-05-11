@@ -71,6 +71,8 @@ import { ProductAttributesPanel } from '@/components/ProductAttributesPanel'
 import { ENABLE_CUSTOM_ATTRIBUTES } from '@/config/featureFlags'
 import { FieldStatusModal } from './FieldStatusModal'
 import { normalizeCategory } from '@/types/categories'
+import { isImageAsset, getAssetUrl } from '@/utils/isImageAsset'
+import { PriceTab } from './PriceTab'
 
 // ====== ATTRIBUTES INTERFACES (EXACT MATCH TO SPEC) ======
 // (Following exactly the backend shape specified in the requirements)
@@ -314,15 +316,31 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
     let fetchedAssets: ProductAsset[] = [];
     try {
       // Attempt to get assets from API
+      console.log(`Attempting to fetch assets for product ${product.id}`);
       fetchedAssets = await productService.getProductAssets(product.id);
       
       // If we got a valid response with at least one asset
       if (Array.isArray(fetchedAssets) && fetchedAssets.length > 0) {
         console.log('Successfully fetched assets from API:', fetchedAssets.length);
-        setAssets(fetchedAssets);
+        
+        // Normalize asset data structure to ensure consistency
+        const normalizedAssets = fetchedAssets.map(asset => ({
+          ...asset,
+          // Ensure type is set for proper detection
+          type: asset.type || asset.asset_type || (
+            /\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i.test(asset.url?.toLowerCase() || '') ? 'image' : 'unknown'
+          ),
+          // Ensure basic properties exist
+          name: asset.name || `Asset ${asset.id}`,
+          size: asset.size || "0",
+          uploaded_at: asset.uploaded_at || new Date().toISOString(),
+          uploaded_by: asset.uploaded_by || 'system'
+        }));
+        
+        setAssets(normalizedAssets);
         
         // Cache the assets in localStorage
-        localStorage.setItem(`product_assets_${product.id}`, JSON.stringify(fetchedAssets));
+        localStorage.setItem(`product_assets_${product.id}`, JSON.stringify(normalizedAssets));
         setLoadingAssets(false);
         return;
       } else {
@@ -349,37 +367,63 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
       console.error('Error reading cached assets:', err);
     }
     
-    // If we got here, both API and cache failed - use fallback
-    console.warn('No assets from API or cache, using fallback data');
+    // If we got here, both API and cache failed - use fallback from product images
+    console.warn('No assets from API or cache, creating fallback assets from product data');
     
-    // Create mock assets from product images if available
-    if (product.images && product.images.length > 0) {
-      const mockAssets = product.images.map((image, index) => ({
-        id: 1000 + index, // Use number IDs for mock assets
-        name: `Product Image ${index + 1}`,
-        url: image.url,
-        type: 'image',
-        size: "0",
-        is_primary: image.is_primary || index === 0,
-        uploaded_at: new Date().toISOString(),
-        uploaded_by: 'system'
-      }));
-      console.log('Created mock assets from product images:', mockAssets);
-      setAssets(mockAssets);
-    } else if (product.primary_image_large) {
-      // If no images array but has primary image, create a single mock asset
-      const mockAsset = {
+    // Create fallback assets from product images if available
+    if (product.images && Array.isArray(product.images) && product.images.length > 0) {
+      console.log('Creating fallback assets from product.images array:', product.images.length);
+      const mockAssets: ProductAsset[] = product.images
+        .filter(image => !!image.url) // Ensure URL exists
+        .map((image, index) => ({
+          id: 1000 + index, // Use number IDs for mock assets
+          name: `Product Image ${index + 1}`, // Generate a name since ProductImage doesn't have one
+          url: image.url,
+          type: 'image',
+          asset_type: 'image',
+          size: "0",
+          is_primary: !!image.is_primary || index === 0,
+          uploaded_at: new Date().toISOString(),
+          uploaded_by: 'system',
+          tags: []
+        }));
+      
+      if (mockAssets.length > 0) {
+        console.log('Created fallback assets from product images:', mockAssets);
+        setAssets(mockAssets);
+        
+        // Cache these fallback assets
+        localStorage.setItem(`product_assets_${product.id}`, JSON.stringify(mockAssets));
+        setLoadingAssets(false);
+        return;
+      }
+    } 
+    
+    // Last resort: if we have a primary image but no images array
+    if (product.primary_image_large) {
+      console.log('Creating single fallback asset from primary_image_large');
+      const mockAsset: ProductAsset = {
         id: 1000, // Use number ID for mock asset
         name: 'Primary Product Image',
         url: product.primary_image_large,
         type: 'image',
+        asset_type: 'image',
         size: "0",
         is_primary: true,
         uploaded_at: new Date().toISOString(),
-        uploaded_by: 'system'
+        uploaded_by: 'system',
+        tags: []
       };
+      
       console.log('Created single mock asset from primary image:', mockAsset);
       setAssets([mockAsset]);
+      
+      // Cache this fallback asset
+      localStorage.setItem(`product_assets_${product.id}`, JSON.stringify([mockAsset]));
+    } else {
+      // Truly no images available
+      console.log('No image data available for this product');
+      setAssets([]);
     }
     
     setLoadingAssets(false);
@@ -1816,15 +1860,39 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
       return new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime();
     });
     
+    // Helper function to check if asset is an image - using consistent detection logic
+    const isImageAsset = (asset: ProductAsset): boolean => {
+      if (!asset || !asset.url) return false;
+      
+      // Check file extensions
+      const name = (asset.name || '').toLowerCase();
+      const url = (asset.url || '').toLowerCase();
+      const type = (asset.type || asset.asset_type || '').toLowerCase();
+      
+      // Check for image file extensions
+      const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'];
+      const hasImageExt = imageExtensions.some(ext => 
+        name.endsWith(`.${ext}`) || url.endsWith(`.${ext}`)
+      );
+      
+      // Check MIME type
+      const isImageType = type.includes('image') || type === 'image';
+      
+      // Debug logging
+      console.log(`[handleAssetUpdate] Asset check: ${asset.name}, type: ${type}, hasImageExt: ${hasImageExt}, isImageType: ${isImageType}, url: ${asset.url}`);
+      
+      return hasImageExt || isImageType;
+    };
+    
     // Find primary image to update product
-    const primaryAsset = sortedAssets.find(asset => asset.is_primary && (asset.type?.toLowerCase() === 'image' || asset.asset_type?.toLowerCase() === 'image'));
+    const primaryAsset = sortedAssets.find(asset => asset.is_primary && isImageAsset(asset));
     
     if (primaryAsset) {
       console.log('Setting primary image:', primaryAsset.url);
       
       // Create product images array with proper typing for ProductImage
       const updatedImages = sortedAssets
-        .filter(asset => asset.type?.toLowerCase() === 'image' || asset.asset_type?.toLowerCase() === 'image')
+        .filter(asset => isImageAsset(asset))
         .map((asset, index) => ({
           id: typeof asset.id === 'string' ? parseInt(asset.id, 10) : Number(asset.id), // Convert to number
           url: asset.url,
@@ -1856,6 +1924,7 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
               primary_image_large: primaryAsset.url,
               images: updatedImages
             }));
+            console.log('Updated product in localStorage with new primary image');
           }
         } catch (err) {
           console.error('Error updating product in localStorage:', err);
@@ -1884,6 +1953,8 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
         console.log('Calling onProductUpdate with updated product');
         onProductUpdate(updatedProduct);
       }
+    } else {
+      console.warn('No primary image found among assets');
     }
     
     // Always update assets even if no primary image found
@@ -2037,6 +2108,7 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
           <History className="h-4 w-4 mr-2" />
           History
         </TabsTrigger>
+        <TabsTrigger value="price">Price</TabsTrigger>
       </TabsList>
       
       <TabsContent value="overview" className="space-y-6">
@@ -2270,7 +2342,7 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
         </Card>
         
         {/* Media Section - Reuse asset data from the API */}
-        <Card>
+        <Card className="overflow-hidden">
           <CardHeader>
             <CardTitle>Media</CardTitle>
             <CardDescription>
@@ -2285,116 +2357,93 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
                   <Skeleton key={i} className="aspect-square rounded-md" />
                 ))}
               </div>
-            ) : assets.length > 0 ? (
-              // Display first 4 assets (or fewer if less available)
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                {assets
-                  // Better image filtering to ensure we only show actual images
-                  .filter(asset => {
-                    // Check file extensions for images
-                    const name = (asset.name || '').toLowerCase();
-                    const url = (asset.url || '').toLowerCase();
-                    const type = (asset.type || '').toLowerCase();
-                    
-                    // Strict image file extension check
-                    const isImageByExt = /\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i.test(name) || 
-                                        /\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i.test(url);
-                    
-                    // Check MIME type
-                    const isImageByType = type.includes('image/') && !type.includes('pdf');
-                    
-                    return isImageByExt || isImageByType;
-                  })
-                  // Primary images first, then by upload date (newest first)
-                  .sort((a, b) => {
-                    if (a.is_primary && !b.is_primary) return -1;
-                    if (!a.is_primary && b.is_primary) return 1;
-                    return new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime();
-                  })
-                  .slice(0, 4)
-                  .map((asset, index) => (
-                    <div 
-                      key={asset.id} 
-                      className={cn(
-                        "relative aspect-square rounded-md overflow-hidden border border-slate-200",
-                        asset.is_primary && "ring-2 ring-primary" // Highlight primary image
-                      )}
-                    >
-                      <img 
-                        src={asset.url} 
-                        alt={asset.name} 
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          console.warn('Error loading image asset:', asset.url);
-                          (e.target as HTMLImageElement).src = 'https://placehold.co/600x600?text=Image+Error';
-                        }}
-                      />
-                      {asset.is_primary && (
-                        <div className="absolute top-2 left-2">
-                          <Badge variant="outline" className="bg-primary/70 text-white border-none text-xs">Primary</Badge>
-                        </div>
-                      )}
-                    </div>
-                  ))
-                }
-              </div>
             ) : (
-              // Fallback to product.images if they exist, otherwise show empty state
-              product.images && product.images.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  {product.images.map((image, index) => (
-                    <div key={index} className="relative aspect-square rounded-md overflow-hidden border border-slate-200">
-                      <img 
-                        src={image.url} 
-                        alt={`${product.name} - Image ${index + 1}`} 
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  <ImageIcon className="h-10 w-10 mx-auto mb-2 text-muted-foreground/60" />
-                  <p>No images available yet</p>
-                  {hasEditPermission && (
+              <>
+                {/* Always render image grid if we have any assets */}
+                {(() => {
+                  const imageAssets = assets.filter(asset => {
+                    if (!isImageAsset(asset)) {
+                      console.warn(`[MediaCard] Dropping non‐image or bad URL: ${asset?.name}`, asset);
+                      return false;
+                    }
+                    return true;
+                  });
+                  
+                  console.log(`[MediaCard] Found ${imageAssets.length} valid image assets`);
+                  
+                  if (imageAssets.length > 0) {
+                    return (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        {imageAssets
+                          .sort((a, b) => (a.is_primary && !b.is_primary) ? -1 : (!a.is_primary && b.is_primary) ? 1 : 0)
+                          .slice(0, 4)
+                          .map((asset, index) => {
+                            const src = getAssetUrl(asset)!; // non-null because we filtered already
+                            return (
+                              <div 
+                                key={`media-card-image-${asset.id}-${index}`}
+                                className={cn(
+                                  "relative aspect-square rounded-md overflow-hidden border border-slate-200",
+                                  asset.is_primary && "ring-2 ring-primary"
+                                )}
+                              >
+                                <img 
+                                  src={src}
+                                  alt={asset.name || `Product image ${index + 1}`}
+                                  className="w-full h-full object-cover"
+                                  loading="lazy"
+                                  onError={e => {
+                                    console.warn(`Error loading image asset: ${src}`, e);
+                                    (e.target as HTMLImageElement).src = 'https://placehold.co/600x600?text=Image+Error';
+                                  }}
+                                />
+                                {asset.is_primary && (
+                                  <div className="absolute top-2 left-2">
+                                    <Badge variant="outline" className="bg-primary/70 text-white border-none text-xs">
+                                      Primary
+                                    </Badge>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                      </div>
+                    );
+                  } else {
+                    return (
+                      // Empty state when no images are found
+                      <div className="text-center py-8 text-muted-foreground">
+                        <ImageIcon className="h-10 w-10 mx-auto mb-2 text-muted-foreground/60" />
+                        <p>No images available yet</p>
+                        {hasEditPermission && (
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            className="mt-4"
+                            onClick={() => setActiveTab('assets')}
+                          >
+                            <PlusIcon className="h-4 w-4 mr-2" />
+                            Add Images
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  }
+                })()}
+                
+                {/* Show "View All" button if there are images */}
+                {assets.filter(isImageAsset).length > 0 && (
+                  <div className="mt-4 flex justify-end">
                     <Button 
                       variant="outline" 
                       size="sm"
-                      className="mt-4"
                       onClick={() => setActiveTab('assets')}
                     >
-                      <PlusIcon className="h-4 w-4 mr-2" />
-                      Add Images
+                      View All Images
                     </Button>
-                  )}
-                </div>
-              )
-            )}
-            
-            {assets.filter(asset => {
-              // Check file extensions for images using the same filter as above
-              const name = (asset.name || '').toLowerCase();
-              const url = (asset.url || '').toLowerCase();
-              const type = (asset.type || '').toLowerCase();
-              
-              // Strict image file extension check
-              const isImageByExt = /\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i.test(name) || 
-                                  /\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i.test(url);
-              
-              // Check MIME type
-              const isImageByType = type.includes('image/') && !type.includes('pdf');
-              
-              return isImageByExt || isImageByType;
-            }).length > 0 && (
-              <div className="mt-4 flex justify-end">
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => setActiveTab('assets')}
-                >
-                  View All Images
-                </Button>
-              </div>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
@@ -2423,6 +2472,9 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
         <Suspense fallback={<Skeleton className="h-48 w-full" />}>
           <ProductHistoryTab productId={product.id} />
         </Suspense>
+      </TabsContent>
+      <TabsContent value="price">
+        <PriceTab productId={product.id} />
       </TabsContent>
     </Tabs>
   );

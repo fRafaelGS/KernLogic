@@ -492,16 +492,27 @@ class ProductAssetSerializer(serializers.ModelSerializer):
     file_url = serializers.SerializerMethodField()
     uploaded_by_name = serializers.SerializerMethodField()
     file_size_formatted = serializers.SerializerMethodField()
+    tags = serializers.ListField(child=serializers.CharField(), required=False)
     
     class Meta:
         model = ProductAsset
         fields = [
             'id', 'file', 'file_url', 'asset_type', 'name', 'order', 
             'is_primary', 'content_type', 'file_size', 'file_size_formatted',
-            'uploaded_by', 'uploaded_by_name', 'uploaded_at', 'product'
+            'uploaded_by', 'uploaded_by_name', 'uploaded_at', 'product', 'tags'
         ]
         read_only_fields = ['product', 'uploaded_at', 'file_url', 'uploaded_by_name', 'file_size_formatted']
     
+    def to_representation(self, instance):
+        """Override to handle tags"""
+        representation = super().to_representation(instance)
+        
+        # Ensure tags are returned as a list
+        if instance.tags is None:
+            representation['tags'] = []
+            
+        return representation
+        
     def get_file_url(self, obj):
         """Return absolute URL for the file"""
         if obj.file:

@@ -136,6 +136,8 @@
         version?: string;
         order?: number;
         archived?: boolean;
+        tags?: string[];
+        content_type?: string;
     }
 
     export interface ProductActivity {
@@ -358,6 +360,12 @@
         name: string;
         asset_ids: number[];
         created_at: string;
+    }
+
+    // Helper to get content_type from File or ProductAsset
+    function getContentType(fileOrAsset: File | ProductAsset): string {
+        if (fileOrAsset instanceof File) return fileOrAsset.type || ''
+        return fileOrAsset.content_type || fileOrAsset.type || ''
     }
 
     export const productService = {
@@ -926,15 +934,22 @@
                 console.log(`[getProductAssets] Successfully fetched ${data.length} assets`);
                 
                 // Helper function to ensure URL is absolute
-                const ensureAbsoluteUrl = (fileUrl: string) => {
+                const ensureAbsoluteUrl = (fileUrl: string | null | undefined): string => {
                     if (!fileUrl) return '';
+                    
                     // If URL is already absolute, return as is
                     if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
                         return fileUrl;
                     }
-                    // Otherwise prepend backend server URL
-                    // For development, use http://localhost:8000
-                    return `http://localhost:8000${fileUrl}`;
+                    
+                    // If URL starts with a slash, assume it's a relative URL
+                    if (fileUrl.startsWith('/')) {
+                        // For development, use http://localhost:8000
+                        return `http://localhost:8000${fileUrl}`;
+                    }
+                    
+                    // Otherwise, add leading slash and prepend backend server URL
+                    return `http://localhost:8000/${fileUrl}`;
                 };
                 
                 // Transform the data to match our expected format
@@ -949,7 +964,9 @@
                     uploaded_at: asset.uploaded_at || new Date().toISOString(),
                     is_primary: !!asset.is_primary, // Ensure boolean type
                     order: asset.order || 0,
-                    archived: asset.archived || false
+                    archived: asset.archived || false,
+                    tags: asset.tags || [], // Include tags with empty array fallback
+                    content_type: getContentType(asset)
                 }));
                 
                 // Save the fetched assets to localStorage for caching
@@ -1308,6 +1325,8 @@
             const formData = new FormData();
             formData.append('file', file);
             formData.append('name', file.name);  // Add name explicitly to match backend expectation
+            formData.append('file_size', file.size.toString()); // Send file size to backend
+            formData.append('content_type', file.type);
 
             /* ------------------------------------------------------------------ *
              * infer a short asset_type label; keep it ≤20 chars (serializer limit)
@@ -1353,7 +1372,8 @@
                     uploaded_by: data.uploaded_by_name || 'You',
                     uploaded_at: data.uploaded_at || new Date().toISOString(),
                     is_primary: data.is_primary || false,
-                    order: data.order || 0
+                    order: data.order || 0,
+                    content_type: getContentType(file)
                 };
             } catch (error) {
                 console.error('[uploadAsset] Error uploading file:', error);
@@ -1767,5 +1787,74 @@
             const url = `${PRODUCTS_API_URL}/${productId}/assets/${assetId}/`;
             const response = await axiosInstance.patch(url, data);
             return response.data;
+        },
+        
+        // Update tags for an asset
+        updateAssetTags: async (productId: number, assetId: number, tags: string[]): Promise<ProductAsset> => {
+            console.log(`[updateAssetTags] Updating tags for asset ${assetId} of product ${productId}:`, tags);
+            
+            try {
+                // Safety check for valid inputs
+                if (!productId || !assetId) {
+                    console.error('[updateAssetTags] Missing required parameters:', { productId, assetId });
+                    throw new Error('Missing productId or assetId');
+                }
+                
+                // Ensure tags is an array of strings and filter out any invalid values
+                const validTags = Array.isArray(tags) 
+                    ? tags.filter(tag => tag && typeof tag === 'string') 
+                    : [];
+                
+                console.log(`[updateAssetTags] Sending ${validTags.length} valid tags to API:`, validTags);
+                
+                // Create API payload with explicit tags field
+                const asset = await productService.getProductAssets(productId).then(assets => assets.find(a => a.id === assetId))
+                const payload = { tags: validTags, content_type: asset?.content_type || asset?.type || '' }
+                console.log('[updateAssetTags] API payload:', payload);
+                
+                const url = `${PRODUCTS_API_URL}/${productId}/assets/${assetId}/`;
+                console.log(`[updateAssetTags] PATCH request to ${url}`);
+                
+                const response = await axiosInstance.patch(url, payload);
+                
+                if (!response.data) {
+                    console.error('[updateAssetTags] Received empty response from server');
+                    throw new Error('Empty response from server');
+                }
+                
+                // Verify the response contains expected data
+                console.log(`[updateAssetTags] Response data:`, response.data);
+                
+                // Clear cache to force refresh
+                localStorage.removeItem(`product_assets_${productId}`);
+                
+                // Handle various response formats
+                if (response.data.tags) {
+                    console.log(`[updateAssetTags] Updated tags:`, response.data.tags);
+                } else {
+                    console.warn('[updateAssetTags] Response does not contain tags field');
+                }
+                
+                return response.data;
+            } catch (error) {
+                console.error('[updateAssetTags] Error updating tags:', error);
+                throw error;
+            }
+        },
+
+        // Bulk archive assets
+        bulkArchiveAssets: async (productId: number, assets: ProductAsset[]): Promise<void> => {
+            const url = `${PRODUCTS_API_URL}/${productId}/assets/bulk-update/`
+            const asset_ids = assets.map(a => a.id)
+            await axiosInstance.post(url, {
+                asset_ids,
+                is_archived: true,
+            })
+        },
+
+        // Delete an asset bundle
+        deleteAssetBundle: async (productId: number, bundleId: number): Promise<void> => {
+            const url = `${PRODUCTS_API_URL}/${productId}/asset-bundles/${bundleId}/`
+            await axiosInstance.delete(url)
         },
     }; 

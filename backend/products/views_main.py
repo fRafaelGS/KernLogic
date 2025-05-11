@@ -98,6 +98,8 @@ from rest_framework import serializers
 from rest_framework.permissions import IsAuthenticated
 from kernlogic.org_queryset import OrganizationQuerySetMixin
 from kernlogic.utils import get_user_organization
+from rest_framework.exceptions import NotFound
+from rest_framework_simplejwt.authentication import JWTAuthentication
 
 User = get_user_model()
 
@@ -1818,23 +1820,13 @@ class AssetViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     serializer_class = ProductAssetSerializer
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     queryset = ProductAsset.objects.all()
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
     
-    def get_permissions(self):
-        """
-        Return permissions based on the action:
-        - list, retrieve: product.view permission
-        - create, update, destroy: product.change permission
-        """
-        from .permissions import HasProductViewPermission, HasProductChangePermission
-        
-        if self.action in ['list', 'retrieve']:
-            return [HasProductViewPermission()]
-        else:
-            return [HasProductChangePermission()]
-
     def get_queryset(self):
         qs = super().get_queryset()
-        return qs.filter(product_id=self.kwargs.get('product_pk'))
+        # Only return non-archived assets by default
+        return qs.filter(product_id=self.kwargs.get('product_pk'), is_archived=False)
         
     def get_serializer_context(self):
         """
@@ -1845,7 +1837,7 @@ class AssetViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             'product_id': self.kwargs.get('product_pk')
         })
         return context
-
+        
     def perform_create(self, serializer):
         try:
             # Get the product
@@ -1874,11 +1866,16 @@ class AssetViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 else:
                     asset_type = 'document'
             
+            # Handle tags from the request
+            tags = self.request.data.get('tags', [])
+            
             # Save Asset with user
             instance = serializer.save(
-                product=product, 
+                product=product,
                 uploaded_by=self.request.user,
-                asset_type=asset_type
+                organization=product.organization,
+                asset_type=asset_type,
+                tags=tags
             )
             
             # Check if this is the first image asset for this product
@@ -1905,6 +1902,51 @@ class AssetViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             return instance
         except Exception as e:
             raise ValidationError({"error": str(e)})
+            
+    def perform_update(self, serializer):
+        """Update an asset, handling tags if they're provided"""
+        # Get the existing tags if not provided
+        if 'tags' not in serializer.validated_data:
+            instance = serializer.instance
+            serializer.save(tags=instance.tags)
+        else:
+            serializer.save()
+            
+        instance = serializer.instance
+        was_archived = instance.is_archived
+        updated_instance = serializer.save()
+        # If asset is now archived and wasn't before, delete any bundles containing it
+        if not was_archived and updated_instance.is_archived:
+            from .models import AssetBundle
+            bundles = AssetBundle.objects.filter(assets=updated_instance)
+            bundles_deleted = bundles.count()
+            bundles.delete()
+            if bundles_deleted:
+                print(f"Deleted {bundles_deleted} asset bundle(s) because asset {updated_instance.id} was archived.")
+        return updated_instance
+
+    def perform_destroy(self, instance):
+        """Record event and delete asset"""
+        try:
+            product = Product.objects.get(pk=self.kwargs["product_pk"])
+            
+            # Record asset deletion event
+            record(
+                product=product,
+                user=self.request.user,
+                event_type="asset_removed",
+                summary=f"Asset '{instance.name or 'file'}' was removed from product '{product.name}'",
+                payload={
+                    "asset_id": instance.id,
+                    "asset_type": instance.asset_type,
+                    "file_name": instance.name or "unknown"
+                }
+            )
+            
+            # Then proceed with deletion
+            super().perform_destroy(instance)
+        except Exception as e:
+            raise ValidationError({"detail": f"Error deleting asset: {str(e)}"})
 
     # -------- custom actions ---------------------------------
 
@@ -1957,28 +1999,202 @@ class AssetViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    def perform_destroy(self, instance):
-        """Record event and delete asset"""
-        try:
-            product = Product.objects.get(pk=self.kwargs["product_pk"])
-            
-            # Record asset deletion event
-            record(
-                product=product,
-                user=self.request.user,
-                event_type="asset_removed",
-                summary=f"Asset '{instance.name or 'file'}' was removed from product '{product.name}'",
-                payload={
-                    "asset_id": instance.id,
-                    "asset_type": instance.asset_type,
-                    "file_name": instance.name or "unknown"
-                }
-            )
-            
-            # Then proceed with deletion
-            super().perform_destroy(instance)
-        except Exception as e:
-            raise ValidationError({"detail": f"Error deleting asset: {str(e)}"})
+    @action(detail=False, methods=['post'], url_path='bulk-update')
+    def bulk_update(self, request, product_pk=None):
+        asset_ids = request.data.get('asset_ids', [])
+        is_archived = request.data.get('is_archived', None)
+        content_types = request.data.get('content_types', [])
+        if not isinstance(asset_ids, list) or is_archived is None:
+            return Response({'error': 'asset_ids (list) and is_archived (bool) are required.'}, status=400)
+        assets = ProductAsset.objects.filter(product_id=product_pk, id__in=asset_ids)
+        for i, asset in enumerate(assets):
+            asset.is_archived = is_archived
+            if content_types and i < len(content_types):
+                asset.content_type = content_types[i]
+            asset.save(update_fields=['is_archived', 'content_type'])
+        return Response({'updated': len(assets)}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['get'], url_path='download')
+    def download(self, request, product_pk=None, pk=None):
+        from django.http import FileResponse, StreamingHttpResponse, Http404
+        import os, io, zipfile, hashlib
+        from django.utils.http import http_date
+        from django.shortcuts import get_object_or_404
+        from .models import Product, AssetBundle, ProductAsset
+        from rest_framework.response import Response
+        from rest_framework import status
+
+        # Defensive: handle missing user
+        if not getattr(request, 'user', None) or not request.user.is_authenticated:
+            return Response({'detail': 'Authentication required'}, status=401)
+
+        # Try ProductAsset first (single asset download)
+        asset = ProductAsset.objects.filter(pk=pk, product_id=product_pk).first()
+        if asset:
+            product = asset.product
+            if not (request.user.is_staff or product.created_by == request.user):
+                return Response({'detail': 'Forbidden'}, status=403)
+            file_handle = asset.file.open('rb')
+            response = FileResponse(file_handle, content_type=asset.content_type or 'application/octet-stream')
+            response['Content-Disposition'] = f'attachment; filename="{asset.name or asset.file.name}"'
+            return response
+
+        # Try AssetBundle (bundle download)
+        product = get_object_or_404(Product, pk=product_pk)
+        bundle = AssetBundle.objects.filter(pk=pk, product=product).first()
+        if bundle:
+            if not (request.user.is_staff or product.created_by == request.user):
+                return Response({'detail': 'Forbidden'}, status=403)
+            bundle_file = getattr(bundle, 'file', None)
+            if bundle_file and hasattr(bundle_file, 'path') and os.path.exists(bundle_file.path):
+                file_path = bundle_file.path
+                stat = os.stat(file_path)
+                etag = hashlib.md5(f'{stat.st_mtime}-{stat.st_size}'.encode()).hexdigest()
+                last_modified = http_date(stat.st_mtime)
+                if_none_match = request.META.get('HTTP_IF_NONE_MATCH')
+                if_modified_since = request.META.get('HTTP_IF_MODIFIED_SINCE')
+                if if_none_match == etag or (if_modified_since and if_modified_since == last_modified):
+                    return Response(status=304)
+                range_header = request.META.get('HTTP_RANGE')
+                response = FileResponse(open(file_path, 'rb'), as_attachment=True, filename=os.path.basename(file_path))
+                response['Content-Type'] = 'application/zip'
+                response['Content-Disposition'] = f'attachment; filename="{os.path.basename(file_path)}"'
+                response['ETag'] = etag
+                response['Last-Modified'] = last_modified
+                if range_header:
+                    try:
+                        start, end = 0, stat.st_size - 1
+                        units, rng = range_header.split('=')
+                        if units == 'bytes':
+                            start_end = rng.split('-')
+                            if start_end[0]:
+                                start = int(start_end[0])
+                            if len(start_end) > 1 and start_end[1]:
+                                end = int(start_end[1])
+                            length = end - start + 1
+                            response.status_code = 206
+                            response['Content-Range'] = f'bytes {start}-{end}/{stat.st_size}'
+                            response['Content-Length'] = str(length)
+                            response.streaming_content = (open(file_path, 'rb').read()[start:end+1] for _ in range(1))
+                    except Exception:
+                        pass
+                return response
+            # Otherwise, generate ZIP on the fly from assets
+            assets = bundle.assets.all()
+            if not assets:
+                return Response({'detail': 'No assets in bundle'}, status=404)
+            def zip_generator():
+                with io.BytesIO() as mem_zip:
+                    with zipfile.ZipFile(mem_zip, mode='w', compression=zipfile.ZIP_DEFLATED) as zf:
+                        for asset in assets:
+                            file_field = asset.file
+                            if not file_field or not file_field.name:
+                                continue
+                            file_path = file_field.path
+                            if not os.path.exists(file_path):
+                                continue
+                            arcname = asset.name or os.path.basename(file_path)
+                            try:
+                                with open(file_path, 'rb') as f:
+                                    zf.writestr(arcname, f.read())
+                            except Exception:
+                                continue
+                    mem_zip.seek(0)
+                    while True:
+                        chunk = mem_zip.read(8192)
+                        if not chunk:
+                            break
+                        yield chunk
+            zip_filename = f'bundle-{bundle.id}-assets.zip'
+            response = StreamingHttpResponse(zip_generator(), content_type='application/zip')
+            response['Content-Disposition'] = f'attachment; filename="{zip_filename}"'
+            if hasattr(bundle, 'updated_at'):
+                response['Last-Modified'] = http_date(bundle.updated_at.timestamp())
+                response['ETag'] = hashlib.md5(f'{bundle.updated_at.timestamp()}-{bundle.id}'.encode()).hexdigest()
+            return response
+
+        # If neither asset nor bundle found
+        return Response({'detail': 'Not found'}, status=404)
+
+    @action(detail=True, methods=['get'], url_path='download-asset')
+    def download_asset(self, request, product_pk=None, pk=None):
+        from django.http import FileResponse, Http404
+        from .models import ProductAsset
+        from rest_framework.response import Response
+
+        # Defensive: handle missing user
+        if not getattr(request, 'user', None) or not request.user.is_authenticated:
+            return Response({'detail': 'Authentication required'}, status=401)
+
+        # Fetch the asset directly, including archived if needed
+        asset = get_object_or_404(ProductAsset, pk=pk, product_id=product_pk)
+
+        # Optional: check permissions here (e.g., only owner or staff)
+        product = asset.product
+        if not (request.user.is_staff or product.created_by == request.user):
+            return Response({'detail': 'Forbidden'}, status=403)
+
+        file_handle = asset.file.open('rb')
+        response = FileResponse(file_handle, content_type=asset.content_type or 'application/octet-stream')
+        response['Content-Disposition'] = f'attachment; filename="{asset.name or asset.file.name}"'
+        return response
+
+    @action(detail=False, methods=['post'], url_path='bulk-download')
+    def bulk_download(self, request, product_pk=None):
+        from django.http import StreamingHttpResponse
+        import io, zipfile, os
+        from rest_framework.response import Response
+        from rest_framework import status
+        from .models import ProductAsset, Product
+        from django.utils.http import http_date
+        import hashlib
+
+        # Defensive: handle missing user
+        if not getattr(request, 'user', None) or not request.user.is_authenticated:
+            return Response({'detail': 'Authentication required'}, status=401)
+
+        asset_ids = request.data.get('asset_ids')
+        if not isinstance(asset_ids, list) or not all(isinstance(i, int) for i in asset_ids):
+            return Response({'detail': 'asset_ids (list of ints) required'}, status=400)
+
+        # Fetch assets, including archived if needed
+        assets = ProductAsset.objects.filter(product_id=product_pk, pk__in=asset_ids)
+        if not assets.exists():
+            return Response({'detail': 'No assets found'}, status=404)
+
+        # Permission: all assets must belong to the product and user must own the product or be staff
+        product = assets.first().product
+        if not (request.user.is_staff or product.created_by == request.user):
+            return Response({'detail': 'Forbidden'}, status=403)
+
+        def zip_generator():
+            with io.BytesIO() as mem_zip:
+                with zipfile.ZipFile(mem_zip, mode='w', compression=zipfile.ZIP_DEFLATED) as zf:
+                    for asset in assets:
+                        file_field = asset.file
+                        if not file_field or not file_field.name:
+                            continue
+                        file_path = file_field.path
+                        if not os.path.exists(file_path):
+                            continue
+                        arcname = asset.name or os.path.basename(file_path)
+                        try:
+                            with open(file_path, 'rb') as f:
+                                zf.writestr(arcname, f.read())
+                        except Exception:
+                            continue
+                mem_zip.seek(0)
+                while True:
+                    chunk = mem_zip.read(8192)
+                    if not chunk:
+                        break
+                    yield chunk
+        zip_filename = f'assets-bulk-download-{product_pk}.zip'
+        response = StreamingHttpResponse(zip_generator(), content_type='application/zip')
+        response['Content-Disposition'] = f'attachment; filename="{zip_filename}"'
+        response['Last-Modified'] = http_date(product.updated_at.timestamp()) if hasattr(product, 'updated_at') else http_date(product.created_at.timestamp())
+        response['ETag'] = hashlib.md5(f'{product_pk}-{len(asset_ids)}-{zip_filename}'.encode()).hexdigest()
+        return response
 
 class ProductEventViewSet(OrganizationQuerySetMixin, mixins.ListModelMixin, viewsets.GenericViewSet):
     serializer_class = ProductEventSerializer
@@ -2083,17 +2299,44 @@ class AssetBundleViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'])
     def download(self, request, product_pk=None, pk=None):
+        from django.http import StreamingHttpResponse
+        import io, zipfile, os, hashlib
+        from django.utils.http import http_date
         bundle = self.get_object()
-        # Zip bundle.assets files, stream as attachment
-        # --- Implementation stub ---
-        # files = bundle.assets.all()
-        # buffer = io.BytesIO()
-        # with zipfile.ZipFile(buffer, 'w') as zip_file:
-        #     for asset in files:
-        #         # asset.file.path or asset.file.read()
-        #         ...
-        # buffer.seek(0)
-        # response = StreamingHttpResponse(buffer, content_type='application/zip')
-        # response['Content-Disposition'] = f'attachment; filename="{bundle.name}.zip"'
-        # return response
-        return Response({'detail': 'Download not implemented'}, status=status.HTTP_501_NOT_IMPLEMENTED)
+        assets = bundle.assets.all()
+        if not assets:
+            return Response({'detail': 'No assets in bundle'}, status=404)
+        def zip_generator():
+            with io.BytesIO() as mem_zip:
+                with zipfile.ZipFile(mem_zip, mode='w', compression=zipfile.ZIP_DEFLATED) as zf:
+                    for asset in assets:
+                        file_field = asset.file
+                        if not file_field or not file_field.name:
+                            continue
+                        file_path = file_field.path
+                        if not os.path.exists(file_path):
+                            continue
+                        arcname = asset.name or os.path.basename(file_path)
+                        try:
+                            with open(file_path, 'rb') as f:
+                                zf.writestr(arcname, f.read())
+                        except Exception:
+                            continue
+                mem_zip.seek(0)
+                while True:
+                    chunk = mem_zip.read(8192)
+                    if not chunk:
+                        break
+                    yield chunk
+        zip_filename = f'bundle-{bundle.id}-assets.zip'
+        response = StreamingHttpResponse(zip_generator(), content_type='application/zip')
+        response['Content-Disposition'] = f'attachment; filename="{zip_filename}"'
+        if hasattr(bundle, 'updated_at'):
+            response['Last-Modified'] = http_date(bundle.updated_at.timestamp())
+            response['ETag'] = hashlib.md5(f'{bundle.updated_at.timestamp()}-{bundle.id}'.encode()).hexdigest()
+        return response
+
+    def destroy(self, request, *args, **kwargs):
+        bundle = self.get_object()
+        bundle.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

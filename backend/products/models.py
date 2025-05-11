@@ -502,6 +502,11 @@ class ProductAsset(models.Model):
         default=0,
         help_text="Size of the file in bytes"
     )
+    tags = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of tags associated with this asset"
+    )
     uploaded_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,

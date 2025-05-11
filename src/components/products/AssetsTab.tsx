@@ -15,6 +15,7 @@ import { PRODUCTS_API_URL } from '@/services/productService';
 import { useToast } from '@/components/ui/use-toast';
 import { DateRange } from 'react-day-picker';
 import { Toast } from '@/components/ui/toast';
+import { formatFileSize } from '@/utils/formatFileSize'
 
 // UI Components
 import { Button } from '@/components/ui/button';
@@ -63,6 +64,14 @@ import {
 
 // Feature flag for the asset gallery
 const ENABLE_ASSET_GALLERY = true;
+
+// Add import for AssetCard
+import { AssetCard } from '@/components/products/AssetCard'
+import { useDownloadAsset } from '@/hooks/useDownloadAsset'
+import { useBulkDownload } from '@/hooks/useBulkDownload'
+import { DownloadButton } from '@/components/products/DownloadButton'
+import { BulkDownloadToolbar } from '@/components/products/BulkDownloadToolbar'
+import { BundleCard } from './BundleCard'
 
 interface AssetTabProps {
   product: Product;
@@ -115,7 +124,8 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     types: new Set<string>(),
     search: '',
     dateFrom: null as Date | null,
-    dateTo: null as Date | null
+    dateTo: null as Date | null,
+    tags: new Set<string>() // Add tags filter
   });
   const [filterSidebarOpen, setFilterSidebarOpen] = useState(false);
   // Bundle dialog state
@@ -491,13 +501,18 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
   };
 
   // Get file type based on mime type, name and url
-  const getFileType = (asset: ProductAsset): string => {
-    console.log(`Detecting type for asset: ${asset.name}`);
+  const getFileType = (asset?: ProductAsset): string => {
+    if (!asset) {
+      console.warn('Attempted to get file type of undefined or null asset');
+      return 'unknown';
+    }
+    
+    console.log(`Detecting type for asset: ${asset.name || 'unnamed'}`);
     
     // Normalize inputs for more consistent matching
     const url = (asset.url || '').toLowerCase();
     const name = (asset.name || '').toLowerCase();
-    const type = (asset.type || '').toLowerCase();
+    const type = (asset.type || asset.asset_type || '').toLowerCase();
     
     // Check for PDF first (most specific case)
     if (
@@ -506,7 +521,7 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
       type.includes('pdf') ||
       type === 'application/pdf'
     ) {
-      console.log(`Detected PDF: ${asset.name}`);
+      console.log(`Detected PDF: ${asset.name || 'unnamed'}`);
       return 'pdf';
     }
     
@@ -518,10 +533,10 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     ) {
       // Warning for TIFF images which might not display properly in browser
       if (name.endsWith('.tiff') || name.endsWith('.tif') || type.includes('tiff')) {
-        console.warn(`TIFF image detected (${asset.name}), may not display in all browsers`);
+        console.warn(`TIFF image detected (${asset.name || 'unnamed'}), may not display in all browsers`);
       }
       
-      console.log(`Detected image: ${asset.name}`);
+      console.log(`Detected image: ${asset.name || 'unnamed'}`);
       return 'image';
     }
     
@@ -532,7 +547,7 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
       type.includes('excel') ||
       type.includes('csv')
     ) {
-      console.log(`Detected spreadsheet: ${asset.name}`);
+      console.log(`Detected spreadsheet: ${asset.name || 'unnamed'}`);
       return 'spreadsheet';
     }
     
@@ -543,12 +558,12 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
       type.includes('word') ||
       type.includes('text/')
     ) {
-      console.log(`Detected document: ${asset.name}`);
+      console.log(`Detected document: ${asset.name || 'unnamed'}`);
       return 'document';
     }
     
     // Handle unknown file types
-    console.warn(`Unknown file type for asset: ${asset.name} (type: ${type})`);
+    console.warn(`Unknown file type for asset: ${asset.name || 'unnamed'} (type: ${type})`);
     return 'unknown';
   };
 
@@ -560,8 +575,7 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     const assetType = asset.type || '';
     
     // Use getFileType for more robust detection
-    const fileType = getFileType(asset);
-    console.log(`Asset ${asset.name} has file type: ${fileType}`);
+    const fileType = getFileType(asset) || '';
     
     // If either check confirms it's an image, return true
     return assetType.toLowerCase() === 'image' || fileType === 'image';
@@ -691,36 +705,24 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
 
   // Archive an asset
   const archiveAsset = async (assetId: number) => {
-    if (!product?.id) return;
-    
+    if (!product?.id) return
     try {
-      await axiosInstance.patch(
-        `${PRODUCTS_API_URL}/${product.id}/assets/${assetId}/`, 
-        { is_archived: true }
-      );
-      
-      // Update local state
-      setAssets(prev => 
-        prev.map(asset => 
-          asset.id === assetId
-            ? { ...asset, is_archived: true }
-            : asset
-        )
-      );
-      
-      toast({
-        title: 'Success',
-        description: 'Asset archived'
-      });
+      const asset = assets.find(a => a.id === assetId)
+      await productService.updateAsset(product.id, assetId, {
+        is_archived: true,
+        content_type: asset?.content_type || asset?.type || ''
+      })
+      // Refetch assets from backend to ensure UI is up to date
+      const updatedAssets = await productService.getProductAssets(product.id)
+      setAssets(updatedAssets)
+      // Refetch bundles in case any were deleted due to asset archive
+      fetchBundles()
+      toast({ title: 'Success', description: 'Asset archived' })
     } catch (err) {
-      console.error('Error archiving asset:', err);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to archive asset'
-      });
+      console.error('Error archiving asset:', err)
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to archive asset' })
     }
-  };
+  }
 
   // Rename an asset
   const renameAsset = async (asset: ProductAsset, newName: string) => {
@@ -770,98 +772,26 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     }
   };
 
-  // Download an asset
-  const downloadAsset = (asset: ProductAsset) => {
-    if (!asset.url) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Asset URL is missing'
-      });
-      return;
-    }
-    
-    const link = document.createElement('a');
-    link.href = asset.url;
-    link.download = asset.name;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  // Download selected assets
-  const downloadSelectedAssets = () => {
-    if (selectedAssets.size === 0) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'No assets selected'
-      });
-      return;
-    }
-    
-    assets
-      .filter(asset => selectedAssets.has(asset.id))
-      .forEach(downloadAsset);
-    
-    toast({
-      title: 'Success',
-      description: `Downloading ${selectedAssets.size} assets`
-    });
-  };
-
   // Archive selected assets
   const archiveSelectedAssets = async () => {
     if (!product?.id || selectedAssets.size === 0) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'No assets selected'
-      });
-      return;
+      toast({ variant: 'destructive', title: 'Error', description: 'No assets selected' })
+      return
     }
-    
-    const confirmArchive = window.confirm(`Are you sure you want to archive ${selectedAssets.size} assets?`);
-    if (!confirmArchive) return;
-    
+    const confirmArchive = window.confirm(`Are you sure you want to archive ${selectedAssets.size} assets?`)
+    if (!confirmArchive) return
     try {
-      // Create a payload with all asset IDs to archive
-      const payload = {
-        asset_ids: Array.from(selectedAssets),
-        is_archived: true
-      };
-      
-      await axiosInstance.post(
-        `${PRODUCTS_API_URL}/${product.id}/assets/bulk-update/`, 
-        payload
-      );
-      
-      // Update local state
-      setAssets(prev => 
-        prev.map(asset => 
-          selectedAssets.has(asset.id)
-            ? { ...asset, is_archived: true }
-            : asset
-        )
-      );
-      
-      // Clear selection
-      setSelectedAssets(new Set());
-      setAllSelected(false);
-      
-      toast({
-        title: 'Success',
-        description: `${selectedAssets.size} assets archived`
-      });
+      const selected = assets.filter(a => selectedAssets.has(a.id))
+      await productService.bulkArchiveAssets(product.id, selected)
+      setAssets(prev => prev.map(asset => selectedAssets.has(asset.id) ? { ...asset, is_archived: true } : asset))
+      setSelectedAssets(new Set())
+      setAllSelected(false)
+      toast({ title: 'Success', description: `${selectedAssets.size} assets archived` })
     } catch (err) {
-      console.error('Error archiving assets:', err);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to archive assets'
-      });
+      console.error('Error archiving assets:', err)
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to archive assets' })
     }
-  };
+  }
 
   // Toggle selection of an asset
   const toggleAssetSelection = (assetId: number) => {
@@ -884,41 +814,6 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
       setSelectedAssets(new Set(assets.map(asset => asset.id)));
     }
     setAllSelected(!allSelected);
-  };
-
-  // Format file size
-  const formatFileSize = (sizeString: string | number | null | undefined): string => {
-    // If it's already formatted (e.g., "1.2MB"), return as is
-    if (typeof sizeString === 'string' && sizeString.match(/^[\d.]+\s*[KMGT]?B$/i)) {
-      return sizeString;
-    }
-    
-    // Handle null/undefined/empty cases
-    if (sizeString === null || sizeString === undefined || sizeString === '') {
-      return 'Unknown size';
-    }
-    
-    // Convert string to number if it's a string
-    let bytes: number;
-    
-    if (typeof sizeString === 'string') {
-      // Try to parse the string as a number
-      bytes = parseInt(sizeString, 10);
-    } else {
-      bytes = sizeString as number;
-    }
-    
-    // Check if bytes is a valid number
-    if (isNaN(bytes) || bytes === 0) {
-      console.warn(`Invalid file size value: ${sizeString}`);
-      return 'Unknown size';
-    }
-    
-    // Format bytes to appropriate units
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-    return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
   };
 
   // Format date
@@ -986,22 +881,28 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     }
   }, [product?.id, fetchBundles]);
 
-  // Define filteredAssets using useMemo
+  // Update filteredAssets useMemo to include tag filtering
   const filteredAssets = useMemo(() => {
     return assets.filter(asset => {
+      if (!asset) return false
+      // Hide archived assets
+      if (asset.is_archived) return false
       // Type filter
       if (filters.types.size > 0) {
-        const assetType = getFileType(asset).toLowerCase();
+        // Get file type with safe fallback
+        const fileType = getFileType(asset);
+        const assetType = fileType ? fileType.toLowerCase() : 'unknown';
+        
         if (!filters.types.has(assetType)) {
           return false;
         }
       }
 
       // Date filter
-      if (filters.dateFrom && new Date(asset.uploaded_at) < filters.dateFrom) {
+      if (filters.dateFrom && asset.uploaded_at && new Date(asset.uploaded_at) < filters.dateFrom) {
         return false;
       }
-      if (filters.dateTo) {
+      if (filters.dateTo && asset.uploaded_at) {
         // Add one day to dateTo to include the end date (user expectation for date ranges)
         const endDate = new Date(filters.dateTo);
         endDate.setDate(endDate.getDate() + 1);
@@ -1011,13 +912,76 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
       }
 
       // Name search
-      if (filters.search && !asset.name.toLowerCase().includes(filters.search.toLowerCase())) {
-        return false;
+      if (filters.search && asset.name) {
+        const assetName = asset.name || '';
+        if (!assetName.toLowerCase().includes(filters.search.toLowerCase())) {
+          return false;
+        }
+      }
+      
+      // Tags filter
+      if (filters.tags.size > 0) {
+        // Ensure assetTags is an array
+        const assetTags = Array.isArray(asset.tags) ? asset.tags : [];
+        // Asset must have ALL selected tags
+        const hasAllSelectedTags = Array.from(filters.tags).every(
+          tag => assetTags.includes(tag)
+        );
+        if (!hasAllSelectedTags) {
+          return false;
+        }
       }
 
       return true;
     });
-  }, [assets, filters]);
+  }, [assets, filters, getFileType]);
+
+  // Add function to collect all unique tags from assets
+  const uniqueAssetTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    assets.forEach(asset => {
+      if (asset && asset.tags && Array.isArray(asset.tags)) {
+        // Only add valid string tags
+        asset.tags.forEach(tag => {
+          if (tag && typeof tag === 'string') {
+            tagSet.add(tag);
+          }
+        });
+      }
+    });
+    return Array.from(tagSet).sort();
+  }, [assets]);
+
+  // Add function to handle asset updates
+  const handleAssetUpdated = (updatedAsset: ProductAsset) => {
+    console.log(`Updating asset ${updatedAsset.id} with:`, updatedAsset)
+    
+    if (!updatedAsset) {
+      console.error('handleAssetUpdated called with undefined/null asset')
+      return
+    }
+    
+    // Make sure we preserve all properties from the existing asset
+    setAssets(prevAssets => {
+      return prevAssets.map(asset => {
+        if (asset.id === updatedAsset.id) {
+          // Create a merged asset that keeps all existing properties but updates with new ones
+          const mergedAsset = { ...asset, ...updatedAsset }
+          console.log(`Asset updated from:`, asset, `to:`, mergedAsset)
+          return mergedAsset
+        }
+        return asset
+      })
+    })
+    
+    // If parent component has an update callback, pass the updated assets
+    if (onAssetUpdate) {
+      console.log('Notifying parent component of asset update')
+      onAssetUpdate(assets.map(asset => 
+        asset.id === updatedAsset.id ? { ...asset, ...updatedAsset } : asset
+      ))
+    }
+  }
 
   // Update the toggleSelectAllFiltered function
   const toggleSelectAllFiltered = () => {
@@ -1042,62 +1006,8 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     }
   };
 
-  // Render loading UI
-  if (loading) {
-    return (
-      <div className="p-6 space-y-6">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold">Assets</h2>
-          <Button 
-            variant="outline" 
-            onClick={() => setFilterSidebarOpen(true)}
-            className="flex items-center gap-2"
-          >
-            <Filter className="h-4 w-4" />
-            Filters
-            {(filters.types.size > 0 || filters.search || filters.dateFrom || filters.dateTo) && (
-              <Badge variant="secondary" className="ml-1 h-5 px-1.5">
-                {filters.types.size + (filters.search ? 1 : 0) + (filters.dateFrom || filters.dateTo ? 1 : 0)}
-              </Badge>
-            )}
-          </Button>
-        </div>
-        
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <Card key={i} className="overflow-hidden">
-              <div className="aspect-square bg-muted">
-                <Skeleton className="h-full w-full" />
-              </div>
-              <CardFooter className="p-3">
-                <div className="space-y-2 w-full">
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-2/3" />
-                </div>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  // Render error UI
-  if (error) {
-    return (
-      <div className="p-6">
-        <div className="text-center p-6 bg-red-50 rounded-lg border border-red-200">
-          <AlertCircle className="h-10 w-10 text-red-500 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-red-700 mb-2">Failed to load assets</h3>
-          <p className="text-red-600 mb-4">{error}</p>
-          <Button variant="outline" onClick={fetchAssets}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Try Again
-          </Button>
-        </div>
-      </div>
-    );
-  }
+  const { download: downloadAsset, isLoading: isDownloadingAsset } = useDownloadAsset()
+  const { download: downloadBulkAssets, isLoading: isBulkDownloading } = useBulkDownload()
 
   return (
     <div className="p-6 space-y-8">
@@ -1221,9 +1131,9 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
                   <CollapsibleContent className="pt-2 space-y-2">
                     <div className="pl-4">
                       <Label className="text-xs mb-1 block">Date Range</Label>
-                      <div className="w-full">
+                      <div className="inline-block">
                         <DatePickerWithRange
-                          className="scale-90 origin-top-left"
+                          className="w-full max-w-[160px]"
                           date={filters.dateFrom && filters.dateTo ? { from: filters.dateFrom, to: filters.dateTo } : undefined}
                           setDate={(dateRange) => {
                             setFilters(f => ({
@@ -1263,7 +1173,7 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
                             value={filters.search}
                             onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
                             placeholder="Search by name"
-                            className="pl-7 py-1 h-7 text-xs"
+                            className="pl-7 py-1 h-8 text-xs max-w-[180px]"
                             aria-label="Search assets by name"
                           />
                         </div>
@@ -1274,7 +1184,56 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
 
                 <Separator className="my-1" />
 
-                {/* Clear Filters Button - more compact */}
+                {/* Tags Filter */}
+                <Collapsible defaultOpen className="space-y-2">
+                  <CollapsibleTrigger className="flex items-center justify-between w-full text-sm font-medium hover:text-primary transition-colors">
+                    <div className="flex items-center gap-2">
+                      <TagIcon className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">Tags</span>
+                      {filters.tags.size > 0 && (
+                        <Badge variant="secondary" className="h-5 px-1.5 text-xs">{filters.tags.size}</Badge>
+                      )}
+                    </div>
+                    <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="pt-2 space-y-1.5">
+                    {uniqueAssetTags.length > 0 ? (
+                      uniqueAssetTags.map(tag => (
+                        <div key={tag} className="flex items-center pl-4 group hover:bg-muted/50 rounded-md p-1">
+                          <Checkbox 
+                            id={`tag-${tag}`}
+                            checked={filters.tags.has(tag)}
+                            onCheckedChange={(checked) => {
+                              setFilters(f => {
+                                const newTags = new Set(f.tags);
+                                if (checked) {
+                                  newTags.add(tag);
+                                } else {
+                                  newTags.delete(tag);
+                                }
+                                return { ...f, tags: newTags };
+                              });
+                            }}
+                            aria-label={`Filter by ${tag} tag`}
+                            className="focus:ring-1 focus:ring-primary/20 h-3.5 w-3.5"
+                          />
+                          <Label 
+                            htmlFor={`tag-${tag}`}
+                            className="ml-2 text-xs group-hover:text-foreground cursor-pointer"
+                          >
+                            {tag}
+                          </Label>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-xs text-muted-foreground pl-4">No tags found</p>
+                    )}
+                  </CollapsibleContent>
+                </Collapsible>
+
+                <Separator className="my-1" />
+
+                {/* Clear Filters Button - updated to include tags */}
                 <Button 
                   variant="outline" 
                   size="sm" 
@@ -1282,10 +1241,11 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
                     types: new Set(), 
                     search: '', 
                     dateFrom: null, 
-                    dateTo: null
+                    dateTo: null,
+                    tags: new Set()
                   })}
                   className="w-full h-7 text-xs"
-                  disabled={!filters.types.size && !filters.search && !filters.dateFrom && !filters.dateTo}
+                  disabled={!filters.types.size && !filters.search && !filters.dateFrom && !filters.dateTo && !filters.tags.size}
                 >
                   Clear All Filters
                 </Button>
@@ -1336,28 +1296,14 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
               </span>
             </div>
             <div className="flex items-center gap-1">
+              <BulkDownloadToolbar
+                productId={product.id}
+                selectedIds={Array.from(selectedAssets)}
+                onDownload={() => downloadBulkAssets(product.id, Array.from(selectedAssets))}
+                disabled={selectedAssets.size === 0}
+              />
               <Button 
                 variant="outline" 
-                size="sm"
-                onClick={downloadSelectedAssets}
-                disabled={selectedAssets.size === 0}
-                className="h-7 text-xs"
-              >
-                <Download className="h-3 w-3 mr-1" />
-                Download
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={archiveSelectedAssets}
-                disabled={selectedAssets.size === 0}
-                className="h-7 text-xs"
-              >
-                <Archive className="h-3 w-3 mr-1" />
-                Archive
-              </Button>
-              <Button
-                variant="primary"
                 size="sm"
                 onClick={() => setBundleDialogOpen(true)}
                 disabled={selectedAssets.size === 0}
@@ -1470,130 +1416,25 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
                     return new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime()
                   })
                   .map(asset => (
-                    <Card key={asset.id} className={cn(
-                      "overflow-hidden group rounded-md shadow-sm min-w-0",
-                      asset.is_primary && isImageAsset(asset) && "ring-1 ring-primary" // Only add primary ring for images
-                    )}>
-                      <div className="relative p-3 pb-2">
-                        {/* Asset preview - more compact */}
-                        <div className="aspect-[4/3] bg-muted flex items-center justify-center rounded-md overflow-hidden">
-                          {isImageAsset(asset) ? (
-                            <img 
-                              src={asset.url} 
-                              alt={asset.name}
-                              className="w-full h-auto max-h-32 object-contain"
-                              onError={(e) => {
-                                console.error(`Image load error for ${asset.url}`);
-                                (e.target as HTMLImageElement).src = 'https://placehold.co/600x600?text=Error';
-                              }}
-                            />
-                          ) : (
-                            <div className="text-center p-3 flex flex-col items-center justify-center h-full">
-                              {getAssetIcon(asset.type)}
-                              <p className="text-xs text-muted-foreground mt-1 font-medium">
-                                {getFileType(asset).toUpperCase()}
-                              </p>
-                              <p className="text-xs mt-1 max-w-full truncate px-2">
-                                {asset.name}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                        
-                        {/* Checkbox overlay */}
-                        <div className="absolute top-4 left-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Checkbox 
-                            checked={selectedAssets.has(asset.id)}
-                            onCheckedChange={() => toggleAssetSelection(asset.id)}
-                            className="h-3.5 w-3.5"
-                          />
-                        </div>
-                      </div>
-                      
-                      <CardContent className="p-3 pt-2 space-y-2">
-                        <div className="flex items-start justify-between gap-1">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1">
-                              {getAssetIcon(asset.type)}
-                              <h3 className="text-xs font-medium truncate">{asset.name}</h3>
-                            </div>
-                            
-                            <div className="mt-1 text-xs text-muted-foreground space-y-1">
-                              <p className="text-[10px]">{formatFileSize(asset.size)}</p>
-                              <div className="flex items-center justify-between">
-                                <span className="text-[10px]">{formatDate(asset.uploaded_at)}</span>
-                                
-                                {/* Primary image badge or button - more compact */}
-                                {asset.is_primary && isImageAsset(asset) ? (
-                                  <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 h-4 px-1 text-[10px]">
-                                    <CheckCircle2 className="h-2 w-2 mr-0.5" />
-                                    Primary
-                                  </Badge>
-                                ) : isImageAsset(asset) ? (
-                                  <Button 
-                                    variant="ghost" 
-                                    size="sm" 
-                                    className="px-1 py-0 h-4 text-[10px] hover:bg-primary/10 hover:text-primary"
-                                    onClick={() => makeAssetPrimary(asset)}
-                                  >
-                                    Set as Primary
-                                  </Button>
-                                ) : null}
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {/* Asset dropdown menu - more compact */}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-6 w-6">
-                                <MoreHorizontal className="h-3 w-3" />
-                                <span className="sr-only">Asset menu</span>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-36">
-                              <DropdownMenuItem onClick={() => downloadAsset(asset)} className="text-xs">
-                                <Download className="h-3 w-3 mr-2" />
-                                Download
-                              </DropdownMenuItem>
-                              
-                              {/* Only show Set as Primary for images that aren't already primary */}
-                              {!asset.is_primary && isImageAsset(asset) && (
-                                <DropdownMenuItem onClick={() => makeAssetPrimary(asset)} className="text-xs">
-                                  <CheckCircle2 className="h-3 w-3 mr-2" />
-                                  Set as Primary
-                                </DropdownMenuItem>
-                              )}
-                              
-                              {/* Add Rename option */}
-                              <DropdownMenuItem 
-                                onClick={() => {
-                                  setAssetToRename(asset);
-                                  setNewAssetName(asset.name);
-                                }}
-                                className="text-xs"
-                              >
-                                <Edit2 className="h-3 w-3 mr-2" />
-                                Rename
-                              </DropdownMenuItem>
-                              
-                              <DropdownMenuItem onClick={() => archiveAsset(asset.id)} className="text-xs">
-                                <Archive className="h-3 w-3 mr-2" />
-                                Archive
-                              </DropdownMenuItem>
-                              
-                              <DropdownMenuItem 
-                                onClick={() => deleteAsset(asset.id)}
-                                className="text-destructive text-xs"
-                              >
-                                <Trash2 className="h-3 w-3 mr-2" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </CardContent>
-                    </Card>
+                    <AssetCard
+                      key={asset.id}
+                      asset={asset}
+                      productId={product.id!}
+                      onAssetUpdated={handleAssetUpdated}
+                      onMakePrimary={makeAssetPrimary}
+                      onDelete={deleteAsset}
+                      onArchive={(assetId) => archiveAsset(assetId)}
+                      onDownload={asset => downloadAsset(product.id, asset.id)}
+                      isImageAsset={isImageAsset}
+                      getAssetIcon={getAssetIcon}
+                      getFileType={getFileType}
+                      onRename={asset => {
+                        setAssetToRename(asset)
+                        setNewAssetName(asset.name || '')
+                      }}
+                      isSelected={selectedAssets.has(asset.id)}
+                      onSelect={toggleAssetSelection}
+                    />
                   ))}
               </div>
             </div>
@@ -1764,66 +1605,33 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
               <div className="flex items-center justify-center p-12">
                 <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
               </div>
-            ) : bundles.length > 0 ? (
+            ) : Array.isArray(bundles) && bundles.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-10">
-                {bundles.map(bundle => {
-                  // Find assets in this bundle
-                  const bundleAssets = assets.filter(asset => 
-                    bundle.asset_ids.includes(asset.id)
-                  );
-                  
-                  return (
-                    <Card key={bundle.id} className="overflow-hidden rounded-lg shadow min-w-0">
-                      <CardHeader className="p-6 pb-3">
-                        <div className="flex justify-between items-start">
-                          <CardTitle className="text-lg font-medium">{bundle.name}</CardTitle>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => productService.downloadAssetBundle(product.id, bundle.id)}
-                            title="Download bundle"
-                          >
-                            <Download className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <CardDescription className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">
-                            {formatDate(bundle.created_at)}
-                          </span>
-                          <span className="text-xs bg-muted px-2 py-0.5 rounded-full">
-                            {bundle.asset_ids.length} assets
-                          </span>
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="p-6 pt-2 space-y-2">
-                        <div className="flex flex-wrap gap-1">
-                          {bundleAssets.slice(0, 5).map(asset => (
-                            <div 
-                              key={asset.id} 
-                              className="w-10 h-10 bg-muted rounded flex items-center justify-center overflow-hidden"
-                              title={asset.name}
-                            >
-                              {isImageAsset(asset) ? (
-                                <img 
-                                  src={asset.url}
-                                  alt={asset.name}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                getAssetIcon(asset.type)
-                              )}
-                            </div>
-                          ))}
-                          {bundle.asset_ids.length > 5 && (
-                            <div className="w-10 h-10 bg-muted rounded flex items-center justify-center text-xs font-medium">
-                              +{bundle.asset_ids.length - 5}
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+                {bundles.map(bundle => (
+                  <BundleCard
+                    key={bundle.id}
+                    bundle={bundle}
+                    productId={product.id}
+                    assets={assets}
+                    onDelete={bundleId => {
+                      if (window.confirm('Are you sure you want to delete this bundle?')) {
+                        productService.deleteAssetBundle(product.id, bundleId)
+                          .then(() => fetchBundles())
+                          .catch(err => {
+                            console.error('Failed to delete bundle:', err)
+                            toast({
+                              variant: 'destructive',
+                              title: 'Error',
+                              description: 'Failed to delete asset bundle'
+                            })
+                          })
+                      }
+                    }}
+                    isImageAsset={isImageAsset}
+                    getAssetIcon={getAssetIcon}
+                    formatDate={formatDate}
+                  />
+                ))}
               </div>
             ) : (
               <div className="text-center p-12 bg-muted/40 rounded-lg">

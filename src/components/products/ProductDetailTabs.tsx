@@ -1951,7 +1951,7 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
                               Optional
                             </h4>
                             <div className="flex flex-wrap gap-2">
-                              {categorizedMissingFields.optional.map((item, index) => (
+                              {categorizedMissingFields.optional.slice(0, 10).map((item, index) => (
                                 <Badge 
                                   key={`optional-${index}`} 
                                   variant="outline" 
@@ -1961,6 +1961,19 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
                                 </Badge>
                               ))}
                             </div>
+                            {categorizedMissingFields.optional.length > 10 && (
+                              <div className="mt-2 text-xs text-slate-500">
+                                +{categorizedMissingFields.optional.length - 10} more optional attributes. 
+                                <Button 
+                                  variant="link" 
+                                  size="sm" 
+                                  className="h-auto p-0 text-xs" 
+                                  onClick={() => setIsFieldStatusModalOpen(true)}
+                                >
+                                  View all
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>

@@ -63,6 +63,19 @@ import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { formatPrice, getProductPriceDisplay } from "@/utils/formatPrice";
 import { PriceSummaryBadge } from "@/components/products/PriceSummaryBadge";
 
+// Helper function to safely format price amounts
+const formatAmount = (amount: number | string | null | undefined): string => {
+  if (amount === null || amount === undefined) return '0.00';
+  
+  try {
+    // Convert to string, then parse to float, then format with 2 decimal places
+    return parseFloat(String(amount)).toFixed(2);
+  } catch (error) {
+    console.error('Error formatting amount:', amount, error);
+    return '0.00';
+  }
+};
+
 /* ---------------------------------------------------------- */
 /*  Helper / shared types                                     */
 /* ---------------------------------------------------------- */
@@ -795,17 +808,29 @@ export function useProductColumns({
         ) : (
           <div
             className="cursor-pointer"
-            onClick={() => {
-              if (!hasPrices) {
+            onClick={(e) => {
+              e.stopPropagation();
+              // Handle click to edit price
+              if (hasPrices) {
+                // Redirect to pricing modal
+                navigate(`/app/products/${row.original.id}/edit?tab=pricing`);
+              } else {
                 // Only allow direct editing of the legacy price field if no prices array
-                handleCellEdit(rowIndex, columnId, row.original.price?.toString() || "0");
+                handleCellEdit(rowIndex, columnId, ((row.original as any).price || 0).toString());
               }
             }}
           >
             {hasPrices ? (
-              <PriceSummaryBadge product={row.original} />
+              <div className="px-1 py-1">
+                {row.original.prices && row.original.prices.length > 0 
+                  ? `${row.original.prices[0].currency} ${formatAmount(row.original.prices[0].amount)}`
+                  : `$ ${formatAmount((row.original as any).price)}`}
+                {row.original.prices && row.original.prices.length > 1 && (
+                  <span className="ml-1 text-xs text-muted-foreground">+{row.original.prices.length - 1}</span>
+                )}
+              </div>
             ) : (
-              <div className="px-1 py-1">{formatPrice(row.original.price || 0)}</div>
+              <div className="px-1 py-1">${formatAmount((row.original as any).price)}</div>
             )}
           </div>
         );

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { Product, productService, ProductAsset, ProductPrice } from '@/services/productService';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -68,6 +68,29 @@ export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showPricingModal, setShowPricingModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [prices, setPrices] = useState<ProductPrice[]>([]);
+  const [isPricesLoading, setIsPricesLoading] = useState(false);
+  
+  // Fetch prices directly from API
+  useEffect(() => {
+    if (!product?.id) return;
+    
+    setIsPricesLoading(true);
+    productService.getPrices(product.id)
+      .then(fetchedPrices => {
+        setPrices(fetchedPrices);
+      })
+      .catch(error => {
+        console.error('Error fetching prices:', error);
+        // Fallback to product.prices if available
+        if (product.prices && product.prices.length > 0) {
+          setPrices(product.prices);
+        }
+      })
+      .finally(() => {
+        setIsPricesLoading(false);
+      });
+  }, [product?.id]);
   
   const createdDate = formatDate(product.created_at);
   const modifiedDate = formatDate(product.updated_at);
@@ -190,44 +213,44 @@ export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
 
   // Get additional prices (excluding the base price)
   const additionalPrices = useMemo(() => {
-    // First check if we have all_prices prefetched array
-    if (product.all_prices && Array.isArray(product.all_prices) && product.all_prices.length > 0) {
-      // Filter out the base price and get up to 3 other prices
-      return product.all_prices
-        .filter(price => price.price_type !== 'base' && price.price_type_display !== 'Base Price')
-        .slice(0, 3);
-    }
+    // Use directly fetched prices
+    if (!prices || prices.length === 0) return [];
     
-    // Fallback to the prices array if all_prices is not available
-    if (!product.prices || product.prices.length === 0) return [];
-    
-    // Filter out the base price and get up to 3 other prices
-    return product.prices
-      .filter(price => price.price_type !== 'base' && price.price_type_display !== 'Base Price')
-      .slice(0, 3);
-  }, [product.all_prices, product.prices]);
+    // Show all prices up to 5
+    return prices.slice(0, 5);
+  }, [prices]);
   
   const hasMorePrices = useMemo(() => {
-    // First check if we have all_prices prefetched array
-    if (product.all_prices && Array.isArray(product.all_prices)) {
-      // Count how many non-base prices exist
-      const nonBasePricesCount = product.all_prices.filter(
-        price => price.price_type !== 'base' && price.price_type_display !== 'Base Price'
-      ).length;
-      
-      return nonBasePricesCount > 3;
+    if (!prices) return false;
+    
+    return prices.length > 5;
+  }, [prices]);
+
+  // Function to refresh prices
+  const refreshPrices = useCallback(() => {
+    if (!product?.id) return;
+    
+    setIsPricesLoading(true);
+    productService.getPrices(product.id)
+      .then(fetchedPrices => {
+        setPrices(fetchedPrices);
+      })
+      .catch(error => {
+        console.error('Error refreshing prices:', error);
+      })
+      .finally(() => {
+        setIsPricesLoading(false);
+      });
+  }, [product?.id]);
+
+  // Handle pricing modal close
+  const handlePricingModalChange = (open: boolean) => {
+    setShowPricingModal(open);
+    if (!open) {
+      // Refresh prices when modal is closed
+      refreshPrices();
     }
-    
-    // Fallback to prices array
-    if (!product.prices) return false;
-    
-    // Count how many non-base prices exist
-    const nonBasePricesCount = product.prices.filter(
-      price => price.price_type !== 'base' && price.price_type_display !== 'Base Price'
-    ).length;
-    
-    return nonBasePricesCount > 3;
-  }, [product.all_prices, product.prices]);
+  };
 
   return (
     <Card className="overflow-hidden">
@@ -483,16 +506,20 @@ export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
             
             {/* Display primary price */}
             <div className="bg-yellow-50 rounded p-2 mb-2">
-              {product.prices && product.prices.length > 0 ? (
+              {isPricesLoading ? (
+                <div className="text-md text-slate-500 animate-pulse">
+                  Loading prices...
+                </div>
+              ) : prices && prices.length > 0 ? (
                 <>
                   <div className="text-2xl font-bold">
                     {formatCurrency(
-                      product.prices[0].amount, 
-                      product.prices[0].currency || 'USD'
+                      prices[0].amount, 
+                      prices[0].currency || 'USD'
                     )}
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    {product.prices[0].price_type_display || product.prices[0].price_type}
+                    {prices[0].price_type_display || prices[0].price_type}
                   </div>
                 </>
               ) : (
@@ -503,9 +530,9 @@ export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
             </div>
             
             {/* Additional prices (up to 3) */}
-            {product.prices && product.prices.length > 1 && (
+            {prices && prices.length > 1 && (
               <div className="space-y-2 mt-2">
-                {product.prices.slice(1, 4).map((price, index) => (
+                {prices.slice(1, 4).map((price, index) => (
                   <div key={`${price.price_type}-${index}`} className="bg-slate-50 rounded p-2 flex justify-between">
                     <div className="text-sm font-medium">
                       {price.price_type_display || price.price_type}
@@ -517,7 +544,7 @@ export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
                 ))}
                 
                 {/* View all prices button */}
-                {product.prices && product.prices.length > 4 && (
+                {prices && prices.length > 4 && (
                   <Button 
                     variant="outline" 
                     size="sm" 
@@ -603,9 +630,9 @@ export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
       {/* Pricing Modal */}
       <PricingModal 
         open={showPricingModal} 
-        onOpenChange={setShowPricingModal}
+        onOpenChange={handlePricingModalChange}
         productId={product.id || 0}
-        onPricesUpdated={() => window.location.reload()}
+        onPricesUpdated={refreshPrices}
       />
 
       {/* Category Modal */}

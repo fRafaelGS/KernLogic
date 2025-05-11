@@ -1,15 +1,15 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { 
   FileIcon, FileSpreadsheet, FileText, ImageIcon, 
   Upload, X, CheckCircle2, AlertCircle, RefreshCw, 
   ChevronDown, ChevronRight, MoreHorizontal, Download, 
-  Archive, Trash2, Edit2
+  Archive, Trash2, Edit2, Filter, PlusCircle, FolderDown
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { Product, ProductAsset, productService } from '@/services/productService';
+import { Product, ProductAsset, productService, AssetBundle } from '@/services/productService';
 import axiosInstance from '@/lib/axiosInstance';
 import { PRODUCTS_API_URL } from '@/services/productService';
 
@@ -36,6 +36,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Calendar } from '@/components/ui/calendar';
+import { Drawer, DrawerContent, DrawerTrigger } from '@/components/ui/drawer';
 
 // Feature flag for the asset gallery
 const ENABLE_ASSET_GALLERY = true;
@@ -83,6 +85,20 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
   // State for renaming assets
   const [assetToRename, setAssetToRename] = useState<ProductAsset | null>(null);
   const [newAssetName, setNewAssetName] = useState<string>('');
+
+  // Filter state
+  const [filters, setFilters] = useState({
+    types: new Set<string>(),
+    search: '',
+    dateFrom: null as Date | null,
+    dateTo: null as Date | null
+  });
+  const [filterSidebarOpen, setFilterSidebarOpen] = useState(false);
+  // Bundle dialog state
+  const [bundleDialogOpen, setBundleDialogOpen] = useState(false);
+  const [bundleName, setBundleName] = useState('');
+  const [bundles, setBundles] = useState<AssetBundle[]>([]);
+  const [bundlesLoading, setBundlesLoading] = useState(false);
 
   /* ------------------------------------------------------------------ *
    * fetchAssets() is wrapped in useCallback so the identity is stable; *
@@ -843,6 +859,49 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     return <FileIcon className="h-5 w-5 text-slate-500" />;
   };
 
+  // Fetch bundles
+  useEffect(() => {
+    if (!product?.id) return
+    setBundlesLoading(true)
+    productService.getAssetBundles(product.id)
+      .then(setBundles)
+      .catch(() => setBundles([]))
+      .finally(() => setBundlesLoading(false))
+  }, [product?.id])
+
+  // Filtering logic
+  const filteredAssets = useMemo(() => {
+    return assets.filter(asset => {
+      // File type filter
+      if (filters.types.size > 0 && !filters.types.has(getFileType(asset))) return false
+      // Search filter
+      if (filters.search && !asset.name.toLowerCase().includes(filters.search.toLowerCase())) return false
+      // Date range filter
+      if (filters.dateFrom && new Date(asset.uploaded_at) < filters.dateFrom) return false
+      if (filters.dateTo && new Date(asset.uploaded_at) > filters.dateTo) return false
+      return true
+    })
+  }, [assets, filters])
+
+  // Select All operates on filteredAssets
+  const toggleSelectAllFiltered = () => {
+    if (allSelected) {
+      setSelectedAssets(new Set())
+    } else {
+      setSelectedAssets(new Set(filteredAssets.map(asset => asset.id)))
+    }
+    setAllSelected(!allSelected)
+  }
+
+  // --- Filter Sidebar UI ---
+  const fileTypes = [
+    { key: 'image', label: 'Image' },
+    { key: 'pdf', label: 'PDF' },
+    { key: 'spreadsheet', label: 'Spreadsheet' },
+    { key: 'document', label: 'Document' },
+    { key: 'unknown', label: 'Other' }
+  ]
+
   // Render loading UI
   if (loading) {
     return (
@@ -889,24 +948,81 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
 
   return (
     <div className="p-6 space-y-6">
+      {/* Filter Sidebar Drawer */}
+      <Drawer open={filterSidebarOpen} onOpenChange={setFilterSidebarOpen}>
+        <DrawerTrigger asChild>
+          <Button variant="outline" size="sm" className="mb-4" onClick={() => setFilterSidebarOpen(true)}>
+            <Filter className="h-4 w-4 mr-2" /> Filters
+          </Button>
+        </DrawerTrigger>
+        <DrawerContent className="w-72 p-4">
+          <h3 className="font-bold mb-2">Filter Assets</h3>
+          <div className="mb-4">
+            <label className="block text-xs font-medium mb-1">File Types</label>
+            {fileTypes.map(ft => (
+              <div key={ft.key} className="flex items-center mb-1">
+                <Checkbox
+                  checked={filters.types.has(ft.key)}
+                  onCheckedChange={checked => {
+                    setFilters(f => {
+                      const next = new Set(f.types)
+                      checked ? next.add(ft.key) : next.delete(ft.key)
+                      return { ...f, types: next }
+                    })
+                  }}
+                  id={`ftype-${ft.key}`}
+                  className="mr-2"
+                />
+                <label htmlFor={`ftype-${ft.key}`} className="text-sm">{ft.label}</label>
+              </div>
+            ))}
+          </div>
+          <div className="mb-4">
+            <label className="block text-xs font-medium mb-1">Filename</label>
+            <Input
+              value={filters.search}
+              onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
+              placeholder="Search by name"
+              className="w-full"
+            />
+          </div>
+          <div className="mb-4">
+            <label className="block text-xs font-medium mb-1">Uploaded From</label>
+            <Calendar
+              mode="single"
+              selected={filters.dateFrom}
+              onSelect={date => setFilters(f => ({ ...f, dateFrom: date }))}
+              className="mb-2"
+            />
+            <label className="block text-xs font-medium mb-1 mt-2">To</label>
+            <Calendar
+              mode="single"
+              selected={filters.dateTo}
+              onSelect={date => setFilters(f => ({ ...f, dateTo: date }))}
+            />
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setFilters({ types: new Set(), search: '', dateFrom: null, dateTo: null })}>
+            Clear Filters
+          </Button>
+        </DrawerContent>
+      </Drawer>
+
       {/* Bulk actions toolbar */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div className="flex items-center">
           <Checkbox 
             id="select-all" 
             checked={allSelected}
-            onCheckedChange={toggleSelectAll}
+            onCheckedChange={toggleSelectAllFiltered}
             className="mr-2"
           />
           <label htmlFor="select-all" className="text-sm font-medium">
             Select All
           </label>
-          
           <span className="ml-4 text-sm text-muted-foreground">
             {selectedAssets.size} selected
           </span>
         </div>
-        
         <div className="flex items-center gap-2">
           <Button 
             variant="outline" 
@@ -917,7 +1033,6 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
             <Download className="h-4 w-4 mr-2" />
             Download
           </Button>
-          
           <Button 
             variant="outline" 
             size="sm"
@@ -926,6 +1041,15 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
           >
             <Archive className="h-4 w-4 mr-2" />
             Archive
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setBundleDialogOpen(true)}
+            disabled={selectedAssets.size === 0}
+          >
+            <PlusCircle className="h-4 w-4 mr-2" />
+            Create Bundle
           </Button>
         </div>
       </div>
@@ -1012,27 +1136,23 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
         </div>
       )}
       
-      {/* Asset gallery grid */}
-      {(!Array.isArray(assets) || assets.length === 0) && !uploading.length ? (
+      {/* Asset grid: show filteredAssets */}
+      {filteredAssets.length === 0 && !uploading.length ? (
         <div className="text-center p-8 bg-muted/40 rounded-lg mt-6">
           <FileIcon className="h-10 w-10 text-muted-foreground mx-auto mb-4" />
-          <h3 className="text-lg font-medium mb-1">No assets yet</h3>
+          <h3 className="text-lg font-medium mb-1">No assets match these filters</h3>
           <p className="text-sm text-muted-foreground">
-            Upload files to see them here
+            Try adjusting your filters or upload new files.
           </p>
         </div>
       ) : (
         <div className="mt-8">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {Array.isArray(assets) && assets
-              // Sort assets: primary images first, then by upload date
+            {filteredAssets
               .sort((a, b) => {
-                // Primary images always come first
-                if (a.is_primary && !b.is_primary) return -1;
-                if (!a.is_primary && b.is_primary) return 1;
-                
-                // If both are primary or both aren't, sort by upload date (newest first)
-                return new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime();
+                if (a.is_primary && !b.is_primary) return -1
+                if (!a.is_primary && b.is_primary) return 1
+                return new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime()
               })
               .map(asset => (
                 <Card key={asset.id} className={cn(
@@ -1215,6 +1335,74 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Bundle Dialog */}
+      <Dialog open={bundleDialogOpen} onOpenChange={setBundleDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create Asset Bundle</DialogTitle>
+            <DialogDescription>
+              Group selected assets into a named bundle for download or sharing.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mb-4">
+            <label className="block text-xs font-medium mb-1">Bundle Name</label>
+            <Input value={bundleName} onChange={e => setBundleName(e.target.value)} placeholder="e.g. Press Kit May 2025" />
+          </div>
+          <div className="mb-4">
+            <label className="block text-xs font-medium mb-1">Assets</label>
+            <ul className="text-xs max-h-32 overflow-y-auto">
+              {assets.filter(a => selectedAssets.has(a.id)).map(a => (
+                <li key={a.id}>{a.name}</li>
+              ))}
+            </ul>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBundleDialogOpen(false)}>Cancel</Button>
+            <Button
+              onClick={async () => {
+                if (!bundleName.trim() || selectedAssets.size === 0) return
+                await productService.createAssetBundle(product.id, bundleName, Array.from(selectedAssets))
+                setBundleDialogOpen(false)
+                setBundleName('')
+                setSelectedAssets(new Set())
+                // Refresh bundles
+                setBundlesLoading(true)
+                productService.getAssetBundles(product.id).then(setBundles).finally(() => setBundlesLoading(false))
+              }}
+              disabled={!bundleName.trim() || selectedAssets.size === 0}
+            >
+              Create Bundle
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bundles Section */}
+      <div className="mt-10">
+        <h3 className="font-bold mb-2 flex items-center gap-2">
+          <FolderDown className="h-5 w-5" /> Bundles
+        </h3>
+        {bundlesLoading ? (
+          <div className="text-muted-foreground text-sm">Loading bundles…</div>
+        ) : bundles.length === 0 ? (
+          <div className="text-muted-foreground text-sm">No bundles yet.</div>
+        ) : (
+          <div className="space-y-2">
+            {bundles.map(bundle => (
+              <div key={bundle.id} className="flex items-center justify-between border rounded p-2">
+                <div>
+                  <div className="font-medium">{bundle.name}</div>
+                  <div className="text-xs text-muted-foreground">{bundle.asset_ids.length} assets • {formatDate(bundle.created_at)}</div>
+                </div>
+                <Button size="icon" variant="ghost" onClick={() => productService.downloadAssetBundle(product.id, bundle.id)}>
+                  <Download className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

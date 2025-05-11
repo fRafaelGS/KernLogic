@@ -18,6 +18,7 @@ from products.views_readonly import (
 from products.views_category import CategoryViewSet
 # Import the PDF export view
 from products.views.pdf_export import generate_product_pdf
+from .views_main import AssetBundleViewSet
 
 # /api/products/…
 router = DefaultRouter()
@@ -35,6 +36,7 @@ router.register(r"categories", CategoryViewSet, basename="category")
 # /api/products/<product_pk>/assets/…
 assets_router = NestedSimpleRouter(router, r"products", lookup="product")
 assets_router.register(r"assets", AssetViewSet, basename="product-assets")
+assets_router.register(r"asset-bundles", AssetBundleViewSet, basename="asset-bundles")
 
 # 🆕  nested router for the four read-only sub-resources
 details_router = NestedSimpleRouter(router, r"products", lookup="product")

@@ -88,7 +88,7 @@ interface AvailableAttribute {
   name: string;
   groupId: number;
   groupName: string;
-  dataType: 'text' | 'number' | 'boolean' | 'select' | 'multiselect' | 'date';
+  dataType: 'text' | 'number' | 'boolean' | 'select' | 'multiselect' | 'date' | 'rich_text' | 'price' | 'media' | 'measurement' | 'url' | 'email' | 'phone';
   unit?: string;
   isMandatory: boolean;
   options?: AttributeOption[];
@@ -99,7 +99,7 @@ interface AvailableAttribute {
 // Attribute value assigned to a product
 interface AttributeValue {
   attributeId: number;
-  value: string | number | boolean | Array<string | number>;
+  value: string | number | boolean | Array<string | number> | { amount: number; currency?: string } | { assetId: number; assetType?: string } | { amount: number; unit?: string } | string | { url: string } | { email: string } | { phone: string };
   updatedAt: string;
   locale: string;
 }
@@ -732,6 +732,32 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
           return 'Invalid date format';
         }
         break;
+      case 'rich_text':
+        if (typeof value !== 'string') return 'Must be a string';
+        break;
+      case 'price':
+        if (!value || typeof value !== 'object') return 'Invalid price object';
+        if (typeof value.amount !== 'number' || value.amount < 0) return 'Amount must be a non-negative number';
+        if (!value.currency || typeof value.currency !== 'string') return 'Currency is required';
+        break;
+      case 'media':
+        if (!value || typeof value !== 'object') return 'Invalid media object';
+        if (typeof value.assetId !== 'number' || value.assetId <= 0) return 'Asset ID must be a positive number';
+        break;
+      case 'measurement':
+        if (!value || typeof value !== 'object') return 'Invalid measurement object';
+        if (typeof value.amount !== 'number' || value.amount < 0) return 'Amount must be a non-negative number';
+        if (!value.unit || typeof value.unit !== 'string') return 'Unit is required';
+        break;
+      case 'url':
+        try { new URL(value) } catch { return 'Invalid URL' }
+        break;
+      case 'email':
+        if (!/\S+@\S+\.\S+/.test(value)) return 'Invalid email address';
+        break;
+      case 'phone':
+        if (!/^\+?[1-9]\d{1,14}$/.test(value)) return 'Invalid phone number';
+        break;
     }
     
     return null; // No validation errors
@@ -876,6 +902,47 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
         } catch (e) {
           return String(value);
         }
+      case 'price': {
+        let parsed: any = value
+        if (typeof value === 'string') {
+          try { parsed = JSON.parse(value) } catch { /* ignore */ }
+        }
+        if (parsed && typeof parsed === 'object' && 'amount' in parsed) {
+          return `${parsed.amount} ${parsed.currency ?? ''}`.trim()
+        }
+        return String(value)
+      }
+      case 'measurement': {
+        let parsed: any = value
+        if (typeof value === 'string') {
+          try { parsed = JSON.parse(value) } catch { /* ignore */ }
+        }
+        if (parsed && typeof parsed === 'object' && 'amount' in parsed) {
+          return `${parsed.amount} ${parsed.unit ?? ''}`.trim()
+        }
+        return String(value)
+      }
+      case 'url':
+        return (
+          <a href={String(value)} target='_blank' rel='noopener noreferrer' className='text-primary underline'>
+            {String(value)}
+          </a>
+        ) as unknown as string // cast because function expects string but JSX will be rendered
+      case 'email':
+      case 'phone':
+        return String(value)
+      case 'rich_text':
+        return (<span dangerouslySetInnerHTML={{ __html: String(value) }} />) as unknown as string
+      case 'media': {
+        let parsed: any = value
+        if (typeof value === 'string') {
+          try { parsed = JSON.parse(value) } catch { /* ignore */ }
+        }
+        if (parsed && typeof parsed === 'object' && 'asset_id' in parsed) {
+          return `Asset #${parsed.asset_id}`
+        }
+        return String(value)
+      }
       default:
         return attributeDef.unit ? `${value} ${attributeDef.unit}` : String(value);
     }
@@ -945,10 +1012,124 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
   const renderAttributeEditor = (attributeId: number) => {
     const attributeDef = availableAttributes.find(def => def.id === attributeId);
     if (!attributeDef) return null;
+    console.debug('Editing attribute:', attributeDef.name, 'type field:', attributeDef.dataType, '/', attributeDef)
     
     const error = attributeSaveError?.id === attributeId ? attributeSaveError.message : null;
-    
-    switch (attributeDef.dataType) {
+    const dt = (attributeDef as any).data_type ?? attributeDef.dataType;
+    switch (dt) {
+      case 'rich_text':
+        return (
+          <div data-testid='rich-text-input'>
+            <RichTextEditor value={currentEditValue || ''} onChange={setCurrentEditValue} />
+            {error && <p className='text-xs text-red-500'>{error}</p>}
+          </div>
+        )
+      case 'price':
+        return (
+          <div data-testid='price-input' className='flex gap-2'>
+            <Input
+              type='number'
+              value={currentEditValue?.amount ?? ''}
+              onChange={e => setCurrentEditValue({ ...currentEditValue, amount: Number(e.target.value) })}
+              placeholder='Amount'
+              className={error ? 'border-red-500' : ''}
+            />
+            <Select
+              value={currentEditValue?.currency || ''}
+              onValueChange={currency => setCurrentEditValue({ ...currentEditValue, currency })}
+            >
+              <SelectTrigger className={error ? 'border-red-500' : ''}>
+                <SelectValue placeholder='Currency' />
+              </SelectTrigger>
+              <SelectContent>
+                {currencies.map(c => (
+                  <SelectItem key={c.iso_code} value={c.iso_code}>{c.iso_code} ({c.symbol})</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {error && <p className='text-xs text-red-500'>{error}</p>}
+          </div>
+        )
+      case 'media':
+        return (
+          <div data-testid='media-input'>
+            {/* Placeholder for MediaPicker */}
+            <Input
+              type='number'
+              value={currentEditValue?.assetId ?? ''}
+              onChange={e => setCurrentEditValue({ assetId: Number(e.target.value) })}
+              placeholder='Asset ID'
+              className={error ? 'border-red-500' : ''}
+            />
+            {/* TODO: Replace with <MediaPicker assets={assets} ... /> */}
+            {error && <p className='text-xs text-red-500'>{error}</p>}
+          </div>
+        )
+      case 'measurement':
+        return (
+          <div data-testid='measurement-input' className='flex gap-2'>
+            <Input
+              type='number'
+              value={currentEditValue?.amount ?? ''}
+              onChange={e => setCurrentEditValue({ ...currentEditValue, amount: Number(e.target.value) })}
+              placeholder='Amount'
+              className={error ? 'border-red-500' : ''}
+            />
+            <Select
+              value={currentEditValue?.unit || ''}
+              onValueChange={unit => setCurrentEditValue({ ...currentEditValue, unit })}
+            >
+              <SelectTrigger className={error ? 'border-red-500' : ''}>
+                <SelectValue placeholder='Unit' />
+              </SelectTrigger>
+              <SelectContent>
+                {units.map(u => (
+                  <SelectItem key={u} value={u}>{u}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {error && <p className='text-xs text-red-500'>{error}</p>}
+          </div>
+        )
+      case 'url':
+        return (
+          <div data-testid='url-input'>
+            <Input
+              type='url'
+              value={currentEditValue || ''}
+              onChange={e => setCurrentEditValue(e.target.value)}
+              placeholder='Enter URL'
+              className={error ? 'border-red-500' : ''}
+            />
+            {error && <p className='text-xs text-red-500'>{error}</p>}
+          </div>
+        )
+      case 'email':
+        return (
+          <div data-testid='email-input'>
+            <Input
+              type='email'
+              value={currentEditValue || ''}
+              onChange={e => setCurrentEditValue(e.target.value)}
+              placeholder='Enter email'
+              className={error ? 'border-red-500' : ''}
+            />
+            {error && <p className='text-xs text-red-500'>{error}</p>}
+          </div>
+        )
+      case 'phone':
+        return (
+          <div data-testid='phone-input'>
+            <Input
+              type='tel'
+              value={currentEditValue || ''}
+              onChange={e => setCurrentEditValue(e.target.value)}
+              placeholder='Enter phone number'
+              className={error ? 'border-red-500' : ''}
+            />
+            {error && <p className='text-xs text-red-500'>{error}</p>}
+          </div>
+        )
       case 'text':
         return (
           <div className="space-y-2 w-full">
@@ -1084,8 +1265,8 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
             {error && <p className="text-xs text-red-500">{error}</p>}
           </div>
         );
-        
       default:
+        console.warn(`Unsupported attribute type: ${dt}`)
         return (
           <Input
             value={currentEditValue || ''}
@@ -1195,7 +1376,7 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
     name: string;
     groupId?: number;
     groupName: string;
-    dataType: 'text' | 'number' | 'boolean' | 'select' | 'multiselect' | 'date';
+    dataType: 'text' | 'number' | 'boolean' | 'select' | 'multiselect' | 'date' | 'rich_text' | 'price' | 'media' | 'measurement' | 'url' | 'email' | 'phone';
     unit?: string;
     isMandatory: boolean;
     options: Array<{ value: string; label: string; id?: number }>;
@@ -1481,6 +1662,13 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
                   <SelectItem value="select">Select (Single Choice)</SelectItem>
                   <SelectItem value="multiselect">Multi-select (Multiple Choice)</SelectItem>
                   <SelectItem value="date">Date</SelectItem>
+                  <SelectItem value="rich_text">Rich Text</SelectItem>
+                  <SelectItem value="price">Price</SelectItem>
+                  <SelectItem value="media">Media</SelectItem>
+                  <SelectItem value="measurement">Measurement</SelectItem>
+                  <SelectItem value="url">URL</SelectItem>
+                  <SelectItem value="email">Email</SelectItem>
+                  <SelectItem value="phone">Phone</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1779,6 +1967,32 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
 
   // Add an initial collapsed state of false - keep content expanded by default
   const [isDataCompletenessCollapsed, setIsDataCompletenessCollapsed] = useState(false);
+
+  const [units] = useState(['kg', 'g', 'lb', 'oz', 'cm', 'mm', 'm', 'in', 'ft', 'l', 'ml'])
+
+  const [currencies, setCurrencies] = useState<{ iso_code: string; symbol: string; name: string }[]>([])
+
+  useEffect(() => {
+    axiosInstance.get('/api/currencies').then(res => setCurrencies(res.data)).catch(() => setCurrencies([]))
+    axiosInstance.get(`/api/products/${product.id}/assets/`).then(res => setAssets(res.data)).catch(() => setAssets([]))
+  }, [product.id])
+
+  // 1. Add this helper function inside ProductDetailTabs:
+  function handleAddGroupAttributes(groupName: string) {
+    if (!hasAddPermission) {
+      toast.error('You do not have permission to add attributes')
+      return
+    }
+    const groupAttrs = getAttributesByGroup(groupName)
+    const usedIds = attributeValues.map(v => v.attributeId)
+    const unusedAttrs = groupAttrs.filter(attr => !usedIds.includes(attr.id))
+    if (unusedAttrs.length === 0) {
+      toast('All attributes in this group are already added')
+      return
+    }
+    unusedAttrs.forEach(attr => handleAddAttribute(attr.id))
+    toast.success(`Added ${unusedAttrs.length} attributes from group '${groupName}'`)
+  }
 
   return (
     <Tabs 

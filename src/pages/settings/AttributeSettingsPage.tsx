@@ -133,6 +133,10 @@ const AttributeSettingsPage: React.FC = () => {
     description: ''
   });
 
+  // Add state for select options
+  const [newOption, setNewOption] = useState('')
+  const [options, setOptions] = useState<{ value: string, label: string }[]>([])
+
   // Load attribute groups
   const {
     data: attributeGroups = [],
@@ -175,27 +179,28 @@ const AttributeSettingsPage: React.FC = () => {
   // Handle creating a new attribute
   const handleCreateAttribute = async () => {
     try {
+      // Build payload
+      const payload = {
+        ...newAttributeData,
+        options: newAttributeData.data_type === 'select' ? options : undefined
+      }
       // Replace with actual API call in real implementation
-      // const response = await axiosInstance.post(paths.attributes.root(), newAttributeData);
-      
-      // For demo purposes, we'll just fake a success
-      toast.success(`Attribute ${newAttributeData.label} created successfully`);
-      setIsCreateAttributeDialogOpen(false);
-      
-      // Reset form
+      // await axiosInstance.post(paths.attributes.root(), payload)
+      toast.success(`Attribute ${newAttributeData.label} created successfully`)
+      setIsCreateAttributeDialogOpen(false)
       setNewAttributeData({
         code: '',
         label: '',
         data_type: 'text',
         is_localisable: false,
         is_scopable: false
-      });
-      
-      // Invalidate queries to refresh data
-      queryClient.invalidateQueries({ queryKey: qkAttributes() });
+      })
+      setOptions([])
+      setNewOption('')
+      queryClient.invalidateQueries({ queryKey: qkAttributes() })
     } catch (error) {
-      console.error('Error creating attribute:', error);
-      toast.error('Failed to create attribute');
+      console.error('Error creating attribute:', error)
+      toast.error('Failed to create attribute')
     }
   };
   
@@ -539,10 +544,10 @@ const AttributeSettingsPage: React.FC = () => {
               </Label>
               <Select
                 value={newAttributeData.data_type}
-                onValueChange={(value) => setNewAttributeData({
-                  ...newAttributeData,
-                  data_type: value
-                })}
+                onValueChange={value => {
+                  setNewAttributeData({ ...newAttributeData, data_type: value })
+                  if (value !== 'select') setOptions([])
+                }}
               >
                 <SelectTrigger className="col-span-3">
                   <SelectValue placeholder="Select data type" />
@@ -552,9 +557,64 @@ const AttributeSettingsPage: React.FC = () => {
                   <SelectItem value="number">Number</SelectItem>
                   <SelectItem value="boolean">Boolean</SelectItem>
                   <SelectItem value="date">Date</SelectItem>
+                  <SelectItem value="select">Select</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+            {/* Options UI for select type */}
+            {newAttributeData.data_type === 'select' && (
+              <div className='grid grid-cols-4 items-center gap-4'>
+                <Label className='text-right'>Options</Label>
+                <div className='col-span-3 space-y-2'>
+                  <div className='flex gap-2'>
+                    <Input
+                      value={newOption}
+                      onChange={e => setNewOption(e.target.value)}
+                      placeholder='Add option...'
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && newOption.trim()) {
+                          setOptions([...options, { value: newOption.trim(), label: newOption.trim() }])
+                          setNewOption('')
+                        }
+                      }}
+                    />
+                    <Button
+                      type='button'
+                      onClick={() => {
+                        if (newOption.trim()) {
+                          setOptions([...options, { value: newOption.trim(), label: newOption.trim() }])
+                          setNewOption('')
+                        }
+                      }}
+                      disabled={!newOption.trim()}
+                    >Add</Button>
+                  </div>
+                  {options.length > 0 && (
+                    <div className='space-y-1'>
+                      {options.map((opt, idx) => (
+                        <div key={idx} className='flex items-center gap-2'>
+                          <Input
+                            value={opt.label}
+                            onChange={e => {
+                              const updated = [...options]
+                              updated[idx] = { ...opt, label: e.target.value, value: e.target.value }
+                              setOptions(updated)
+                            }}
+                            className='w-48'
+                          />
+                          <Button
+                            type='button'
+                            variant='ghost'
+                            size='sm'
+                            onClick={() => setOptions(options.filter((_, i) => i !== idx))}
+                          >Remove</Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             
             <div className="grid grid-cols-4 items-center gap-4">
               <div className="text-right">

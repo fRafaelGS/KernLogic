@@ -25,17 +25,20 @@ from rest_framework.generics import get_object_or_404
 from .models import (
     Product, ProductImage, Activity, ProductRelation, 
     ProductAsset, ProductEvent, Attribute, AttributeValue,
-    AttributeGroup, AttributeGroupItem, ProductPrice, SalesChannel, Category
+    AttributeGroup, AttributeGroupItem, ProductPrice, SalesChannel, Category, AssetBundle
 )
 from .serializers import (
     ProductSerializer, ProductImageSerializer, ActivitySerializer, 
     ProductRelationSerializer, ProductStatsSerializer, IncompleteProductSerializer,
     ProductAssetSerializer, ProductEventSerializer, AttributeValueSerializer,
     AttributeValueDetailSerializer, AttributeGroupSerializer, AttributeGroupItemSerializer,
-    ProductPriceSerializer, SalesChannelSerializer, SimpleCategorySerializer, CategorySerializer
+    ProductPriceSerializer, SalesChannelSerializer, SimpleCategorySerializer, CategorySerializer,
+    AssetBundleSerializer
 )
 from django_filters.rest_framework import DjangoFilterBackend
 import sys
+import zipfile
+import io
 
 # Import the models, but don't import them during migration
 # Create placeholders if we're in a migration
@@ -2066,3 +2069,31 @@ class SkuCheckAPIView(APIView):
                 {"duplicates": [], "error": f"An error occurred: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+class AssetBundleViewSet(viewsets.ModelViewSet):
+    serializer_class = AssetBundleSerializer
+
+    def get_queryset(self):
+        return AssetBundle.objects.filter(product_id=self.kwargs['product_pk'])
+
+    def perform_create(self, serializer):
+        # Attach product from URL
+        product_id = self.kwargs['product_pk']
+        serializer.save(product_id=product_id)
+
+    @action(detail=True, methods=['get'])
+    def download(self, request, product_pk=None, pk=None):
+        bundle = self.get_object()
+        # Zip bundle.assets files, stream as attachment
+        # --- Implementation stub ---
+        # files = bundle.assets.all()
+        # buffer = io.BytesIO()
+        # with zipfile.ZipFile(buffer, 'w') as zip_file:
+        #     for asset in files:
+        #         # asset.file.path or asset.file.read()
+        #         ...
+        # buffer.seek(0)
+        # response = StreamingHttpResponse(buffer, content_type='application/zip')
+        # response['Content-Disposition'] = f'attachment; filename="{bundle.name}.zip"'
+        # return response
+        return Response({'detail': 'Download not implemented'}, status=status.HTTP_501_NOT_IMPLEMENTED)

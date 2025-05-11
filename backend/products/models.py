@@ -541,6 +541,13 @@ class Attribute(models.Model):
         ('boolean', 'Boolean'),
         ('date', 'Date'),
         ('select', 'Select'),
+        ('rich_text', 'Rich Text'),
+        ('price', 'Price'),
+        ('media', 'Media'),
+        ('measurement', 'Measurement'),
+        ('url', 'URL'),
+        ('email', 'Email'),
+        ('phone', 'Phone'),
     ]
 
     id = models.AutoField(primary_key=True)
@@ -663,3 +670,26 @@ class ProductPrice(models.Model):
             models.Index(fields=['organization']),
             models.Index(fields=['valid_from', 'valid_to']),
         ]
+
+# Option model for select attributes
+class AttributeOption(models.Model):
+    attribute = models.ForeignKey('Attribute', on_delete=models.CASCADE, related_name='options')
+    value = models.CharField(max_length=100)
+    label = models.CharField(max_length=255)
+    order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        unique_together = ('attribute', 'value')
+        ordering = ['attribute', 'order', 'id']
+
+    def __str__(self):
+        return f'{self.label} ({self.value}) for {self.attribute.code}'
+
+class AssetBundle(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='bundles')
+    name = models.CharField(max_length=255)
+    assets = models.ManyToManyField('ProductAsset', related_name='bundles')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name} (Product: {self.product_id})"

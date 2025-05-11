@@ -4,6 +4,7 @@ import axiosInstance from '@/lib/axiosInstance';
 import { paths } from '@/lib/apiPaths';
 import { ENABLE_CUSTOM_ATTRIBUTES } from '@/config/featureFlags';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePriceMetadata } from '@/hooks/usePriceMetadata'
 
 // UI Components
 import {
@@ -79,6 +80,136 @@ interface AttributeFormValues {
   data_type: string;
   is_localisable: boolean;
   is_scopable: boolean;
+  currencies?: string[];
+  units?: string[];
+  options?: string[];
+  enableHtmlSanitizer?: boolean;
+}
+
+// --- PriceTypeControls ---
+function PriceTypeControls({ selectedCurrencies, onChange }: { selectedCurrencies: string[], onChange: (currencies: string[]) => void }) {
+  const { currencies, loading } = usePriceMetadata()
+
+  if (loading) return <div className='text-xs text-slate-500'>Loading currencies…</div>
+
+  function handleToggle(code: string) {
+    if (selectedCurrencies.includes(code)) {
+      onChange(selectedCurrencies.filter(c => c !== code))
+    } else {
+      onChange([...selectedCurrencies, code])
+    }
+  }
+
+  return (
+    <div className='pt-2'>
+      <Label>Currencies</Label>
+      <div className='flex flex-wrap gap-2 mt-1'>
+        {currencies.map(c => (
+          <label key={c.iso_code} className='flex items-center gap-1 text-sm'>
+            <input
+              type='checkbox'
+              checked={selectedCurrencies.includes(c.iso_code)}
+              onChange={() => handleToggle(c.iso_code)}
+            />
+            {c.iso_code} <span className='text-slate-400'>({c.symbol})</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// --- MeasurementTypeControls ---
+const DEFAULT_UNITS = ['kg', 'g', 'lb', 'oz', 'cm', 'mm', 'm', 'in', 'ft', 'l', 'ml']
+
+function MeasurementTypeControls({ selectedUnits, onChange }: { selectedUnits: string[], onChange: (units: string[]) => void }) {
+  function handleToggle(unit: string) {
+    if (selectedUnits.includes(unit)) {
+      onChange(selectedUnits.filter(u => u !== unit))
+    } else {
+      onChange([...selectedUnits, unit])
+    }
+  }
+
+  return (
+    <div className='pt-2'>
+      <Label>Units</Label>
+      <div className='flex flex-wrap gap-2 mt-1'>
+        {DEFAULT_UNITS.map(unit => (
+          <label key={unit} className='flex items-center gap-1 text-sm'>
+            <input
+              type='checkbox'
+              checked={selectedUnits.includes(unit)}
+              onChange={() => handleToggle(unit)}
+            />
+            {unit}
+          </label>
+        ))}
+      </div>
+      <div className='mt-2'>
+        <Label htmlFor='custom-units' className='text-xs'>Custom units (comma separated)</Label>
+        <input
+          id='custom-units'
+          type='text'
+          className='border rounded px-2 py-1 text-xs w-full mt-1'
+          placeholder='e.g. box, pack'
+          value={selectedUnits.filter(u => !DEFAULT_UNITS.includes(u)).join(', ')}
+          onChange={e => {
+            const custom = e.target.value.split(',').map(s => s.trim()).filter(Boolean)
+            const merged = [...DEFAULT_UNITS.filter(u => selectedUnits.includes(u)), ...custom]
+            onChange(merged)
+          }}
+        />
+      </div>
+    </div>
+  )
+}
+
+function OptionListEditor({ options, onChange }: { options: string[], onChange: (options: string[]) => void }) {
+  const [input, setInput] = useState('')
+  function addOption() {
+    const val = input.trim()
+    if (val && !options.includes(val)) {
+      onChange([...options, val])
+      setInput('')
+    }
+  }
+  function removeOption(idx: number) {
+    onChange(options.filter((_, i) => i !== idx))
+  }
+  function editOption(idx: number, val: string) {
+    const newOpts = [...options]
+    newOpts[idx] = val
+    onChange(newOpts)
+  }
+  return (
+    <div className='pt-2'>
+      <Label>Options</Label>
+      <div className='flex gap-2 mt-1'>
+        <Input
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') addOption() }}
+          placeholder='Add option'
+        />
+        <Button type='button' onClick={addOption}>Add</Button>
+      </div>
+      <ul className='mt-2 space-y-1'>
+        {options.map((opt, i) => (
+          <li key={i} className='flex items-center gap-2'>
+            <Input
+              value={opt}
+              onChange={e => editOption(i, e.target.value)}
+              className='w-40'
+            />
+            <Button type='button' variant='ghost' onClick={() => removeOption(i)}>
+              Remove
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
 }
 
 const AttributesPage: React.FC = () => {
@@ -584,12 +715,48 @@ const AttributesPage: React.FC = () => {
                     <SelectItem value="boolean">Boolean</SelectItem>
                     <SelectItem value="date">Date</SelectItem>
                     <SelectItem value="select">Select</SelectItem>
+                    <SelectItem value="rich_text">Rich Text</SelectItem>
+                    <SelectItem value="price">Price</SelectItem>
+                    <SelectItem value="media">Media</SelectItem>
+                    <SelectItem value="measurement">Measurement</SelectItem>
+                    <SelectItem value="url">URL</SelectItem>
+                    <SelectItem value="email">Email</SelectItem>
+                    <SelectItem value="phone">Phone</SelectItem>
                   </SelectContent>
                 </Select>
                 {formErrors.data_type && (
                   <p className="text-sm text-danger-500">{formErrors.data_type}</p>
                 )}
               </div>
+              
+              {formValues.data_type === 'price' && (
+                <PriceTypeControls
+                  selectedCurrencies={formValues.currencies || []}
+                  onChange={currencies => setFormValues(prev => ({ ...prev, currencies }))}
+                />
+              )}
+              {formValues.data_type === 'measurement' && (
+                <MeasurementTypeControls
+                  selectedUnits={formValues.units || []}
+                  onChange={units => setFormValues(prev => ({ ...prev, units }))}
+                />
+              )}
+              {['select', 'multiselect'].includes(formValues.data_type) && (
+                <OptionListEditor
+                  options={formValues.options || []}
+                  onChange={options => setFormValues(prev => ({ ...prev, options }))}
+                />
+              )}
+              {formValues.data_type === 'rich_text' && (
+                <div className='flex items-center gap-2 pt-2'>
+                  <Switch
+                    id='enable-html-sanitizer'
+                    checked={!!formValues.enableHtmlSanitizer}
+                    onCheckedChange={checked => setFormValues(prev => ({ ...prev, enableHtmlSanitizer: checked }))}
+                  />
+                  <Label htmlFor='enable-html-sanitizer'>Enable HTML sanitizer</Label>
+                </div>
+              )}
               
               <div className="flex items-center justify-between space-x-2 pt-2">
                 <div className="flex flex-col">

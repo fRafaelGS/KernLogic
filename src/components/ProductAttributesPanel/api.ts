@@ -133,4 +133,15 @@ export function useAllAttributes() {
     },
     staleTime: 10 * 60 * 1000
   })
+}
+
+export function useAllAttributeGroups() {
+  return useQuery<AttributeGroup[], Error>({
+    queryKey: ['allAttributeGroups'],
+    queryFn: async () => {
+      const { data } = await axiosInstance.get('/api/attribute-groups/')
+      return Array.isArray(data) ? data : []
+    },
+    staleTime: 10 * 60 * 1000
+  })
 } 

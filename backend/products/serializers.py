@@ -1,6 +1,6 @@
 from rest_framework import serializers
 import json
-from .models import Product, ProductImage, Activity, ProductRelation, ProductAsset, ProductEvent, Attribute, AttributeValue, AttributeGroupItem, AttributeGroup, SalesChannel, ProductPrice, Category
+from .models import Product, ProductImage, Activity, ProductRelation, ProductAsset, ProductEvent, Attribute, AttributeValue, AttributeGroupItem, AttributeGroup, SalesChannel, ProductPrice, Category, AttributeOption, AssetBundle
 from django.db.models import Sum, F, Count, Case, When, Value, FloatField
 from decimal import Decimal
 from django.conf import settings
@@ -533,10 +533,19 @@ class ProductEventSerializer(serializers.ModelSerializer):
 
 # Add the Attribute serializers
 class AttributeSerializer(serializers.ModelSerializer):
+    options = serializers.SerializerMethodField(read_only=True)
     class Meta:
         model = Attribute
         fields = '__all__'
         read_only_fields = ('id', 'organization', 'created_by')
+
+    def get_options(self, obj):
+        """Return the options for this attribute"""
+        try:
+            return AttributeOptionSerializer(obj.attributeoption_set.all(), many=True).data
+        except Exception as e:
+            print(f"ERROR: Failed to get options for attribute {obj.id}: {str(e)}")
+            return []
 
 class AttributeValueSerializer(serializers.ModelSerializer):
     class Meta:
@@ -637,6 +646,171 @@ class AttributeValueSerializer(serializers.ModelSerializer):
                         {"value": f"Invalid date value for attribute '{attr.label}'. Must be a valid date in ISO-8601 format (YYYY-MM-DD)"}
                     )
                 print(f"Validated date value: {data['value']}")
+            
+            elif attr.data_type == 'rich_text':
+                # Validate rich text (HTML) and sanitize it with Bleach
+                import bleach
+                
+                if not isinstance(value, str):
+                    raise serializers.ValidationError({"value": f"Rich text must be a string for attribute '{attr.label}'"})
+                
+                # Define allowed tags and attributes for sanitization
+                allowed_tags = [
+                    'a', 'abbr', 'acronym', 'b', 'blockquote', 'code', 'em', 'i', 'li', 'ol', 'p',
+                    'strong', 'ul', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'span', 'br', 'hr'
+                ]
+                allowed_attrs = {
+                    'a': ['href', 'title', 'target'],
+                    'abbr': ['title'],
+                    'acronym': ['title'],
+                    'span': ['style'],
+                }
+                
+                # Sanitize the HTML
+                sanitized_value = bleach.clean(value, tags=allowed_tags, attributes=allowed_attrs)
+                data['value'] = sanitized_value
+                print(f"Sanitized rich text value: {data['value']}")
+            
+            elif attr.data_type == 'price':
+                # Value must be a dict with amount (decimal) and currency (string)
+                if not isinstance(value, dict):
+                    raise serializers.ValidationError({"value": f"Price must be an object with amount and currency for attribute '{attr.label}'"})
+                
+                # Check required keys
+                if 'amount' not in value or 'currency' not in value:
+                    raise serializers.ValidationError({"value": f"Price must contain both amount and currency for attribute '{attr.label}'"})
+                
+                # Validate amount (must be a non-negative decimal)
+                try:
+                    amount = float(value['amount'])
+                    if amount < 0:
+                        raise serializers.ValidationError({"value": f"Price amount must be non-negative for attribute '{attr.label}'"})
+                    # Store as float (frontend will format)
+                    value['amount'] = amount
+                except (ValueError, TypeError):
+                    raise serializers.ValidationError({"value": f"Price amount must be a number for attribute '{attr.label}'"})
+                
+                # Validate currency (must exist in Currency table)
+                from prices.models import Currency
+                currency_code = str(value['currency']).upper()
+                if not Currency.objects.filter(iso_code=currency_code).exists():
+                    raise serializers.ValidationError({"value": f"Invalid currency code '{currency_code}' for attribute '{attr.label}'"})
+                
+                value['currency'] = currency_code
+                data['value'] = value
+                print(f"Validated price value: {data['value']}")
+            
+            elif attr.data_type == 'media':
+                # Value must be a dict with asset_id (int)
+                if not isinstance(value, dict):
+                    raise serializers.ValidationError({"value": f"Media value must be an object with asset_id for attribute '{attr.label}'"})
+                
+                # Check required keys
+                if 'asset_id' not in value:
+                    raise serializers.ValidationError({"value": f"Media value must contain asset_id for attribute '{attr.label}'"})
+                
+                # Validate asset_id (must be an integer and exist in Asset table)
+                try:
+                    asset_id = int(value['asset_id'])
+                    value['asset_id'] = asset_id
+                except (ValueError, TypeError):
+                    raise serializers.ValidationError({"value": f"Media asset_id must be an integer for attribute '{attr.label}'"})
+                
+                # Check if asset exists and belongs to the same organization
+                from .models import ProductAsset
+                if not ProductAsset.objects.filter(id=asset_id, organization=org).exists():
+                    raise serializers.ValidationError({"value": f"Asset with ID {asset_id} does not exist or doesn't belong to your organization"})
+                
+                data['value'] = value
+                print(f"Validated media value: {data['value']}")
+            
+            elif attr.data_type == 'measurement':
+                # Value must be a dict with amount (decimal) and unit (string)
+                if not isinstance(value, dict):
+                    raise serializers.ValidationError({"value": f"Measurement must be an object with amount and unit for attribute '{attr.label}'"})
+                
+                # Check required keys
+                if 'amount' not in value:
+                    raise serializers.ValidationError({"value": f"Measurement must contain amount for attribute '{attr.label}'"})
+                
+                # Validate amount (must be a non-negative decimal)
+                try:
+                    amount = float(value['amount'])
+                    if amount < 0:
+                        raise serializers.ValidationError({"value": f"Measurement amount must be non-negative for attribute '{attr.label}'"})
+                    value['amount'] = amount
+                except (ValueError, TypeError):
+                    raise serializers.ValidationError({"value": f"Measurement amount must be a number for attribute '{attr.label}'"})
+                
+                # Validate unit if present
+                if 'unit' in value and value['unit']:
+                    # If allowedUnits exists in the context or somewhere else, validate against it
+                    allowed_units = self.context.get('allowed_units', None)
+                    if allowed_units and value['unit'] not in allowed_units:
+                        raise serializers.ValidationError({"value": f"Invalid measurement unit '{value['unit']}'. Allowed units: {', '.join(allowed_units)}"})
+                
+                data['value'] = value
+                print(f"Validated measurement value: {data['value']}")
+            
+            elif attr.data_type == 'url':
+                # Validate URL format
+                from django.core.validators import URLValidator
+                from django.core.exceptions import ValidationError as DjangoValidationError
+                
+                if not isinstance(value, str):
+                    raise serializers.ValidationError({"value": f"URL must be a string for attribute '{attr.label}'"})
+                
+                # Validate URL
+                url_validator = URLValidator()
+                try:
+                    url_validator(value)
+                except DjangoValidationError:
+                    raise serializers.ValidationError({"value": f"Invalid URL format for attribute '{attr.label}'"})
+                
+                data['value'] = value
+                print(f"Validated URL value: {data['value']}")
+            
+            elif attr.data_type == 'email':
+                # Validate email format
+                from django.core.validators import validate_email
+                from django.core.exceptions import ValidationError as DjangoValidationError
+                
+                if not isinstance(value, str):
+                    raise serializers.ValidationError({"value": f"Email must be a string for attribute '{attr.label}'"})
+                
+                # Validate email
+                try:
+                    validate_email(value)
+                except DjangoValidationError:
+                    raise serializers.ValidationError({"value": f"Invalid email format for attribute '{attr.label}'"})
+                
+                data['value'] = value
+                print(f"Validated email value: {data['value']}")
+            
+            elif attr.data_type == 'phone':
+                # Validate phone number
+                import phonenumbers
+                
+                if not isinstance(value, str):
+                    raise serializers.ValidationError({"value": f"Phone number must be a string for attribute '{attr.label}'"})
+                
+                # Default region (can be configurable)
+                default_region = 'US'
+                
+                try:
+                    # Parse phone number
+                    parsed_number = phonenumbers.parse(value, default_region)
+                    
+                    # Check if it's a valid number
+                    if not phonenumbers.is_valid_number(parsed_number):
+                        raise serializers.ValidationError({"value": f"Invalid phone number format for attribute '{attr.label}'"})
+                    
+                    # Format to E.164 (optional, for standardization)
+                    data['value'] = phonenumbers.format_number(parsed_number, phonenumbers.PhoneNumberFormat.E164)
+                except phonenumbers.NumberParseException:
+                    raise serializers.ValidationError({"value": f"Could not parse phone number for attribute '{attr.label}'"})
+                
+                print(f"Validated phone value: {data['value']}")
             
         except Exception as e:
             if not isinstance(e, serializers.ValidationError):
@@ -748,3 +922,15 @@ class AttributeGroupSerializer(serializers.ModelSerializer):
             AttributeGroupItem.objects.filter(id=item_id, group=group).update(
                 order=payload.get('order', position)
             ) 
+
+# Serializer for AttributeOption
+class AttributeOptionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AttributeOption
+        fields = ['id', 'value', 'label', 'order'] 
+
+class AssetBundleSerializer(serializers.ModelSerializer):
+    asset_ids = serializers.PrimaryKeyRelatedField(queryset=ProductAsset.objects.all(), many=True, source='assets')
+    class Meta:
+        model = AssetBundle
+        fields = ['id','name','asset_ids','created_at'] 

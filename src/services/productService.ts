@@ -353,6 +353,13 @@
 
     export type UpdatePricePayload = Partial<AddPricePayload>;
 
+    export interface AssetBundle {
+        id: number;
+        name: string;
+        asset_ids: number[];
+        created_at: string;
+    }
+
     export const productService = {
         // Get all products with optional pagination support
         getProducts: async (
@@ -1737,5 +1744,21 @@
                 console.error('Error fetching sales channels:', error);
                 return [];
             }
+        },
+
+        // Asset Bundles
+        getAssetBundles: async (productId: number): Promise<AssetBundle[]> => {
+            const url = `${PRODUCTS_API_URL}/${productId}/asset-bundles/`
+            const response = await axiosInstance.get(url)
+            return response.data
+        },
+        createAssetBundle: async (productId: number, name: string, assetIds: number[]): Promise<AssetBundle> => {
+            const url = `${PRODUCTS_API_URL}/${productId}/asset-bundles/`
+            const response = await axiosInstance.post(url, { name, asset_ids: assetIds })
+            return response.data
+        },
+        downloadAssetBundle: (productId: number, bundleId: number): void => {
+            const url = `${PRODUCTS_API_URL}/${productId}/asset-bundles/${bundleId}/download/`
+            window.open(url, '_blank')
         },
     }; 

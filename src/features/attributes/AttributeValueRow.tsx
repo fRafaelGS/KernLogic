@@ -32,6 +32,17 @@ export interface AttributeValue {
 
 export type SavingState = 'idle' | 'saving' | 'saved' | 'error';
 
+// ------------------------------------------------------------------
+// Normalised value type – covers every data_type we support
+// ------------------------------------------------------------------
+export type AttrValue =
+  | string
+  | number
+  | boolean
+  | { amount: number; currency: string }
+  | { amount: number; unit: string }
+  | { asset_id: number }
+
 interface AttributeValueRowProps {
   attribute: Attribute;
   value: AttributeValue | null;
@@ -74,9 +85,25 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
   selectedLocale = "default",
   selectedChannel = "default"
 }) => {
-  // Keep a local value for editing
-  const [localValue, setLocalValue] = useState<any>(
-    isNew ? '' : value?.value
+  // --------------------------------------------------------------
+  // Normalise incoming JSONField value from API → AttrValue object
+  // --------------------------------------------------------------
+  const rawValue = value?.value as any
+
+  const needsJSON = ['price', 'measurement', 'media', 'rich_text'].includes(attribute.data_type)
+
+  let actualValue: AttrValue = rawValue as AttrValue
+  if (needsJSON && typeof rawValue === 'string') {
+    try {
+      actualValue = JSON.parse(rawValue)
+    } catch {
+      // leave as-is – backend already sent object or malformed JSON
+    }
+  }
+
+  // Local editing state – initialise with the normalised value
+  const [localValue, setLocalValue] = useState<AttrValue>(
+    isNew ? (needsJSON ? ({} as AttrValue) : ('' as AttrValue)) : (actualValue as AttrValue)
   );
   
   // Add state for locale and channel
@@ -89,16 +116,18 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
   );
   
   // Use debounced callback for saving
-  const debouncedSave = useDebouncedCallback((newValue: any) => {
+  const debouncedSave = useDebouncedCallback((newValue: AttrValue) => {
+    const sendValue = needsJSON ? JSON.stringify(newValue) : newValue
+
     if (isNew) {
-      onSaveNew(attribute.id, newValue);
+      onSaveNew(attribute.id, sendValue);
     } else if (value?.id) {
-      onUpdate(value.id, newValue);
+      onUpdate(value.id, sendValue);
     }
   }, 800);
   
   // Handle value change
-  const handleValueChange = useCallback((newValue: any) => {
+  const handleValueChange = useCallback((newValue: AttrValue) => {
     console.log(`Value changed for attribute ${attribute.id} to:`, newValue);
     console.log(`Current locale: ${localLocale}, channel: ${localChannel}`);
     
@@ -142,8 +171,8 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
       case 'text':
         return (
           <Input
-            value={localValue || ''}
-            onChange={(e) => handleValueChange(e.target.value)}
+            value={(localValue as any) || ''}
+            onChange={(e) => handleValueChange(e.target.value as AttrValue)}
             disabled={isDisabled}
             placeholder={`Enter ${attribute.label} (press Enter to save)`}
             onKeyDown={handleKeyDown}
@@ -155,8 +184,8 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
         return (
           <Input
             type="number"
-            value={localValue || ''}
-            onChange={(e) => handleValueChange(parseFloat(e.target.value))}
+            value={(localValue as any) || ''}
+            onChange={(e) => handleValueChange(parseFloat(e.target.value) as AttrValue)}
             disabled={isDisabled}
             placeholder={`Enter ${attribute.label} (press Enter to save)`}
             onKeyDown={handleKeyDown}
@@ -169,7 +198,7 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
           <div className="flex items-center space-x-2">
             <Switch
               checked={Boolean(localValue)}
-              onCheckedChange={handleValueChange}
+              onCheckedChange={(newValue) => handleValueChange(newValue as AttrValue)}
               disabled={isDisabled}
             />
             <span className="text-sm text-enterprise-600">
@@ -190,21 +219,21 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
                   disabled={isDisabled}
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
-                  {localValue ? format(new Date(localValue), 'PPP') : `Select ${attribute.label}`}
+                  {localValue ? format(new Date(localValue as string), 'PPP') : `Select ${attribute.label}`}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
                 <Calendar
                   mode="single"
-                  selected={localValue ? new Date(localValue) : undefined}
+                  selected={localValue ? new Date(localValue as string) : undefined}
                   onSelect={(date) => {
                     if (date) {
                       // Format date to ISO string (YYYY-MM-DD)
                       const formattedDate = format(date, 'yyyy-MM-dd');
                       console.log("Selected date:", date, "Formatted:", formattedDate);
-                      handleValueChange(formattedDate);
+                      handleValueChange(formattedDate as AttrValue);
                     } else {
-                      handleValueChange(null);
+                      handleValueChange(null as AttrValue);
                     }
                   }}
                   initialFocus
@@ -215,11 +244,142 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
           </div>
         );
         
+      case 'price':
+        // Expecting object { amount, currency }
+        return (
+          <div className='flex gap-2'>
+            <Input
+              type='number'
+              step='0.01'
+              value={(localValue as any)?.amount ?? ''}
+              onChange={e => {
+                const amt = parseFloat(e.target.value)
+                handleValueChange({ amount: isNaN(amt) ? 0 : amt, currency: (localValue as any)?.currency ?? 'USD' } as AttrValue)
+              }}
+              disabled={isDisabled}
+              placeholder='Amount'
+              className='w-32'
+            />
+            <Select
+              value={(localValue as any)?.currency ?? 'USD'}
+              onValueChange={cur => handleValueChange({ amount: (localValue as any)?.amount ?? 0, currency: cur } as AttrValue)}
+              disabled={isDisabled}
+            >
+              <SelectTrigger className='w-28'>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {['USD','EUR','GBP','JPY','CNY'].map(c => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )
+
+      case 'measurement':
+        // Expecting object { amount, unit }
+        const units = ['mm','cm','m','in','ft']
+        return (
+          <div className='flex gap-2'>
+            <Input
+              type='number'
+              value={(localValue as any)?.amount ?? ''}
+              onChange={e => {
+                const amt = parseFloat(e.target.value)
+                handleValueChange({ amount: isNaN(amt) ? 0 : amt, unit: (localValue as any)?.unit ?? units[0] } as AttrValue)
+              }}
+              disabled={isDisabled}
+              placeholder='Amount'
+              className='w-28'
+            />
+            <Select
+              value={(localValue as any)?.unit ?? units[0]}
+              onValueChange={unit => handleValueChange({ amount: (localValue as any)?.amount ?? 0, unit } as AttrValue)}
+              disabled={isDisabled}
+            >
+              <SelectTrigger className='w-24'>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {units.map(u => (<SelectItem key={u} value={u}>{u}</SelectItem>))}
+              </SelectContent>
+            </Select>
+          </div>
+        )
+
+      case 'url':
+        return (
+          <Input
+            type='url'
+            value={(localValue as any) || ''}
+            onChange={e => handleValueChange(e.target.value as AttrValue)}
+            disabled={isDisabled}
+            placeholder='https://example.com'
+            onKeyDown={handleKeyDown}
+            autoFocus
+          />
+        )
+
+      case 'email':
+        return (
+          <Input
+            type='email'
+            value={(localValue as any) || ''}
+            onChange={e => handleValueChange(e.target.value as AttrValue)}
+            disabled={isDisabled}
+            placeholder='name@example.com'
+            onKeyDown={handleKeyDown}
+            autoFocus
+          />
+        )
+
+      case 'phone':
+        return (
+          <Input
+            type='tel'
+            value={(localValue as any) || ''}
+            onChange={e => handleValueChange(e.target.value as AttrValue)}
+            disabled={isDisabled}
+            placeholder='+1 555 555 5555'
+            onKeyDown={handleKeyDown}
+            autoFocus
+          />
+        )
+
+      case 'rich_text':
+        return (
+          <textarea
+            className='w-full border rounded p-2 text-sm'
+            rows={4}
+            value={(localValue as any) || ''}
+            onChange={e => handleValueChange(e.target.value as AttrValue)}
+            disabled={isDisabled}
+            placeholder='Enter formatted text...'
+          />
+        )
+
+      case 'media':
+        return (
+          <Input
+            type='file'
+            accept='image/*,video/*,application/pdf'
+            onChange={e => {
+              const file = e.target.files?.[0]
+              if (file) {
+                // For now just store file name; real implementation would upload and obtain asset_id
+                handleValueChange({ asset_id: Date.now() } as AttrValue)
+              }
+            }}
+            disabled={isDisabled}
+          />
+        )
+
       default:
         return (
           <Input
-            value={localValue || ''}
-            onChange={(e) => handleValueChange(e.target.value)}
+            value={(localValue as any) || ''}
+            onChange={(e) => handleValueChange(e.target.value as AttrValue)}
             disabled={isDisabled}
             placeholder={`Enter ${attribute.label} (press Enter to save)`}
             onKeyDown={handleKeyDown}
@@ -273,10 +433,12 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
       return <span className="text-muted-foreground italic">No value</span>;
     }
     
-    // Extract the actual value from the AttributeValue object if needed
-    const actualValue = typeof value === 'object' && value !== null && 'value' in value 
-      ? value.value 
-      : value;
+    // Use the normalised value when displaying
+    const actualValue = actualValueRef();
+
+    function actualValueRef (): AttrValue {
+      return actualValue
+    }
     
     switch (attribute.data_type) {
       case 'boolean':
@@ -298,6 +460,41 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
         // Make sure we display 0 values properly (don't treat them as falsy)
         if (actualValue === 0) return "0";
         return actualValue?.toString() || '';
+      case 'price':
+        if (!actualValue) return <span className='text-muted-foreground italic'>No price</span>
+        try {
+          const { amount, currency } = actualValue as any
+          return `${amount} ${currency}`
+        } catch {
+          return actualValue as string
+        }
+      case 'measurement':
+        if (!actualValue) return <span className='text-muted-foreground italic'>No measurement</span>
+        try {
+          const { amount, unit } = actualValue as any
+          return `${amount} ${unit || ''}`
+        } catch {
+          return actualValue as string
+        }
+      case 'url':
+      case 'email':
+      case 'phone':
+        return (
+          <a href={attribute.data_type === 'url' ? (actualValue as string) : undefined} target='_blank' rel='noopener noreferrer' className='text-primary underline'>
+            {actualValue as string}
+          </a>
+        )
+      case 'rich_text':
+        return <div dangerouslySetInnerHTML={{ __html: actualValue as string }} />
+      case 'media':
+        // Expecting object { asset_id }
+        if (!actualValue) return <span className='text-muted-foreground italic'>No media</span>
+        try {
+          const { asset_id } = actualValue as any
+          return `Asset #${asset_id}`
+        } catch {
+          return actualValue as string
+        }
       default:
         // Text
         return actualValue as string || '';

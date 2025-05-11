@@ -214,7 +214,7 @@ class AttributeGroupViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             status=status.HTTP_201_CREATED
         )
         
-    @action(detail=True, methods=['delete'], url_path='items/(?P<item_id>\\d+)')
+    @action(detail=True, methods=['delete'], url_path='items/(?P<item_id>\d+)')
     def remove_item(self, request, pk=None, item_id=None):
         """
         Delete ONE item from the group, leaving the rest intact and re-ordering.
@@ -227,18 +227,18 @@ class AttributeGroupViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 {"detail": "Item not found"},
                 status=status.HTTP_404_NOT_FOUND
             )
-        
         # Delete the item
         item.delete()
-        
         # Compact orders (0,1,2,...)
-        for pos, gi in enumerate(
-            AttributeGroupItem.objects.filter(group=group).order_by('order')
-        ):
+        remaining_items = AttributeGroupItem.objects.filter(group=group).order_by('order')
+        for pos, gi in enumerate(remaining_items):
             if gi.order != pos:
-                gi.order = pos
-                gi.save(update_fields=['order'])
-                
+                try:
+                    gi.order = pos
+                    gi.save(update_fields=['order'])
+                except Exception as e:
+                    # Log the error, but don't crash
+                    print(f'Error updating order for AttributeGroupItem {gi.id}: {e}')
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 @extend_schema_view(
@@ -255,39 +255,71 @@ class ProductAttributeGroupViewSet(OrganizationQuerySetMixin, viewsets.ReadOnlyM
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
+        """Build a filtered queryset of attribute groups that have *at least one* value
+        for this product/localisation combination.
+
+        Steps:
+        1.  Compute a Q() object (`value_filter`) matching the product, locale and
+            channel requested by the client.  This will be re-used both for the
+            annotation and for prefetching the concrete `AttributeValue` rows.
+        2.  Annotate every `AttributeGroup` with `num_values`, the count of
+            `AttributeValue` rows reachable through the M2M relation
+            `attributegroupitem → attribute → attributevalue` that match the
+            filter.
+        3.  Keep only the groups where `num_values > 0` – these are the groups
+            that have relevant data for the current product.
+        4.  Prefetch the related items/attributes/values so the serializer can
+            render them without additional queries.
+        """
+
         product_id = self.kwargs.get('product_pk')
         locale     = self.request.query_params.get('locale')
         channel    = self.request.query_params.get('channel')
-        
-        # Build a more precise filter for attribute values
-        value_filter = Q(product_id=product_id)
-        if locale:
-            value_filter &= Q(locale=locale)
-        else:
-            value_filter &= Q(locale__isnull=True)
-        if channel:
-            value_filter &= Q(channel=channel)
-        else:
-            value_filter &= Q(channel__isnull=True)
-            
-        # Get organization from request
+
+        # Base filter that must always match – the product and organisation.
+        value_filter = Q(
+            attributegroupitem__attribute__attributevalue__product_id=product_id,
+            attributegroupitem__attribute__attributevalue__organization=get_user_organization(self.request.user)
+        )
+
+        # Optional locale / channel specificity.  Only add these conditions
+        # when the client explicitly requests them – otherwise we allow *any*
+        # locale/channel so that existing values are counted.
+        if locale not in [None, '']:
+            value_filter &= Q(attributegroupitem__attribute__attributevalue__locale=locale)
+
+        if channel not in [None, '']:
+            value_filter &= Q(attributegroupitem__attribute__attributevalue__channel=channel)
+
         org = get_user_organization(self.request.user)
-        
-        # Get all groups for the organization with their attributes
-        return AttributeGroup.objects.filter(
+
+        queryset = AttributeGroup.objects.filter(
             organization=org
+        ).annotate(
+            # Count AttributeValue rows that match our filter.
+            num_values=models.Count(
+                'attributegroupitem__attribute__attributevalue',
+                filter=value_filter,
+            )
+        ).filter(
+            num_values__gt=0  # keep only groups that have values
         ).prefetch_related(
             'attributegroupitem_set__attribute',
-            # Improved prefetch that directly targets the values we need
+            # Prefetch only the relevant values so the serializer can access
+            # them without extra queries.
             Prefetch(
                 'attributegroupitem_set__attribute__attributevalue_set',
                 queryset=AttributeValue.objects.filter(
-                    value_filter,
-                    organization=org
+                    product_id=product_id,
+                    organization=org,
+                    **({'locale': locale} if locale not in [None, ''] else {}),
+                    **({'channel': channel} if channel not in [None, ''] else {}),
                 ).select_related('attribute'),
                 to_attr='product_values'
             )
         )
+
+        return queryset
     
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()

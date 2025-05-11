@@ -7,7 +7,7 @@ if 'makemigrations' not in sys.argv and 'migrate' not in sys.argv:
     # Import all models from models.py
     from products.models import (
         Product, ProductImage, ProductAsset, ProductEvent, Activity, ProductRelation,
-        Attribute, AttributeValue, AttributeGroup, AttributeGroupItem
+        Attribute, AttributeValue, AttributeGroup, AttributeGroupItem, AttributeOption
     )
 
     class ProductImageInline(admin.TabularInline):
@@ -38,6 +38,10 @@ if 'makemigrations' not in sys.argv and 'migrate' not in sys.argv:
         can_delete = False
         readonly_fields = ()  # make empty tuple → rows are editable
         ordering = ('attribute__label',)
+
+    class AttributeOptionInline(admin.TabularInline):
+        model = AttributeOption
+        extra = 1
 
     @admin.register(Product)
     class ProductAdmin(admin.ModelAdmin):
@@ -117,6 +121,7 @@ if 'makemigrations' not in sys.argv and 'migrate' not in sys.argv:
         list_display = ('id', 'code', 'label', 'data_type', 'organization')
         list_filter = ('data_type', 'is_localisable', 'organization')
         search_fields = ('code', 'label')
+        inlines = [AttributeOptionInline]
         
         def get_queryset(self, request):
             qs = super().get_queryset(request)
@@ -182,3 +187,9 @@ if 'makemigrations' not in sys.argv and 'migrate' not in sys.argv:
                 organization = get_user_organization(request.user)
                 return qs.filter(organization=organization)
             return qs
+
+    @admin.register(AttributeOption)
+    class AttributeOptionAdmin(admin.ModelAdmin):
+        list_display = ('id', 'attribute', 'value', 'label', 'order')
+        list_filter = ('attribute',)
+        search_fields = ('value', 'label')

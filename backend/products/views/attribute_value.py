@@ -4,6 +4,7 @@ from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from django.db.models import Q
 
 from products.models import AttributeValue, Product, Attribute
 from products.serializers import AttributeValueSerializer, AttributeValueDetailSerializer
@@ -30,9 +31,49 @@ class AttributeValueViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     """
     API endpoint for managing attribute values.
     """
-    queryset = AttributeValue.objects.all()
-    serializer_class = AttributeValueSerializer
     permission_classes = [IsAuthenticated, IsStaffOrReadOnly]
+    
+    def get_queryset(self):
+        """
+        Return AttributeValues scoped to the current user's organisation.
+        If the URL is nested under /products/<product_pk>/, limit to that product.
+        Otherwise return all attribute values for the organisation.
+        Keeps backwards-compatibility with existing non-nested endpoint which expects
+        organisation-wide results.
+        """
+        org = get_user_organization(self.request.user)
+
+        # Standard base queryset – always organisation scoped
+        qs = AttributeValue.objects.filter(organization=org).select_related('attribute', 'product')
+
+        # Check if we are under a nested router with product_pk in kwargs
+        product_pk = self.kwargs.get('product_pk') or self.kwargs.get('product_id')
+
+        if product_pk:
+            qs = qs.filter(product_id=product_pk)
+
+        # --------------------------------------------------------------
+        # Locale / Channel scoping
+        # --------------------------------------------------------------
+        # When the frontend supplies ?locale=<code>&channel=<code> it expects
+        # operations (list, update, delete) to apply ONLY to that specific
+        # locale / channel combination.  Previously we ignored these query
+        # parameters which meant that list responses mixed values from other
+        # locales/channels and the delete button could remove a fallback
+        # (locale/channel = NULL) value, effectively deleting the attribute
+        # for all contexts.  By honouring the query-string here we ensure that
+        # any action is strictly scoped to the requested locale/channel.
+
+        locale  = self.request.query_params.get('locale')
+        channel = self.request.query_params.get('channel')
+
+        if locale is not None and locale != '':
+            qs = qs.filter(Q(locale=locale) | Q(locale__isnull=True))
+
+        if channel is not None and channel != '':
+            qs = qs.filter(Q(channel=channel) | Q(channel__isnull=True))
+
+        return qs
     
     def get_serializer_class(self):
         if self.action in ['retrieve', 'list']:
@@ -55,6 +96,30 @@ class AttributeValueViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             serializer.save(organization=get_user_organization(request.user), created_by=request.user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    # ------------------------------------------------------------------
+    # Deletion safety – ensure we only delete the value that matches the
+    # requested locale/channel so that a global (NULL locale/channel) value
+    # isn't removed accidentally when the user is working within a specific
+    # context.
+    # ------------------------------------------------------------------
+    def perform_destroy(self, instance):
+        from rest_framework.exceptions import ValidationError
+
+        locale_param  = self.request.query_params.get('locale')
+        channel_param = self.request.query_params.get('channel')
+
+        # If the caller specified a locale/channel, ensure the instance
+        # matches exactly; otherwise abort to prevent unintended cross-scope
+        # deletions.
+        if locale_param and (instance.locale or '') != locale_param:
+            raise ValidationError({'detail': 'Attribute value does not match the requested locale – deletion aborted.'})
+
+        if channel_param and (instance.channel or '') != channel_param:
+            raise ValidationError({'detail': 'Attribute value does not match the requested channel – deletion aborted.'})
+
+        # All good – delete the instance.
+        instance.delete()
 
 class ProductAttributeValueList(generics.ListAPIView):
     """

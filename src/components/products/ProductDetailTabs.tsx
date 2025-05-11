@@ -67,13 +67,10 @@ import { AssetsTab } from './AssetsTab';
 import { Skeleton } from "@/components/ui/skeleton";
 import ProductHistoryTab from './ProductHistoryTab';
 import { Suspense } from 'react';
-import AttributesTab from './AttributesTab';
-import { ENABLE_CUSTOM_ATTRIBUTES } from '@/config/featureFlags';
-import { PermissionGuard } from '@/components/common/PermissionGuard';
-// Update the imports to include FieldStatusModal
-import { FieldStatusModal } from './FieldStatusModal';
-// Add import for normalizeCategory
-import { normalizeCategory } from '@/types/categories';
+import { ProductAttributesPanel } from '@/components/ProductAttributesPanel'
+import { ENABLE_CUSTOM_ATTRIBUTES } from '@/config/featureFlags'
+import { FieldStatusModal } from './FieldStatusModal'
+import { normalizeCategory } from '@/types/categories'
 
 // ====== ATTRIBUTES INTERFACES (EXACT MATCH TO SPEC) ======
 // (Following exactly the backend shape specified in the requirements)
@@ -2197,7 +2194,7 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
       
       <TabsContent value="attributes" className="space-y-6">
         {ENABLE_CUSTOM_ATTRIBUTES && (
-          <AttributesTab productId={product.id} />
+          <ProductAttributesPanel productId={String(product.id)} locale={selectedLocale} />
         )}
       </TabsContent>
       

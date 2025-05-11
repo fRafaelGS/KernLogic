@@ -35,6 +35,7 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
   const updateMutation = useUpdateAttribute(productId, selectedLocale, selectedChannel)
   const { data: groupsData = [] } = useAttributeGroups(productId)
   const deleteMutation = useDeleteAttribute(productId, selectedLocale, selectedChannel)
+  const deleteGlobalMutation = useDeleteAttribute(productId, null, null)
 
   // local editing state
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -227,8 +228,8 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
                             <TableRow key={attr.id}>
                               <TableCell className='py-4'>{attr.attribute_label || attr.name || attr.attribute_code}</TableCell>
                               <TableCell className='py-4'>{attr.attribute_type || attr.type}</TableCell>
-                              <TableCell className='py-4'>{attr.locale}</TableCell>
-                              <TableCell className='py-4'>{attr.channel}</TableCell>
+                              <TableCell className='py-4'>{attr.locale || 'All locales'}</TableCell>
+                              <TableCell className='py-4'>{attr.channel || 'All channels'}</TableCell>
                               <TableCell className='py-4'>
                                 {isEditing ? (
                                   <div className='flex items-center space-x-2'>
@@ -293,12 +294,19 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
                                     size='icon'
                                     variant='ghost'
                                     aria-label='Delete'
-                                    disabled={deleteMutation.isPending || (
-                                      // Only allow deletion when attr matches current locale/channel
-                                      (selectedLocale && (attr.locale ?? '') !== selectedLocale.replace('-', '_')) ||
-                                      (selectedChannel && (attr.channel ?? '') !== selectedChannel)
-                                    )}
-                                    onClick={() => deleteMutation.mutate({ id: String(attr.id) })}
+                                    disabled={deleteMutation.isPending || deleteGlobalMutation.isPending}
+                                    onClick={() => {
+                                      const isGlobal = (attr.locale == null || attr.locale === '') && (attr.channel == null || attr.channel === '')
+
+                                      // Warn the user if this is a global value (applies to all locales/channels)
+                                      if (isGlobal) {
+                                        const ok = window.confirm('This attribute value applies to ALL locales and channels for this product. Deleting it will remove the value everywhere. Continue?')
+                                        if (!ok) return
+                                        deleteGlobalMutation.mutate({ id: String(attr.id) })
+                                      } else {
+                                        deleteMutation.mutate({ id: String(attr.id) })
+                                      }
+                                    }}
                                   >
                                     <Trash2 className='h-4 w-4' />
                                   </Button>

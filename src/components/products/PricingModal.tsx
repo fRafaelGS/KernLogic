@@ -18,7 +18,7 @@ import { Badge } from '@/components/ui/badge';
 interface PricingModalProps {
   isOpen: boolean;
   onClose: () => void;
-  productId: number;
+  productId?: number;
   onPricesUpdated?: () => Promise<void>;
 }
 
@@ -90,9 +90,11 @@ export function PricingModal({ isOpen, onClose, productId, onPricesUpdated }: Pr
     }
   }, [priceTypes, newPrice.price_type_id]);
   
-  // Fetch prices when the modal opens
+  // Always respond to open/close, but only fetch when we have an ID
   useEffect(() => {
-    if (isOpen && productId) {
+    if (!isOpen) return;
+    
+    if (productId) {
       fetchPrices();
       fetchProduct();
     }
@@ -288,7 +290,7 @@ export function PricingModal({ isOpen, onClose, productId, onPricesUpdated }: Pr
     
     setLoading(true);
     try {
-      await productService.deletePrice(productId, priceId);
+      await productService.deletePrice(productId!, priceId);
       toast.success('Price deleted successfully');
       
       // Refresh prices
@@ -316,6 +318,24 @@ export function PricingModal({ isOpen, onClose, productId, onPricesUpdated }: Pr
     setEditingPrice(null);
     setActiveTab('table');
   };
+  
+  // Show friendly message before the product exists
+  if (!productId) {
+    return (
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="sm:max-w-[650px]">
+          <DialogHeader>
+            <DialogTitle>
+              You can manage pricing after saving this product
+            </DialogTitle>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={onClose}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
   
   // Show loading indicator if metadata is still loading
   if (metaLoading) {

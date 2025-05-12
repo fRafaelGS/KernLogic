@@ -141,8 +141,17 @@ export function usePricingData(productId: number) {
 
   // Function to add a price
   const add = async (values: PriceFormValues) => {
+    // Map camelCase form values to snake_case API fields
+    const payload: Record<string, any> = {
+      price_type: values.priceType,
+      currency: values.currencyCode,
+      amount: values.value,
+      valid_from: values.validFrom
+    }
+    if (values.channel) payload.channel = values.channel
+    if (values.validTo) payload.valid_to = values.validTo
     try {
-      await priceService.createPrice(productId, values)
+      await priceService.createPrice(productId, payload)
       await fetchPrices() // Refresh prices after adding
       return true
     } catch (err) {

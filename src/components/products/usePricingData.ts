@@ -71,6 +71,7 @@ export function usePricingData(productId: number) {
   }, [metadataHook.currencies])
   
   const [prices, setPrices] = useState<Price[]>([])
+  const [rawPrices, setRawPrices] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filters, setFilters] = useState<PriceFilters>({
@@ -112,7 +113,7 @@ export function usePricingData(productId: number) {
         priceData = []
       }
       
-      console.log('Processed price data:', priceData)
+      setRawPrices(priceData)
       
       // Transform the API response to match our Price interface
       const fetchedPrices: Price[] = priceData.map(price => ({
@@ -132,6 +133,7 @@ export function usePricingData(productId: number) {
       setError('Failed to load prices')
       console.error('Error fetching prices:', err)
       setPrices([]) // Ensure prices is always an array even on error
+      setRawPrices([])
     } finally {
       setIsLoading(false)
     }
@@ -228,6 +230,7 @@ export function usePricingData(productId: number) {
 
   return {
     prices: filteredPrices,
+    rawPrices, // full, unfiltered from API
     isLoading,
     error,
     summary,

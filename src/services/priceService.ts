@@ -22,7 +22,7 @@ export default {
     return axiosInstance.post(`/api/products/${productId}/prices/`, payload)
   },
   updatePrice(productId: number, priceId: number, payload: PriceFormValues) {
-    return axiosInstance.put(`/api/products/${productId}/prices/${priceId}/`, payload)
+    return axiosInstance.patch(`/api/products/${productId}/prices/${priceId}/`, payload)
   },
   deletePrice(productId: number, priceId: number) {
     return axiosInstance.delete(`/api/products/${productId}/prices/${priceId}/`)

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { usePricingData, Price } from './usePricingData'
 import { PricingForm } from './PricingForm'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -34,6 +34,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/use-toast'
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog'
+import { usePriceMetadata } from '@/hooks/usePriceMetadata'
 
 interface PriceTabProps {
   productId: number
@@ -42,13 +43,14 @@ interface PriceTabProps {
 export function PriceTab({ productId }: PriceTabProps) {
   const { toast } = useToast()
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [selectedPrice, setSelectedPrice] = useState<Price | null>(null)
+  const [selectedPrice, setSelectedPrice] = useState<any>(null)
   const [selectedRows, setSelectedRows] = useState<number[]>([])
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [priceToDelete, setPriceToDelete] = useState<number | null>(null)
   
   const {
     prices,
+    rawPrices,
     isLoading,
     error,
     summary,
@@ -65,13 +67,72 @@ export function PriceTab({ productId }: PriceTabProps) {
     remove
   } = usePricingData(productId)
 
+  const { priceTypes: metaPriceTypes } = usePriceMetadata()
+
+  const firstInputRef = useRef<HTMLInputElement>(null)
+
+  // Focus management for accessibility
+  useEffect(() => {
+    if (drawerOpen && firstInputRef.current) {
+      firstInputRef.current.focus()
+    }
+  }, [drawerOpen])
+
+  // Build a set of used currency codes (normalize to uppercase)
+  const usedCurrencyCodes = useMemo(() => {
+    return new Set(
+      rawPrices
+        .map(p =>
+          (p.currency ?? p.currencyCode ?? '')
+            .toString()
+            .toUpperCase()
+        )
+        .filter(code => code)
+    )
+  }, [rawPrices])
+
+  // Filter metadata currencies by used codes (normalize to uppercase)
+  const filteredCurrencies = useMemo(() =>
+    currencies.filter(c =>
+      usedCurrencyCodes.has(c.code.toUpperCase())
+    ),
+    [currencies, usedCurrencyCodes]
+  )
+
+  // Debug log at the top of the component
+  console.log('CURRENCY FILTER DEBUG', { rawPrices, currencies, usedCurrencyCodes, filteredCurrencies })
+
+  // Also log in a useEffect to ensure it logs on every change
+  useEffect(() => {
+    console.log('CURRENCY FILTER DEBUG (effect)', { rawPrices, currencies, usedCurrencyCodes, filteredCurrencies })
+  }, [rawPrices, currencies, usedCurrencyCodes, filteredCurrencies])
+
   const handleAddPrice = () => {
     setSelectedPrice(null)
     setDrawerOpen(true)
   }
 
-  const handleEditPrice = (price: Price) => {
-    setSelectedPrice(price)
+  const handleEditPrice = (price: any) => {
+    // Use metaPriceTypes for code lookup
+    const priceTypeObj = metaPriceTypes.find(pt => pt.code === price.priceType || pt.code === price.price_type)
+    const priceTypeId = priceTypeObj ? priceTypeObj.id.toString() : price.priceType
+    setSelectedPrice({
+      id: price.id,
+      priceType: priceTypeId,
+      channel: price.channel,
+      currencyCode: price.currencyCode,
+      value: price.value,
+      validFrom: price.validFrom
+        ? price.validFrom.slice(0, 10)
+        : price.valid_from
+          ? price.valid_from.slice(0, 10)
+          : '',
+      validTo: price.validTo
+        ? price.validTo.slice(0, 10)
+        : price.valid_to
+          ? price.valid_to.slice(0, 10)
+          : ''
+    })
     setDrawerOpen(true)
   }
 
@@ -212,16 +273,13 @@ export function PriceTab({ productId }: PriceTabProps) {
                 onValueChange={value => setFilters({ ...filters, currency: value })}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Currency" />
+                  <SelectValue placeholder="All Currencies" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Currencies</SelectItem>
-                  {currencies.map(currency => (
-                    <SelectItem 
-                      key={currency.id || currency.code || `currency-${Math.random()}`} 
-                      value={currency.code || `currency-${Math.random()}`}
-                    >
-                      {currency.code || 'Unknown'} ({currency.name || currency.symbol || 'Unknown'})
+                  {filteredCurrencies.map(c => (
+                    <SelectItem key={c.id} value={c.code}>
+                      {c.code} ({c.symbol || c.name})
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -329,12 +387,13 @@ export function PriceTab({ productId }: PriceTabProps) {
                         {price.formattedValue}
                       </TableCell>
                       <TableCell>
-                        <div className="flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex justify-end">
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => handleEditPrice(price)}
                             className="h-8 w-8"
+                            aria-label="Edit price"
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
@@ -343,6 +402,7 @@ export function PriceTab({ productId }: PriceTabProps) {
                             size="icon"
                             onClick={() => confirmDelete(price.id)}
                             className="h-8 w-8 text-destructive"
+                            aria-label="Delete price"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -358,7 +418,13 @@ export function PriceTab({ productId }: PriceTabProps) {
       </Card>
 
       {/* Add/Edit Price Drawer */}
-      <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
+      <Drawer 
+        open={drawerOpen} 
+        onOpenChange={(open) => {
+          setDrawerOpen(open)
+          if (!open) setSelectedPrice(null)
+        }}
+      >
         <DrawerContent className="max-w-md mx-auto">
           <DrawerHeader>
             <DrawerTitle>
@@ -372,20 +438,16 @@ export function PriceTab({ productId }: PriceTabProps) {
           </DrawerHeader>
           <div className="px-4 py-2">
             <PricingForm
+              key={selectedPrice?.id ?? 'new-price'}
               productId={productId}
-              initialData={selectedPrice ? {
-                id: selectedPrice.id,
-                priceType: selectedPrice.priceType,
-                channel: selectedPrice.channel,
-                currencyCode: selectedPrice.currencyCode,
-                value: selectedPrice.value
-              } : undefined}
-              onSuccess={() => {
-                setDrawerOpen(false)
-                refresh()
-              }}
+              initialData={selectedPrice || undefined}
               onAdd={add}
               onUpdate={update}
+              onSuccess={() => {
+                refresh()
+                setDrawerOpen(false)
+                setSelectedPrice(null)
+              }}
             />
           </div>
           <DrawerFooter>

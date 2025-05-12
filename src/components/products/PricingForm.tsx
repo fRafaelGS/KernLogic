@@ -21,16 +21,18 @@ import {
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Loader2 } from 'lucide-react'
-import { PriceType, SalesChannel, Currency } from './usePricingData'
-import priceService from '@/services/priceService'
+import { PriceType, SalesChannel, Currency } from '@/hooks/usePriceMetadata'
+import { useEffect } from 'react'
 
 const priceFormSchema = z.object({
   priceType: z.string().min(1, { message: 'Price type is required' }),
-  channel: z.string().min(1, { message: 'Channel is required' }),
+  channel: z.string().optional(),
   currencyCode: z.string().min(1, { message: 'Currency is required' }),
   value: z.coerce
     .number()
     .min(0, { message: 'Price must be a positive number' }),
+  validFrom: z.string().min(1, { message: 'Valid from is required' }),
+  validTo: z.string().optional().nullable(),
 })
 
 export type PriceFormValues = z.infer<typeof priceFormSchema>
@@ -40,13 +42,15 @@ interface PricingFormProps {
   initialData?: {
     id?: number
     priceType: string
-    channel: string
+    channel?: string | null
     currencyCode: string
     value: number
+    validFrom?: string
+    validTo?: string | null
   }
   onSuccess: () => void
-  onAdd?: (values: PriceFormValues) => Promise<boolean>
-  onUpdate?: (id: number, values: PriceFormValues) => Promise<boolean>
+  onAdd: (values: PriceFormValues) => Promise<any>
+  onUpdate: (id: number, values: PriceFormValues) => Promise<any>
 }
 
 export function PricingForm({
@@ -57,25 +61,7 @@ export function PricingForm({
   onUpdate
 }: PricingFormProps) {
   const { toast } = useToast()
-  const metadataHook = usePriceMetadata()
-  
-  // Adapt metadata to our expected shape
-  const priceTypes: PriceType[] = metadataHook.priceTypes?.map((pt: any) => ({
-    id: pt.id || pt.value || `pricetype-${Math.random()}`,
-    name: pt.name || pt.label || 'Unnamed Type',
-  })) || []
-  
-  const channels: SalesChannel[] = metadataHook.channels?.map((ch: any) => ({
-    id: ch.id || ch.value || `channel-${Math.random()}`,
-    name: ch.name || ch.label || 'Unnamed Channel',
-  })) || []
-  
-  const currencies: Currency[] = metadataHook.currencies?.map((cur: any) => ({
-    id: cur.id || cur.value || cur.code || `currency-${Math.random()}`,
-    code: cur.code || cur.value || `CUR${Math.floor(Math.random() * 1000)}`,
-    name: cur.name || cur.label || 'Unnamed Currency',
-    symbol: cur.symbol || '$',
-  })) || []
+  const { priceTypes, channels, currencies, loading: metaLoading, error: metaError } = usePriceMetadata()
   
   const form = useForm<PriceFormValues>({
     resolver: zodResolver(priceFormSchema),
@@ -84,26 +70,43 @@ export function PricingForm({
       channel: '',
       currencyCode: '',
       value: 0,
+      validFrom: new Date().toISOString().slice(0, 10),
+      validTo: '',
     },
   })
+
+  // Reset form when initialData changes (e.g., when editing a new price)
+  useEffect(() => {
+    if (initialData) {
+      form.reset(initialData)
+    }
+  }, [initialData])
 
   const isSubmitting = form.formState.isSubmitting
 
   async function onSubmit(values: PriceFormValues) {
     try {
+      // Step 1: Log values on submit
+      console.log('Form submitted values:', values)
+      console.log('Current initialData:', initialData)
       if (initialData?.id) {
-        if (onUpdate) {
-          await onUpdate(initialData.id, values)
-        } else {
-          await priceService.updatePrice(productId, initialData.id, values)
+        // Only send changed fields (diff)
+        const diff: Record<string, any> = {}
+        if (values.priceType !== initialData.priceType) diff.price_type = values.priceType
+        if (values.channel !== initialData.channel) diff.channel_id = values.channel || null
+        if (values.currencyCode !== initialData.currencyCode) diff.currency = values.currencyCode
+        if (values.value !== initialData.value) diff.amount = values.value
+        if (values.validFrom !== initialData.validFrom) diff.valid_from = values.validFrom
+        if (values.validTo !== initialData.validTo) diff.valid_to = values.validTo || null
+        if (Object.keys(diff).length === 0) {
+          toast({ title: 'No changes to update' })
+          return
         }
+        console.log('PATCH diff payload:', diff)
+        await onUpdate(initialData.id, diff)
         toast({ title: 'Price updated successfully' })
       } else {
-        if (onAdd) {
-          await onAdd(values)
-        } else {
-          await priceService.createPrice(productId, values)
-        }
+        await onAdd(values)
         toast({ title: 'Price created successfully' })
       }
       form.reset()
@@ -116,6 +119,24 @@ export function PricingForm({
     }
   }
 
+  // Show loading indicator if metadata is still loading
+  if (metaLoading) {
+    return (
+      <div className='py-8 flex flex-col items-center justify-center'>
+        <Loader2 className='h-8 w-8 animate-spin text-primary mb-2' />
+        <p className='text-muted-foreground'>Loading price metadata...</p>
+      </div>
+    )
+  }
+  if (metaError) {
+    return (
+      <div className='py-8 flex flex-col items-center justify-center'>
+        <p className='text-destructive mb-2'>Error loading price data</p>
+        <p className='text-muted-foreground text-sm'>Please try again later</p>
+      </div>
+    )
+  }
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -125,24 +146,24 @@ export function PricingForm({
           render={({ field }) => (
             <FormItem>
               <FormLabel>Price Type</FormLabel>
-              <Select
-                disabled={isSubmitting}
-                onValueChange={field.onChange}
-                defaultValue={field.value || undefined}
-              >
-                <FormControl>
+              <FormControl>
+                <Select
+                  disabled={isSubmitting}
+                  value={field.value}
+                  onValueChange={field.onChange}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select price type" />
                   </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {priceTypes.map((type) => (
-                    <SelectItem key={type.id} value={type.id}>
-                      {type.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                  <SelectContent>
+                    {Array.isArray(priceTypes) && priceTypes.map((pt: PriceType) => (
+                      <SelectItem key={pt.id} value={pt.id.toString()}>
+                        {pt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormControl>
               <FormMessage />
             </FormItem>
           )}
@@ -151,30 +172,36 @@ export function PricingForm({
         <FormField
           control={form.control}
           name="channel"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Channel</FormLabel>
-              <Select
-                disabled={isSubmitting}
-                onValueChange={field.onChange}
-                defaultValue={field.value || undefined}
-              >
+          render={({ field }) => {
+            function handleChange(val: string) {
+              if (!val) field.onChange(undefined)
+              else field.onChange(val)
+            }
+            return (
+              <FormItem>
+                <FormLabel>Channel (optional)</FormLabel>
                 <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select channel" />
-                  </SelectTrigger>
+                  <Select
+                    disabled={isSubmitting}
+                    value={field.value || undefined}
+                    onValueChange={handleChange}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select channel (optional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.isArray(channels) && channels.map((c: SalesChannel) => (
+                        <SelectItem key={c.id} value={c.id.toString()}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </FormControl>
-                <SelectContent>
-                  {channels.map((channel) => (
-                    <SelectItem key={channel.id} value={channel.id}>
-                      {channel.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
+                <FormMessage />
+              </FormItem>
+            )
+          }}
         />
         
         <FormField
@@ -183,24 +210,24 @@ export function PricingForm({
           render={({ field }) => (
             <FormItem>
               <FormLabel>Currency</FormLabel>
-              <Select
-                disabled={isSubmitting}
-                onValueChange={field.onChange}
-                defaultValue={field.value || undefined}
-              >
-                <FormControl>
+              <FormControl>
+                <Select
+                  disabled={isSubmitting}
+                  value={field.value}
+                  onValueChange={field.onChange}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select currency" />
                   </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {currencies.map((currency) => (
-                    <SelectItem key={currency.id} value={currency.code || currency.id}>
-                      {currency.code || currency.id} ({currency.name})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                  <SelectContent>
+                    {Array.isArray(currencies) && currencies.map((c: Currency) => (
+                      <SelectItem key={c.iso_code} value={c.iso_code}>
+                        {c.iso_code} ({c.symbol})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormControl>
               <FormMessage />
             </FormItem>
           )}
@@ -219,6 +246,44 @@ export function PricingForm({
                   step="0.01"
                   disabled={isSubmitting}
                   {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        <FormField
+          control={form.control}
+          name="validFrom"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Valid From</FormLabel>
+              <FormControl>
+                <Input
+                  type="date"
+                  disabled={isSubmitting}
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        <FormField
+          control={form.control}
+          name="validTo"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Valid To (optional)</FormLabel>
+              <FormControl>
+                <Input
+                  type="date"
+                  disabled={isSubmitting}
+                  value={field.value || ''}
+                  onChange={field.onChange}
+                  placeholder="Never expires"
                 />
               </FormControl>
               <FormMessage />

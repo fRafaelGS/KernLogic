@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Loader2 } from 'lucide-react'
 import { PriceType, SalesChannel, Currency } from './usePricingData'
+import priceService from '@/services/priceService'
 
 const priceFormSchema = z.object({
   priceType: z.string().min(1, { message: 'Price type is required' }),
@@ -32,7 +33,7 @@ const priceFormSchema = z.object({
     .min(0, { message: 'Price must be a positive number' }),
 })
 
-type PriceFormValues = z.infer<typeof priceFormSchema>
+export type PriceFormValues = z.infer<typeof priceFormSchema>
 
 interface PricingFormProps {
   productId: number
@@ -44,12 +45,16 @@ interface PricingFormProps {
     value: number
   }
   onSuccess: () => void
+  onAdd?: (values: PriceFormValues) => Promise<boolean>
+  onUpdate?: (id: number, values: PriceFormValues) => Promise<boolean>
 }
 
 export function PricingForm({
   productId,
   initialData,
-  onSuccess
+  onSuccess,
+  onAdd,
+  onUpdate
 }: PricingFormProps) {
   const { toast } = useToast()
   const metadataHook = usePriceMetadata()
@@ -87,14 +92,18 @@ export function PricingForm({
   async function onSubmit(values: PriceFormValues) {
     try {
       if (initialData?.id) {
-        // Using a mock function - should be implemented in productService
-        // await productService.updatePrice(productId, initialData.id, values)
-        console.log('Update price:', productId, initialData.id, values)
+        if (onUpdate) {
+          await onUpdate(initialData.id, values)
+        } else {
+          await priceService.updatePrice(productId, initialData.id, values)
+        }
         toast({ title: 'Price updated successfully' })
       } else {
-        // Using a mock function - should be implemented in productService
-        // await productService.createPrice(productId, values)
-        console.log('Create price:', productId, values)
+        if (onAdd) {
+          await onAdd(values)
+        } else {
+          await priceService.createPrice(productId, values)
+        }
         toast({ title: 'Price created successfully' })
       }
       form.reset()

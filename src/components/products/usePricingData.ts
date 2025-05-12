@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { usePriceMetadata } from '@/hooks/usePriceMetadata'
+import priceService from '@/services/priceService'
+import { PriceFormValues } from './PricingForm'
 
 // Define interfaces for metadata objects
 export interface PriceType {
@@ -82,46 +84,92 @@ export function usePricingData(productId: number) {
     setIsLoading(true)
     setError(null)
     try {
-      // Mock implementation - replace with actual API call
-      // const response = await productService.getProductPrices(productId)
+      // Use priceService to fetch prices
+      const response = await priceService.getPrices(productId)
       
-      // Simulate API response with mock data
-      const mockPrices: Price[] = [
-        {
-          id: 1,
-          priceType: 'retail',
-          channel: 'online',
-          currencyCode: 'USD',
-          value: 19.99,
-          formattedValue: '$19.99'
-        },
-        {
-          id: 2,
-          priceType: 'wholesale',
-          channel: 'store',
-          currencyCode: 'USD',
-          value: 15.99,
-          formattedValue: '$15.99'
-        },
-        {
-          id: 3,
-          priceType: 'msrp',
-          channel: 'online',
-          currencyCode: 'EUR',
-          value: 18.99,
-          formattedValue: '€18.99'
+      // Debug the response structure
+      console.log('Price API response:', response)
+      
+      // Handle different response formats
+      let priceData: any[] = []
+      
+      if (response && response.data) {
+        if (Array.isArray(response.data)) {
+          // Direct array in response.data
+          priceData = response.data
+        } else if (response.data.data && Array.isArray(response.data.data)) {
+          // Nested data property (response.data.data)
+          priceData = response.data.data
+        } else if (Array.isArray(response.data.results)) {
+          // DRF paginated response
+          priceData = response.data.results
         }
-      ]
+      }
       
-      // Simulate API delay
-      setTimeout(() => {
-        setPrices(mockPrices)
-        setIsLoading(false)
-      }, 800)
+      // Default to empty array if no data found in expected formats
+      if (!priceData || !Array.isArray(priceData)) {
+        console.warn('No price data found or unexpected format:', response.data)
+        priceData = []
+      }
+      
+      console.log('Processed price data:', priceData)
+      
+      // Transform the API response to match our Price interface
+      const fetchedPrices: Price[] = priceData.map(price => ({
+        id: price.id,
+        priceType: price.priceType || price.price_type || '',
+        channel: price.channel || (price.channel_id ? price.channel_id.toString() : ''),
+        currencyCode: price.currencyCode || price.currency || 'USD',
+        value: typeof price.value === 'number' ? price.value : (Number(price.amount) || 0),
+        formattedValue: formatPrice(
+          typeof price.value === 'number' ? price.value : (Number(price.amount) || 0),
+          price.currencyCode || price.currency || 'USD'
+        )
+      }))
+      
+      setPrices(fetchedPrices)
     } catch (err) {
       setError('Failed to load prices')
-      console.error(err)
+      console.error('Error fetching prices:', err)
+      setPrices([]) // Ensure prices is always an array even on error
+    } finally {
       setIsLoading(false)
+    }
+  }
+
+  // Function to add a price
+  const add = async (values: PriceFormValues) => {
+    try {
+      await priceService.createPrice(productId, values)
+      await fetchPrices() // Refresh prices after adding
+      return true
+    } catch (err) {
+      console.error('Error adding price:', err)
+      throw err
+    }
+  }
+
+  // Function to update a price
+  const update = async (priceId: number, values: PriceFormValues) => {
+    try {
+      await priceService.updatePrice(productId, priceId, values)
+      await fetchPrices() // Refresh prices after updating
+      return true
+    } catch (err) {
+      console.error('Error updating price:', err)
+      throw err
+    }
+  }
+
+  // Function to remove a price
+  const remove = async (priceId: number) => {
+    try {
+      await priceService.deletePrice(productId, priceId)
+      await fetchPrices() // Refresh prices after deleting
+      return true
+    } catch (err) {
+      console.error('Error removing price:', err)
+      throw err
     }
   }
 
@@ -190,6 +238,9 @@ export function usePricingData(productId: number) {
     formatPrice,
     priceTypes,
     channels,
-    currencies
+    currencies,
+    add,
+    update,
+    remove
   }
 } 

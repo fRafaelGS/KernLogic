@@ -59,7 +59,10 @@ export function PriceTab({ productId }: PriceTabProps) {
     getPriceTypeLabel,
     priceTypes,
     channels,
-    currencies
+    currencies,
+    add,
+    update,
+    remove
   } = usePricingData(productId)
 
   const handleAddPrice = () => {
@@ -74,19 +77,17 @@ export function PriceTab({ productId }: PriceTabProps) {
 
   const handleDeletePrice = async (id: number) => {
     try {
-      // Mock implementation - replace with actual API call
-      // await productService.deletePrice(productId, id)
-      console.log('Deleting price:', id)
+      await remove(id)
       toast({ title: 'Price deleted successfully' })
-      refresh()
     } catch (error) {
       toast({ 
         title: 'Failed to delete price',
         variant: 'destructive'
       })
+    } finally {
+      setDeleteDialogOpen(false)
+      setPriceToDelete(null)
     }
-    setDeleteDialogOpen(false)
-    setPriceToDelete(null)
   }
 
   const confirmDelete = (id: number) => {
@@ -96,12 +97,9 @@ export function PriceTab({ productId }: PriceTabProps) {
 
   const handleBulkDelete = async () => {
     try {
-      // Mock implementation - replace with actual API call
-      // This would need to be implemented on the backend
-      console.log('Bulk deleting prices:', selectedRows)
+      await Promise.all(selectedRows.map(id => remove(id)))
       toast({ title: `${selectedRows.length} prices deleted successfully` })
       setSelectedRows([])
-      refresh()
     } catch (error) {
       toast({
         title: 'Failed to delete prices',
@@ -361,23 +359,33 @@ export function PriceTab({ productId }: PriceTabProps) {
 
       {/* Add/Edit Price Drawer */}
       <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
-        <DrawerContent>
+        <DrawerContent className="max-w-md mx-auto">
           <DrawerHeader>
-            <DrawerTitle>{selectedPrice ? 'Edit Price' : 'Add New Price'}</DrawerTitle>
+            <DrawerTitle>
+              {selectedPrice ? 'Edit Price' : 'Add New Price'}
+            </DrawerTitle>
             <DrawerDescription>
               {selectedPrice 
-                ? 'Update the price details below' 
-                : 'Fill out the form to add a new price for this product'}
+                ? 'Modify the details of this price.' 
+                : 'Enter the details for the new price.'}
             </DrawerDescription>
           </DrawerHeader>
           <div className="px-4 py-2">
             <PricingForm
               productId={productId}
-              initialData={selectedPrice || undefined}
+              initialData={selectedPrice ? {
+                id: selectedPrice.id,
+                priceType: selectedPrice.priceType,
+                channel: selectedPrice.channel,
+                currencyCode: selectedPrice.currencyCode,
+                value: selectedPrice.value
+              } : undefined}
               onSuccess={() => {
                 setDrawerOpen(false)
                 refresh()
               }}
+              onAdd={add}
+              onUpdate={update}
             />
           </div>
           <DrawerFooter>

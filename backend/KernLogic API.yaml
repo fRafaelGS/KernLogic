@@ -2423,14 +2423,9 @@ paths:
           description: ''
   /products/{product_pk}/price-history/:
     get:
+      deprecated: true
       operationId: products_price_history_list
       parameters:
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
       - in: path
         name: product_pk
         schema:
@@ -2440,26 +2435,22 @@ paths:
       - products
       security:
       - jwtAuth: []
-      - {}
       responses:
-        '200':
+        '410':
+          description: Gone - This endpoint is deprecated.
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ProductPriceHistory'
-          description: ''
+                type: object
+                properties:
+                  detail:
+                    type: string
+                    example: The /price-history/ endpoint is deprecated. Please use /history/ instead.
   /products/{product_pk}/versions/:
     get:
+      deprecated: true
       operationId: products_versions_list
       parameters:
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
       - in: path
         name: product_pk
         schema:
@@ -2469,16 +2460,17 @@ paths:
       - products
       security:
       - jwtAuth: []
-      - {}
       responses:
-        '200':
+        '410':
+          description: Gone - This endpoint is deprecated.
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ProductVersion'
-          description: ''
+                type: object
+                properties:
+                  detail:
+                    type: string
+                    example: The /versions/ endpoint is deprecated. Please use /history/ instead.
   /products/sku-check/:
     post:
       operationId: products_sku_check_create

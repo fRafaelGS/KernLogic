@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Product, productService } from '@/services/productService';
+import { Product, productService, ProductPrice } from '@/services/productService';
 import { ProductDetailLayout } from '@/components/products/ProductDetailLayout';
 import ProductDetailSidebar from '@/components/products/ProductDetailSidebar';
 import { ProductDetailTabs } from '@/components/products/ProductDetailTabs';
@@ -32,6 +32,8 @@ export const ProductDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [product, setProduct] = useState<Product | null>(null);
+  const [prices, setPrices] = useState<ProductPrice[]>([]);
+  const [isPricesLoading, setIsPricesLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,54 +43,59 @@ export const ProductDetail = () => {
   const canEdit = checkPermission ? checkPermission('product.edit') : true;
   const canDelete = checkPermission ? checkPermission('product.delete') : true;
 
-  useEffect(() => {
-    const fetchProduct = async () => {
-      if (!id) {
-        setError('Product ID is missing from the URL');
-        setLoading(false);
+  // Load all product data including prices
+  const loadAll = async () => {
+    if (!id) {
+      setError('Product ID is missing from the URL');
+      setLoading(false);
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      setIsPricesLoading(true);
+      
+      // Fetch product and prices in parallel
+      const [productData, pricesData, assetsData] = await Promise.all([
+        productService.getProduct(Number(id)),
+        productService.getPrices(Number(id)),
+        productService.getProductAssets(Number(id))
+      ]);
+      
+      if (!productData) {
+        setError('Product not found or returned empty data');
+        setProduct(null);
         return;
       }
       
-      try {
-        setLoading(true);
-        const data = await productService.getProduct(Number(id));
-        
-        if (!data) {
-          setError('Product not found or returned empty data');
-          setProduct(null);
-        } else {
-          let productWithAssets: Product = data;
-          try {
-            const fetchedAssets = await productService.getProductAssets(data.id as number);
-            if (Array.isArray(fetchedAssets) && fetchedAssets.length > 0) {
-              productWithAssets = {
-                ...data,
-                assets: fetchedAssets,
-              };
-            }
-          } catch (assetErr) {
-            console.error('[ProductDetail] Failed to pre-fetch assets:', assetErr);
-          }
-          
-          setProduct(productWithAssets);
-          setError(null);
-          
-          document.title = `${productWithAssets.name || 'Product'} - KernLogic PIM`;
-        }
-      } catch (err: any) {
-        const errorMessage = err.response?.status === 404 
-          ? 'Product not found' 
-          : 'Failed to load product details. Please try again.';
-        
-        setError(errorMessage);
-        setProduct(null);
-        toast.error(errorMessage);
-      } finally {
-        setLoading(false);
-      }
-    };
+      // Build complete product with assets and prices
+      const productWithAssets: Product = {
+        ...productData,
+        assets: Array.isArray(assetsData) && assetsData.length > 0 ? assetsData : [],
+        prices: pricesData
+      };
+      
+      setProduct(productWithAssets);
+      setPrices(pricesData);
+      setError(null);
+      
+      document.title = `${productWithAssets.name || 'Product'} - KernLogic PIM`;
+    } catch (err: any) {
+      const errorMessage = err.response?.status === 404 
+        ? 'Product not found' 
+        : 'Failed to load product details. Please try again.';
+      
+      setError(errorMessage);
+      setProduct(null);
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+      setIsPricesLoading(false);
+    }
+  };
 
-    fetchProduct();
+  useEffect(() => {
+    loadAll();
     
     // Clean up on unmount
     return () => {
@@ -152,16 +159,19 @@ export const ProductDetail = () => {
   };
 
   // Handle product update from description component
-  const handleProductUpdate = (updatedProduct: Product) => {
+  const handleProductUpdate = async (updatedProduct: Product) => {
     console.log('ProductDetail: Updating product state with:', updatedProduct);
     // Create a new object to ensure React detects the change
     setProduct({...updatedProduct});
+    
+    // Reload all data to ensure we have the latest
+    await loadAll();
   };
 
   const handleRetry = () => {
     setLoading(true);
     setError(null);
-    window.location.reload();
+    loadAll();
   };
 
   if (loading) {
@@ -373,8 +383,21 @@ export const ProductDetail = () => {
         </AnimatePresence>
         
         <ProductDetailLayout
-          sidebar={<ProductDetailSidebar product={product} />}
-          content={<ProductDetailTabs product={product} onProductUpdate={handleProductUpdate} />}
+          sidebar={
+            <ProductDetailSidebar 
+              product={product} 
+              prices={prices}
+              isPricesLoading={isPricesLoading}
+            />
+          }
+          content={
+            <ProductDetailTabs 
+              product={product} 
+              prices={prices}
+              isPricesLoading={isPricesLoading}
+              onProductUpdate={handleProductUpdate} 
+            />
+          }
         />
       </div>
     </DashboardLayout>

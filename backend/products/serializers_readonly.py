@@ -25,23 +25,11 @@ class ProductActivitySerializer(serializers.ModelSerializer):
         model = Activity
         fields = ['id', 'type', 'user', 'timestamp', 'details']
 
-class ProductPriceHistorySerializer(serializers.Serializer):
-    # Create a serializer for prices even without a model
-    date = serializers.DateTimeField(default=timezone.now)
-    oldPrice = serializers.CharField(default="0.00")
-    newPrice = serializers.CharField(default="0.00")
-    user = serializers.CharField(default="system")
+# Deprecated: ProductPriceHistorySerializer has been removed
+# Use ProductEventSerializer instead
 
-class ProductVersionSerializer(serializers.ModelSerializer):
-    # Use the ProductEvent model as a base but adapt it
-    version = serializers.CharField(source='event_type')
-    timestamp = serializers.DateTimeField(source='created_at')
-    user = serializers.CharField(source='created_by_name')
-    summary = serializers.CharField()
-    
-    class Meta:
-        model = ProductEvent
-        fields = ['id', 'version', 'timestamp', 'user', 'summary']
+# Deprecated: ProductVersionSerializer has been removed
+# Use ProductEventSerializer instead
 
 class AttributeSetSerializer(serializers.Serializer):
     # Basic template for attribute sets

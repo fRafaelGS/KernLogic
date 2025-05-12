@@ -35,23 +35,25 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/use-toast'
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog'
 import { usePriceMetadata } from '@/hooks/usePriceMetadata'
+import { productService, ProductPrice } from '@/services/productService'
 
 interface PriceTabProps {
-  productId: number
+  productId: number;
+  prices: ProductPrice[];
+  isPricesLoading: boolean;
+  onPricesUpdated: () => Promise<void>;
 }
 
-export function PriceTab({ productId }: PriceTabProps) {
-  const { toast } = useToast()
-  const [drawerOpen, setDrawerOpen] = useState(false)
-  const [selectedPrice, setSelectedPrice] = useState<any>(null)
-  const [selectedRows, setSelectedRows] = useState<number[]>([])
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [priceToDelete, setPriceToDelete] = useState<number | null>(null)
+export function PriceTab({ productId, prices, isPricesLoading, onPricesUpdated }: PriceTabProps) {
+  const { toast } = useToast();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [selectedPrice, setSelectedPrice] = useState<any>(null);
+  const [selectedRows, setSelectedRows] = useState<number[]>([]);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [priceToDelete, setPriceToDelete] = useState<number | null>(null);
   
   const {
-    prices,
     rawPrices,
-    isLoading,
     error,
     summary,
     filters,
@@ -65,11 +67,11 @@ export function PriceTab({ productId }: PriceTabProps) {
     add,
     update,
     remove
-  } = usePricingData(productId)
+  } = usePricingData(productId);
 
-  const { priceTypes: metaPriceTypes } = usePriceMetadata()
+  const { priceTypes: metaPriceTypes } = usePriceMetadata();
 
-  const firstInputRef = useRef<HTMLInputElement>(null)
+  const firstInputRef = useRef<HTMLInputElement>(null);
 
   // Focus management for accessibility
   useEffect(() => {
@@ -112,44 +114,38 @@ export function PriceTab({ productId }: PriceTabProps) {
     setDrawerOpen(true)
   }
 
-  const handleEditPrice = (price: any) => {
+  const handleEditPrice = (price: ProductPrice) => {
     // Use metaPriceTypes for code lookup
-    const priceTypeObj = metaPriceTypes.find(pt => pt.code === price.priceType || pt.code === price.price_type)
-    const priceTypeId = priceTypeObj ? priceTypeObj.id.toString() : price.priceType
+    const priceTypeObj = metaPriceTypes.find(pt => pt.code === price.price_type)
+    const priceTypeId = priceTypeObj ? priceTypeObj.id.toString() : price.price_type
+    
     setSelectedPrice({
       id: price.id,
       priceType: priceTypeId,
-      channel: price.channel,
-      currencyCode: price.currencyCode,
-      value: price.value,
-      validFrom: price.validFrom
-        ? price.validFrom.slice(0, 10)
-        : price.valid_from
-          ? price.valid_from.slice(0, 10)
-          : '',
-      validTo: price.validTo
-        ? price.validTo.slice(0, 10)
-        : price.valid_to
-          ? price.valid_to.slice(0, 10)
-          : ''
+      channel: price.channel?.id?.toString(),
+      currencyCode: price.currency,
+      value: price.amount,
+      validFrom: price.valid_from ? price.valid_from.slice(0, 10) : '',
+      validTo: price.valid_to ? price.valid_to.slice(0, 10) : ''
     })
     setDrawerOpen(true)
   }
 
   const handleDeletePrice = async (id: number) => {
     try {
-      await remove(id)
-      toast({ title: 'Price deleted successfully' })
+      await remove(id);
+      toast({ title: 'Price deleted successfully' });
+      await onPricesUpdated();
     } catch (error) {
       toast({ 
         title: 'Failed to delete price',
         variant: 'destructive'
-      })
+      });
     } finally {
-      setDeleteDialogOpen(false)
-      setPriceToDelete(null)
+      setDeleteDialogOpen(false);
+      setPriceToDelete(null);
     }
-  }
+  };
 
   const confirmDelete = (id: number) => {
     setPriceToDelete(id)
@@ -158,16 +154,17 @@ export function PriceTab({ productId }: PriceTabProps) {
 
   const handleBulkDelete = async () => {
     try {
-      await Promise.all(selectedRows.map(id => remove(id)))
-      toast({ title: `${selectedRows.length} prices deleted successfully` })
-      setSelectedRows([])
+      await Promise.all(selectedRows.map(id => remove(id)));
+      toast({ title: `${selectedRows.length} prices deleted successfully` });
+      setSelectedRows([]);
+      await onPricesUpdated();
     } catch (error) {
       toast({
         title: 'Failed to delete prices',
         variant: 'destructive'
-      })
+      });
     }
-  }
+  };
 
   const toggleSelectAll = () => {
     if (selectedRows.length === prices.length) {
@@ -211,7 +208,7 @@ export function PriceTab({ productId }: PriceTabProps) {
             <div className="grid grid-cols-3 gap-4">
               <div className="bg-muted p-4 rounded-md">
                 <div className="text-sm text-muted-foreground">Min Price</div>
-                {isLoading ? (
+                {isPricesLoading ? (
                   <Skeleton className="h-8 w-24 mt-1" />
                 ) : (
                   <div className="text-2xl font-semibold">
@@ -221,7 +218,7 @@ export function PriceTab({ productId }: PriceTabProps) {
               </div>
               <div className="bg-muted p-4 rounded-md">
                 <div className="text-sm text-muted-foreground">Avg Price</div>
-                {isLoading ? (
+                {isPricesLoading ? (
                   <Skeleton className="h-8 w-24 mt-1" />
                 ) : (
                   <div className="text-2xl font-semibold">
@@ -231,7 +228,7 @@ export function PriceTab({ productId }: PriceTabProps) {
               </div>
               <div className="bg-muted p-4 rounded-md">
                 <div className="text-sm text-muted-foreground">Max Price</div>
-                {isLoading ? (
+                {isPricesLoading ? (
                   <Skeleton className="h-8 w-24 mt-1" />
                 ) : (
                   <div className="text-2xl font-semibold">
@@ -345,7 +342,7 @@ export function PriceTab({ productId }: PriceTabProps) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading ? (
+                {isPricesLoading ? (
                   Array.from({ length: 5 }).map((_, index) => (
                     <TableRow key={index}>
                       <TableCell><Skeleton className="h-4 w-4" /></TableCell>
@@ -378,32 +375,20 @@ export function PriceTab({ productId }: PriceTabProps) {
                           aria-label={`Select price ${price.id}`}
                         />
                       </TableCell>
-                      <TableCell>{getPriceTypeLabel(price.priceType)}</TableCell>
+                      <TableCell>{getPriceTypeLabel(price.price_type)}</TableCell>
                       <TableCell>
-                        {channels.find(c => c.id.toString() === price.channel)?.name || price.channel}
+                        {price.channel?.name || 'All Channels'}
                       </TableCell>
-                      <TableCell>{price.currencyCode}</TableCell>
+                      <TableCell>{price.currency}</TableCell>
                       <TableCell className="text-right font-medium">
-                        {price.formattedValue}
+                        {formatPrice(price.amount, price.currency)}
                       </TableCell>
                       <TableCell>
                         <div className="flex justify-end">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEditPrice(price)}
-                            className="h-8 w-8"
-                            aria-label="Edit price"
-                          >
+                          <Button variant="ghost" size="icon" onClick={() => handleEditPrice(price)}>
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => confirmDelete(price.id)}
-                            className="h-8 w-8 text-destructive"
-                            aria-label="Delete price"
-                          >
+                          <Button variant="ghost" size="icon" onClick={() => confirmDelete(price.id)}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>

@@ -4,8 +4,6 @@ from .models import Product, Activity, ProductEvent
 from .serializers_readonly import (
     ProductAttributeValueSerializer,
     ProductActivitySerializer,
-    ProductPriceHistorySerializer,
-    ProductVersionSerializer,
     AttributeSetSerializer,
 )
 
@@ -32,28 +30,6 @@ class ActivityViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
         # We're using the Activity model which is close enough
         product_id = self.kwargs["product_pk"]
         return Activity.objects.filter(entity='product', entity_id=product_id)
-
-class PriceHistoryViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
-    serializer_class = ProductPriceHistorySerializer
-
-    def get_queryset(self):
-        # Since we don't have a real model, return an empty list
-        return []
-    
-    def list(self, request, *args, **kwargs):
-        # Get the product or return 404
-        product = get_object_or_404(Product, pk=self.kwargs["product_pk"])
-        
-        # Return empty list (in the future this could be populated with real data)
-        return response.Response([])
-
-class VersionViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
-    serializer_class = ProductVersionSerializer
-
-    def get_queryset(self):
-        # Use ProductEvent as a placeholder for versions
-        product_id = self.kwargs["product_pk"]
-        return ProductEvent.objects.filter(product_id=product_id)
 
 class AttributeSetViewSet(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
     # For attribute sets, we'll need to handle this manually

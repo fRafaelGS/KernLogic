@@ -1241,6 +1241,23 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                     organization=get_user_organization(request.user)
                 )
                 
+                # Build diff payload with old values for price_created
+                old_amount = None
+                old_currency = None
+                old_price_type = None
+                
+                changes = {
+                    "amount": {"old": old_amount, "new": str(price.amount)},
+                    "currency": {"old": old_currency, "new": price.currency.iso_code},
+                    "price_type": {"old": old_price_type, "new": price.price_type.code},
+                }
+                
+                old_data = {
+                    "amount": old_amount,
+                    "currency": old_currency,
+                    "price_type": old_price_type,
+                }
+                
                 # Record the price creation event
                 record(
                     product=product,
@@ -1249,9 +1266,8 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                     summary=f"Added {price.price_type.label} price of {price.currency.iso_code} {price.amount}",
                     payload={
                         "price_id": price.id,
-                        "price_type": price.price_type.code,
-                        "amount": str(price.amount),
-                        "currency": price.currency.iso_code
+                        "changes": changes,
+                        "old_data": old_data
                     }
                 )
                 
@@ -1296,38 +1312,39 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         elif request.method == 'PATCH':
             serializer = ProductPriceSerializer(price, data=request.data, partial=True)
             if serializer.is_valid():
+                # Capture original values BEFORE applying update
+                original_amount = str(price.amount) if price.amount is not None else None
+                original_currency = price.currency.iso_code if price.currency else None
+                original_price_type = price.price_type.code if price.price_type else None
+                
+                # Apply the update
                 updated_price = serializer.save()
                 
-                # Create a JSON-serializable version of the changes
-                changes = {}
-                for key, value in serializer.validated_data.items():
-                    # Handle different types of non-serializable values
-                    if value is None:
-                        changes[key] = None
-                    elif key == 'currency' and hasattr(value, 'iso_code'):
-                        # Special case for currency - use ISO code
-                        changes[key] = value.iso_code
-                    elif hasattr(value, 'id') and callable(getattr(value, '__str__', None)):
-                        # Any model instance with an ID and string representation
-                        changes[key] = {
-                            'id': value.id,
-                            'str': str(value)
-                        }
-                    elif isinstance(value, Decimal):
-                        # Convert Decimal to string for JSON serialization
-                        changes[key] = str(value)
-                    elif hasattr(value, 'isoformat'):
-                        # Handle datetime and date objects via isoformat()
-                        changes[key] = value.isoformat()
-                    else:
-                        try:
-                            # Test if value is JSON serializable
-                            import json
-                            json.dumps(value)
-                            changes[key] = value
-                        except (TypeError, OverflowError):
-                            # Fall back to string representation
-                            changes[key] = str(value)
+                # Build diff payload with actual changes
+                changes = {
+                    "amount": {
+                        "old": original_amount,
+                        "new": str(updated_price.amount)
+                    },
+                    "currency": {
+                        "old": original_currency,
+                        "new": updated_price.currency.iso_code
+                    },
+                    "price_type": {
+                        "old": original_price_type,
+                        "new": updated_price.price_type.code
+                    }
+                }
+                
+                # Only include fields that actually changed in the diff
+                changes = {k: v for k, v in changes.items() if v["old"] != v["new"]}
+                
+                # Include full old_data snapshot
+                old_data = {
+                    "amount": original_amount,
+                    "currency": original_currency,
+                    "price_type": original_price_type,
+                }
                 
                 # Record the price update event
                 record(
@@ -1337,10 +1354,8 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                     summary=f"Updated {updated_price.price_type.label} price to {updated_price.currency.iso_code} {updated_price.amount}",
                     payload={
                         "price_id": updated_price.id,
-                        "price_type": updated_price.price_type.code,
-                        "amount": str(updated_price.amount),
-                        "currency": updated_price.currency.iso_code,
-                        "changes": changes
+                        "changes": changes,
+                        "old_data": old_data
                     }
                 )
                 
@@ -1353,6 +1368,23 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             price_type = price.price_type.label
             price_amount = f"{price.currency.iso_code} {price.amount}"
             
+            # Build diff payload for price_deleted
+            old_amount = str(price.amount)
+            old_currency = price.currency.iso_code
+            old_price_type = price.price_type.code
+            
+            changes = {
+                "amount": {"old": old_amount, "new": None},
+                "currency": {"old": old_currency, "new": None},
+                "price_type": {"old": old_price_type, "new": None},
+            }
+            
+            old_data = {
+                "amount": old_amount,
+                "currency": old_currency,
+                "price_type": old_price_type,
+            }
+            
             # Delete the price
             price.delete()
             
@@ -1364,9 +1396,8 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 summary=f"Deleted {price_type} price of {price_amount}",
                 payload={
                     "price_id": price_id,
-                    "price_type": price.price_type.code,
-                    "amount": str(price.amount),
-                    "currency": price.currency.iso_code
+                    "changes": changes,
+                    "old_data": old_data
                 }
             )
             
@@ -2211,6 +2242,278 @@ class ProductEventViewSet(OrganizationQuerySetMixin, mixins.ListModelMixin, view
     def get_queryset(self):
         qs = super().get_queryset()
         return qs.filter(product_id=self.kwargs.get('product_pk'))
+        
+    @action(detail=True, methods=['post'], url_path='rollback')
+    def rollback(self, request, product_pk=None, pk=None):
+        """
+        Rollback a specific product field to its previous value from a history event.
+        
+        Expects a JSON payload with a 'field' parameter specifying which field to rollback.
+        Returns the updated product after the rollback operation.
+        
+        Example:
+            POST /api/products/42/history/123/rollback/
+            Body: { "field": "price" }
+        """
+        from .events import record
+        from .serializers import ProductSerializer
+        from decimal import Decimal
+        
+        # Get the event to roll back from
+        try:
+            event = self.get_object()
+        except ProductEvent.DoesNotExist:
+            return Response(
+                {"error": "Event not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+            
+        # Get the field to rollback from the request
+        field = request.data.get('field')
+        if not field:
+            return Response(
+                {"error": "Missing 'field' parameter"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # Validate the event payload has changes for the specified field
+        if not event.payload or not isinstance(event.payload, dict):
+            return Response(
+                {"error": "Event has no valid payload"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        changes = event.payload.get('changes', {})
+        if field not in changes or not isinstance(changes[field], dict):
+            return Response(
+                {"error": f"No changes found for field '{field}' in this event"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        if 'old' not in changes[field]:
+            return Response(
+                {"error": f"No previous value found for field '{field}'"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # Get the product
+        try:
+            product = Product.objects.get(pk=product_pk)
+        except Product.DoesNotExist:
+            return Response(
+                {"error": "Product not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+            
+        # Get the old value to restore
+        old_value = changes[field]['old']
+        current_value = getattr(product, field, None)
+        
+        # Handle type conversions for different field types
+        try:
+            if field == 'price':
+                # Handle price rollback - find the base price from pricing table
+                from .models import ProductPrice
+                base_price = product.prices.filter(price_type__code='base').first()
+                if base_price:
+                    # Convert old price value to Decimal
+                    if isinstance(old_value, (int, float)):
+                        old_decimal = Decimal(str(old_value))
+                    else:
+                        old_decimal = Decimal(old_value)
+                    
+                    # Update the price
+                    base_price.amount = old_decimal
+                    base_price.save()
+                    
+                    # Create a new event for the rollback
+                    record(
+                        product=product,
+                        user=request.user,
+                        event_type="rollback",
+                        summary=f"Rolled back price to {old_value}",
+                        payload={
+                            "restored_field": field,
+                            "restored_from_event": event.id,
+                            "old": float(base_price.amount),  # Current value before rollback
+                            "new": float(old_decimal)  # Restored value
+                        }
+                    )
+                else:
+                    return Response(
+                        {"error": "No base price found for this product"}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            elif field == 'category':
+                # Handle category rollback - need to restore the Category object
+                from .models import Category
+                
+                # Skip if the values are already the same
+                if str(current_value) == str(old_value):
+                    return Response(
+                        {"error": f"Field '{field}' already has the value '{old_value}'"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                    
+                # If old_value is None or empty, set to None
+                if old_value is None or old_value == '':
+                    category = None
+                else:
+                    # Try to find the category by ID or name
+                    try:
+                        # First try by ID
+                        if isinstance(old_value, int) or (isinstance(old_value, str) and old_value.isdigit()):
+                            category = Category.objects.filter(
+                                organization=product.organization, 
+                                id=int(old_value)
+                            ).first()
+                        else:
+                            # Then try by name
+                            category = Category.objects.filter(
+                                organization=product.organization, 
+                                name=old_value
+                            ).first()
+                            
+                        if not category:
+                            return Response(
+                                {"error": f"Category '{old_value}' not found"}, 
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+                    except (ValueError, TypeError) as e:
+                        return Response(
+                            {"error": f"Invalid category value: {str(e)}"}, 
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                
+                # Set the category
+                setattr(product, field, category)
+                product.save(update_fields=[field])
+                
+                # Create a new event for the rollback
+                record(
+                    product=product,
+                    user=request.user,
+                    event_type="rollback",
+                    summary=f"Rolled back category to {old_value}",
+                    payload={
+                        "restored_field": field,
+                        "restored_from_event": event.id,
+                        "old": str(current_value),
+                        "new": str(old_value)
+                    }
+                )
+            elif field == 'is_active':
+                # Handle boolean fields
+                if isinstance(old_value, str):
+                    old_bool = old_value.lower() in ('true', 't', 'yes', 'y', '1')
+                else:
+                    old_bool = bool(old_value)
+                    
+                # Skip if the values are already the same
+                if current_value == old_bool:
+                    return Response(
+                        {"error": f"Field '{field}' already has the value '{old_value}'"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Set the field value
+                setattr(product, field, old_bool)
+                product.save(update_fields=[field])
+                
+                # Create a new event for the rollback
+                record(
+                    product=product,
+                    user=request.user,
+                    event_type="rollback",
+                    summary=f"Rolled back {field} to {old_bool}",
+                    payload={
+                        "restored_field": field,
+                        "restored_from_event": event.id,
+                        "old": current_value,
+                        "new": old_bool
+                    }
+                )
+            # Handle nested price properties (amount, currency, price_type)
+            elif field in ("amount", "currency", "price_type"):
+                from prices.models import ProductPrice, Currency, PriceType
+                
+                # Find the base price record
+                base_price = ProductPrice.objects.filter(product=product, price_type__code="base").first()
+                if not base_price:
+                    return Response({"error":"No base price record to rollback"}, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Extract the old value from the event payload
+                old_val = changes[field]["old"]
+                
+                # Apply the old value to the appropriate attribute
+                if field == "amount":
+                    base_price.amount = Decimal(str(old_val))
+                elif field == "currency":
+                    base_price.currency = Currency.objects.get(iso_code=old_val)
+                else:  # price_type
+                    base_price.price_type = PriceType.objects.get(code=old_val)
+                
+                base_price.save()
+                
+                # Record a rollback event for this nested change
+                record(
+                    product=product,
+                    user=request.user,
+                    event_type="rollback",
+                    summary=f"Rolled back price.{field} to {old_val}",
+                    payload={
+                        "restored_field": field,
+                        "restored_from_event": event.id,
+                        "old": changes[field]["new"],
+                        "new": old_val
+                    }
+                )
+                
+                product.refresh_from_db()
+                serializer = ProductSerializer(product, context={"request":request})
+                return Response(serializer.data)
+            else:
+                # Handle general fields
+                # Skip if the values are already the same
+                if current_value == old_value:
+                    return Response(
+                        {"error": f"Field '{field}' already has the value '{old_value}'"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Set the field value
+                setattr(product, field, old_value)
+                product.save(update_fields=[field])
+                
+                # Create a new event for the rollback
+                record(
+                    product=product,
+                    user=request.user,
+                    event_type="rollback",
+                    summary=f"Rolled back {field} to {old_value}",
+                    payload={
+                        "restored_field": field,
+                        "restored_from_event": event.id,
+                        "old": current_value,
+                        "new": old_value
+                    }
+                )
+                
+            # Refresh the product to get the updated data
+            product.refresh_from_db()
+            
+            # Return the updated product
+            serializer = ProductSerializer(product, context={'request': request})
+            return Response(serializer.data)
+            
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error during rollback: {str(e)}", exc_info=True)
+            return Response(
+                {"error": f"Failed to rollback: {str(e)}"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 # SKU Check API View - Added to solve the duplicate SKU issue
 class SkuCheckAPIView(APIView):

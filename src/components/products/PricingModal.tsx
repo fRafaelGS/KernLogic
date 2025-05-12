@@ -16,16 +16,16 @@ import { AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface PricingModalProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  isOpen: boolean;
+  onClose: () => void;
   productId: number;
-  onPricesUpdated: () => void;
+  onPricesUpdated?: () => Promise<void>;
 }
 
 // Use the Product type from the service
 type Product = ProductFromService;
 
-export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }: PricingModalProps) {
+export function PricingModal({ isOpen, onClose, productId, onPricesUpdated }: PricingModalProps) {
   // Use the price metadata hook
   const { priceTypes, currencies, channels, loading: metaLoading, error: metaError } = usePriceMetadata();
   
@@ -92,11 +92,11 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
   
   // Fetch prices when the modal opens
   useEffect(() => {
-    if (open && productId) {
+    if (isOpen && productId) {
       fetchPrices();
       fetchProduct();
     }
-  }, [open, productId]);
+  }, [isOpen, productId]);
   
   // Fetch product data
   const fetchProduct = async () => {
@@ -211,7 +211,9 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
       setActiveTab('table');
       
       // Call the onPricesUpdated callback
-      onPricesUpdated();
+      if (onPricesUpdated) {
+        await onPricesUpdated();
+      }
     } catch (error) {
       toast.error('Failed to add price');
       console.error('Error adding price:', error);
@@ -263,7 +265,9 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
       setActiveTab('table');
       
       // Call the onPricesUpdated callback
-      onPricesUpdated();
+      if (onPricesUpdated) {
+        await onPricesUpdated();
+      }
     } catch (error) {
       toast.error('Failed to update price');
       console.error('Error updating price:', error);
@@ -291,7 +295,9 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
       fetchPrices();
       
       // Call the onPricesUpdated callback
-      onPricesUpdated();
+      if (onPricesUpdated) {
+        await onPricesUpdated();
+      }
     } catch (error) {
       toast.error('Failed to delete price');
       console.error('Error deleting price:', error);
@@ -314,7 +320,7 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
   // Show loading indicator if metadata is still loading
   if (metaLoading) {
     return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="sm:max-w-[650px]">
           <div className="py-8 flex flex-col items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
@@ -328,12 +334,12 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
   // Show error if there was a problem loading metadata
   if (metaError) {
     return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="sm:max-w-[650px]">
           <div className="py-8 flex flex-col items-center justify-center">
             <p className="text-destructive mb-2">Error loading price data</p>
             <p className="text-muted-foreground text-sm">Please try again later</p>
-            <Button variant="outline" onClick={() => onOpenChange(false)} className="mt-4">
+            <Button variant="outline" onClick={() => onClose()} className="mt-4">
               Close
             </Button>
           </div>
@@ -416,7 +422,7 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
   };
   
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="lg:max-w-screen-md">
         <DialogHeader>
           <DialogTitle>
@@ -652,7 +658,7 @@ export function PricingModal({ open, onOpenChange, productId, onPricesUpdated }:
         )}
         
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="outline" onClick={() => onClose()}>
             Close
           </Button>
         </DialogFooter>

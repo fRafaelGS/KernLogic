@@ -31,6 +31,8 @@ interface ExtendedProduct extends Product {
 
 interface ProductDetailSidebarProps {
   product: ExtendedProduct;
+  prices: ProductPrice[];
+  isPricesLoading: boolean;
 }
 
 // Helper function to format date for display and tooltip
@@ -63,34 +65,11 @@ const validateGTIN = (gtin: string | undefined): boolean => {
   return checkDigit === calculatedCheckDigit;
 };
 
-export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
+export default function ProductDetailSidebar({ product, prices, isPricesLoading }: ProductDetailSidebarProps) {
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showPricingModal, setShowPricingModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const [prices, setPrices] = useState<ProductPrice[]>([]);
-  const [isPricesLoading, setIsPricesLoading] = useState(false);
-  
-  // Fetch prices directly from API
-  useEffect(() => {
-    if (!product?.id) return;
-    
-    setIsPricesLoading(true);
-    productService.getPrices(product.id)
-      .then(fetchedPrices => {
-        setPrices(fetchedPrices);
-      })
-      .catch(error => {
-        console.error('Error fetching prices:', error);
-        // Fallback to product.prices if available
-        if (product.prices && product.prices.length > 0) {
-          setPrices(product.prices);
-        }
-      })
-      .finally(() => {
-        setIsPricesLoading(false);
-      });
-  }, [product?.id]);
   
   const createdDate = formatDate(product.created_at);
   const modifiedDate = formatDate(product.updated_at);
@@ -226,30 +205,16 @@ export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
     return prices.length > 5;
   }, [prices]);
 
-  // Function to refresh prices
-  const refreshPrices = useCallback(() => {
+  // Update handlePricesUpdated to return a Promise
+  const handlePricesUpdated = (): Promise<void> => {
+    setShowPricingModal(false);
+    return Promise.resolve();
+  };
+  
+  // Update the handleShowPricing function
+  const handleShowPricing = () => {
     if (!product?.id) return;
-    
-    setIsPricesLoading(true);
-    productService.getPrices(product.id)
-      .then(fetchedPrices => {
-        setPrices(fetchedPrices);
-      })
-      .catch(error => {
-        console.error('Error refreshing prices:', error);
-      })
-      .finally(() => {
-        setIsPricesLoading(false);
-      });
-  }, [product?.id]);
-
-  // Handle pricing modal close
-  const handlePricingModalChange = (open: boolean) => {
-    setShowPricingModal(open);
-    if (!open) {
-      // Refresh prices when modal is closed
-      refreshPrices();
-    }
+    setShowPricingModal(true);
   };
 
   return (
@@ -498,7 +463,7 @@ export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
                 PRICING
               </h3>
               {hasEditPermission && (
-                <Button variant="ghost" size="sm" onClick={() => setShowPricingModal(true)}>
+                <Button variant="ghost" size="sm" onClick={handleShowPricing}>
                   Manage
                 </Button>
               )}
@@ -549,7 +514,7 @@ export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
                     variant="outline" 
                     size="sm" 
                     className="w-full mt-1" 
-                    onClick={() => setShowPricingModal(true)}
+                    onClick={handleShowPricing}
                   >
                     <MoreHorizontal className="h-4 w-4 mr-2" />
                     View all prices
@@ -628,12 +593,14 @@ export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
       </CardContent>
       
       {/* Pricing Modal */}
-      <PricingModal 
-        open={showPricingModal} 
-        onOpenChange={handlePricingModalChange}
-        productId={product.id || 0}
-        onPricesUpdated={refreshPrices}
-      />
+      {product?.id && showPricingModal && (
+        <PricingModal
+          isOpen={showPricingModal}
+          onClose={() => setShowPricingModal(false)}
+          productId={product.id}
+          onPricesUpdated={handlePricesUpdated}
+        />
+      )}
 
       {/* Category Modal */}
       <CategoryModal
@@ -649,7 +616,4 @@ export function ProductDetailSidebar({ product }: ProductDetailSidebarProps) {
       />
     </Card>
   );
-}
-
-// Add default export to provide the component in both ways
-export default ProductDetailSidebar; 
+} 

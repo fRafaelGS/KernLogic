@@ -10,8 +10,8 @@ from products.views import (
 )
 from products.views_readonly import (
     ActivityViewSet,
-    PriceHistoryViewSet,
-    VersionViewSet,
+    # PriceHistoryViewSet,  # Deprecated - Use /history/ endpoint instead
+    # VersionViewSet,  # Deprecated - Use /history/ endpoint instead
     AttributeSetViewSet,
 )
 # Import the new CategoryViewSet
@@ -43,8 +43,9 @@ details_router = NestedSimpleRouter(router, r"products", lookup="product")
 details_router.register(r"attributes", AttributeValueViewSet, basename="product-attributes")
 details_router.register(r"attribute-groups", ProductAttributeGroupViewSet, basename="product-attribute-groups")
 details_router.register(r"activities", ActivityViewSet, basename="product-activities")
-details_router.register(r"price-history", PriceHistoryViewSet, basename="product-price-history")
-details_router.register(r"versions", VersionViewSet, basename="product-versions")
+# DEPRECATED: Use /history/ endpoint instead
+# details_router.register(r"price-history", PriceHistoryViewSet, basename="product-price-history")
+# details_router.register(r"versions", VersionViewSet, basename="product-versions")
 
 urlpatterns = [
     path("", include(router.urls)),

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Product, productService, ProductAttribute, ProductAsset, ProductActivity, ProductVersion, PriceHistory, PRODUCTS_API_URL as PRODUCTS_PATH, ProductImage } from '@/services/productService';
+import { Product, productService, ProductAttribute, ProductAsset, ProductActivity, ProductVersion, PriceHistory, PRODUCTS_API_URL as PRODUCTS_PATH, ProductImage, ProductPrice } from '@/services/productService';
 import { IncompleteProduct, dashboardService } from '@/services/dashboardService';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -114,10 +114,17 @@ interface AttributeGroup {
 
 interface ProductDetailTabsProps {
   product: Product;
-  onProductUpdate?: (updatedProduct: Product) => void;
+  prices: ProductPrice[];
+  isPricesLoading: boolean;
+  onProductUpdate: (updatedProduct: Product) => Promise<void>;
 }
 
-export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTabsProps): JSX.Element => {
+export const ProductDetailTabs = ({ 
+  product, 
+  prices, 
+  isPricesLoading, 
+  onProductUpdate 
+}: ProductDetailTabsProps): JSX.Element => {
   const [activeTab, setActiveTab] = useState('overview');
   
   // States for dynamic data
@@ -2470,11 +2477,19 @@ export const ProductDetailTabs = ({ product, onProductUpdate }: ProductDetailTab
       
       <TabsContent value="history" className="space-y-6">
         <Suspense fallback={<Skeleton className="h-48 w-full" />}>
-          <ProductHistoryTab productId={product.id} />
+          <ProductHistoryTab 
+            productId={product.id} 
+            onProductRefresh={async () => await onProductUpdate(product)}
+          />
         </Suspense>
       </TabsContent>
       <TabsContent value="price">
-        <PriceTab productId={product.id} />
+        <PriceTab 
+          productId={product.id} 
+          prices={prices}
+          isPricesLoading={isPricesLoading}
+          onPricesUpdated={async () => await onProductUpdate(product)}
+        />
       </TabsContent>
     </Tabs>
   );

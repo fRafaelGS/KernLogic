@@ -131,8 +131,6 @@ export const ProductDetailTabs = ({
   const [attributes, setAttributes] = useState<ProductAttribute[]>([]);
   const [assets, setAssets] = useState<ProductAsset[]>([]);
   const [activities, setActivities] = useState<ProductActivity[]>([]);
-  const [versions, setVersions] = useState<ProductVersion[]>([]);
-  const [priceHistory, setPriceHistory] = useState<PriceHistory[]>([]);
   
   // States for the enhanced attributes tab
   const [availableAttributes, setAvailableAttributes] = useState<AvailableAttribute[]>([]);
@@ -156,8 +154,6 @@ export const ProductDetailTabs = ({
   const [loadingAttributes, setLoadingAttributes] = useState(false);
   const [loadingAssets, setLoadingAssets] = useState(false);
   const [loadingActivities, setLoadingActivities] = useState(false);
-  const [loadingVersions, setLoadingVersions] = useState(false);
-  const [loadingAttributeDefinitions, setLoadingAttributeDefinitions] = useState(false);
   
   // New state for completeness data
   const [productCompletenessDetails, setProductCompletenessDetails] = useState<IncompleteProduct | null>(null);
@@ -270,8 +266,6 @@ export const ProductDetailTabs = ({
       // Always fetch assets on initial load, regardless of activeTab
       fetchAssets();
       fetchActivities();
-      fetchVersions();
-      fetchPriceHistory();
       
       // Fetch attribute data according to spec
       fetchAttributeSet();
@@ -487,100 +481,7 @@ export const ProductDetailTabs = ({
       setLoadingActivities(false);
     }
   };
-
-  // Fetch versions from API
-  const fetchVersions = async () => {
-    if (!product.id) return;
-    setLoadingVersions(true);
-    
-    try {
-      console.log('Attempting to fetch versions for product ID:', product.id);
-      const data = await productService.getProductVersions(product.id);
-      
-      // Ensure data is always an array
-      if (Array.isArray(data) && data.length > 0) {
-        console.log('Successfully fetched versions:', data.length);
-        setVersions(data);
-      } else {
-        console.warn('No versions returned from API or invalid response format');
-        // Don't override existing versions if we get an empty response
-        if (versions.length === 0) {
-          console.log('Using mock versions as fallback');
-          // Fallback to mock data with a note that the data is mock
-          const mockData = [
-            { id: 1, version: 'v1.0', timestamp: new Date().toISOString(), user: 'System', summary: 'Version history unavailable' },
-            { id: 2, version: 'v1.1', timestamp: new Date(Date.now() - 86400000).toISOString(), user: 'System', summary: 'Initial product creation' },
-          ];
-          setVersions(mockData);
-          
-          // Add a warning toast that data is unavailable
-          toast("Version history limited", {
-            description: "We couldn't retrieve the full version history. The system will show limited information."
-          });
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching versions:', error);
-      
-      // Only use fallback if no existing data
-      if (versions.length === 0) {
-        console.log('Using mock versions due to error');
-        // Fallback to mock data with clear indication it's placeholder data
-        const mockData = [
-          { id: 1, version: 'v1.0', timestamp: new Date().toISOString(), user: 'System', summary: 'Version history unavailable (server error)' },
-        ];
-        setVersions(mockData);
-        
-        // Add an error toast to inform the user
-        toast("Couldn't load version history", {
-          description: "There was a server error loading the version history. Please try again later."
-        });
-      }
-    } finally {
-      setLoadingVersions(false);
-    }
-  };
-
-  // Fetch price history
-  const fetchPriceHistory = async () => {
-    if (!product.id) return;
-    
-    try {
-      console.log('Attempting to fetch price history for product ID:', product.id);
-      const data = await productService.getPriceHistory(product.id);
-      
-      // Ensure data is always an array
-      if (Array.isArray(data) && data.length > 0) {
-        console.log('Successfully fetched price history:', data.length);
-        setPriceHistory(data);
-      } else {
-        console.warn('No price history returned from API or invalid response format');
-        // Don't override existing price history if we get an empty response
-        if (priceHistory.length === 0) {
-          console.log('Using mock price history as fallback');
-          // Fallback to mock data if API fails
-          setPriceHistory([
-            { date: '2023-11-10', oldPrice: '85.00', newPrice: '89.99', user: 'John Doe' },
-            { date: '2023-09-25', oldPrice: '79.99', newPrice: '85.00', user: 'Jane Smith' },
-            { date: '2023-08-15', oldPrice: '75.00', newPrice: '79.99', user: 'Mike Johnson' },
-          ]);
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching price history:', error);
-      // Only use fallback if no existing data
-      if (priceHistory.length === 0) {
-        console.log('Using mock price history due to error');
-        // Fallback to mock data if API fails
-        setPriceHistory([
-          { date: '2023-11-10', oldPrice: '85.00', newPrice: '89.99', user: 'John Doe' },
-          { date: '2023-09-25', oldPrice: '79.99', newPrice: '85.00', user: 'Jane Smith' },
-          { date: '2023-08-15', oldPrice: '75.00', newPrice: '79.99', user: 'Mike Johnson' },
-        ]);
-      }
-    }
-  };
-
+  
   // Fetch related products (callback for RelatedProductsCarousel)
   const fetchRelatedProducts = useCallback(async () => {
     if (!product || !product.id) {
@@ -601,7 +502,7 @@ export const ProductDetailTabs = ({
   const fetchAttributeSet = async () => {
     if (!product.id) return;
     
-    setLoadingAttributeDefinitions(true);
+    setLoadingAttributes(true);
     try {
       // Log the category to debug
       console.log('Product category:', product.category);
@@ -641,8 +542,9 @@ export const ProductDetailTabs = ({
       // Initialize empty arrays instead of showing error toast
       setAvailableAttributes([]);
       setAttributeGroups([]);
+      setLoadingAttributes(false);
     } finally {
-      setLoadingAttributeDefinitions(false);
+      setLoadingAttributes(false);
     }
   };
   
@@ -1956,10 +1858,11 @@ export const ProductDetailTabs = ({
       }
       
       // Ensure we pass the updated product to the parent
-      if (onProductUpdate) {
-        console.log('Calling onProductUpdate with updated product');
-        onProductUpdate(updatedProduct);
-      }
+      // Do NOT call onProductUpdate after asset upload to avoid unnecessary reloads
+      // if (onProductUpdate) {
+      //   console.log('Calling onProductUpdate with updated product');
+      //   onProductUpdate(updatedProduct);
+      // }
     } else {
       console.warn('No primary image found among assets');
     }
@@ -2477,10 +2380,7 @@ export const ProductDetailTabs = ({
       
       <TabsContent value="history" className="space-y-6">
         <Suspense fallback={<Skeleton className="h-48 w-full" />}>
-          <ProductHistoryTab 
-            productId={product.id} 
-            onProductRefresh={async () => await onProductUpdate(product)}
-          />
+          <ProductHistoryTab productId={product.id} />
         </Suspense>
       </TabsContent>
       <TabsContent value="price">

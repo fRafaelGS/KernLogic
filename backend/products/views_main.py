@@ -100,6 +100,8 @@ from kernlogic.org_queryset import OrganizationQuerySetMixin
 from kernlogic.utils import get_user_organization
 from rest_framework.exceptions import NotFound
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from django.db.models.fields.files import FieldFile
+from django.db.models import Model
 
 User = get_user_model()
 
@@ -237,65 +239,67 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             raise
 
     def perform_update(self, serializer):
-        """
-        Record the update event when a product is updated.
-        Avoid using organization to prevent UUID conversion issues.
-        """
-        try:
-            # Get the old product before update
-            old_product = self.get_object()
-            
-            # Get the base price for the old product
-            old_base_price = old_product.prices.filter(price_type__code='base').first()
-            old_price_value = float(old_base_price.amount) if old_base_price else 0.0
-            
-            old_data = {
-                "name": old_product.name,
-                "price": old_price_value,  # Get price from pricing table
-                "sku": old_product.sku,
-                "category": old_product.category,
-                "is_active": old_product.is_active
-            }
-            
-            # Save the updated product without modifying organization
-            product = serializer.save()
-            
-            # Get the base price for the updated product
-            base_price = product.prices.filter(price_type__code='base').first()
-            price_value = float(base_price.amount) if base_price else 0.0
-            
-            # Collect changes
-            changes = {}
-            if old_product.name != product.name:
-                changes["name"] = {"old": old_product.name, "new": product.name}
-            if old_price_value != price_value:
-                changes["price"] = {"old": old_price_value, "new": price_value}
-            if old_product.sku != product.sku:
-                changes["sku"] = {"old": old_product.sku, "new": product.sku}
-            if old_product.category != product.category:
-                changes["category"] = {"old": old_product.category, "new": product.category}
-            if old_product.is_active != product.is_active:
-                changes["is_active"] = {"old": old_product.is_active, "new": product.is_active}
-            
-            if changes:
+        from .models import AttributeValue, Attribute
+
+        # 1) Snapshot old product fields
+        old_product = self.get_object()
+        old_values = {
+            f.name: serialize_field(getattr(old_product, f.name))
+            for f in Product._meta.concrete_fields
+            if f.name not in ('id', 'created_at', 'updated_at')
+        }
+        for key in ('tags', 'attributes'):
+            old_values[key] = getattr(old_product, key)
+
+        # 1b) Snapshot old attribute values
+        old_attr_qs = AttributeValue.objects.filter(product=old_product)
+        old_attrs = {av.attribute_id: av.value for av in old_attr_qs}
+
+        # 2) Save the updated product
+        product = serializer.save()
+
+        # 3) Snapshot new attribute values
+        new_attr_qs = AttributeValue.objects.filter(product=product)
+        new_attrs = {av.attribute_id: av.value for av in new_attr_qs}
+
+        # 4) Build changes for product fields
+        new_values = {field: serialize_field(getattr(product, field)) for field in old_values}
+        for key in ('tags', 'attributes'):
+            new_values[key] = getattr(product, key)
+        changes = {
+            field: {'old': old_values[field], 'new': new_values[field]}
+            for field in old_values
+            if old_values[field] != new_values[field]
+        }
+        old_data = old_values.copy()
+
+        # 5) Diff attributes and add to changes
+        for attr_id in set(old_attrs) | set(new_attrs):
+            old_val = old_attrs.get(attr_id)
+            new_val = new_attrs.get(attr_id)
+            if old_val != new_val:
                 try:
-                    # Record product update event
-                    record(
-                        product=product,
-                        user=self.request.user,
-                        event_type="updated",
-                        summary=f"Product '{product.name}' was updated",
-                        payload={
-                            "changes": changes,
-                            "old_data": old_data,
-                        }
-                    )
-                except Exception as e:
-                    print(f"Error recording product update: {str(e)}")
-        except Exception as e:
-            print(f"Error in perform_update: {str(e)}")
-            # Re-raise to let DRF handle the response
-            raise
+                    attr_obj = Attribute.objects.get(pk=attr_id)
+                    attr_label = attr_obj.label
+                except Attribute.DoesNotExist:
+                    attr_label = str(attr_id)
+                changes[f'attribute:{attr_label}'] = {'old': old_val, 'new': new_val}
+
+        print(f"[DEBUG] perform_update: old_values={old_values}")
+        print(f"[DEBUG] perform_update: new_values={new_values}")
+        print(f"[DEBUG] perform_update: changes={changes}")
+
+        if changes:
+            try:
+                record(
+                    product=product,
+                    user=self.request.user,
+                    event_type='updated',
+                    summary=f"Product '{product.name}' was updated",
+                    payload={'changes': changes, 'old_data': old_data}
+                )
+            except Exception:
+                pass
 
     def destroy(self, request, *args, **kwargs):
         """
@@ -2240,8 +2244,36 @@ class ProductEventViewSet(OrganizationQuerySetMixin, mixins.ListModelMixin, view
         return [HasProductViewPermission()]
 
     def get_queryset(self):
-        qs = super().get_queryset()
-        return qs.filter(product_id=self.kwargs.get('product_pk'))
+        from django.utils.dateparse import parse_date
+        
+        # Get base queryset from parent and filter by product
+        qs = super().get_queryset().filter(product_id=self.kwargs.get('product_pk'))
+        
+        # Ensure we bring in the user record
+        qs = qs.select_related('created_by')
+        
+        # Get query parameters
+        p = self.request.query_params
+        
+        # 1) Filter by event_type
+        if et := p.get('event_type'):
+            qs = qs.filter(event_type=et)
+            
+        # 2) Filter by who changed it
+        if cb := p.get('created_by'):
+            qs = qs.filter(created_by_id=cb)
+            
+        # 3) Date range on the date part of created_at
+        if df := p.get('date_from'):
+            if d := parse_date(df):
+                qs = qs.filter(created_at__date__gte=d)
+                
+        if dt := p.get('date_to'):
+            if d := parse_date(dt):
+                qs = qs.filter(created_at__date__lte=d)
+                
+        # Return events ordered by most recent first
+        return qs.order_by('-created_at')
         
     @action(detail=True, methods=['post'], url_path='rollback')
     def rollback(self, request, product_pk=None, pk=None):
@@ -2643,3 +2675,24 @@ class AssetBundleViewSet(viewsets.ModelViewSet):
         bundle = self.get_object()
         bundle.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+def serialize_field(value):
+    # Protect against empty FileFields
+    try:
+        if hasattr(value, 'url'):
+            return value.url
+    except ValueError:
+        # no file associated
+        return None
+
+    # Model instances → use their .name (or str())
+    from django.db.models import Model
+    if isinstance(value, Model):
+        return getattr(value, 'name', str(value))
+
+    # Dicts (e.g. your nested serializers)
+    if isinstance(value, dict):
+        return value.get('name') or value.get('title') or str(value)
+
+    # Everything else (primitives)
+    return value

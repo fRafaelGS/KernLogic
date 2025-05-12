@@ -271,6 +271,7 @@
         payload: Record<string, any>;
         created_at: string;        // ISO
         created_by_name: string;
+        created_by?: number;       // User ID for filtering
     }
 
     export interface PaginatedResponse<T> {
@@ -1539,23 +1540,43 @@
         getProductHistory: async (
             productId: number,
             page = 1,
-            pageSize = 20
+            filters: Record<string, any> = {}
         ): Promise<PaginatedResponse<ProductEvent>> => {
             try {
+                // Construct params with page, page_size, and all filter parameters
+                const params = {
+                    page,
+                    page_size: 20,
+                    ...filters
+                };
+                
+                // Log the exact parameters being sent to the API for debugging
+                console.log(`[productService] Calling history API with params:`, JSON.stringify(params, null, 2));
+                console.log(`[productService] URL will be: /api/products/${productId}/history/?` + 
+                            Object.entries(params)
+                                .map(([key, value]) => `${key}=${encodeURIComponent(String(value))}`)
+                                .join('&'));
+                
                 const res = await axiosInstance.get(
                     `${PRODUCTS_API_URL}/${productId}/history/`,
-                    { params: { page, page_size: pageSize } }
+                    { params }
                 );
                 
                 // Handle different response formats
                 const data = res.data;
+                
+                // If response has results, log the first result to debug structure
+                if (data && data.results && data.results.length > 0) {
+                    console.log(`[productService] Sample event structure:`, 
+                        JSON.stringify(data.results[0], null, 2).substring(0, 500) + '...');
+                }
                 
                 // If response is empty array or object
                 if (
                     (Array.isArray(data) && data.length === 0) || 
                     (typeof data === 'object' && Object.keys(data).length === 0)
                 ) {
-                    console.log('Empty history response, returning formatted empty data');
+                    console.log('[productService] Empty history response, returning formatted empty data');
                     return {
                         count: 0,
                         next: null,
@@ -1566,7 +1587,7 @@
                 
                 // If response is array but not paginated (backend didn't format properly)
                 if (Array.isArray(data) && !('results' in data)) {
-                    console.log('Non-paginated array response, formatting to paginated structure');
+                    console.log('[productService] Non-paginated array response, formatting to paginated structure');
                     return {
                         count: data.length,
                         next: null,
@@ -1577,11 +1598,12 @@
                 
                 // Normal paginated response
                 if (data && typeof data === 'object' && 'results' in data) {
+                    console.log(`[productService] Received ${data.results.length} history events`);
                     return data;
                 }
                 
                 // Fallback for unexpected formats
-                console.warn('Unexpected response format from history API:', data);
+                console.warn('[productService] Unexpected response format from history API:', data);
                 return {
                     count: 0,
                     next: null,
@@ -1589,7 +1611,18 @@
                     results: []
                 };
             } catch (error) {
-                console.error('Error fetching product history:', error);
+                console.error('[productService] Error fetching product history:', error);
+                
+                // Log more details about the error if available
+                if (axios.isAxiosError(error)) {
+                    console.error('[productService] API error details:', {
+                        status: error.response?.status,
+                        statusText: error.response?.statusText,
+                        data: error.response?.data,
+                        message: error.message
+                    });
+                }
+                
                 // Return empty paginated response on error
                 return {
                     count: 0,

@@ -11,7 +11,7 @@ from products.serializers import AttributeValueSerializer, AttributeValueDetailS
 from products.permissions import IsStaffOrReadOnly
 from kernlogic.org_queryset import OrganizationQuerySetMixin
 from kernlogic.utils import get_user_organization
-from ..events import record
+from products.events import record
 
 @extend_schema_view(
     list=extend_schema(summary="List all attribute values", 
@@ -143,6 +143,32 @@ class AttributeValueViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         # All good – delete the instance.
         instance.delete()
 
+    def perform_update(self, serializer):
+        from products.events import record
+        # capture the old value
+        instance = serializer.instance
+        old_value = instance.value
+
+        # save the new one
+        new_instance = serializer.save()
+
+        # record the change on the product
+        record(
+            product=new_instance.product,
+            user=self.request.user,
+            event_type="attribute_updated",
+            summary=f"Updated attribute '{getattr(new_instance.attribute, 'label', str(new_instance.attribute))}'",
+            payload={
+                "attribute": new_instance.attribute.code if hasattr(new_instance.attribute, 'code') else str(new_instance.attribute),
+                "changes": {
+                    "value": {
+                        "old": old_value,
+                        "new": new_instance.value
+                    }
+                }
+            }
+        )
+
 class ProductAttributeValueList(generics.ListAPIView):
     """
     API endpoint to list all attribute values for a specific product
@@ -220,36 +246,38 @@ class AttributeValuesByAttributeList(generics.ListAPIView):
             channel=channel
         )
         
-        # Log the update event in the product history
-        product = serializer.instance.product
-        
-        # Create event summary
-        location_context = ""
-        if locale and channel:
-            location_context = f" for locale {locale} and channel {channel}"
-        elif locale:
-            location_context = f" for locale {locale}"
-        elif channel:
-            location_context = f" for channel {channel}"
-        
-        summary = f"Updated attribute '{attribute.label}'{location_context}"
-        
-        # Record the event
-        record(
-            product=product,
-            user=self.request.user,
-            event_type="attribute_updated",
-            summary=summary,
-            payload={
-                "attribute_id": attribute.id,
-                "attribute_code": attribute.code,
-                "attribute_label": attribute.label,
-                "locale": locale,
-                "channel": channel,
-                "old_value": old_value,
-                "new_value": attr_value.value
-            }
-        )
+        # Only record event if value actually changed
+        if old_value != attr_value.value:
+            # Log the update event in the product history
+            product = serializer.instance.product
+            
+            # Create event summary
+            location_context = ""
+            if locale and channel:
+                location_context = f" for locale {locale} and channel {channel}"
+            elif locale:
+                location_context = f" for locale {locale}"
+            elif channel:
+                location_context = f" for channel {channel}"
+            
+            summary = f"Updated attribute '{attribute.label}'{location_context}"
+            
+            # Record the event
+            record(
+                product=product,
+                user=self.request.user,
+                event_type="attribute_updated",
+                summary=summary,
+                payload={
+                    "attribute_id": attribute.id,
+                    "attribute_code": attribute.code,
+                    "attribute_label": attribute.label,
+                    "locale": locale,
+                    "channel": channel,
+                    "old_value": old_value,
+                    "new_value": attr_value.value
+                }
+            )
 
     def create(self, request, *args, **kwargs):
         """Custom create method to set attribute in context"""

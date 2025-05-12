@@ -160,7 +160,6 @@ export const ProductDetail = () => {
 
   // Handle product update from description component
   const handleProductUpdate = async (updatedProduct: Product) => {
-    console.log('ProductDetail: Updating product state with:', updatedProduct);
     // Create a new object to ensure React detects the change
     setProduct({...updatedProduct});
     

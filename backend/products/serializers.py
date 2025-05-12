@@ -536,11 +536,20 @@ class ProductAssetSerializer(serializers.ModelSerializer):
             return f"{size/(1024*1024):.1f} MB"
 
 class ProductEventSerializer(serializers.ModelSerializer):
-    created_by_name = serializers.CharField(source="created_by.first_name", read_only=True)
+    created_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = ProductEvent
         fields = ["id", "event_type", "summary", "payload", "created_at", "created_by_name"]
+
+    def get_created_by_name(self, obj):
+        user = obj.created_by
+        if user:
+            # prefer full name, otherwise username
+            full = user.get_full_name()
+            return full if full.strip() else user.username
+        # if no user, it really was the system
+        return 'System'
 
 # Add the Attribute serializers
 class AttributeSerializer(serializers.ModelSerializer):

@@ -101,14 +101,6 @@ export function PriceTab({ productId, prices, isPricesLoading, onPricesUpdated }
     [currencies, usedCurrencyCodes]
   )
 
-  // Debug log at the top of the component
-  console.log('CURRENCY FILTER DEBUG', { rawPrices, currencies, usedCurrencyCodes, filteredCurrencies })
-
-  // Also log in a useEffect to ensure it logs on every change
-  useEffect(() => {
-    console.log('CURRENCY FILTER DEBUG (effect)', { rawPrices, currencies, usedCurrencyCodes, filteredCurrencies })
-  }, [rawPrices, currencies, usedCurrencyCodes, filteredCurrencies])
-
   const handleAddPrice = () => {
     setSelectedPrice(null)
     setDrawerOpen(true)

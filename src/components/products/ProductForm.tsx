@@ -1,12 +1,28 @@
+/**
+ * ProductForm Component
+ * 
+ * This component handles both creating new products and editing existing ones.
+ * The form uses a centralized schema (productEditSchema) and default values function
+ * (getDefaultProductValues) from the src/schemas/product.ts file.
+ * 
+ * Key features:
+ * - Unified form for create and edit operations
+ * - Validation using Zod schema
+ * - Proper handling of complex types (categories, attributes, prices)
+ * - Image upload with preview
+ * - Organization by tabs for better UX
+ */
+
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate, useParams } from 'react-router-dom';
-import { z } from 'zod';
 import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { useToast } from '@/components/ui/use-toast';
 import axios from 'axios';
+import AsyncCreatableSelect from 'react-select/async-creatable';
+import { productEditSchema, getDefaultProductValues, ProductFormValues, extractCategoryInfo } from '@/schemas/product';
 
 // UI components
 import { Button } from '@/components/ui/button';
@@ -47,59 +63,11 @@ import { getCategories, createCategory } from "@/services/categoryService";
 
 const PRODUCTS_BASE_URL = `${API_URL}/products`;
 
-// Validation for GTIN (EAN-8, EAN-13, UPC-A, GTIN-14)
-const isValidGTIN = (code: string): boolean => {
-  // Remove any spaces or dashes
-  code = code.replace(/[\s-]/g, '');
-  
-  // Check if the code contains only digits
-  if (!/^\d+$/.test(code)) return false;
-  
-  // Check for valid length
-  if (![8, 12, 13, 14].includes(code.length)) return false;
-  
-  // Checksum validation (Luhn algorithm for GTIN/EAN/UPC)
-  let sum = 0;
-  const parity = code.length % 2;
-  
-  for (let i = 0; i < code.length - 1; i++) {
-    let digit = parseInt(code[i], 10);
-    if (i % 2 === parity) digit *= 3;
-    sum += digit;
-  }
-  
-  const checkDigit = (10 - (sum % 10)) % 10;
-  return checkDigit === parseInt(code[code.length - 1], 10);
-};
-
 // Add type for category options used by react-select
 interface CategoryOption {
   label: string;
   value: number | string;
 }
-
-// Schema for product form validation
-const productEditSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  description: z.string().optional(),
-  sku: z.string().min(1, "SKU is required"),
-  price: z.coerce
-    .number({ required_error: "Price is required" })
-    .min(0.01, "Price must be at least 0.01"),
-  category: z.any().optional(), // Allow any type for react-select object
-  is_active: z.boolean().default(true), // Always true by default, kept for backend compatibility
-  primary_image: z.any().optional(),
-  brand: z.string().optional(),
-  barcode: z.string()
-    .refine(val => val === '' || isValidGTIN(val), {
-      message: "Invalid GTIN format. Please enter a valid EAN-8, EAN-13, UPC-A, or GTIN-14 code",
-    })
-    .optional(),
-  tags: z.array(z.string()).default([]),
-  attributes: z.record(z.string(), z.string()).default({}),
-});
-
-type ProductFormValues = z.infer<typeof productEditSchema>;
 
 interface ProductFormProps {
   product?: Product;
@@ -125,22 +93,10 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
   // Use the passed-in product data or fetch it if needed
   const productId = initialProduct?.id || (id ? Number(id) : undefined);
 
-  // Form definition using react-hook-form with zod resolver
+  // Form definition using react-hook-form with zod resolver and centralized default values
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productEditSchema),
-    defaultValues: {
-      name: initialProduct?.name || '',
-      description: initialProduct?.description || '',
-      sku: initialProduct?.sku || '',
-      price: initialProduct?.price || 0.01,
-      category: initialProduct?.category ? 
-        { label: initialProduct.category, value: initialProduct.category } : undefined,
-      is_active: initialProduct?.is_active ?? true,
-      brand: initialProduct?.brand || '',
-      barcode: initialProduct?.barcode || '',
-      tags: initialProduct?.tags || [],
-      attributes: initialProduct?.attributes || {},
-    },
+    defaultValues: getDefaultProductValues(initialProduct),
   });
 
   // Initialize image preview if product has an image
@@ -160,19 +116,8 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
   // Set form data if initialProduct is provided
   useEffect(() => {
     if (initialProduct) {
-      // Reset form with data
-      form.reset({
-        name: initialProduct.name,
-        description: initialProduct.description || '',
-        sku: initialProduct.sku,
-        price: initialProduct.price,
-        category: initialProduct.category ? { label: initialProduct.category, value: initialProduct.category } : undefined,
-        is_active: initialProduct.is_active,
-        brand: initialProduct.brand || '',
-        barcode: initialProduct.barcode || '',
-        tags: initialProduct.tags || [],
-        attributes: initialProduct.attributes || {},
-      });
+      // Reset form with data using our centralized helper
+      form.reset(getDefaultProductValues(initialProduct));
 
       // Set image preview if available
       if (initialProduct.primary_image_large) {
@@ -186,34 +131,29 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
     const loadInitialCategories = async () => {
       try {
         const initialCats = await productService.getCategories();
-        const options = initialCats.map(c => ({ label: c.name, value: c.id }));
+        // Make sure we properly handle category objects
+        const options = initialCats.map(c => ({ 
+          label: c.name || '', 
+          value: c.id || ''
+        }));
         setCategoryOptions(options);
+        
         // Set default category value if editing
         if (initialProduct?.category) {
-          // Handle the case where category can be a string or an object
-          if (typeof initialProduct.category === 'object') {
-            const categoryObj = initialProduct.category;
-            const initialOption = options.find(opt => 
-              opt.value === categoryObj.id || 
-              opt.label === categoryObj.name
-            );
-            if (initialOption) {
-              form.setValue('category', initialOption);
-            } else {
-              // Create a new option if not found in the list
-              const newOption = { 
-                label: categoryObj.name, 
-                value: categoryObj.id 
-              };
-              form.setValue('category', newOption);
-            }
+          // Get label and value using our helper
+          const { label, value } = extractCategoryInfo(initialProduct.category);
+          
+          // Find matching option or create new one
+          const initialOption = options.find(opt => 
+            String(opt.value) === String(value) || opt.label === label
+          );
+          
+          if (initialOption) {
+            form.setValue('category', initialOption);
           } else {
-            // Handle string category (legacy format)
-            const categoryStr = initialProduct.category as string;
-            const initialOption = options.find(opt => opt.label === categoryStr);
-            if (initialOption) {
-              form.setValue('category', initialOption);
-            }
+            // Create a new option if not found in the list
+            const newOption = { label, value };
+            form.setValue('category', newOption);
           }
         }
       } catch (error) {

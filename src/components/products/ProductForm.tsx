@@ -167,8 +167,18 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
   // Set form data if initialProduct is provided
   useEffect(() => {
     if (initialProduct) {
+      console.log('Setting initial form values from product:', initialProduct);
+      
+      // Make sure name and SKU are explicitly set
+      const defaultValues = getDefaultProductValues(initialProduct);
+      console.log('Default values from helper:', defaultValues);
+      
       // Reset form with data using our centralized helper
-      form.reset(getDefaultProductValues(initialProduct));
+      form.reset(defaultValues);
+      
+      // Just to be extra sure, explicitly set these critical fields
+      form.setValue('name', initialProduct.name || '');
+      form.setValue('sku', initialProduct.sku || '');
       
       // Update product state
       setProduct(initialProduct);
@@ -250,75 +260,21 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
 
   // Mutation for create/update
   const { mutate, isPending } = useMutation({
-    mutationFn: (values: ProductFormValues) => {
-      // Create FormData with proper encoding for file uploads
-      const formData = new FormData();
-      
-      // Always ensure is_active is true
-      values.is_active = true;
-      
+    mutationFn: async (data: FormData) => {
       // Debug what's happening during form submission
-      console.log('Form values before FormData conversion:', values);
+      console.log('Mutation executing with FormData');
       
-      Object.entries(values).forEach(([key, value]) => {
-        if (key === 'tags') {
-          // Always send tags as a JSON array string
-          formData.append('tags', JSON.stringify(value || []))
-        } else if (key === 'attributes') {
-          formData.append(key, JSON.stringify(value || {}));
-        } else if (key === 'category') {
-          // More carefully handle category, which comes as an object from react-select
-          if (value) {
-            if (typeof value === 'string') {
-              formData.append(key, value);
-              console.log(`Set category as string: ${value}`);
-            } else if (typeof value === 'object') {
-              // For category, we should send the ID to the backend
-              // The backend is expecting a category_id field for properly setting the category
-              const categoryId = (value as any).value || '';
-              formData.append('category_id', categoryId.toString());
-              console.log(`Set category_id from object: ${categoryId}`);
-              
-              // Also include the category name for backwards compatibility
-              const categoryName = (value as any).label || '';
-              formData.append(key, categoryName);
-              console.log(`Set category name: ${categoryName}`);
-            }
-          } else {
-            formData.append(key, '');
-            console.log('Category is empty');
-          }
-        } else if (key !== 'primary_image') {
-          // Handle all other fields normally - as long as they're not the image field
-          formData.append(key, value?.toString() || '');
-          console.log(`Set ${key}: ${value}`);
-        }
-      });
+      // Verify name and SKU are in the FormData
+      console.log('Name in FormData:', data.get('name'));
+      console.log('SKU in FormData:', data.get('sku'));
       
-      // Handle image file separately and ensure it's properly added as a file
-      if (imageFile) {
-        // Make sure to append as a File object, not converted to string
-        formData.append('primary_image', imageFile);
-        console.log('Added image file to FormData:', {
-          name: imageFile.name,
-          size: imageFile.size,
-          type: imageFile.type
-        });
-      }
-      
-      // Debug complete FormData
-      console.log('FormData prepared:');
-      for (const pair of formData.entries()) {
-        // For debugging - keep this to help troubleshoot API issues
-        console.log(`${pair[0]}: ${typeof pair[1] === 'object' ? 'File object' : pair[1]}`);
-      }
-      
+      // Create or update the product
       if (isEditMode && productId) {
-        return productService.updateProduct(productId, formData);
+        return productService.updateProduct(productId, data);
       } 
 
       // Create product and then add any draft prices
-      return productService.createProduct(formData)
+      return productService.createProduct(data)
         .then(createdProduct => {
           // If we have draft prices, create them now
           if (draftPrices.length > 0) {
@@ -415,81 +371,157 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
     },
   });
 
-  // Handle form submission
-  const onSubmit = (values: ProductFormValues) => {
-    console.log('Form submitted with values:', values);
-    
-    // Show immediate feedback to the user
-    setIsLoading(true);
-    toast({ title: "Processing your request...", description: "Creating product" });
-    
-    try {
-      mutate(values, {
-        onError: (error) => {
-          console.error('Mutation error:', error);
-          setIsLoading(false);
-          
-          // Display detailed error information
-          if (axios.isAxiosError(error)) {
-            console.error('API error response:', error.response?.data);
-            console.error('API error status:', error.response?.status);
-            console.error('API error headers:', error.response?.headers);
-          }
-          
-          toast({ 
-            title: "Error creating product", 
-            description: axios.isAxiosError(error) 
-              ? (error.response?.data?.detail || error.message) 
-              : "An unexpected error occurred",
-            variant: "destructive" 
-          });
-        },
-        onSuccess: (data) => {
-          console.log('Product created successfully:', data);
-          setIsLoading(false);
-        }
-      });
-    } catch (error) {
-      console.error('Error in submit handler:', error);
-      setIsLoading(false);
-      toast({ 
-        title: "Error creating product", 
-        description: "An unexpected error occurred in the form submission",
-        variant: "destructive" 
-      });
-    }
-  };
-
   // Handle image upload
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setImageFile(file);
       setImagePreview(URL.createObjectURL(file));
+      console.log('Image selected for upload:', file.name, 'size:', file.size, 'type:', file.type);
     }
   };
 
-  // Add this function to help debug form validations
-  const validateAndSubmit = () => {
-    // Check if form has validation errors
-    const formState = form.getValues();
-    const formErrors = form.formState.errors;
+  // Handle form submission
+  const onSubmit = (values: ProductFormValues) => {
+    console.log('Form submitted with values:', values);
     
-    console.log('Current form values:', formState);
-    console.log('Current form errors:', formErrors);
+    // Show immediate feedback to the user
+    setIsLoading(true);
+    toast({ title: "Processing your request...", description: isEditMode ? "Updating product" : "Creating product" });
     
-    if (Object.keys(formErrors).length > 0) {
-      console.error('Form validation failed:', formErrors);
+    try {
+      // Keep original values for validation and mutation
+      const productValues = { ...values };
+      
+      // Log values to verify they exist before submission
+      console.log('Product name:', productValues.name);
+      console.log('Product SKU:', productValues.sku);
+      
+      // Make sure required fields are present
+      if (!productValues.name || !productValues.sku) {
+        console.error('Name or SKU is missing');
+        setIsLoading(false);
+        toast({ 
+          title: "Required fields missing", 
+          description: "Please enter both a name and SKU for the product",
+          variant: "destructive" 
+        });
+        return;
+      }
+      
+      // Create FormData object for file uploads
+      const formData = new FormData();
+      
+      // Explicitly add name and SKU first to ensure they're included
+      formData.append('name', productValues.name || '');
+      formData.append('sku', productValues.sku || '');
+      
+      // Add all other form fields to FormData
+      Object.entries(productValues).forEach(([key, value]) => {
+        // Skip name and SKU since we already added them
+        if (key === 'name' || key === 'sku') return;
+        
+        if (key === 'tags') {
+          // Always send tags as a JSON array string
+          formData.append('tags', JSON.stringify(value || []))
+        } else if (key === 'attributes') {
+          formData.append(key, JSON.stringify(value || {}));
+        } else if (key === 'category') {
+          // Handle category, which comes as an object from react-select
+          if (value) {
+            if (typeof value === 'string') {
+              formData.append(key, value);
+            } else if (typeof value === 'object') {
+              const categoryId = (value as any).value || '';
+              formData.append('category_id', categoryId.toString());
+              const categoryName = (value as any).label || '';
+              formData.append(key, categoryName);
+            }
+          } else {
+            formData.append(key, '');
+          }
+        } else if (key !== 'primary_image') {
+          // Handle all other fields
+          formData.append(key, value?.toString() || '');
+        }
+      });
+      
+      // Handle image file separately
+      if (imageFile) {
+        formData.append('primary_image', imageFile);
+      } else if (isEditMode && imagePreview && imagePreview.startsWith('http')) {
+        formData.append('keep_existing_image', 'true');
+      }
+      
+      // Log the FormData content for debugging
+      console.log('FormData entries:');
+      for (const pair of formData.entries()) {
+        console.log(`[FormData] ${pair[0]}: ${typeof pair[1] === 'object' ? 'File object' : pair[1]}`);
+      }
+      
+      // Submit the form using the original mutate function which expects FormData
+      if (isEditMode && productId) {
+        mutate(formData, {
+          onError: (error) => {
+            console.error('Mutation error:', error);
+            setIsLoading(false);
+            
+            // Display detailed error information
+            if (axios.isAxiosError(error)) {
+              console.error('API error response:', error.response?.data);
+              console.error('API error status:', error.response?.status);
+              console.error('API error headers:', error.response?.headers);
+            }
+            
+            toast({ 
+              title: `Error ${isEditMode ? 'updating' : 'creating'} product`, 
+              description: axios.isAxiosError(error) 
+                ? (error.response?.data?.detail || error.message) 
+                : "An unexpected error occurred",
+              variant: "destructive" 
+            });
+          },
+          onSuccess: (data) => {
+            console.log(`Product ${isEditMode ? 'updated' : 'created'} successfully:`, data);
+            setIsLoading(false);
+          }
+        });
+      } else {
+        mutate(formData, {
+          onError: (error) => {
+            console.error('Mutation error:', error);
+            setIsLoading(false);
+            
+            // Display detailed error information
+            if (axios.isAxiosError(error)) {
+              console.error('API error response:', error.response?.data);
+              console.error('API error status:', error.response?.status);
+              console.error('API error headers:', error.response?.headers);
+            }
+            
+            toast({ 
+              title: `Error ${isEditMode ? 'updating' : 'creating'} product`, 
+              description: axios.isAxiosError(error) 
+                ? (error.response?.data?.detail || error.message) 
+                : "An unexpected error occurred",
+              variant: "destructive" 
+            });
+          },
+          onSuccess: (data) => {
+            console.log(`Product ${isEditMode ? 'updated' : 'created'} successfully:`, data);
+            setIsLoading(false);
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error in submit handler:', error);
+      setIsLoading(false);
       toast({ 
-        title: "Validation Error", 
-        description: "Please check form fields for errors",
+        title: `Error ${isEditMode ? 'updating' : 'creating'} product`, 
+        description: "An unexpected error occurred in the form submission",
         variant: "destructive" 
       });
-      return;
     }
-    
-    // If validation passes, handle submit
-    form.handleSubmit(onSubmit)();
   };
 
   // Extracted PricingModal handler with proper cache invalidation
@@ -536,8 +568,31 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit((values) => {
-          console.log('Form submitted through onSubmit handler');
-          validateAndSubmit(); // This will log form data and handle the submission
+          console.log('Form submitted with values:', values);
+          console.log('Form values - name:', values.name);
+          console.log('Form values - SKU:', values.sku);
+          
+          // Get the raw form data to see what's actually in the DOM
+          const formElement = document.querySelector('form');
+          if (formElement) {
+            const formData = new FormData(formElement);
+            console.log('Raw form data - name:', formData.get('name'));
+            console.log('Raw form data - SKU:', formData.get('sku'));
+          }
+          
+          // Only proceed if SKU is properly defined
+          if (!values.name || !values.sku) {
+            console.error('Name or SKU is required but missing from form values');
+            toast({
+              title: "Validation Error",
+              description: values.name ? "SKU is required" : values.sku ? "Name is required" : "Name and SKU are required",
+              variant: "destructive"
+            });
+            return;
+          }
+          
+          // If validation passes, handle submit with the original values
+          onSubmit(values);
         })} className="space-y-6">
           <Tabs defaultValue="basic" className="w-full">
             <TabsList className="mb-4">

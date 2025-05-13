@@ -212,13 +212,19 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         """
-        Set the created_by field to the current user when creating a product.
-        Avoid using organization to prevent UUID conversion issues.
+        Set the created_by field and organization when creating a product.
         """
         try:
-            # Create the product with just the user
+            # Get the user's organization
+            organization = get_user_organization(self.request.user)
+            
+            if not organization:
+                raise ValidationError({"error": "User must belong to an organization to create products"})
+                
+            # Create the product with user and organization
             product = serializer.save(
-                created_by=self.request.user
+                created_by=self.request.user,
+                organization=organization
             )
                 
             # Record product creation event
@@ -465,6 +471,14 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 {"error": "Expected a list of products"},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        
+        # Get the user's organization for bulk creation    
+        organization = get_user_organization(request.user)
+        if not organization:
+            return Response(
+                {"error": "User must belong to an organization to create products"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
             
         created_products = []
         errors = []
@@ -472,7 +486,10 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         for index, product_data in enumerate(products_data):
             serializer = self.get_serializer(data=product_data)
             if serializer.is_valid():
-                serializer.save(created_by=request.user)
+                serializer.save(
+                    created_by=request.user,
+                    organization=organization
+                )
                 created_products.append(serializer.data)
             else:
                 errors.append({

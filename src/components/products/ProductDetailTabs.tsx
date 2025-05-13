@@ -132,6 +132,18 @@ export const ProductDetailTabs = ({
   const [assets, setAssets] = useState<ProductAsset[]>([]);
   const [activities, setActivities] = useState<ProductActivity[]>([]);
   
+  // Add debugging effect for attributes tab
+  useEffect(() => {
+    // Log rendering info whenever the active tab or product ID changes
+    if (activeTab === 'attributes') {
+      console.log('[Debug] Attributes tab selected', {
+        'ENABLE_CUSTOM_ATTRIBUTES': ENABLE_CUSTOM_ATTRIBUTES,
+        'product.id exists': !!product.id,
+        'productId value': String(product.id) 
+      });
+    }
+  }, [activeTab, product.id]);
+  
   // States for the enhanced attributes tab
   const [availableAttributes, setAvailableAttributes] = useState<AvailableAttribute[]>([]);
   const [attributeValues, setAttributeValues] = useState<AttributeValue[]>([]);
@@ -2367,7 +2379,10 @@ export const ProductDetailTabs = ({
       
       <TabsContent value="attributes" className="space-y-6">
         {ENABLE_CUSTOM_ATTRIBUTES && (
-          <ProductAttributesPanel productId={String(product.id)} locale={selectedLocale} />
+          <ProductAttributesPanel 
+            productId={product.id ? String(product.id) : undefined} 
+            locale={selectedLocale} 
+          />
         )}
       </TabsContent>
       

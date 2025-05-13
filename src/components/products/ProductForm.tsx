@@ -259,19 +259,8 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
       
       Object.entries(values).forEach(([key, value]) => {
         if (key === 'tags') {
-          // For tags, we need to send an array, not a JSON string
-          // If we have tags, append each tag individually to create a proper array in FormData
-          if (Array.isArray(value) && value.length > 0) {
-            // Use brackets notation for arrays in FormData
-            value.forEach((tag, index) => {
-              formData.append(`tags[${index}]`, tag);
-            });
-            console.log(`Set tags as array with ${value.length} items`);
-          } else {
-            // If there are no tags, send an empty array parameter to satisfy the API
-            formData.append('tags', '[]');
-            console.log('Set empty tags array');
-          }
+          // Always send tags as a JSON array string
+          formData.append('tags', JSON.stringify(value || []))
         } else if (key === 'attributes') {
           formData.append(key, JSON.stringify(value || {}));
         } else if (key === 'category') {
@@ -554,7 +543,6 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
                 <>
                   <TabsTrigger value="details">Details & Media</TabsTrigger>
                   <TabsTrigger value="description">Description</TabsTrigger>
-                  <TabsTrigger value="attributes">Attributes</TabsTrigger>
                 </>
               )}
             </TabsList>
@@ -615,28 +603,6 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
                   )}
                 </div>
               )}
-
-              <div className="space-y-2">
-                <label htmlFor="description" className="block text-sm font-medium">
-                  Description
-                </label>
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormControl>
-                        <RichTextEditor
-                          value={field.value || ''}
-                          onChange={field.onChange}
-                          placeholder="Enter product description..."
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -840,14 +806,6 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
                       )}
                     />
                   </div>
-                </TabsContent>
-                
-                <TabsContent value="attributes" className="space-y-4">
-                  <Card className="p-6 text-center">
-                    <p className="text-gray-600 mb-4">
-                      You can manage attributes once the product is saved.
-                    </p>
-                  </Card>
                 </TabsContent>
               </>
             )}

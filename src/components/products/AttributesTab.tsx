@@ -49,6 +49,9 @@ import {
   filterUnusedAttributes
 } from '@/lib/attributeUtils';
 
+import { LOCALES, LocaleCode } from '@/config/locales'
+import { CHANNELS, ChannelCode } from '@/config/channels'
+
 interface AttributesTabProps {
   productId: number;
 }
@@ -59,21 +62,8 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
   const isStaff = (user as any)?.is_staff || false;
   
   // State
-  const [selectedLocale, setSelectedLocale] = useState<string>('en_US');
-  const [selectedChannel, setSelectedChannel] = useState<string>('ecommerce');
-  const [availableLocales] = useState([
-    { code: 'en_US', label: 'English (US)' },
-    { code: 'fr_FR', label: 'French' },
-    { code: 'es_ES', label: 'Spanish' },
-    { code: 'de_DE', label: 'German' },
-    { code: 'it_IT', label: 'Italian' },
-  ]);
-  const [availableChannels] = useState([
-    { code: 'ecommerce', label: 'E-commerce' },
-    { code: 'mobile', label: 'Mobile App' },
-    { code: 'pos', label: 'Point of Sale' },
-    { code: 'marketplace', label: 'Marketplace' },
-  ]);
+  const [selectedLocale, setSelectedLocale] = useState<LocaleCode>(LOCALES[0].code)
+  const [selectedChannel, setSelectedChannel] = useState<ChannelCode>(CHANNELS[0].code)
   
   // Helper values for API calls
   const apiLocale = selectedLocale === 'default' ? null : selectedLocale;
@@ -1081,8 +1071,8 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
         <LocaleChannelSelector
           selectedLocale={selectedLocale}
           selectedChannel={selectedChannel}
-          availableLocales={availableLocales}
-          availableChannels={availableChannels}
+          availableLocales={LOCALES}
+          availableChannels={CHANNELS}
           onLocaleChange={setSelectedLocale}
           onChannelChange={setSelectedChannel}
         />
@@ -1134,8 +1124,8 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
               onUpdateValue={handleUpdateValue}
               onRemoveAttribute={handleRemoveAttribute}
               onRemoveAttributeValue={handleRemoveAttributeValue}
-              availableLocales={availableLocales}
-              availableChannels={availableChannels}
+              availableLocales={LOCALES}
+              availableChannels={CHANNELS}
               makeAttrKey={makeAttributeKey}
             />
           ) : attributes.length === 0 ? (
@@ -1186,8 +1176,8 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
                     onUpdate={handleUpdateValue}
                     savingState={savingStates[attribute.id] || 'idle'}
                     isStaff={isStaff}
-                    availableLocales={availableLocales}
-                    availableChannels={availableChannels}
+                    availableLocales={LOCALES}
+                    availableChannels={CHANNELS}
                     onRemove={value && value.id ? () => handleRemoveAttributeValue(value.id) : undefined}
                   />
                 );
@@ -1203,8 +1193,8 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
         availableAttributes={getUnassignedAttributes()}
         onAddAttribute={handleAddAttribute}
         isPending={createAttributeValueMutation.isPending}
-        availableLocales={availableLocales}
-        availableChannels={availableChannels}
+        availableLocales={LOCALES}
+        availableChannels={CHANNELS}
         selectedLocale={selectedLocale}
         selectedChannel={selectedChannel}
         groupId={currentGroupId}

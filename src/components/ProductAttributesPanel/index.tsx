@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { PlusIcon, PencilIcon, Save, X, Trash2, Sparkles, Layers } from 'lucide-react'
-import { useAttributes, useUpdateAttribute, useAttributeGroups, useDeleteAttribute, useCreateAttribute, useAllAttributes, useAllAttributeGroups } from './api'
+import { useAttributes, useUpdateAttribute, useDeleteAttribute, useCreateAttribute, useAllAttributes, useAllAttributeGroups, useAttributeGroups } from './api'
 import type { Attribute, AttributeGroup } from './types'
 import { cn } from '@/lib/utils'
 import LocaleChannelSelector from '@/features/attributes/LocaleChannelSelector'
@@ -13,6 +13,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { toast } from 'sonner'
 import { RichTextEditor } from '@/components/ui/RichTextEditor'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
+import { useQueryClient } from '@tanstack/react-query'
+import { LOCALES, LocaleCode } from '@/config/locales'
+import { CHANNELS, ChannelCode } from '@/config/channels'
 
 interface ProductAttributesPanelProps {
   productId: string
@@ -32,94 +36,82 @@ const currencies = [
 const units = ['mm','cm','m','in','ft','kg','g','lb','oz','l','ml']
 
 export function ProductAttributesPanel({ productId, locale, channel }: ProductAttributesPanelProps) {
-  const [selectedLocale, setSelectedLocale] = useState(locale || 'en_US')
-  const [selectedChannel, setSelectedChannel] = useState(channel || 'ecommerce')
+  // Initialize query client
+  const queryClient = useQueryClient()
+  
+  // Add debug logs
+  console.log({
+    productId,
+    isCreateMode: !productId,
+    locale,
+    channel
+  });
 
-  const availableLocales = [
-    { code: 'en_US', label: 'English (US)' },
-    { code: 'fr_FR', label: 'French' },
-    { code: 'es_ES', label: 'Spanish' },
-    { code: 'de_DE', label: 'German' }
-  ]
-  const availableChannels = [
-    { code: 'ecommerce', label: 'E-commerce' },
-    { code: 'mobile', label: 'Mobile' }
-  ]
+  const [selectedLocale, setSelectedLocale] = useState<LocaleCode>(locale as LocaleCode ?? LOCALES[0].code)
+  const [selectedChannel, setSelectedChannel] = useState<ChannelCode>(channel as ChannelCode ?? CHANNELS[0].code)
+
+  // Add flag to track if we're in create mode
+  const isCreateMode = !productId
 
   const { data, isPending, isError } = useAttributes(productId, selectedLocale, selectedChannel)
   const updateMutation = useUpdateAttribute(productId, selectedLocale, selectedChannel)
-  const { data: groupsData = [] } = useAttributeGroups(productId)
   const deleteMutation = useDeleteAttribute(productId, selectedLocale, selectedChannel)
   const deleteGlobalMutation = useDeleteAttribute(productId, null, null)
   const createMutation = useCreateAttribute(productId, selectedLocale, selectedChannel)
   const { data: allAttributes = [] } = useAllAttributes()
   const { data: allGroups = [], isLoading: loadingAllGroups } = useAllAttributeGroups()
+  const { data: groupsData = [] } = useAttributeGroups(productId)
+
+  // Add runtime logging for debugging data shapes
+  useEffect(() => {
+    console.log('👉 allGroups:', allGroups);
+    console.log('👉 groupsData:', groupsData);
+    console.log('👉 data.attributes:', data?.attributes);
+  }, [allGroups, groupsData, data]);
+
+  // Add more comprehensive debug logs
+  console.log({
+    productId,
+    isCreateMode: !productId,
+    'useAttributes data': data?.attributes,
+    'useAllAttributeGroups data': allGroups,
+    'allGroups.length': allGroups?.length,
+    'allAttributes.length': allAttributes?.length
+  });
 
   // local editing state
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draftValue, setDraftValue] = useState<string>('')
+  
+  // Track draft values for create mode
+  const [createModeDraftValues, setCreateModeDraftValues] = useState<Record<number, string>>({})
 
-  // group attributes by group name
+  // Build grouped data from all groups, then add any data attributes
   const grouped = useMemo(() => {
-    if (!data?.attributes) return {}
-    const shouldFilter = Boolean(selectedLocale) || Boolean(selectedChannel)
+    // 1) Build a bucket for every group name, plus 'Ungrouped'
+    const map: Record<string, Attribute[]> = {};
+    allGroups.forEach(g => { map[g.name] = []; });
+    map['Ungrouped'] = [];
 
-    // initial map from group id/name
-    const map: Record<string, Attribute[]> = {}
-    // Build helper index by attribute id
-    const attrById: Record<number, Attribute> = {}
-
-    // Sort attributes so that the most specific (locale+channel) appear last.
-    const sortedAttrs = [...data.attributes].sort((a, b) => {
-      const score = (x: any) => (x.locale ? 2 : 0) + (x.channel ? 1 : 0)
-      return score(a) - score(b)
-    })
-
-    sortedAttrs.forEach(a => {
-      const key = (a as any).attribute ?? a.id
-      attrById[key] = a as any
-    })
-
-    groupsData.forEach(g => {
-      g.items.forEach(item => {
-        const a = attrById[item.attribute]
-        if (!a) return
-        // filter
-        if (a.product !== Number(productId)) return
-        if (shouldFilter) {
-          if (selectedLocale) {
-            const loc = selectedLocale.replace('-', '_')
-            if (a.locale && a.locale !== loc) return
-          }
-          if (selectedChannel) {
-            if (a.channel && a.channel !== selectedChannel) return
-          }
+    // 2) If we have existing values, slot each one into its group
+    if (data?.attributes?.length) {
+      data.attributes.forEach(attrVal => {
+        // Get the attribute ID, checking both possible fields for flexibility
+        const valId = Number((attrVal as any).attribute || attrVal.id);
+        // find the group containing that attribute
+        const grp = allGroups.find(g =>
+          g.items.some(item => Number(item.attribute) === valId)
+        );
+        if (grp) {
+          map[grp.name].push(attrVal);
+        } else {
+          map['Ungrouped'].push(attrVal);
         }
-        map[g.name] = map[g.name] ? [...map[g.name], a] : [a]
-      })
-    })
+      });
+    }
 
-    // handle attributes not in any group
-    const groupedIds = new Set(Object.values(map).flat().map(a => a.id))
-    const ungrouped: Attribute[] = []
-    sortedAttrs.forEach(a => {
-      if (a.product !== Number(productId)) return
-      if (groupedIds.has(a.id)) return
-      // same filter
-      if (shouldFilter) {
-        if (selectedLocale) {
-          const loc = selectedLocale.replace('-', '_')
-          if (a.locale && a.locale !== loc) return
-        }
-        if (selectedChannel) {
-          if (a.channel && a.channel !== selectedChannel) return
-        }
-      }
-      ungrouped.push(a)
-    })
-    if (ungrouped.length) map['Ungrouped'] = ungrouped
-    return map
-  }, [data?.attributes, selectedLocale, selectedChannel, productId, groupsData])
+    return map;
+  }, [allGroups, data?.attributes]);
 
   // Add validation state for phone, email, url, date
   const [validationError, setValidationError] = useState<string | null>(null)
@@ -151,6 +143,14 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
     }
     updateMutation.mutate({ id: attr.id, payload: { value } })
     setEditingId(null)
+  }
+
+  // Handle updating draft values in create mode
+  const handleCreateModeDraftChange = (attributeId: number, value: string) => {
+    setCreateModeDraftValues(prev => ({
+      ...prev,
+      [attributeId]: value
+    }))
   }
 
   const groupNames = Object.keys(grouped)
@@ -186,8 +186,38 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
   const [addingAllGroup, setAddingAllGroup] = useState<string | null>(null)
 
   // Compute missing groups (by id): show button if group is not in product's group list
-  const productGroupIds = new Set((groupsData || []).map(g => g.id))
-  const missingGroups = (allGroups || []).filter(g => !productGroupIds.has(g.id))
+  const productGroupIds = new Set(Object.keys(grouped).filter(name => name !== 'Ungrouped'))
+  const missingGroups = (allGroups || []).filter(g => !productGroupIds.has(g.name))
+  
+  // Add state for the delete group modal
+  const [isDeleteGroupModalOpen, setIsDeleteGroupModalOpen] = useState(false)
+  const [groupToDelete, setGroupToDelete] = useState<string | null>(null)
+  
+  // Function to delete a group from the product
+  const handleDeleteGroup = async (groupName: string) => {
+    // Get all attribute IDs for this group
+    const attrs = grouped[groupName] || []
+    if (attrs.length === 0) {
+      toast.error('No attributes found in this group to delete')
+      return
+    }
+    
+    // Confirm with the user
+    const attrPromises = attrs.map(attr => 
+      deleteMutation.mutateAsync({ id: String(attr.id) })
+    )
+    
+    try {
+      await Promise.all(attrPromises)
+      await queryClient.invalidateQueries({ queryKey: ['attributes', productId, selectedLocale, selectedChannel] })
+      toast.success(`Successfully removed all attributes from group "${groupName}"`)
+      setIsDeleteGroupModalOpen(false)
+      setGroupToDelete(null)
+    } catch (error) {
+      console.error('Error deleting group attributes:', error)
+      toast.error('Failed to remove some attributes')
+    }
+  }
 
   // Helper: add all attributes from a group to the product
   async function handleAddGroupToProduct(group: AttributeGroup) {
@@ -195,10 +225,10 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
     try {
       // Find which attributes are not present in the product
       // Convert all attributes to numbers for consistent comparison
-      const presentIds = new Set(data?.attributes.map(a => {
+      const presentIds = new Set(data?.attributes?.map(a => {
         const attrId = (a as any).attribute ?? a.id
         return typeof attrId === 'string' ? Number(attrId) : attrId
-      }))
+      }) || [])
       
       const toAdd = group.items.filter(item => !presentIds.has(item.attribute))
       
@@ -210,8 +240,16 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
       
       // Use Promise.all to add all attributes in parallel
       await Promise.all(toAdd.map(item => 
-        createMutation.mutateAsync({ attributeId: item.attribute, value: '' })
+        createMutation.mutateAsync({
+          attributeId: item.attribute,
+          value: '',
+          locale: selectedLocale,
+          channel: selectedChannel
+        })
       ))
+      
+      // 🔄 REFRESH DATA
+      await queryClient.invalidateQueries({ queryKey: ['attributes', productId, selectedLocale, selectedChannel] })
       
       toast.success(`Added group '${group.name}' to product (${toAdd.length} attributes)`) 
     } catch (err) {
@@ -488,6 +526,7 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
   const [mediaUploading, setMediaUploading] = useState(false)
   const [mediaUploadError, setMediaUploadError] = useState<string | null>(null)
 
+  // MODIFIED: Relax the bailout condition to allow rendering in create mode
   if (isPending) {
     return (
       <div className='space-y-2'>
@@ -504,22 +543,31 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
     )
   }
 
-  if (!data?.attributes || data.attributes.length === 0) {
-    return (
-      <p className='text-muted-foreground'>No attributes found.</p>
-    )
-  }
-
   return (
     <div className='space-y-4'>
       <LocaleChannelSelector
         selectedLocale={selectedLocale}
         selectedChannel={selectedChannel}
-        availableLocales={availableLocales}
-        availableChannels={availableChannels}
+        availableLocales={LOCALES}
+        availableChannels={CHANNELS}
         onLocaleChange={setSelectedLocale}
         onChannelChange={setSelectedChannel}
       />
+
+      {/* Group management UI */}
+      <div className="flex justify-between items-center mb-2">
+        <h3 className="text-sm font-medium">Group Management</h3>
+        {!isCreateMode && Object.keys(grouped).filter(name => name !== 'Ungrouped').length > 0 && (
+          <Button 
+            size="sm" 
+            variant="outline" 
+            className="text-red-600 border-red-300 hover:bg-red-50"
+            onClick={() => setIsDeleteGroupModalOpen(true)}
+          >
+            Delete Group
+          </Button>
+        )}
+      </div>
 
       {/* Group navigation */}
       {groupNames.length > 1 && (
@@ -566,20 +614,22 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
           ))}
         </div>
       ) : (
-        <div className='text-xs text-muted-foreground mb-2'>All attribute groups are already added to this product.</div>
+        missingGroups.length === 0 && allGroups.length > 0 ? (
+          <div className='text-xs text-muted-foreground mb-2'>All attribute groups are already added to this product.</div>
+        ) : null
       )}
 
       <Accordion type='single' collapsible value={openGroup} onValueChange={setOpenGroup} className='w-full'>
         {visibleGroupNames.map(groupName => {
           const attrs = grouped[groupName]
           // Find all attribute IDs in this group
-          const groupMeta = groupsData.find(g => g.name === groupName)
+          const groupMeta = allGroups.find(g => g.name === groupName)
           const allGroupAttrIds = groupMeta ? groupMeta.items.map(item => item.attribute) : []
           // Find which are not present in product
-          const presentIds = new Set(data?.attributes.map(a => {
+          const presentIds = new Set(data?.attributes?.map(a => {
             const attrId = (a as any).attribute ?? a.id
             return typeof attrId === 'string' ? Number(attrId) : attrId
-          }))
+          }) || [])
           const unusedAttrIds = allGroupAttrIds.filter(id => !presentIds.has(id))
           const canAddAll = unusedAttrIds.length > 0
           return (
@@ -587,7 +637,7 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
               <AccordionTrigger className='flex items-center justify-between px-4 py-3'>
                 <span className='font-medium'>{groupName} ({attrs.length})</span>
                 <div className='flex items-center gap-2'>
-                  {canAddAll && (
+                  {canAddAll && !isCreateMode && (
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span
@@ -600,9 +650,13 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
                             setAddingAllGroup(groupName)
                             try {
                               const promises = unusedAttrIds.map(attrId =>
-                                createMutation.mutateAsync({ attributeId: attrId, value: '' })
+                                createMutation.mutateAsync({ attributeId: attrId, value: '', locale: selectedLocale, channel: selectedChannel })
                               )
                               await Promise.all(promises)
+                              
+                              // 🔄 REFRESH DATA
+                              await queryClient.invalidateQueries({ queryKey: ['attributes', productId, selectedLocale, selectedChannel] })
+                              
                               toast.success(`Added ${unusedAttrIds.length} attributes from '${groupName}'`)
                             } catch (err) {
                               toast.error('Failed to add all attributes')
@@ -627,30 +681,41 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
                       <TooltipContent>Add all attributes from this group to product</TooltipContent>
                     </Tooltip>
                   )}
-                  <span
-                    role='button'
-                    tabIndex={0}
-                    className='h-8 w-8 p-0 flex items-center justify-center rounded-md cursor-pointer hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2'
-                    onClick={e => {
-                      e.stopPropagation()
-                      setAddDialogGroup(groupName)
-                    }}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
+                  {!isCreateMode && (
+                    <span
+                      role='button'
+                      tabIndex={0}
+                      className='h-8 w-8 p-0 flex items-center justify-center rounded-md cursor-pointer hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2'
+                      onClick={e => {
                         e.stopPropagation()
                         setAddDialogGroup(groupName)
-                      }
-                    }}
-                    aria-label={`Add attribute to ${groupName}`}
-                  >
-                    <PlusIcon className='h-4 w-4' />
-                  </span>
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setAddDialogGroup(groupName)
+                        }
+                      }}
+                      aria-label={`Add attribute to ${groupName}`}
+                    >
+                      <PlusIcon className='h-4 w-4' />
+                    </span>
+                  )}
                 </div>
               </AccordionTrigger>
               <AccordionContent className='px-2 pb-4'>
                 {attrs.length === 0 ? (
-                  <p className='text-sm text-muted-foreground px-4'>No attributes. Click + to add one.</p>
+                  // Instead of trying to render individual attribute rows which causes linter errors, 
+                  // Just show an improved message explaining how to add attributes
+                  <div className="py-4 text-sm text-muted-foreground px-4 flex flex-col gap-2">
+                    <p>No attributes in this group yet.</p>
+                    {isCreateMode ? (
+                      <p>Attributes will be available after saving the product.</p>
+                    ) : (
+                      <p>Click the + button in the header to add attributes.</p>
+                    )}
+                  </div>
                 ) : (
                   <div className='overflow-x-auto'>
                     <Table className='min-w-full'>
@@ -753,49 +818,65 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Add attribute to {addDialogGroup}</DialogTitle>
-              <DialogDescription>Select an attribute from the group and enter its value.</DialogDescription>
+              <DialogDescription>Select an attribute to add to this product. You can set its value after adding.</DialogDescription>
             </DialogHeader>
 
-            {/* Attribute select */}
-            <div className='space-y-2'>
-              <label className='block text-sm font-medium'>Attribute</label>
-              <select
-                className='w-full border rounded px-2 py-1'
-                value={newAttrId ?? ''}
-                onChange={e => setNewAttrId(Number(e.target.value))}
-              >
-                <option value='' disabled>Select attribute…</option>
-                {(() => {
-                  const grp = groupsData.find(g => g.name === addDialogGroup)
-                  if (!grp) return null
-                  // Filter attributeIds already present in product
-                  const presentIds = new Set(data?.attributes.map(a => {
-                    const attrId = (a as any).attribute ?? a.id
-                    return typeof attrId === 'string' ? Number(attrId) : attrId
-                  }))
-                  return grp.items
-                    .filter(item => !presentIds.has(item.attribute))
-                    .map(item => {
-                      const attrMeta = allAttributes.find(a => a.id === String(item.attribute) || Number(a.id) === item.attribute)
-                      const label = (attrMeta?.attribute_label as any) || (attrMeta as any)?.label || attrMeta?.name || (attrMeta as any)?.code || attrMeta?.attribute_code || `Attr ${item.attribute}`
-                      return <option key={item.attribute} value={item.attribute}>{label}</option>
-                    })
-                })()}
-              </select>
-
-              <label className='block text-sm font-medium'>Value</label>
-              <Input value={newAttrValue} onChange={e => setNewAttrValue(e.target.value)} />
+            {/* Attribute select - simplified to just the dropdown */}
+            <div className='space-y-4'>
+              <div>
+                <label className='block text-sm font-medium mb-1'>Attribute</label>
+                <select
+                  className='w-full border rounded px-2 py-1'
+                  value={newAttrId ?? ''}
+                  onChange={e => setNewAttrId(Number(e.target.value))}
+                >
+                  <option value='' disabled>Select attribute…</option>
+                  {(() => {
+                    const grp = allGroups.find(g => g.name === addDialogGroup)
+                    if (!grp) return null
+                    // Filter attributeIds already present in product
+                    const presentIds = new Set(data?.attributes?.map(a => {
+                      const attrId = (a as any).attribute ?? a.id
+                      return typeof attrId === 'string' ? Number(attrId) : attrId
+                    }) || [])
+                    return grp.items
+                      .filter(item => !presentIds.has(item.attribute))
+                      .map(item => {
+                        const attrMeta = allAttributes.find(a => a.id === String(item.attribute) || Number(a.id) === item.attribute)
+                        const label = (attrMeta?.attribute_label as any) || (attrMeta as any)?.label || attrMeta?.name || (attrMeta as any)?.code || attrMeta?.attribute_code || `Attr ${item.attribute}`
+                        return <option key={item.attribute} value={item.attribute}>{label}</option>
+                      })
+                  })()}
+                </select>
+              </div>
             </div>
 
             <DialogFooter className='mt-4'>
               <Button
-                onClick={() => {
-                  if (!newAttrId || newAttrValue.trim() === '') return
-                  createMutation.mutate({ attributeId: newAttrId, value: newAttrValue.trim() }, {
-                    onSuccess: () => setAddDialogGroup(null)
-                  })
+                onClick={async () => {
+                  if (!newAttrId) return
+                  
+                  try {
+                    // Add attribute with empty value - users will edit it later
+                    await createMutation.mutateAsync({
+                      attributeId: newAttrId,
+                      value: '',
+                      locale: selectedLocale,
+                      channel: selectedChannel
+                    })
+                    
+                    // 🔄 REFRESH DATA
+                    await queryClient.invalidateQueries({ queryKey: ['attributes', productId, selectedLocale, selectedChannel] })
+                    
+                    setAddDialogGroup(null)
+                    
+                    // Show success message with hint to edit
+                    toast.success('Attribute added. Use the edit button to set its value.')
+                  } catch (err) {
+                    toast.error('Failed to add attribute')
+                  }
                 }}
-                disabled={!newAttrId || newAttrValue.trim() === '' || createMutation.isPending}
+                disabled={!newAttrId || createMutation.isPending}
               >
                 Add
               </Button>
@@ -806,6 +887,66 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
           </DialogContent>
         </Dialog>
       )}
+      
+      {/* Delete Group Modal */}
+      <Dialog open={isDeleteGroupModalOpen} onOpenChange={setIsDeleteGroupModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Attribute Group</DialogTitle>
+            <DialogDescription className="text-amber-600">
+              Warning: This will remove all attributes in the selected group from this product.
+              The group itself will remain available for other products.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Select Group to Delete</label>
+              <select
+                className="w-full border rounded px-3 py-2"
+                value={groupToDelete || ''}
+                onChange={e => setGroupToDelete(e.target.value)}
+              >
+                <option value="" disabled>Choose a group...</option>
+                {Object.keys(grouped)
+                  .filter(name => name !== 'Ungrouped' && grouped[name].length > 0)
+                  .map(name => (
+                    <option key={name} value={name}>
+                      {name} ({grouped[name].length} attributes)
+                    </option>
+                  ))
+                }
+              </select>
+            </div>
+            
+            {groupToDelete && (
+              <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm">
+                <p className="font-medium text-amber-800 mb-1">You are about to delete:</p>
+                <p className="text-amber-700">
+                  All {grouped[groupToDelete]?.length || 0} attributes in group "{groupToDelete}"
+                </p>
+                <p className="mt-2 text-xs text-amber-600">
+                  This action only removes these attributes from the current product.
+                  The attributes and group definition will still be available for other products.
+                </p>
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button
+              variant="destructive"
+              onClick={() => groupToDelete && handleDeleteGroup(groupToDelete)}
+              disabled={!groupToDelete || deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? 'Deleting...' : 'Confirm Delete'}
+            </Button>
+            <Button variant="outline" onClick={() => setIsDeleteGroupModalOpen(false)}>
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 } 

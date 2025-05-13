@@ -103,22 +103,24 @@ export function useAttributeGroups(productId: string) {
 
 export function useCreateAttribute(productId: string, locale?: string, channel?: string) {
   const queryClient = useQueryClient()
-  return useMutation<Attribute, Error, { attributeId: number; value: string }>({
-    mutationFn: async ({ attributeId, value }) => {
+  return useMutation<Attribute, Error, { attributeId: number; value: string; locale?: string; channel?: string }>({
+    mutationFn: async ({ attributeId, value, locale: attributeLocale, channel: attributeChannel }) => {
       const params: Record<string,string> = {}
-      if (locale) params.locale = locale
-      if (channel) params.channel = channel
+      if (attributeLocale || locale) params.locale = attributeLocale || locale
+      if (attributeChannel || channel) params.channel = attributeChannel || channel
       const payload = {
         attribute: attributeId,
         product: Number(productId),
-        value
+        value,
+        locale: attributeLocale || locale,
+        channel: attributeChannel || channel
       }
       const { data } = await axiosInstance.post<Attribute>(`/api/products/${productId}/attributes/`, payload, { params })
       return data
     },
     onSuccess: () => {
       toast.success('Attribute added')
-      queryClient.invalidateQueries()
+      queryClient.invalidateQueries({ queryKey: ATTRIBUTES_QUERY_KEY(productId, locale, channel) })
     },
     onError: () => toast.error('Failed to add attribute')
   })
@@ -131,7 +133,8 @@ export function useAllAttributes() {
       const { data } = await axiosInstance.get('/api/attributes/')
       return data
     },
-    staleTime: 10 * 60 * 1000
+    staleTime: 10 * 60 * 1000,
+    // No enabled condition - always load regardless of productId
   })
 }
 
@@ -142,6 +145,7 @@ export function useAllAttributeGroups() {
       const { data } = await axiosInstance.get('/api/attribute-groups/')
       return Array.isArray(data) ? data : []
     },
-    staleTime: 10 * 60 * 1000
+    staleTime: 10 * 60 * 1000,
+    // No enabled condition - always load regardless of productId
   })
 } 

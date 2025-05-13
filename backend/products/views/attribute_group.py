@@ -275,11 +275,25 @@ class ProductAttributeGroupViewSet(OrganizationQuerySetMixin, viewsets.ReadOnlyM
         product_id = self.kwargs.get('product_pk')
         locale     = self.request.query_params.get('locale')
         channel    = self.request.query_params.get('channel')
+        org        = get_user_organization(self.request.user)
 
-        # Base filter that must always match – the product and organisation.
+        # If the product has no values yet, return all groups for the org
+        from ..models import AttributeValue, AttributeGroup
+        has_values = AttributeValue.objects.filter(
+            product_id=product_id,
+            organization=org
+        ).exists()
+        if not has_values:
+            return AttributeGroup.objects.filter(
+                organization=org
+            ).prefetch_related(
+                'attributegroupitem_set__attribute'
+            )
+
+        # Otherwise (edit mode), only return groups with values
         value_filter = Q(
             attributegroupitem__attribute__attributevalue__product_id=product_id,
-            attributegroupitem__attribute__attributevalue__organization=get_user_organization(self.request.user)
+            attributegroupitem__attribute__attributevalue__organization=org
         )
 
         # Optional locale / channel specificity.  Only add these conditions
@@ -290,8 +304,6 @@ class ProductAttributeGroupViewSet(OrganizationQuerySetMixin, viewsets.ReadOnlyM
 
         if channel not in [None, '']:
             value_filter &= Q(attributegroupitem__attribute__attributevalue__channel=channel)
-
-        org = get_user_organization(self.request.user)
 
         queryset = AttributeGroup.objects.filter(
             organization=org

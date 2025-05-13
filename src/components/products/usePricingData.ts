@@ -88,8 +88,6 @@ export function usePricingData(productId: number) {
       // Use priceService to fetch prices
       const response = await priceService.getPrices(productId)
       
-      // Debug the response structure
-      console.log('Price API response:', response)
       
       // Handle different response formats
       let priceData: any[] = []

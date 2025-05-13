@@ -554,7 +554,16 @@
                 // Handle FormData or regular object
                 let response;
                 if (product instanceof FormData) {
-                    response = await axiosInstance.post(url, product);
+                    // Explicitly set the correct headers for FormData with files
+                    response = await axiosInstance.post(url, product, {
+                        headers: {
+                            'Content-Type': 'multipart/form-data',
+                            // Remove any preset content-type that might interfere
+                            'Accept': 'application/json'
+                        },
+                    });
+                    
+                    console.log('FormData sent with multipart/form-data Content-Type');
                 } else {
                     const productData = { ...product } as any; // Use type assertion to handle property assignments
                     

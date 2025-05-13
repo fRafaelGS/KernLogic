@@ -434,11 +434,10 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
     }
     
     // Use the normalised value when displaying
-    const actualValue = actualValueRef();
-
     function actualValueRef (): AttrValue {
-      return actualValue
+      return value.value
     }
+    const actualValue = actualValueRef();
     
     switch (attribute.data_type) {
       case 'boolean':

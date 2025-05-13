@@ -59,8 +59,8 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
   const isStaff = (user as any)?.is_staff || false;
   
   // State
-  const [selectedLocale, setSelectedLocale] = useState('en_US');
-  const [selectedChannel, setSelectedChannel] = useState('ecommerce');
+  const [selectedLocale, setSelectedLocale] = useState<string>('en_US');
+  const [selectedChannel, setSelectedChannel] = useState<string>('ecommerce');
   const [availableLocales] = useState([
     { code: 'en_US', label: 'English (US)' },
     { code: 'fr_FR', label: 'French' },
@@ -74,6 +74,10 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
     { code: 'pos', label: 'Point of Sale' },
     { code: 'marketplace', label: 'Marketplace' },
   ]);
+  
+  // Helper values for API calls
+  const apiLocale = selectedLocale === 'default' ? null : selectedLocale;
+  const apiChannel = selectedChannel === 'default' ? null : selectedChannel;
   
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [currentGroupId, setCurrentGroupId] = useState<number | null>(null);
@@ -108,19 +112,18 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
     enabled: ENABLE_CUSTOM_ATTRIBUTES,
   });
   
-  // Load attribute groups
-  const { 
-    data: attributeGroups = [], 
+  // Load attribute groups (always fetch every group assigned to this product)
+  const {
+    data: attributeGroups = [],
     isLoading: isLoadingGroups,
-    error: groupsError
+    error: groupsError,
   } = useQuery({
     queryKey: qkAttributeGroups(productId, selectedLocale, selectedChannel),
     queryFn: async () => {
-      const response = await axiosInstance.get(paths.products.groups(productId), {
-        headers: { 'Accept': 'application/json' },
-        params: { locale: selectedLocale, channel: selectedChannel }
-      });
-      return response.data;
+      return axiosInstance.get(
+        paths.products.groups(productId),
+        { headers: { 'Accept': 'application/json' } }
+      ).then(r => r.data);
     },
     enabled: ENABLE_ATTRIBUTE_GROUPS && !!productId,
   });
@@ -135,7 +138,10 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
     queryFn: async () => {
       const response = await axiosInstance.get(paths.products.attributes(productId), {
         headers: { 'Accept': 'application/json' },
-        params: { locale: selectedLocale, channel: selectedChannel }
+        params: {
+          ...(apiLocale != null ? { locale: apiLocale } : {}),
+          ...(apiChannel != null ? { channel: apiChannel } : {}),
+        }
       });
       return response.data;
     },
@@ -145,17 +151,22 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
   // Process values when they change
   React.useEffect(() => {
     if (!values) return;
-    
-    // Create a map of attribute ID to value
+    // Build a map of attributeId to the best value for the current locale/channel, with fallback
     const valueMap: Record<number, AttributeValue> = {};
-    const filteredValues = values.filter((value: AttributeValue) => 
-      value.locale === selectedLocale && value.channel === selectedChannel
-    );
-    
-    filteredValues.forEach((value: AttributeValue) => {
-      valueMap[value.attribute] = value;
+    values.forEach((v: AttributeValue) => {
+      if (!valueMap[v.attribute]) {
+        valueMap[v.attribute] = v;
+      } else {
+        // Prefer more specific values: exact match > locale-only > channel-only > global
+        const curr = valueMap[v.attribute];
+        // Score: 3 = exact, 2 = locale only, 1 = channel only, 0 = global
+        const score = (val: AttributeValue) => (
+          (val.locale === selectedLocale ? 2 : (val.locale ? 1 : 0)) +
+          (val.channel === selectedChannel ? 1 : (val.channel ? 0.5 : 0))
+        );
+        if (score(v) > score(curr)) valueMap[v.attribute] = v;
+      }
     });
-    
     if (!isEqual(attributeValues, valueMap)) {
       setAttributeValues(valueMap);
     }

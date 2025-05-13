@@ -16,7 +16,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ChevronLeft, Edit, Copy, Trash, Download, AlertCircle } from 'lucide-react';
+import { ChevronLeft, Edit, Copy, Trash, Download, AlertCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { 
   DropdownMenu,
@@ -27,81 +27,89 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useQuery } from '@tanstack/react-query';
 
 export const ProductDetail = () => {
   const { id } = useParams<{ id: string }>();
+  const productId = id ? Number(id) : 0;
   const navigate = useNavigate();
-  const [product, setProduct] = useState<Product | null>(null);
   const [prices, setPrices] = useState<ProductPrice[]>([]);
   const [isPricesLoading, setIsPricesLoading] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   // Get user permissions from auth context
   const { checkPermission } = useAuth();
   const canEdit = checkPermission ? checkPermission('product.edit') : true;
   const canDelete = checkPermission ? checkPermission('product.delete') : true;
 
-  // Load all product data including prices
-  const loadAll = async () => {
-    if (!id) {
-      setError('Product ID is missing from the URL');
-      setLoading(false);
-      return;
-    }
-    
-    try {
-      setLoading(true);
-      setIsPricesLoading(true);
-      
-      // Fetch product and prices in parallel
-      const [productData, pricesData, assetsData] = await Promise.all([
-        productService.getProduct(Number(id)),
-        productService.getPrices(Number(id)),
-        productService.getProductAssets(Number(id))
-      ]);
-      
-      if (!productData) {
-        setError('Product not found or returned empty data');
-        setProduct(null);
-        return;
+  // Use React Query to fetch the product with retry logic
+  const { 
+    data: product, 
+    isLoading: loading, 
+    isError, 
+    error: queryError,
+    refetch 
+  } = useQuery({
+    queryKey: ['product', productId],
+    queryFn: async () => {
+      if (!productId) {
+        throw new Error('Product ID is missing from the URL');
       }
       
-      // Build complete product with assets and prices
-      const productWithAssets: Product = {
-        ...productData,
-        assets: Array.isArray(assetsData) && assetsData.length > 0 ? assetsData : [],
-        prices: pricesData
-      };
+      try {
+        // Fetch product data
+        const productData = await productService.getProduct(productId);
+        
+        if (!productData) {
+          throw new Error('Product not found or returned empty data');
+        }
+        
+        // Fetch additional data
+        const [pricesData, assetsData] = await Promise.all([
+          productService.getPrices(productId),
+          productService.getProductAssets(productId)
+        ]);
+        
+        // Set prices in state for other components
+        setPrices(pricesData);
+        
+        // Build complete product with assets and prices
+        const productWithAssets: Product = {
+          ...productData,
+          assets: Array.isArray(assetsData) && assetsData.length > 0 ? assetsData : [],
+          prices: pricesData
+        };
+        
+        // Set page title
+        document.title = `${productWithAssets.name || 'Product'} - KernLogic PIM`;
+        
+        return productWithAssets;
+      } catch (err: any) {
+        if (err.response?.status === 404) {
+          throw new Error('Product not found');
+        }
+        throw new Error('Failed to load product details. Please try again.');
+      }
+    },
+    retry: (failureCount, error: any) => {
+      // Only retry a few times and only for network errors or if we think
+      // the product might still be propagating through the database
+      const isNetwork = !error.response;
+      const isNotFound = error.response?.status === 404;
       
-      setProduct(productWithAssets);
-      setPrices(pricesData);
-      setError(null);
-      
-      document.title = `${productWithAssets.name || 'Product'} - KernLogic PIM`;
-    } catch (err: any) {
-      const errorMessage = err.response?.status === 404 
-        ? 'Product not found' 
-        : 'Failed to load product details. Please try again.';
-      
-      setError(errorMessage);
-      setProduct(null);
-      toast.error(errorMessage);
-    } finally {
-      setLoading(false);
-      setIsPricesLoading(false);
-    }
-  };
+      // Retry up to 3 times for any error except a confirmed 404
+      return !isNotFound && failureCount < 3;
+    },
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 10000), // Exponential backoff
+    refetchOnWindowFocus: false
+  });
 
+  // Clean up on unmount
   useEffect(() => {
-    loadAll();
-    
-    // Clean up on unmount
     return () => {
       document.title = 'KernLogic PIM';
     };
-  }, [id]);
+  }, []);
 
   const handleEdit = () => {
     if (id) {
@@ -160,17 +168,12 @@ export const ProductDetail = () => {
 
   // Handle product update from description component
   const handleProductUpdate = async (updatedProduct: Product) => {
-    // Create a new object to ensure React detects the change
-    setProduct({...updatedProduct});
-    
-    // Reload all data to ensure we have the latest
-    await loadAll();
+    // Refetch product data to ensure we have the latest
+    refetch();
   };
 
   const handleRetry = () => {
-    setLoading(true);
-    setError(null);
-    loadAll();
+    refetch();
   };
 
   if (loading) {
@@ -196,17 +199,13 @@ export const ProductDetail = () => {
             </div>
           </div>
           
-          <div className="mb-6">
-            <Skeleton className="h-40 w-full rounded-lg" />
-          </div>
-          
-          <div className="flex flex-col lg:flex-row gap-6">
-            <div className="w-full lg:w-1/4">
-              <Skeleton className="h-96 w-full rounded-lg" />
-            </div>
-            <div className="w-full lg:w-3/4">
-              <Skeleton className="h-12 w-full mb-6" />
-              <Skeleton className="h-72 w-full rounded-lg" />
+          <div className="flex items-center justify-center p-12">
+            <div className="text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+              <p className="text-muted-foreground">Loading product data...</p>
+              <p className="text-xs text-muted-foreground mt-2">
+                This may take a moment if the product was just created
+              </p>
             </div>
           </div>
         </div>
@@ -214,7 +213,9 @@ export const ProductDetail = () => {
     );
   }
 
-  if (error || !product) {
+  if (isError || !product) {
+    const errorMessage = queryError instanceof Error ? queryError.message : 'Product not found';
+    
     return (
       <DashboardLayout>
         <div className="container py-6">
@@ -235,7 +236,7 @@ export const ProductDetail = () => {
             <AlertCircle className="h-5 w-5" />
             <AlertTitle>Error</AlertTitle>
             <AlertDescription className="flex flex-col gap-4">
-              <p>{error || 'Product not found'}</p>
+              <p>{errorMessage}</p>
               <div className="flex gap-2">
                 <Button 
                   variant="outline" 

@@ -35,6 +35,7 @@ export function CategoryModal({
   // Loading state for operations
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [treeKey, setTreeKey] = useState(0);
+  const [categoryTree, setCategoryTree] = useState<any[]>([]);
   
   // When the modal opens, fetch the current category data if we only have an ID
   useEffect(() => {
@@ -55,21 +56,28 @@ export function CategoryModal({
     }
   }, [open, currentCategoryId, selectedCategory]);
   
+  useEffect(() => {
+    // Fetch the category tree for label resolution
+    const fetchTree = async () => {
+      const tree = await categoryService.getCategoryTree();
+      setCategoryTree(tree);
+    };
+    if (open) fetchTree();
+  }, [open]);
+  
   // Handle category selection from tree - only updates local state
   const handleCategoryChange = async (raw: string | number) => {
     const id = typeof raw === 'string' ? +raw : raw;
     setSelectedCategoryId(id || null);
-    
     if (id) {
-      try {
-        const categories = await categoryService.getCategories();
-        const categoryData = categories.find(c => c.id === id);
-        setSelectedCategory(categoryData ?? { id, name: `Category ${id}` } as Category);
-        // If we select a category, disable the "create at top level" option
-        setCreateAtTopLevel(false);
-      } catch (error) {
-        console.error('Error fetching category data:', error);
+      // Use the tree to find the node and get the label
+      const node = categoryService.findNodeById(categoryTree, id);
+      if (node) {
+        setSelectedCategory({ id, name: node.label });
+      } else {
+        setSelectedCategory({ id, name: `Category ${id}` });
       }
+      setCreateAtTopLevel(false);
     } else {
       setSelectedCategory(null);
     }
@@ -100,10 +108,19 @@ export function CategoryModal({
   
   // Save the selected category to the product
   const handleSave = async () => {
-    if (!productId) return;
-    
+    if (!selectedCategoryId) return;
     setIsSubmitting(true);
     try {
+      if (!productId) {
+        // In create mode, just return the selected category object
+        if (selectedCategory) {
+          onCategoryUpdated(selectedCategory);
+          onOpenChange(false);
+        }
+        setIsSubmitting(false);
+        return;
+      }
+      // In edit mode, update via API
       const success = await categoryService.updateProductCategory(productId, selectedCategoryId);
       if (success) {
         const resultCat = selectedCategoryId

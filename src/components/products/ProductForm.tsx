@@ -55,6 +55,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Spinner } from "@/components/ui/spinner";
 import { FileUpload } from "@/components/ui/file-upload";
 import { CategoryTreeSelect } from '../categories/CategoryTreeSelect';
+import { CategoryModal } from '@/components/products/CategoryModal'
 
 // Services
 import { productService, Product, ProductPrice } from '@/services/productService';
@@ -66,6 +67,7 @@ import { RichTextEditor } from '@/components/ui/RichTextEditor';
 import { PriceSummaryBadge } from '@/components/products/PriceSummaryBadge';
 import { PricingModal } from '@/components/products/PricingModal';
 import { AttributeManager } from '@/features/AttributeManager/AttributeManager';
+import AttributesTab from '@/components/products/AttributesTab'
 
 const PRODUCTS_BASE_URL = `${API_URL}/products`;
 
@@ -107,9 +109,6 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const isEditMode = !!id || !!initialProduct;
-  const [attributes, setAttributes] = useState<Record<string, string>>({});
-  const [newAttributeKey, setNewAttributeKey] = useState("");
-  const [newAttributeValue, setNewAttributeValue] = useState("");
   const [showTechSpecs, setShowTechSpecs] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -124,6 +123,9 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
   // State for draft prices (used in create mode)
   const [draftPrices, setDraftPrices] = useState<ProductPrice[]>([]);
 
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false)
+  const [selectedCategory, setSelectedCategory] = useState<any>(initialProduct?.category || null)
+
   // Use the passed-in product data or fetch it if needed
   const productId = initialProduct?.id || (id ? Number(id) : undefined);
 
@@ -131,6 +133,7 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productEditSchema),
     defaultValues: getDefaultProductValues(initialProduct),
+    mode: 'onSubmit', // Set submission mode
   });
 
   // Initialize image preview if product has an image
@@ -165,29 +168,23 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
     const loadInitialCategories = async () => {
       try {
         const initialCats = await productService.getCategories();
-        // Make sure we properly handle category objects
         const options = initialCats.map(c => ({ 
           label: c.name || '', 
           value: c.id || ''
         }));
         setCategoryOptions(options);
-        
-        // Set default category value if editing
         if (initialProduct?.category) {
-          // Get label and value using our helper
           const { label, value } = extractCategoryInfo(initialProduct.category);
-          
-          // Find matching option or create new one
           const initialOption = options.find(opt => 
             String(opt.value) === String(value) || opt.label === label
           );
-          
           if (initialOption) {
             form.setValue('category', initialOption);
+            setSelectedCategory({ label: initialOption.label, id: initialOption.value, value: initialOption.value })
           } else {
-            // Create a new option if not found in the list
             const newOption = { label, value };
             form.setValue('category', newOption);
+            setSelectedCategory({ label, id: value, value })
           }
         }
       } catch (error) {
@@ -237,6 +234,7 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
   // Mutation for create/update
   const { mutate, isPending } = useMutation({
     mutationFn: (values: ProductFormValues) => {
+      // Create FormData with proper encoding for file uploads
       const formData = new FormData();
       
       // Always ensure is_active is true
@@ -247,7 +245,19 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
       
       Object.entries(values).forEach(([key, value]) => {
         if (key === 'tags') {
-          formData.append(key, JSON.stringify(value || [])); // Send tag IDs
+          // For tags, we need to send an array, not a JSON string
+          // If we have tags, append each tag individually to create a proper array in FormData
+          if (Array.isArray(value) && value.length > 0) {
+            // Use brackets notation for arrays in FormData
+            value.forEach((tag, index) => {
+              formData.append(`tags[${index}]`, tag);
+            });
+            console.log(`Set tags as array with ${value.length} items`);
+          } else {
+            // If there are no tags, send an empty array parameter to satisfy the API
+            formData.append('tags', '[]');
+            console.log('Set empty tags array');
+          }
         } else if (key === 'attributes') {
           formData.append(key, JSON.stringify(value || {}));
         } else if (key === 'category') {
@@ -273,20 +283,28 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
             console.log('Category is empty');
           }
         } else if (key !== 'primary_image') {
+          // Handle all other fields normally - as long as they're not the image field
           formData.append(key, value?.toString() || '');
           console.log(`Set ${key}: ${value}`);
         }
       });
       
+      // Handle image file separately and ensure it's properly added as a file
       if (imageFile) {
+        // Make sure to append as a File object, not converted to string
         formData.append('primary_image', imageFile);
-        console.log('Added image file to FormData');
+        console.log('Added image file to FormData:', {
+          name: imageFile.name,
+          size: imageFile.size,
+          type: imageFile.type
+        });
       }
       
       // Debug complete FormData
       console.log('FormData prepared:');
       for (const pair of formData.entries()) {
-        console.log(`${pair[0]}: ${pair[1]}`);
+        // For debugging - keep this to help troubleshoot API issues
+        console.log(`${pair[0]}: ${typeof pair[1] === 'object' ? 'File object' : pair[1]}`);
       }
       
       if (isEditMode && productId) {
@@ -317,10 +335,22 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
           return createdProduct;
         });
     },
-    onSuccess: () => {
+    onSuccess: (product) => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
       toast({ title: `Product ${isEditMode ? 'updated' : 'created'} successfully`, variant: "default" });
-      navigate('/app/products');
+      
+      // Ensure we have a valid product ID before navigating
+      if (product && product.id) {
+        // Navigate to product detail page with replace:true to replace the current history entry
+        navigate(`/app/products/${product.id}`, { replace: true });
+      } else {
+        console.error('Product created but no ID returned');
+        navigate('/app/products'); // Fallback to products list if no ID
+        toast({ 
+          title: "Product created but there was an issue. Please check the products list.", 
+          variant: "destructive" 
+        });
+      }
     },
     onError: (error) => {
       if (axios.isAxiosError(error) && error.response?.data) {
@@ -370,7 +400,47 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
 
   // Handle form submission
   const onSubmit = (values: ProductFormValues) => {
-    mutate(values);
+    console.log('Form submitted with values:', values);
+    
+    // Show immediate feedback to the user
+    setIsLoading(true);
+    toast({ title: "Processing your request...", description: "Creating product" });
+    
+    try {
+      mutate(values, {
+        onError: (error) => {
+          console.error('Mutation error:', error);
+          setIsLoading(false);
+          
+          // Display detailed error information
+          if (axios.isAxiosError(error)) {
+            console.error('API error response:', error.response?.data);
+            console.error('API error status:', error.response?.status);
+            console.error('API error headers:', error.response?.headers);
+          }
+          
+          toast({ 
+            title: "Error creating product", 
+            description: axios.isAxiosError(error) 
+              ? (error.response?.data?.detail || error.message) 
+              : "An unexpected error occurred",
+            variant: "destructive" 
+          });
+        },
+        onSuccess: (data) => {
+          console.log('Product created successfully:', data);
+          setIsLoading(false);
+        }
+      });
+    } catch (error) {
+      console.error('Error in submit handler:', error);
+      setIsLoading(false);
+      toast({ 
+        title: "Error creating product", 
+        description: "An unexpected error occurred in the form submission",
+        variant: "destructive" 
+      });
+    }
   };
 
   // Handle image upload
@@ -382,23 +452,27 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
     }
   };
 
-  // Handle adding a new attribute
-  const handleAddAttribute = () => {
-    if (newAttributeKey.trim() && newAttributeValue.trim()) {
-      const newAttributes = { ...attributes, [newAttributeKey]: newAttributeValue };
-      setAttributes(newAttributes);
-      form.setValue("attributes", newAttributes);
-      setNewAttributeKey("");
-      setNewAttributeValue("");
+  // Add this function to help debug form validations
+  const validateAndSubmit = () => {
+    // Check if form has validation errors
+    const formState = form.getValues();
+    const formErrors = form.formState.errors;
+    
+    console.log('Current form values:', formState);
+    console.log('Current form errors:', formErrors);
+    
+    if (Object.keys(formErrors).length > 0) {
+      console.error('Form validation failed:', formErrors);
+      toast({ 
+        title: "Validation Error", 
+        description: "Please check form fields for errors",
+        variant: "destructive" 
+      });
+      return;
     }
-  };
-
-  // Handle removing an attribute
-  const handleRemoveAttribute = (key: string) => {
-    const newAttributes = { ...attributes };
-    delete newAttributes[key];
-    setAttributes(newAttributes);
-    form.setValue("attributes", newAttributes);
+    
+    // If validation passes, handle submit
+    form.handleSubmit(onSubmit)();
   };
 
   if (queryLoading) {
@@ -412,7 +486,10 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
       </h1>
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <form onSubmit={form.handleSubmit((values) => {
+          console.log('Form submitted through onSubmit handler');
+          validateAndSubmit(); // This will log form data and handle the submission
+        })} className="space-y-6">
           <Tabs defaultValue="basic" className="w-full">
             <TabsList className="mb-4">
               <TabsTrigger value="basic">Basic Information</TabsTrigger>
@@ -503,21 +580,22 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
                   <label htmlFor="category" className="block text-sm font-medium">
                     Category
                   </label>
-                  <FormField
-                    control={form.control}
-                    name="category"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormControl>
-                          <CategoryTreeSelect
-                            selectedValue={field.value?.value || field.value || null}
-                            onChange={id => field.onChange({ value: id })}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsCategoryModalOpen(true)}
+                      className="w-full justify-between"
+                    >
+                      {selectedCategory?.label || selectedCategory?.name || 'Select category'}
+                    </Button>
+                    <input
+                      type="hidden"
+                      {...form.register('category')}
+                      value={selectedCategory?.value || selectedCategory?.id || ''}
+                    />
+                    <FormMessage />
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -672,69 +750,11 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
             </TabsContent>
             
             <TabsContent value="attributes" className="space-y-4">
-              {/* Enterprise Attribute Manager */}
-              <AttributeManager
-                productId={productId}
-                control={form.control}
-                locale={selectedLocale}
-                channel={selectedChannel}
-              />
-              
-              {/* Legacy Simple Attributes */}
-              <div className="border-t pt-6 mt-8">
-                <h3 className="text-lg font-medium mb-4">Custom Attributes</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                  <div>
-                    <Input
-                      value={newAttributeKey}
-                      onChange={(e) => setNewAttributeKey(e.target.value)}
-                      placeholder="Attribute name"
-                      className="w-full"
-                    />
-                  </div>
-                  <div>
-                    <Input
-                      value={newAttributeValue}
-                      onChange={(e) => setNewAttributeValue(e.target.value)}
-                      placeholder="Attribute value"
-                      className="w-full"
-                    />
-                  </div>
-                  <div>
-                    <Button 
-                      type="button"
-                      onClick={handleAddAttribute}
-                      disabled={!newAttributeKey.trim() || !newAttributeValue.trim()}
-                      className="w-full"
-                    >
-                      Add Attribute
-                    </Button>
-                  </div>
-                </div>
-                
-                {Object.entries(attributes).length > 0 ? (
-                  <div className="mt-4 border rounded-md divide-y">
-                    {Object.entries(attributes).map(([key, value]) => (
-                      <div key={key} className="flex justify-between items-center p-2 hover:bg-gray-50">
-                        <div>
-                          <span className="font-medium">{key}:</span> {value}
-                        </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveAttribute(key)}
-                          className="text-red-500 hover:text-red-700"
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-gray-500 text-sm mt-2">No custom attributes added yet.</p>
-                )}
-              </div>
+              <Card className="p-6 text-center">
+                <p className="text-gray-600 mb-4">
+                  You can manage attributes once the product is saved.
+                </p>
+              </Card>
             </TabsContent>
           </Tabs>
           
@@ -742,7 +762,7 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
             <Button
               type="button"
               variant="outline"
-              onClick={() => navigate('/app/products')}
+              onClick={() => navigate(isEditMode ? `/app/products/${productId}` : '/app/products')}
               disabled={isLoading}
             >
               Cancel
@@ -783,6 +803,19 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
                   });
                 }
               }
+            }}
+          />
+
+          <CategoryModal
+            open={isCategoryModalOpen}
+            onOpenChange={setIsCategoryModalOpen}
+            productId={productId}
+            currentCategoryId={selectedCategory?.id || selectedCategory?.value || null}
+            onCategoryUpdated={cat => {
+              // Always set both label and value for the form and selectedCategory
+              setSelectedCategory({ label: cat.name, value: cat.id })
+              form.setValue('category', { label: cat.name, value: cat.id })
+              setIsCategoryModalOpen(false)
             }}
           />
         </form>

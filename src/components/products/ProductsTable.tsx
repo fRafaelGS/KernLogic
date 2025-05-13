@@ -97,6 +97,8 @@ import { getCategoryName, matchesCategoryFilter } from '@/lib/utils';
 import { PriceSummaryBadge } from './PriceSummaryBadge';
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { CategoryTreeSelect } from "@/components/categories/CategoryTreeSelect";
+import { ViewToggle } from './ViewToggle'
+import { ProductGrid } from './ProductGrid'
 
 // Define constants for fixed widths
 const ACTION_W = 112; // Width of action column in pixels
@@ -190,6 +192,10 @@ function toCategoryOption(category: any): CategoryOption {
   };
 }
 
+// Add an interface for ProductsTable props
+// interface ProductsTableProps { ... }
+
+// Update the component definition to accept props
 export function ProductsTable() {
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
@@ -199,8 +205,10 @@ export function ProductsTable() {
   const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]); // State for formatted options
   const [editingCell, setEditingCell] = useState<{ rowIndex: number; columnId: string } | null>(null);
   const [editValue, setEditValue] = useState<string>('');
-  // Add a new state to store the original value before editing
   const [originalEditValue, setOriginalEditValue] = useState<string>('');
+  
+  // Add viewMode state
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   
   // Add product assets cache state
   const [productAssetsCache, setProductAssetsCache] = useState<Record<number, ProductAsset[]>>({});
@@ -212,7 +220,7 @@ export function ProductsTable() {
   const fetchedOnceRef = useRef(false);
   
   // Add reference to track if user preferences have been loaded
-  const prefsLoadedRef = useRef(false);   // ⬅️ add this
+  const prefsLoadedRef = useRef(false);
   
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm, 300); // 300ms debounce
@@ -245,7 +253,7 @@ export function ProductsTable() {
   
   // Add scroll container ref
   const scrollRef = useRef<HTMLDivElement>(null);
-
+  
   // Effect to handle action column visibility
   useEffect(() => {
     if (!columnVisibility.actions) {
@@ -1637,6 +1645,10 @@ export function ProductsTable() {
           </div>
           
           <div className="flex items-center space-x-2">
+            <ViewToggle 
+              view={viewMode} 
+              onViewChange={setViewMode} 
+            />
             <Button
               size="sm"
               variant="outline"
@@ -1822,584 +1834,595 @@ export function ProductsTable() {
 
         {/* Section containing scroll area and footer */}
         <section className="flex flex-col flex-1 min-h-0">
-          {/* Create ONE scroll container that handles both axes */}
-          <div
-            ref={scrollRef}
-            className={cn(
-              "flex-1 overflow-auto min-h-0",
-              columnVisibility.actions !== false && `pr-[${ACTION_W}px]`,
-              `pb-[${FOOTER_H}px]`          // space for the sticky footer
-            )}
-            id="products-scroll-area"
-          >
-            <DndContext
-              sensors={sensors}
-              onDragEnd={handleDragEnd}
+          {viewMode === 'list' ? (
+            <div
+              ref={scrollRef}
+              className={cn(
+                "flex-1 overflow-auto min-h-0",
+                columnVisibility.actions !== false && `pr-[${ACTION_W}px]`,
+                `pb-[${FOOTER_H}px]`          // space for the sticky footer
+              )}
+              id="products-scroll-area"
             >
-              <SortableContext
-                items={columnOrder.filter(Boolean)}
-                strategy={horizontalListSortingStrategy}
+              <DndContext
+                sensors={sensors}
+                onDragEnd={handleDragEnd}
               >
-                <Table className="min-w-fit">
-                  <TableHeader className="relative">
-                      {table.getHeaderGroups().map(headerGroup => (
-                        <React.Fragment key={headerGroup.id}>
-                          {/* 1) Column titles */}
-                          <TableRow className="sticky top-0 z-30 bg-slate-100 h-4 border-b border-slate-200">
-                            {headerGroup.headers.map(header =>
-                              <SortableTableHeader key={header.id} id={header.column.id} header={header}/>
-                            )}
-                          </TableRow>
+                <SortableContext
+                  items={columnOrder.filter(Boolean)}
+                  strategy={horizontalListSortingStrategy}
+                >
+                  <Table className="min-w-fit">
+                    <TableHeader className="relative">
+                        {table.getHeaderGroups().map(headerGroup => (
+                          <React.Fragment key={headerGroup.id}>
+                            {/* 1) Column titles */}
+                            <TableRow className="sticky top-0 z-30 bg-slate-100 h-4 border-b border-slate-200">
+                              {headerGroup.headers.map(header =>
+                                <SortableTableHeader key={header.id} id={header.column.id} header={header}/>
+                              )}
+                            </TableRow>
 
-                          {/* 2) Filter inputs - Always visible now */}
-                          <TableRow className="sticky top-9 z-20 bg-slate-50 h-6 border-b border-slate-200">
-                            {headerGroup.headers.map((header) => {
-                              const column = header.column;
-                              const columnId = column.id;
-                              
-                              // Skip filter UI for select column
-                              if (columnId === 'select') {
-                                return <TableHead key={`filter-${columnId}`} className="px-1 py-1" />;
-                              }
-                              
-                              // Add Clear Filters button to thumbnail column 
-                              // thumbnail column ➜ filter row
-                              if (columnId === "thumbnail") {
+                            {/* 2) Filter inputs - Always visible now */}
+                            <TableRow className="sticky top-9 z-20 bg-slate-50 h-6 border-b border-slate-200">
+                              {headerGroup.headers.map((header) => {
+                                const column = header.column;
+                                const columnId = column.id;
+                                
+                                // Skip filter UI for select column
+                                if (columnId === 'select') {
+                                  return <TableHead key={`filter-${columnId}`} className="px-1 py-1" />;
+                                }
+                                
+                                // Add Clear Filters button to thumbnail column 
+                                // thumbnail column ➜ filter row
+                                if (columnId === "thumbnail") {
+                                  return (
+                                    <TableHead key={`filter-${columnId}`} className="px-1 py-1">
+                                      <Button
+                                        variant="outline"       // keeps the shadcn outline styling
+                                        size="sm"
+                                        onClick={() => {
+                                          table.resetColumnFilters();
+                                          setColumnFilterValues({});
+                                          handleClearFilters();
+                                        }}
+                                        /* prettier, compact pill-style */
+                                        className="
+                                          h-6 px-3                   /* slimmer height & horizontal padding  */
+                                          rounded-full               /* fully rounded pill                  */
+                                          border-slate-300           /* subtle 1-px border                  */
+                                          bg-white/90                /* soft white with a hint of opacity   */
+                                          text-slate-600             /* medium-gray label                   */
+                                          hover:bg-slate-100         /* light gray hover                    */
+                                          hover:border-slate-400
+                                          shadow-sm                  /* faint drop-shadow                   */
+                                          transition-colors
+                                        "
+                                      >
+                                        Clear&nbsp;filters
+                                      </Button>
+                                    </TableHead>
+                                  );
+                                }
+
+                                
+                                // Use tailwind classes for mobile responsiveness
+                                const hideOnMobileClass = ['brand', 'barcode', 'created_at', 'tags'].includes(columnId) ? 'hidden md:table-cell' : '';
+                                
                                 return (
-                                  <TableHead key={`filter-${columnId}`} className="px-1 py-1">
-                                    <Button
-                                      variant="outline"       // keeps the shadcn outline styling
-                                      size="sm"
-                                      onClick={() => {
-                                        table.resetColumnFilters();
-                                        setColumnFilterValues({});
-                                        handleClearFilters();
-                                      }}
-                                      /* prettier, compact pill-style */
-                                      className="
-                                        h-6 px-3                   /* slimmer height & horizontal padding  */
-                                        rounded-full               /* fully rounded pill                  */
-                                        border-slate-300           /* subtle 1-px border                  */
-                                        bg-white/90                /* soft white with a hint of opacity   */
-                                        text-slate-600             /* medium-gray label                   */
-                                        hover:bg-slate-100         /* light gray hover                    */
-                                        hover:border-slate-400
-                                        shadow-sm                  /* faint drop-shadow                   */
-                                        transition-colors
-                                      "
-                                    >
-                                      Clear&nbsp;filters
-                                    </Button>
-                                  </TableHead>
-                                );
-                              }
+                                  <TableHead key={`filter-${columnId}`} className={`px-2 py-2 ${hideOnMobileClass}`}>
+                                    {/* Using React.Fragment to properly wrap the IIFE result as a ReactNode */}
+                                    <React.Fragment>
+                                    {(() => {
+                                      // Text input filter for text columns
+                                      if (['name','sku','brand','barcode'].includes(columnId)) {
+                                        return (
+                                          <Input
+                                            placeholder="Filter…"
+                                            value={(table.getColumn(columnId)?.getFilterValue() as string) ?? ''}
+                                            onChange={(e) => {
+                                              column.setFilterValue(e.target.value);
+                                              handleColumnFilterChange(columnId, e.target.value);
+                                            }}
+                                            className="h-7 text-xs"
+                                            onClick={(e) => e.stopPropagation()}
+                                          />
+                                        );
+                                      }
 
-                              
-                              // Use tailwind classes for mobile responsiveness
-                              const hideOnMobileClass = ['brand', 'barcode', 'created_at', 'tags'].includes(columnId) ? 'hidden md:table-cell' : '';
-                              
-                              return (
-                                <TableHead key={`filter-${columnId}`} className={`px-2 py-2 ${hideOnMobileClass}`}>
-                                  {/* Using React.Fragment to properly wrap the IIFE result as a ReactNode */}
-                                  <React.Fragment>
-                                  {(() => {
-                                    // Text input filter for text columns
-                                    if (['name','sku','brand','barcode'].includes(columnId)) {
-                                      return (
-                                        <Input
-                                          placeholder="Filter…"
-                                          value={(table.getColumn(columnId)?.getFilterValue() as string) ?? ''}
-                                          onChange={(e) => {
-                                            column.setFilterValue(e.target.value);
-                                            handleColumnFilterChange(columnId, e.target.value);
-                                          }}
-                                          className="h-7 text-xs"
-                                          onClick={(e) => e.stopPropagation()}
-                                        />
-                                      );
-                                    }
+                                      // Dropdown filter for category
+                                      if (columnId === 'category') {
+                                        return (
+                                          <Select
+                                            value={(table.getColumn("category")?.getFilterValue() as string) ?? "all"}
+                                            onValueChange={(v) => {
+                                              // Debug logging
+                                              console.log("Column header filter - Selected category value:", v);
+                                              
+                                              // Update our local filter state and column filter in one call
+                                              handleFilterChange('category', v);
+                                            }}
+                                          >
+                                            <SelectTrigger className="h-7 text-xs">
+                                              <SelectValue placeholder="Filter category" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="all">All</SelectItem>
+                                              <SelectItem value="uncategorized">Uncategorized</SelectItem>
+                                              {uniqueCategories.map((category) => (
+                                                <SelectItem key={category} value={category}>
+                                                  {category}
+                                                </SelectItem>
+                                              ))}
+                                            </SelectContent>
+                                          </Select>
+                                        );
+                                      }
 
-                                    // Dropdown filter for category
-                                    if (columnId === 'category') {
-                                      return (
-                                        <Select
-                                          value={(table.getColumn("category")?.getFilterValue() as string) ?? "all"}
-                                          onValueChange={(v) => {
-                                            // Debug logging
-                                            console.log("Column header filter - Selected category value:", v);
-                                            
-                                            // Update our local filter state and column filter in one call
-                                            handleFilterChange('category', v);
-                                          }}
-                                        >
-                                          <SelectTrigger className="h-7 text-xs">
-                                            <SelectValue placeholder="Filter category" />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            <SelectItem value="all">All</SelectItem>
-                                            <SelectItem value="uncategorized">Uncategorized</SelectItem>
-                                            {uniqueCategories.map((category) => (
-                                              <SelectItem key={category} value={category}>
-                                                {category}
-                                              </SelectItem>
-                                            ))}
-                                          </SelectContent>
-                                        </Select>
-                                      );
-                                    }
+                                      // Status filter for is_active
+                                      if (columnId === 'is_active') {
+                                        return (
+                                          <Select
+                                            value={(table.getColumn(columnId)?.getFilterValue() as string) ?? ''}
+                                            onValueChange={(value) => {
+                                              column.setFilterValue(value);
+                                              handleColumnFilterChange(columnId, value === 'all' ? '' : value);
+                                            }}
+                                          >
+                                            <SelectTrigger className="h-7 text-xs">
+                                              <SelectValue placeholder="Status" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="all">All</SelectItem>
+                                              <SelectItem value="true">Active</SelectItem>
+                                              <SelectItem value="false">Inactive</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        );
+                                      }
 
-                                    // Status filter for is_active
-                                    if (columnId === 'is_active') {
-                                      return (
-                                        <Select
-                                          value={(table.getColumn(columnId)?.getFilterValue() as string) ?? ''}
-                                          onValueChange={(value) => {
-                                            column.setFilterValue(value);
-                                            handleColumnFilterChange(columnId, value === 'all' ? '' : value);
-                                          }}
-                                        >
-                                          <SelectTrigger className="h-7 text-xs">
-                                            <SelectValue placeholder="Status" />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            <SelectItem value="all">All</SelectItem>
-                                            <SelectItem value="true">Active</SelectItem>
-                                            <SelectItem value="false">Inactive</SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                      );
-                                    }
-
-                                    // Price range filter
-                                    if (columnId === 'price') {
-                                      return (
-                                        <Popover>
-                                          <PopoverTrigger asChild>
-                                            <Button 
-                                              variant="outline" 
-                                              className="h-7 text-xs w-full justify-start font-normal"
-                                              onClick={(e) => e.stopPropagation()}
-                                            >
-                                              <span>Price Range</span>
-                                            </Button>
-                                          </PopoverTrigger>
-                                          <PopoverContent className="w-60 p-3" align="start">
-                                            <div className="space-y-2">
-                                              <div className="grid grid-cols-2 gap-2">
-                                                <div>
-                                                  <Label htmlFor="price-min">Min</Label>
-                                                  <Input
-                                                    id="price-min"
-                                                    type="number"
-                                                    placeholder="Min"
-                                                    className="h-8"
-                                                    value={columnFilterValues['price']?.min || ''}
-                                                    onChange={(e) => {
-                                                      const currentValues = columnFilterValues['price'] || {};
-                                                      const newValues = { ...currentValues, min: e.target.value };
-                                                      column.setFilterValue(newValues);
-                                                      handleColumnFilterChange(columnId, newValues);
-                                                    }}
-                                                  />
-                                                </div>
-                                                <div>
-                                                  <Label htmlFor="price-max">Max</Label>
-                                                  <Input
-                                                    id="price-max"
-                                                    type="number"
-                                                    placeholder="Max"
-                                                    className="h-8"
-                                                    value={columnFilterValues['price']?.max || ''}
-                                                    onChange={(e) => {
-                                                      const currentValues = columnFilterValues['price'] || {};
-                                                      const newValues = { ...currentValues, max: e.target.value };
-                                                      column.setFilterValue(newValues);
-                                                      handleColumnFilterChange(columnId, newValues);
-                                                    }}
-                                                  />
-                                                </div>
-                                              </div>
+                                      // Price range filter
+                                      if (columnId === 'price') {
+                                        return (
+                                          <Popover>
+                                            <PopoverTrigger asChild>
                                               <Button 
-                                                size="sm" 
                                                 variant="outline" 
-                                                className="w-full text-xs"
-                                                onClick={() => {
-                                                  column.setFilterValue(undefined);
-                                                  handleColumnFilterChange(columnId, undefined);
-                                                }}
+                                                className="h-7 text-xs w-full justify-start font-normal"
+                                                onClick={(e) => e.stopPropagation()}
                                               >
-                                                Reset
+                                                <span>Price Range</span>
                                               </Button>
-                                            </div>
-                                          </PopoverContent>
-                                        </Popover>
-                                      );
-                                    }
-
-                                    // Date filters
-                                    if (['created_at', 'updated_at'].includes(columnId)) {
-                                      return (
-                                        <Popover>
-                                          <PopoverTrigger asChild>
-                                            <Button 
-                                              variant="outline" 
-                                              className="h-7 text-xs w-full justify-start font-normal"
-                                              onClick={(e) => e.stopPropagation()}
-                                            >
-                                              <span>Date Range</span>
-                                            </Button>
-                                          </PopoverTrigger>
-                                          <PopoverContent className="w-auto p-3" align="start">
-                                            <div className="space-y-2">
-                                              <div className="grid gap-2">
-                                                <div>
-                                                  <Label htmlFor={`${columnId}-from`}>From</Label>
-                                                  <Input
-                                                    id={`${columnId}-from`}
-                                                    type="date"
-                                                    className="h-8"
-                                                    value={columnFilterValues[columnId]?.from || ''}
-                                                    onChange={(e) => {
-                                                      const currentValues = columnFilterValues[columnId] || {};
-                                                      const newValues = { ...currentValues, from: e.target.value };
-                                                      column.setFilterValue(newValues);
-                                                      handleColumnFilterChange(columnId, newValues);
-                                                    }}
-                                                  />
-                                                </div>
-                                                <div>
-                                                  <Label htmlFor={`${columnId}-to`}>To</Label>
-                                                  <Input
-                                                    id={`${columnId}-to`}
-                                                    type="date"
-                                                    className="h-8"
-                                                    value={columnFilterValues[columnId]?.to || ''}
-                                                    onChange={(e) => {
-                                                      const currentValues = columnFilterValues[columnId] || {};
-                                                      const newValues = { ...currentValues, to: e.target.value };
-                                                      column.setFilterValue(newValues);
-                                                      handleColumnFilterChange(columnId, newValues);
-                                                    }}
-                                                  />
-                                                </div>
-                                              </div>
-                                              <Button 
-                                                size="sm" 
-                                                variant="outline" 
-                                                className="w-full text-xs"
-                                                onClick={() => {
-                                                  column.setFilterValue(undefined);
-                                                  handleColumnFilterChange(columnId, undefined);
-                                                }}
-                                              >
-                                                Reset
-                                              </Button>
-                                            </div>
-                                          </PopoverContent>
-                                        </Popover>
-                                      );
-                                    }
-
-                                    // Tags filter 
-                                    if (columnId === 'tags') {
-                                      return (
-                                        <Popover>
-                                          <PopoverTrigger asChild>
-                                            <Button 
-                                              variant="outline" 
-                                              className="h-7 text-xs w-full justify-start font-normal"
-                                              onClick={(e) => e.stopPropagation()}
-                                            >
-                                              <TagIcon className="mr-1 h-3 w-3" />
-                                              <span>
-                                                {filters.tags.length > 0 
-                                                  ? `${filters.tags.length} Selected`
-                                                  : "Filter Tags"}
-                                              </span>
-                                            </Button>
-                                          </PopoverTrigger>
-                                          <PopoverContent className="w-64 p-3" align="start">
-                                            <div className="space-y-2">
-                                              <div className="max-h-60 overflow-y-auto pr-2">
-                                                {uniqueTags.length > 0 ? (
-                                                  <div className="space-y-1">
-                                                    {uniqueTags.map((tag) => (
-                                                      <div key={tag} className="flex items-center">
-                                                        <Checkbox 
-                                                          id={`tag-${tag}`}
-                                                          checked={filters.tags.includes(tag)}
-                                                          onCheckedChange={(checked) => {
-                                                            // Create new tags array
-                                                            const newTags = checked 
-                                                              ? [...filters.tags, tag] 
-                                                              : filters.tags.filter(t => t !== tag);
-                                                            
-                                                            // Update the filters state directly
-                                                            setFilters(prev => ({ ...prev, tags: newTags }));
-                                                            
-                                                            // Force refresh of filtered data via a direct table update
-                                                            const tagsColumn = table.getColumn('tags');
-                                                            if (tagsColumn) {
-                                                              if (newTags.length > 0) {
-                                                                // Important: create a new array reference to ensure React detects the change
-                                                                tagsColumn.setFilterValue([...newTags]);
-                                                              } else {
-                                                                tagsColumn.setFilterValue(undefined);
-                                                              }
-                                                            }
-                                                          }}
-                                                        />
-                                                        <Label 
-                                                          htmlFor={`tag-${tag}`}
-                                                          className="ml-2 text-sm cursor-pointer"
-                                                        >
-                                                          {tag}
-                                                        </Label>
-                                                      </div>
-                                                    ))}
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-60 p-3" align="start">
+                                              <div className="space-y-2">
+                                                <div className="grid grid-cols-2 gap-2">
+                                                  <div>
+                                                    <Label htmlFor="price-min">Min</Label>
+                                                    <Input
+                                                      id="price-min"
+                                                      type="number"
+                                                      placeholder="Min"
+                                                      className="h-8"
+                                                      value={columnFilterValues['price']?.min || ''}
+                                                      onChange={(e) => {
+                                                        const currentValues = columnFilterValues['price'] || {};
+                                                        const newValues = { ...currentValues, min: e.target.value };
+                                                        column.setFilterValue(newValues);
+                                                        handleColumnFilterChange(columnId, newValues);
+                                                      }}
+                                                    />
                                                   </div>
-                                                ) : (
-                                                  <p className="text-sm text-slate-500 text-center py-2">
-                                                    No tags available
-                                                  </p>
-                                                )}
-                                              </div>
-                                              <div className="flex justify-between">
+                                                  <div>
+                                                    <Label htmlFor="price-max">Max</Label>
+                                                    <Input
+                                                      id="price-max"
+                                                      type="number"
+                                                      placeholder="Max"
+                                                      className="h-8"
+                                                      value={columnFilterValues['price']?.max || ''}
+                                                      onChange={(e) => {
+                                                        const currentValues = columnFilterValues['price'] || {};
+                                                        const newValues = { ...currentValues, max: e.target.value };
+                                                        column.setFilterValue(newValues);
+                                                        handleColumnFilterChange(columnId, newValues);
+                                                      }}
+                                                    />
+                                                  </div>
+                                                </div>
                                                 <Button 
                                                   size="sm" 
                                                   variant="outline" 
-                                                  className="text-xs"
+                                                  className="w-full text-xs"
                                                   onClick={() => {
-                                                    // Clear the tags filter
-                                                    setFilters(prev => ({ ...prev, tags: [] }));
-                                                    
-                                                    // Clear the table column filter
-                                                    const tagsColumn = table.getColumn('tags');
-                                                    if (tagsColumn) {
-                                                      tagsColumn.setFilterValue(undefined);
-                                                    }
-                                                  }}
-                                                  disabled={filters.tags.length === 0}
-                                                >
-                                                  Clear
-                                                </Button>
-                                                <Button 
-                                                  size="sm" 
-                                                  className="text-xs"
-                                                  onClick={() => {
-                                                    // Close the popover by simulating a click outside
-                                                    const closeEvent = new MouseEvent('click', {
-                                                      bubbles: true,
-                                                      cancelable: true,
-                                                      view: window
-                                                    });
-                                                    document.dispatchEvent(closeEvent);
+                                                    column.setFilterValue(undefined);
+                                                    handleColumnFilterChange(columnId, undefined);
                                                   }}
                                                 >
-                                                  Apply
+                                                  Reset
                                                 </Button>
                                               </div>
-                                            </div>
-                                          </PopoverContent>
-                                        </Popover>
-                                      );
-                                    }
+                                            </PopoverContent>
+                                          </Popover>
+                                        );
+                                      }
 
-                                    // Default: no filter
-                                    return null;
-                                  })()}
-                                  </React.Fragment>
-                                </TableHead>
-                              );
-                            })}
-                          </TableRow>
-                        </React.Fragment>
-                      ))}
-                  </TableHeader>
-                  <TableBody>
-                    <ProductsTableFallback 
-                      columns={columns}
-                      loading={loading}
-                      filteredData={filteredData}
-                      debouncedSearchTerm={debouncedSearchTerm}
-                      filters={filters}
-                      handleClearFilters={handleClearFilters}
-                      handleRefresh={handleRefresh}
-                    />
-                    
-                    {!loading && filteredData.length > 0 && 
-                      table.getRowModel().rows.map((row, index) => {
-                        const productId = row.original.id;
-                        
-                        return (
-                          <React.Fragment key={row.id}>
-                            <TableRow 
-                              data-state={row.getIsSelected() && "selected"}
-                              className={cn(
-                                "border-b border-gray-200 transition-colors hover:bg-slate-950/15",
-                                row.getIsSelected() ? "bg-slate-950/18" : index % 2 === 0 ? "bg-slate-950/5" : "bg-slate-950/11",
-                                "cursor-pointer",
-                                "h-0 leading-tight"
-                              )}
-                              onClick={(e) => {
-                                const target = e.target as HTMLElement;
-                                const isActionClick = !!target.closest('button, input, [role="combobox"], [data-editable="true"], [data-editing="true"], [data-component="category-tree-select-container"]');
-                                
-                                // Don't do anything if clicking on an action element
-                                if (isActionClick) return;
-                                
-                                // If there's an active edit in any cell, just cancel it - prevent navigation
-                                if (editingCell && productId) {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  handleCancelEdit();
-                                  return;
-                                }
-                                
-                                // Only navigate if not editing
-                                if (productId) {
-                                  handleRowClick(productId);
-                                }
-                              }}
-                            >
-                              {row.getVisibleCells().map((cell) => {
-                                const columnId = cell.column.id;
-                                const hideOnMobileClass = ['brand', 'barcode', 'created_at', 'tags'].includes(columnId) ? 'hidden md:table-cell' : '';
-                                
-                                // Special styling for expander column
-                                if (columnId === 'expander') {
+                                      // Date filters
+                                      if (['created_at', 'updated_at'].includes(columnId)) {
+                                        return (
+                                          <Popover>
+                                            <PopoverTrigger asChild>
+                                              <Button 
+                                                variant="outline" 
+                                                className="h-7 text-xs w-full justify-start font-normal"
+                                                onClick={(e) => e.stopPropagation()}
+                                              >
+                                                <span>Date Range</span>
+                                              </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-3" align="start">
+                                              <div className="space-y-2">
+                                                <div className="grid gap-2">
+                                                  <div>
+                                                    <Label htmlFor={`${columnId}-from`}>From</Label>
+                                                    <Input
+                                                      id={`${columnId}-from`}
+                                                      type="date"
+                                                      className="h-8"
+                                                      value={columnFilterValues[columnId]?.from || ''}
+                                                      onChange={(e) => {
+                                                        const currentValues = columnFilterValues[columnId] || {};
+                                                        const newValues = { ...currentValues, from: e.target.value };
+                                                        column.setFilterValue(newValues);
+                                                        handleColumnFilterChange(columnId, newValues);
+                                                      }}
+                                                    />
+                                                  </div>
+                                                  <div>
+                                                    <Label htmlFor={`${columnId}-to`}>To</Label>
+                                                    <Input
+                                                      id={`${columnId}-to`}
+                                                      type="date"
+                                                      className="h-8"
+                                                      value={columnFilterValues[columnId]?.to || ''}
+                                                      onChange={(e) => {
+                                                        const currentValues = columnFilterValues[columnId] || {};
+                                                        const newValues = { ...currentValues, to: e.target.value };
+                                                        column.setFilterValue(newValues);
+                                                        handleColumnFilterChange(columnId, newValues);
+                                                      }}
+                                                    />
+                                                  </div>
+                                                </div>
+                                                <Button 
+                                                  size="sm" 
+                                                  variant="outline" 
+                                                  className="w-full text-xs"
+                                                  onClick={() => {
+                                                    column.setFilterValue(undefined);
+                                                    handleColumnFilterChange(columnId, undefined);
+                                                  }}
+                                                >
+                                                  Reset
+                                                </Button>
+                                              </div>
+                                            </PopoverContent>
+                                          </Popover>
+                                        );
+                                      }
+
+                                      // Tags filter 
+                                      if (columnId === 'tags') {
+                                        return (
+                                          <Popover>
+                                            <PopoverTrigger asChild>
+                                              <Button 
+                                                variant="outline" 
+                                                className="h-7 text-xs w-full justify-start font-normal"
+                                                onClick={(e) => e.stopPropagation()}
+                                              >
+                                                <TagIcon className="mr-1 h-3 w-3" />
+                                                <span>
+                                                  {filters.tags.length > 0 
+                                                    ? `${filters.tags.length} Selected`
+                                                    : "Filter Tags"}
+                                                </span>
+                                              </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-64 p-3" align="start">
+                                              <div className="space-y-2">
+                                                <div className="max-h-60 overflow-y-auto pr-2">
+                                                  {uniqueTags.length > 0 ? (
+                                                    <div className="space-y-1">
+                                                      {uniqueTags.map((tag) => (
+                                                        <div key={tag} className="flex items-center">
+                                                          <Checkbox 
+                                                            id={`tag-${tag}`}
+                                                            checked={filters.tags.includes(tag)}
+                                                            onCheckedChange={(checked) => {
+                                                              // Create new tags array
+                                                              const newTags = checked 
+                                                                ? [...filters.tags, tag] 
+                                                                : filters.tags.filter(t => t !== tag);
+                                                              
+                                                              // Update the filters state directly
+                                                              setFilters(prev => ({ ...prev, tags: newTags }));
+                                                              
+                                                              // Force refresh of filtered data via a direct table update
+                                                              const tagsColumn = table.getColumn('tags');
+                                                              if (tagsColumn) {
+                                                                if (newTags.length > 0) {
+                                                                  // Important: create a new array reference to ensure React detects the change
+                                                                  tagsColumn.setFilterValue([...newTags]);
+                                                                } else {
+                                                                  tagsColumn.setFilterValue(undefined);
+                                                                }
+                                                              }
+                                                            }}
+                                                          />
+                                                          <Label 
+                                                            htmlFor={`tag-${tag}`}
+                                                            className="ml-2 text-sm cursor-pointer"
+                                                          >
+                                                            {tag}
+                                                          </Label>
+                                                        </div>
+                                                      ))}
+                                                    </div>
+                                                  ) : (
+                                                    <p className="text-sm text-slate-500 text-center py-2">
+                                                      No tags available
+                                                    </p>
+                                                  )}
+                                                </div>
+                                                <div className="flex justify-between">
+                                                  <Button 
+                                                    size="sm" 
+                                                    variant="outline" 
+                                                    className="text-xs"
+                                                    onClick={() => {
+                                                      // Clear the tags filter
+                                                      setFilters(prev => ({ ...prev, tags: [] }));
+                                                      
+                                                      // Clear the table column filter
+                                                      const tagsColumn = table.getColumn('tags');
+                                                      if (tagsColumn) {
+                                                        tagsColumn.setFilterValue(undefined);
+                                                      }
+                                                    }}
+                                                    disabled={filters.tags.length === 0}
+                                                  >
+                                                    Clear
+                                                  </Button>
+                                                  <Button 
+                                                    size="sm" 
+                                                    className="text-xs"
+                                                    onClick={() => {
+                                                      // Close the popover by simulating a click outside
+                                                      const closeEvent = new MouseEvent('click', {
+                                                        bubbles: true,
+                                                        cancelable: true,
+                                                        view: window
+                                                      });
+                                                      document.dispatchEvent(closeEvent);
+                                                    }}
+                                                  >
+                                                    Apply
+                                                  </Button>
+                                                </div>
+                                              </div>
+                                            </PopoverContent>
+                                          </Popover>
+                                        );
+                                      }
+
+                                      // Default: no filter
+                                      return null;
+                                    })()}
+                                    </React.Fragment>
+                                  </TableHead>
+                                );
+                              })}
+                            </TableRow>
+                          </React.Fragment>
+                        ))}
+                    </TableHeader>
+                    <TableBody>
+                      <ProductsTableFallback 
+                        columns={columns}
+                        loading={loading}
+                        filteredData={filteredData}
+                        debouncedSearchTerm={debouncedSearchTerm}
+                        filters={filters}
+                        handleClearFilters={handleClearFilters}
+                        handleRefresh={handleRefresh}
+                      />
+                      
+                      {!loading && filteredData.length > 0 && 
+                        table.getRowModel().rows.map((row, index) => {
+                          const productId = row.original.id;
+                          
+                          return (
+                            <React.Fragment key={row.id}>
+                              <TableRow 
+                                data-state={row.getIsSelected() && "selected"}
+                                className={cn(
+                                  "border-b border-gray-200 transition-colors hover:bg-slate-950/15",
+                                  row.getIsSelected() ? "bg-slate-950/18" : index % 2 === 0 ? "bg-slate-950/5" : "bg-slate-950/11",
+                                  "cursor-pointer",
+                                  "h-0 leading-tight"
+                                )}
+                                onClick={(e) => {
+                                  const target = e.target as HTMLElement;
+                                  const isActionClick = !!target.closest('button, input, [role="combobox"], [data-editable="true"], [data-editing="true"], [data-component="category-tree-select-container"]');
+                                  
+                                  // Don't do anything if clicking on an action element
+                                  if (isActionClick) return;
+                                  
+                                  // If there's an active edit in any cell, just cancel it - prevent navigation
+                                  if (editingCell && productId) {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleCancelEdit();
+                                    return;
+                                  }
+                                  
+                                  // Only navigate if not editing
+                                  if (productId) {
+                                    handleRowClick(productId);
+                                  }
+                                }}
+                              >
+                                {row.getVisibleCells().map((cell) => {
+                                  const columnId = cell.column.id;
+                                  const hideOnMobileClass = ['brand', 'barcode', 'created_at', 'tags'].includes(columnId) ? 'hidden md:table-cell' : '';
+                                  
+                                  // Special styling for expander column
+                                  if (columnId === 'expander') {
+                                    return (
+                                      <TableCell 
+                                        key={cell.id} 
+                                        className="p-0 w-9 relative"
+                                        data-column-id={columnId}
+                                      >
+                                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                      </TableCell>
+                                    );
+                                  }
+                                  
+                                  const isActionsColumn = columnId === 'actions';
+                                  const actionsClass = isActionsColumn ? 'sticky right-0 z-20 border-l border-slate-300/40' : '';
+                                  const cellBgClass = isActionsColumn ? (row.getIsSelected() ? 'bg-slate-950/18' : index % 2 === 0 ? 'bg-slate-950/5' : 'bg-slate-950/11') : '';
+                                  
+                                  // Special cell rendering for specific column types
+                                  if (columnId === 'brand' && row.getValue('brand')) {
+                                    return (
+                                      <TableCell 
+                                        key={cell.id} 
+                                        className={`px-2 py-0 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
+                                        data-column-id={columnId}
+                                      >
+                                        <div className="flex items-center gap-1">
+                                          <span className="text-gray-500"><TagIcon className="h-3.5 w-3.5" /></span>
+                                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                        </div>
+                                      </TableCell>
+                                    );
+                                  }
+                                  
+                                  if (columnId === 'category' && row.getValue('category')) {
+                                    return (
+                                      <TableCell 
+                                        key={cell.id} 
+                                        className={`px-2 py-1 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
+                                        data-column-id={columnId}
+                                      >
+                                        <div className="flex items-center gap-1">
+                                          <span className="text-gray-500"><FolderIcon className="h-3.5 w-3.5" /></span>
+                                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                        </div>
+                                      </TableCell>
+                                    );
+                                  }
+                                  
+                                  if (columnId === 'is_active') {
+                                    const isActive = row.getValue('is_active') as boolean;
+                                    return (
+                                      <TableCell 
+                                        key={cell.id} 
+                                        className={`px-2 py-1 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
+                                        data-column-id={columnId}
+                                      >
+                                        <div className="flex items-center gap-1">
+                                          {isActive ? <CheckCircle className="h-4 w-4 text-green-600" /> : <XCircle className="h-4 w-4 text-red-600" />}
+                                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                        </div>
+                                      </TableCell>
+                                    );
+                                  }
+                                  
+                                  // Default cell rendering
                                   return (
                                     <TableCell 
                                       key={cell.id} 
-                                      className="p-0 w-9 relative"
+                                      className={`px-2 py-1 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
                                       data-column-id={columnId}
                                     >
                                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                     </TableCell>
                                   );
-                                }
-                                
-                                const isActionsColumn = columnId === 'actions';
-                                const actionsClass = isActionsColumn ? 'sticky right-0 z-20 border-l border-slate-300/40' : '';
-                                const cellBgClass = isActionsColumn ? (row.getIsSelected() ? 'bg-slate-950/18' : index % 2 === 0 ? 'bg-slate-950/5' : 'bg-slate-950/11') : '';
-                                
-                                // Special cell rendering for specific column types
-                                if (columnId === 'brand' && row.getValue('brand')) {
-                                  return (
-                                    <TableCell 
-                                      key={cell.id} 
-                                      className={`px-2 py-0 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
-                                      data-column-id={columnId}
-                                    >
-                                      <div className="flex items-center gap-1">
-                                        <span className="text-gray-500"><TagIcon className="h-3.5 w-3.5" /></span>
-                                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                      </div>
-                                    </TableCell>
-                                  );
-                                }
-                                
-                                if (columnId === 'category' && row.getValue('category')) {
-                                  return (
-                                    <TableCell 
-                                      key={cell.id} 
-                                      className={`px-2 py-1 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
-                                      data-column-id={columnId}
-                                    >
-                                      <div className="flex items-center gap-1">
-                                        <span className="text-gray-500"><FolderIcon className="h-3.5 w-3.5" /></span>
-                                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                      </div>
-                                    </TableCell>
-                                  );
-                                }
-                                
-                                if (columnId === 'is_active') {
-                                  const isActive = row.getValue('is_active') as boolean;
-                                  return (
-                                    <TableCell 
-                                      key={cell.id} 
-                                      className={`px-2 py-1 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
-                                      data-column-id={columnId}
-                                    >
-                                      <div className="flex items-center gap-1">
-                                        {isActive ? <CheckCircle className="h-4 w-4 text-green-600" /> : <XCircle className="h-4 w-4 text-red-600" />}
-                                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                      </div>
-                                    </TableCell>
-                                  );
-                                }
-                                
-                                // Default cell rendering
-                                return (
-                                  <TableCell 
-                                    key={cell.id} 
-                                    className={`px-2 py-1 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
-                                    data-column-id={columnId}
-                                  >
-                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                  </TableCell>
-                                );
-                              })}
-                            </TableRow>
-                            
-                            {/* Render expanded row content */}
-                            <AnimatePresence initial={false}>
-                              {row.getIsExpanded() && renderExpandedRow(row, index)}
-                            </AnimatePresence>
-                          </React.Fragment>
-                        );
-                      })
-                    }
-                  </TableBody>
-                </Table>
-              </SortableContext>
-            </DndContext>
-          </div>
+                                })}
+                              </TableRow>
+                              
+                              {/* Render expanded row content */}
+                              <AnimatePresence initial={false}>
+                                {row.getIsExpanded() && renderExpandedRow(row, index)}
+                              </AnimatePresence>
+                            </React.Fragment>
+                          );
+                        })
+                      }
+                    </TableBody>
+                  </Table>
+                </SortableContext>
+              </DndContext>
+            </div>
+          ) : (
+            <div className="flex-1 overflow-auto min-h-0">
+              <ProductGrid 
+                products={filteredData}
+                loading={loading}
+                error={error}
+              />
+            </div>
+          )}
         </section>
 
         {/* PAGINATION - Fixed to viewport bottom */}
-        <div 
-          className="fixed left-0 right-0 bottom-0 z-50 
-                     h-12 bg-slate-100 border-t border-slate-300/40
-                     flex items-center justify-between px-4"
-        >
-          <div className="flex space-x-2">
-            <Button 
-              size="sm" 
-              onClick={() => table.previousPage()} 
-              disabled={!table.getCanPreviousPage()}
-            >
-              <ChevronLeft />
-            </Button>
-            <Button 
-              size="sm" 
-              onClick={() => table.nextPage()} 
-              disabled={!table.getCanNextPage()}
-            >
-              <ChevronRight />
-            </Button>
-          </div>
+        {viewMode === 'list' ? (
+          <div 
+            className="fixed left-0 right-0 bottom-0 z-50 
+                      h-12 bg-slate-100 border-t border-slate-300/40
+                      flex items-center justify-between px-4"
+          >
+            <div className="flex space-x-2">
+              <Button 
+                size="sm" 
+                onClick={() => table.previousPage()} 
+                disabled={!table.getCanPreviousPage()}
+              >
+                <ChevronLeft />
+              </Button>
+              <Button 
+                size="sm" 
+                onClick={() => table.nextPage()} 
+                disabled={!table.getCanNextPage()}
+              >
+                <ChevronRight />
+              </Button>
+            </div>
 
-          <span className="text-sm text-slate-600">
-            {renderPaginationInfo()}
-          </span>
+            <span className="text-sm text-slate-600">
+              {renderPaginationInfo()}
+            </span>
 
-          <div className="flex items-center space-x-2">
-            <span className="text-sm">Show</span>
-            <Select
-              value={String(table.getState().pagination.pageSize)}
-              onValueChange={v => table.setPageSize(Number(v))}
-            >
-              <SelectTrigger className="h-8 w-[70px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {[10, 25, 50, 100].map((n) => (
-                  <SelectItem key={n} value={String(n)}>{n}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center space-x-2">
+              <span className="text-sm">Show</span>
+              <Select
+                value={String(table.getState().pagination.pageSize)}
+                onValueChange={v => table.setPageSize(Number(v))}
+              >
+                <SelectTrigger className="h-8 w-[70px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[10, 25, 50, 100].map((n) => (
+                    <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-        </div>
+        ) : null}
       </div>
       
       {/* Add modals at the end */}

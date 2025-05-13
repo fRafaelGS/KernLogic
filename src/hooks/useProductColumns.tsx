@@ -1001,7 +1001,7 @@ export function useProductColumns({
   ]);
 
   /* -------- 2. sticky action column ----------------------- */
-  const ACTION_W = 48;
+  const ACTION_W = 112;
   const actionColumn: ColumnDef<Product> = {
     id: "actions",
     size: ACTION_W,

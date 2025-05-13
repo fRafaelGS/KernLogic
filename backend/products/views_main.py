@@ -213,6 +213,7 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """
         Set the created_by field and organization when creating a product.
+        Also add the primary image to assets collection if present.
         """
         try:
             # Get the user's organization
@@ -237,6 +238,25 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                         summary=f"Product '{product.name}' was created",
                         payload={"product_id": product.id, "sku": product.sku, "name": product.name}
                     )
+                    
+                    # Check if primary_image exists and add it to assets collection
+                    if hasattr(product, 'primary_image') and product.primary_image:
+                        try:
+                            # Create an asset from the primary image
+                            from .models import ProductAsset
+                            asset = ProductAsset.objects.create(
+                                product=product,
+                                organization=organization,
+                                uploaded_by=self.request.user,
+                                asset_type='image',
+                                file=product.primary_image,
+                                name=f"{product.name} - Primary Image",
+                                is_primary=True
+                            )
+                            print(f"Created asset {asset.id} from product's primary image")
+                        except Exception as e:
+                            print(f"Error creating asset from primary image: {str(e)}")
+                    
                 except Exception as e:
                     print(f"Error recording product creation: {str(e)}")
         except Exception as e:
@@ -1184,49 +1204,54 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 asset.is_primary = True
                 asset.save(update_fields=['is_primary'])
                 
-                # Now update the parent Product model with this asset's file
-                if asset.file:
-                    product = Product.objects.select_for_update().get(pk=product_pk)
-                    
-                    # Update all primary image fields in one operation
-                    # First get the full URL for the file
-                    file_url = asset.file.url if hasattr(asset.file, 'url') else str(asset.file)
-                    
-                    # Update all primary image fields to ensure consistency
-                    product.primary_image = asset.file
-                    product.primary_image_url = file_url
-                    product.primary_image_thumb = file_url
-                    product.primary_image_large = file_url
-                    
-                    # Save all updates in a single operation
-                    product.save(update_fields=[
-                        'primary_image', 
-                        'primary_image_url', 
-                        'primary_image_thumb', 
-                        'primary_image_large'
-                    ])
-                    
-                    return Response({
-                        'success': True, 
-                        'message': 'Asset set as primary successfully',
-                        'primary_image_url': file_url,
-                        'asset_id': asset.id
-                    }, status=status.HTTP_200_OK)
+                # Now update the parent product's primary image field
+                product = Product.objects.select_for_update().get(pk=product_pk)
                 
-                return Response({
-                    'success': True, 
-                    'message': 'Asset set as primary, but no file was found'
-                }, status=status.HTTP_200_OK)
+                # Get the asset URL - try multiple approaches to ensure we find a valid URL
+                asset_url = None
+                # Try as direct property first
+                if hasattr(asset, 'url') and asset.url:
+                    asset_url = asset.url
+                # If not available, try to get from file field
+                elif hasattr(asset, 'file') and asset.file:
+                    try:
+                        asset_url = asset.file.url if hasattr(asset.file, 'url') else str(asset.file)
+                    except ValueError:
+                        # This might happen if the file doesn't exist
+                        asset_url = str(asset.file)
+                
+                if not asset_url:
+                    return Response(
+                        {"detail": "Could not determine asset URL"},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    )
+                
+                # Update product's primary image field - this is the only field that exists in the model
+                if hasattr(asset, 'file') and asset.file:
+                    product.primary_image = asset.file
+                
+                # Save only the primary_image field
+                product.save(update_fields=['primary_image'])
+                
+                # Get the updated product with all its assets for the response
+                from .serializers import ProductSerializer
+                serializer = ProductSerializer(product)
+                return Response(serializer.data)
                 
             except ProductAsset.DoesNotExist:
                 return Response(
-                    {"error": "Asset not found"},
-                    status=status.HTTP_404_NOT_FOUND
+                    {"detail": f"Asset {pk} not found for product {product_pk}"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            except Product.DoesNotExist:
+                return Response(
+                    {"detail": f"Product {product_pk} not found"},
+                    status=status.HTTP_404_NOT_FOUND,
                 )
             except Exception as e:
                 return Response(
-                    {"error": str(e)},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    {"detail": str(e)},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
 
     # New action for managing prices for a product
@@ -1951,27 +1976,6 @@ class AssetViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 tags=tags
             )
             
-            # Check if this is the first image asset for this product
-            # If so, automatically set it as primary
-            if asset_type == 'image':
-                # Check if any primary images exist
-                has_primary = ProductAsset.objects.filter(
-                    product=product, 
-                    asset_type='image',
-                    is_primary=True
-                ).exists()
-                
-                # If no primary image exists, set this one as primary
-                if not has_primary:
-                    instance.is_primary = True
-                    instance.save()
-                    
-                    # Also update the product's primary_image fields
-                    if instance.file:
-                        product.primary_image_large = instance.file.url
-                        product.primary_image_thumb = instance.file.url  # In a real system, you'd create a thumbnail
-                        product.save()
-                
             return instance
         except Exception as e:
             raise ValidationError({"error": str(e)})
@@ -2048,49 +2052,54 @@ class AssetViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 asset.is_primary = True
                 asset.save(update_fields=['is_primary'])
                 
-                # Now update the parent Product model with this asset's file
-                if asset.file:
-                    product = Product.objects.select_for_update().get(pk=product_pk)
-                    
-                    # Update all primary image fields in one operation
-                    # First get the full URL for the file
-                    file_url = asset.file.url if hasattr(asset.file, 'url') else str(asset.file)
-                    
-                    # Update all primary image fields to ensure consistency
-                    product.primary_image = asset.file
-                    product.primary_image_url = file_url
-                    product.primary_image_thumb = file_url
-                    product.primary_image_large = file_url
-                    
-                    # Save all updates in a single operation
-                    product.save(update_fields=[
-                        'primary_image', 
-                        'primary_image_url', 
-                        'primary_image_thumb', 
-                        'primary_image_large'
-                    ])
-                    
-                    return Response({
-                        'success': True, 
-                        'message': 'Asset set as primary successfully',
-                        'primary_image_url': file_url,
-                        'asset_id': asset.id
-                    }, status=status.HTTP_200_OK)
+                # Now update the parent product's primary image field
+                product = Product.objects.select_for_update().get(pk=product_pk)
                 
-                return Response({
-                    'success': True, 
-                    'message': 'Asset set as primary, but no file was found'
-                }, status=status.HTTP_200_OK)
+                # Get the asset URL - try multiple approaches to ensure we find a valid URL
+                asset_url = None
+                # Try as direct property first
+                if hasattr(asset, 'url') and asset.url:
+                    asset_url = asset.url
+                # If not available, try to get from file field
+                elif hasattr(asset, 'file') and asset.file:
+                    try:
+                        asset_url = asset.file.url if hasattr(asset.file, 'url') else str(asset.file)
+                    except ValueError:
+                        # This might happen if the file doesn't exist
+                        asset_url = str(asset.file)
+                
+                if not asset_url:
+                    return Response(
+                        {"detail": "Could not determine asset URL"},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    )
+                
+                # Update product's primary image field - this is the only field that exists in the model
+                if hasattr(asset, 'file') and asset.file:
+                    product.primary_image = asset.file
+                
+                # Save only the primary_image field
+                product.save(update_fields=['primary_image'])
+                
+                # Get the updated product with all its assets for the response
+                from .serializers import ProductSerializer
+                serializer = ProductSerializer(product)
+                return Response(serializer.data)
                 
             except ProductAsset.DoesNotExist:
                 return Response(
-                    {"error": "Asset not found"},
-                    status=status.HTTP_404_NOT_FOUND
+                    {"detail": f"Asset {pk} not found for product {product_pk}"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            except Product.DoesNotExist:
+                return Response(
+                    {"detail": f"Product {product_pk} not found"},
+                    status=status.HTTP_404_NOT_FOUND,
                 )
             except Exception as e:
                 return Response(
-                    {"error": str(e)},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    {"detail": str(e)},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
 
     @action(detail=False, methods=['post'], url_path='bulk-update')

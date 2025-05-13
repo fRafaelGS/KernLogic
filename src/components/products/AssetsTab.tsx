@@ -74,6 +74,10 @@ import { DownloadButton } from '@/components/products/DownloadButton'
 import { BulkDownloadToolbar } from '@/components/products/BulkDownloadToolbar'
 import { BundleCard } from './BundleCard'
 
+// Add import for our new hook
+import { useSetPrimaryAsset } from '@/hooks/useSetPrimaryAsset';
+import { pickPrimaryImage } from '@/utils/images';
+
 interface AssetTabProps {
   product: Product;
   onAssetUpdate?: (assets: ProductAsset[]) => void;
@@ -108,14 +112,14 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     );
   }
 
-  const [assets, setAssets] = useState<ProductAsset[]>([]);
+  const [assets, setAssets] = useState<ProductAsset[]>(product.assets || []);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedAssets, setSelectedAssets] = useState<Set<number>>(new Set());
   const [assetGroups, setAssetGroups] = useState<AssetGroup[]>([]);
   const [uploading, setUploading] = useState<UploadingAsset[]>([]);
   const [allSelected, setAllSelected] = useState(false);
-  const [isMakingPrimary, setIsMakingPrimary] = useState<number | string | null>(null);
+  const [isMakingPrimary, setIsMakingPrimary] = useState<number | null>(null);
   
   // State for renaming assets
   const [assetToRename, setAssetToRename] = useState<ProductAsset | null>(null);
@@ -416,62 +420,10 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
       updateUploadStatus(upload.id, 'success');
       console.log(`[uploadFile] Successful upload: Asset ID ${asset.id}, is_primary: ${asset.is_primary}`);
       
-      // Check if this is an image
-      const fileIsImage = /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(upload.file.name) ||
-                          upload.file.type.startsWith('image/');
-      
       // Add the new asset to the list
       setAssets(prev => {
-        // Check if there are no existing image assets and this is an image
-        const hasExistingImageAssets = prev.some(a => 
-          (a.type === 'image' || a.asset_type === 'image' || a.type?.startsWith('image/'))
-        );
-        
-        // If this is an image and there are no existing image assets, make it primary automatically
-        let shouldSetAsPrimary = fileIsImage && !hasExistingImageAssets && !asset.is_primary;
-        
-        // If this asset should be primary but isn't marked that way yet
-        if (shouldSetAsPrimary) {
-          console.log(`[uploadFile] No existing images found. Setting this image as primary automatically`);
-          // Make API call to set as primary (async)
-          productService.setAssetPrimary(productId, asset.id)
-            .then(success => {
-              if (success) {
-                console.log(`[uploadFile] Successfully set asset ${asset.id} as primary`);
-                
-                // IMPROVED: More thorough invalidation and refetching similar to makeAssetPrimary function
-                queryClient.invalidateQueries({ queryKey: ['product'] });
-                queryClient.invalidateQueries({ queryKey: ['product', productId] });
-                queryClient.invalidateQueries({ queryKey: ['productAssets'] });
-                queryClient.invalidateQueries({ queryKey: ['productAssets', productId] });
-                
-                // Force refetch the product data to ensure the UI updates
-                queryClient.refetchQueries({ queryKey: ['product', productId], exact: true })
-                  .catch(err => console.error(`[uploadFile] Error refetching product:`, err));
-                
-                // Update the product object directly - similar to makeAssetPrimary
-                if (product) {
-                  product.primary_image_url = asset.url;
-                  product.primary_image_large = asset.url; 
-                  product.primary_image_thumb = asset.url;
-                }
-                
-                // Force refresh assets to ensure UI is updated
-                fetchAssets();
-              }
-            })
-            .catch(err => console.error(`[uploadFile] Error setting asset as primary:`, err));
-          
-          // Update the asset locally to show as primary immediately
-          asset.is_primary = true;
-        }
-        
-        // If this is primary, make sure other assets are not primary
-        const updatedAssets = asset.is_primary 
-          ? prev.map(a => ({...a, is_primary: false}))
-          : prev;
-          
-        const newAssets = [asset, ...updatedAssets];
+        // Simply add the new asset to the list without setting it as primary
+        const newAssets = [asset, ...prev];
         
         // Notify parent component if callback exists
         if (onAssetUpdate) {
@@ -652,102 +604,47 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     setIsMakingPrimary(asset.id);
     console.log(`[makeAssetPrimary] Setting asset ${asset.id} as primary for product ${product.id}`);
 
-    // Optimistically update UI - mark this asset as primary, all others as not primary
-    const oldAssets = [...assets];
-    const newAssets = assets.map(a => ({
-      ...a,
-      is_primary: a.id === asset.id
-    }));
-    
-    // Update the UI immediately
-    setAssets(newAssets);
-    
-    try {
-      // Call the service to set the asset as primary
-      // The backend will update both the asset and product primary image fields in one transaction
-      const success = await productService.setAssetPrimary(product.id, asset.id);
-      console.log(`[makeAssetPrimary] setAssetPrimary result: ${success ? 'success' : 'failure'}`);
-      
-      if (success) {
-        // IMPROVEMENT: More aggressive cache invalidation and forced refetches
-        console.log('[makeAssetPrimary] Invalidating all related cache keys');
+    // Use our new mutation hook for setting the primary asset
+    setPrimaryAsset(asset.id, {
+      onSuccess: () => {
+        // Clear loading state
+        setIsMakingPrimary(null);
+        console.log('[makeAssetPrimary] Primary asset updated successfully');
         
-        // Invalidate product, productAssets, and any related queries in the cache
-        queryClient.invalidateQueries({ queryKey: ['product'] });
-        queryClient.invalidateQueries({ queryKey: ['product', product.id] });
-        queryClient.invalidateQueries({ queryKey: ['productAssets'] });
-        queryClient.invalidateQueries({ queryKey: ['productAssets', product.id] });
-        
-        // Force refetch product directly
-        try {
-          await queryClient.refetchQueries({ queryKey: ['product', product.id], exact: true });
-          console.log('[makeAssetPrimary] Successfully refetched product data');
-        } catch (refetchError) {
-          console.error('[makeAssetPrimary] Error refetching product data:', refetchError);
-        }
-        
-        toast({
-          title: 'Success',
-          description: 'Primary image updated'
+        // If the operation succeeded, update the local assets array to reflect the change
+        setAssets(prevAssets => {
+          return prevAssets.map(a => ({
+            ...a,
+            is_primary: a.id === asset.id
+          }));
         });
         
-        // If onAssetUpdate is provided, pass the updated assets to the parent component
-        if (onAssetUpdate) {
-          console.log('[makeAssetPrimary] Calling onAssetUpdate with updated assets');
-          onAssetUpdate(newAssets);
-        }
+        // Force refresh to ensure UI is consistent
+        fetchAssets();
         
-        // IMPROVEMENT: Update both local state AND product object's primary_image fields
-        try {
-          // Force a refresh of the assets to ensure we have the latest data from the server
-          const refreshedAssets = await productService.getProductAssets(product.id);
-          console.log(`[makeAssetPrimary] Refreshed ${refreshedAssets.length} assets from server`);
-          setAssets(refreshedAssets);
-          
-          // Get the updated asset URL for the primary image
-          const primaryAssetUrl = asset.url;
-          
-          // Update the product object directly to ensure immediate UI updates
-          if (product.primary_image_url !== primaryAssetUrl) {
-            console.log('[makeAssetPrimary] Updating product primary_image_url:', primaryAssetUrl);
-            product.primary_image_url = primaryAssetUrl;
-            product.primary_image_large = primaryAssetUrl;
-            product.primary_image_thumb = primaryAssetUrl;
-            
-            // Set the asset as primary in the product's assets array too
-            if (product.assets) {
-              product.assets = product.assets.map(a => ({
-                ...a,
-                is_primary: a.id === asset.id
-              }));
-            }
-          }
-        } catch (refreshError) {
-          console.error('[makeAssetPrimary] Error refreshing assets:', refreshError);
+        // Notify parent component if callback exists
+        if (onAssetUpdate) {
+          onAssetUpdate(assets.map(a => ({
+            ...a,
+            is_primary: a.id === asset.id
+          })));
         }
-      } else {
-        console.error('[makeAssetPrimary] Failed to set asset as primary');
+      },
+      onError: (error: any) => {
+        console.error('[makeAssetPrimary] Failed to set primary asset:', error);
+        setIsMakingPrimary(null);
+        
+        // Show error toast to the user
         toast({
           variant: 'destructive',
           title: 'Error',
-          description: 'Failed to set as primary image'
+          description: error?.message || 'Failed to set primary image'
         });
-        // Revert optimistic update
-        setAssets(oldAssets);
+        
+        // Refresh assets to ensure UI shows correct state
+        fetchAssets();
       }
-    } catch (error) {
-      console.error('[makeAssetPrimary] Error setting asset as primary:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'An error occurred while setting the primary image'
-      });
-      // Revert optimistic update
-      setAssets(oldAssets);
-    } finally {
-      // Clear loading state
-      setIsMakingPrimary(null);
-    }
+    });
   };
 
   // Delete an asset
@@ -1087,6 +984,9 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
 
   const { download: downloadAsset, isLoading: isDownloadingAsset } = useDownloadAsset()
   const { download: downloadBulkAssets, isLoading: isBulkDownloading } = useBulkDownload()
+
+  // Initialize our new hook for setting a primary asset
+  const { mutate: setPrimaryAsset } = useSetPrimaryAsset(product.id);
 
   return (
     <div className="p-6 space-y-8">

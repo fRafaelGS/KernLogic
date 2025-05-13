@@ -21,7 +21,7 @@ import { normalizeCategory, Category } from '@/types/categories';
 import { CategoryTreeSelect } from '../categories/CategoryTreeSelect';
 import { useQueryClient } from '@tanstack/react-query';
 import { isImageAsset } from '@/utils/isImageAsset';
-import { pickPrimaryImage } from '@/lib/imageUtils';
+import { pickPrimaryImage } from '@/utils/images';
 
 // Mock user permissions - in a real app, these would come from auth context
 const hasEditPermission = true;
@@ -114,22 +114,7 @@ export default function ProductDetailSidebar({ product, prices, isPricesLoading 
   const thumbUrl = useMemo(() => {
     console.log('[ProductDetailSidebar] Recalculating thumbUrl, assets count:', product.assets?.length);
     
-    // Check for updates in localStorage cache first
-    try {
-      const cachedProductJSON = localStorage.getItem(`product_${product.id}`);
-      if (cachedProductJSON) {
-        const cachedProduct = JSON.parse(cachedProductJSON);
-        // Use primary image from cache if it exists and is more recent
-        if (cachedProduct.primary_image_url) {
-          console.log('[ProductDetailSidebar] Using primary_image_url from localStorage cache');
-          return cachedProduct.primary_image_url;
-        }
-      }
-    } catch (error) {
-      console.warn('[ProductDetailSidebar] Error reading from localStorage:', error);
-    }
-    
-    // Continue with existing logic
+    // Use the centralized helper for consistent image selection
     return pickPrimaryImage(product);
   }, [product]);
   

@@ -1444,7 +1444,8 @@
             }
         },
 
-        // Set an asset as primary
+        // Set an asset as primary - now this is an atomic operation on the backend
+        // The backend will update the asset and product fields in a single transaction
         setAssetPrimary: async (productId: number, assetId: number): Promise<boolean> => {
             try {
                 console.log(`[setAssetPrimary] Setting asset ${assetId} as primary for product ${productId}`);
@@ -1456,30 +1457,21 @@
                 // Response should include success flag and updated fields
                 console.log(`[setAssetPrimary] Successfully set asset ${assetId} as primary`);
                 
-                // Make an additional call to immediately get the updated product to ensure all clients have latest data
-                try {
-                    // This helps ensure all components have access to the updated product data
-                    const productResponse = await axiosInstance.get(`${PRODUCTS_API_URL}/${productId}/`);
-                    const productData = productResponse.data;
-                    
-                    // Use localStorage to help with immediate data sync across components
-                    try {
-                        // Clear any existing cached product data
-                        localStorage.removeItem(`product_${productId}`);
-                        // Store the fresh product data
-                        localStorage.setItem(`product_${productId}`, JSON.stringify(productData));
-                        console.log('[setAssetPrimary] Updated local product cache with fresh data');
-                    } catch (storageError) {
-                        console.warn('[setAssetPrimary] Could not update localStorage cache:', storageError);
-                    }
-                } catch (fetchError) {
-                    console.warn('[setAssetPrimary] Could not fetch updated product data:', fetchError);
-                }
-                
                 return true;
             } catch (error) {
                 console.error(`[setAssetPrimary] Error setting asset ${assetId} as primary:`, error);
-                return false;
+                
+                // Enhanced error handling for the asset.url error
+                if (axios.isAxiosError(error) && error.response?.data?.detail) {
+                    const errorDetail = error.response.data.detail;
+                    if (errorDetail.includes("'ProductAsset' object has no attribute 'url'")) {
+                        console.warn(`[setAssetPrimary] Backend error: asset.url attribute is missing. 
+                            This is a backend issue where the asset model is trying to access 'url' directly 
+                            instead of through the file field.`);
+                    }
+                }
+                
+                throw error;
             }
         },
 

@@ -65,7 +65,7 @@ import { formatPrice, getProductPriceDisplay } from "@/utils/formatPrice";
 import { PriceSummaryBadge } from "@/components/products/PriceSummaryBadge";
 import CreatableSelect from 'react-select/creatable'
 import '@/styles/editable-cell.scss'
-import { pickPrimaryImage } from '@/lib/imageUtils';
+import { pickPrimaryImage } from '@/utils/images';
 
 // Helper function to safely format price amounts
 const formatAmount = (amount: number | string | null | undefined): string => {
@@ -224,34 +224,31 @@ export function useProductColumns({
       ),
       cell: ({ row }) => {
         // Use the centralized pickPrimaryImage utility for consistent image selection
-        const primary = pickPrimaryImage(row.original);
+        const primaryImageUrl = pickPrimaryImage(row.original);
 
         return (
           <div className="flex items-center space-x-2">
-            {primary ? (
+            {primaryImageUrl ? (
               <HoverCard>
                 <HoverCardTrigger>
                   <img
-                    src={primary}
+                    src={primaryImageUrl}
                     alt={row.original.name}
                     className="h-14 w-14 rounded border object-cover"
                   />
                 </HoverCardTrigger>
                 <HoverCardContent className="p-2 w-80">
                   <img
-                    src={primary}
+                    src={primaryImageUrl}
                     alt={row.original.name}
                     className="w-full h-auto max-h-64 rounded"
                   />
-                  <p className="mt-2 text-sm font-medium text-center">
-                    {row.original.name}
-                  </p>
+                  <p className="mt-2 text-sm">{row.original.name}</p>
                 </HoverCardContent>
               </HoverCard>
             ) : (
-              <div className="h-14 w-14 flex flex-col items-center justify-center rounded border bg-gray-100">
-                <ImageIcon className="h-6 w-6 text-slate-400" />
-                <span className="text-xs text-slate-400">No Image</span>
+              <div className="h-14 w-14 rounded border flex items-center justify-center bg-muted">
+                <ImageIcon className="h-6 w-6 text-muted-foreground" />
               </div>
             )}
           </div>

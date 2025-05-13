@@ -14,6 +14,7 @@ import { usePriceMetadata } from '@/hooks/usePriceMetadata';
 import { Loader2 } from 'lucide-react';
 import { AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface PricingModalProps {
   isOpen: boolean;
@@ -46,6 +47,9 @@ export function PricingModal({
   draftPrices = [],
   setDraftPrices
 }: PricingModalProps) {
+  // Add React Query client
+  const queryClient = useQueryClient();
+  
   // Use the price metadata hook
   const { priceTypes, currencies, channels, loading: metaLoading, error: metaError } = usePriceMetadata();
   
@@ -276,6 +280,16 @@ export function PricingModal({
       // Switch back to table view to show the new row
       setActiveTab('table');
       
+      // Invalidate and refetch product queries
+      if (productId) {
+        // Invalidate the specific product's cache
+        queryClient.invalidateQueries({ queryKey: ['product', productId] });
+        // Force an immediate refetch
+        queryClient.refetchQueries({ queryKey: ['product', productId] });
+        // Also invalidate prices query
+        queryClient.invalidateQueries({ queryKey: ['prices', productId] });
+      }
+      
       // Call the onPricesUpdated callback
       if (onPricesUpdated) {
         await onPricesUpdated();
@@ -374,6 +388,16 @@ export function PricingModal({
       setEditingPrice(null);
       setActiveTab('table');
       
+      // Invalidate and refetch product queries
+      if (productId) {
+        // Invalidate the specific product's cache
+        queryClient.invalidateQueries({ queryKey: ['product', productId] });
+        // Force an immediate refetch
+        queryClient.refetchQueries({ queryKey: ['product', productId] });
+        // Also invalidate prices query
+        queryClient.invalidateQueries({ queryKey: ['prices', productId] });
+      }
+      
       // Call the onPricesUpdated callback
       if (onPricesUpdated) {
         await onPricesUpdated();
@@ -417,6 +441,16 @@ export function PricingModal({
       
       // Refresh prices
       fetchPrices();
+      
+      // Invalidate and refetch product queries
+      if (productId) {
+        // Invalidate the specific product's cache
+        queryClient.invalidateQueries({ queryKey: ['product', productId] });
+        // Force an immediate refetch
+        queryClient.refetchQueries({ queryKey: ['product', productId] });
+        // Also invalidate prices query
+        queryClient.invalidateQueries({ queryKey: ['prices', productId] });
+      }
       
       // Call the onPricesUpdated callback
       if (onPricesUpdated) {

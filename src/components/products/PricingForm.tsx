@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button'
 import { Loader2 } from 'lucide-react'
 import { PriceType, SalesChannel, Currency } from '@/hooks/usePriceMetadata'
 import { useEffect } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 
 const priceFormSchema = z.object({
   priceType: z.string().min(1, { message: 'Price type is required' }),
@@ -62,6 +63,7 @@ export function PricingForm({
 }: PricingFormProps) {
   const { toast } = useToast()
   const { priceTypes, channels, currencies, loading: metaLoading, error: metaError } = usePriceMetadata()
+  const queryClient = useQueryClient()
   
   const form = useForm<PriceFormValues>({
     resolver: zodResolver(priceFormSchema),
@@ -104,9 +106,15 @@ export function PricingForm({
         }
         console.log('PATCH diff payload:', diff)
         await onUpdate(initialData.id, diff)
+        await queryClient.invalidateQueries({ queryKey: ['product', productId] })
+        await queryClient.refetchQueries({ queryKey: ['product', productId] })
+        await queryClient.invalidateQueries({ queryKey: ['prices', productId] })
         toast({ title: 'Price updated successfully' })
       } else {
         await onAdd(values)
+        await queryClient.invalidateQueries({ queryKey: ['product', productId] })
+        await queryClient.refetchQueries({ queryKey: ['product', productId] })
+        await queryClient.invalidateQueries({ queryKey: ['prices', productId] })
         toast({ title: 'Price created successfully' })
       }
       form.reset()

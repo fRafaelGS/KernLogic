@@ -36,6 +36,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog'
 import { usePriceMetadata } from '@/hooks/usePriceMetadata'
 import { productService, ProductPrice } from '@/services/productService'
+import { useQueryClient } from '@tanstack/react-query'
 
 interface PriceTabProps {
   productId: number;
@@ -46,6 +47,7 @@ interface PriceTabProps {
 
 export function PriceTab({ productId, prices, isPricesLoading, onPricesUpdated }: PriceTabProps) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedPrice, setSelectedPrice] = useState<any>(null);
   const [selectedRows, setSelectedRows] = useState<number[]>([]);
@@ -127,6 +129,12 @@ export function PriceTab({ productId, prices, isPricesLoading, onPricesUpdated }
     try {
       await remove(id);
       toast({ title: 'Price deleted successfully' });
+      
+      // Invalidate and refetch product queries
+      queryClient.invalidateQueries({ queryKey: ['product', productId] });
+      queryClient.refetchQueries({ queryKey: ['product', productId] });
+      queryClient.invalidateQueries({ queryKey: ['prices', productId] });
+      
       await onPricesUpdated();
     } catch (error) {
       toast({ 
@@ -149,6 +157,12 @@ export function PriceTab({ productId, prices, isPricesLoading, onPricesUpdated }
       await Promise.all(selectedRows.map(id => remove(id)));
       toast({ title: `${selectedRows.length} prices deleted successfully` });
       setSelectedRows([]);
+      
+      // Invalidate and refetch product queries
+      queryClient.invalidateQueries({ queryKey: ['product', productId] });
+      queryClient.refetchQueries({ queryKey: ['product', productId] });
+      queryClient.invalidateQueries({ queryKey: ['prices', productId] });
+      
       await onPricesUpdated();
     } catch (error) {
       toast({

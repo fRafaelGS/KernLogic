@@ -119,6 +119,7 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
   const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
   const [selectedLocale, setSelectedLocale] = useState('en-US');
   const [selectedChannel, setSelectedChannel] = useState('default');
+  const [product, setProduct] = useState<Product | null>(initialProduct || null);
   
   // State for draft prices (used in create mode)
   const [draftPrices, setDraftPrices] = useState<ProductPrice[]>([]);
@@ -146,7 +147,17 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
   // Only fetch if no initialProduct is provided and we have an ID
   const { isLoading: queryLoading } = useQuery({
     queryKey: ['product', productId],
-    queryFn: () => productId ? productService.getProduct(productId) : null,
+    queryFn: async () => {
+      if (!productId) return null;
+      const data = await productService.getProduct(productId);
+      
+      // Update our local product state when we get the data
+      if (data) {
+        setProduct(data);
+      }
+      
+      return data;
+    },
     enabled: isEditMode && !initialProduct && !!productId,
   });
 
@@ -155,6 +166,9 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
     if (initialProduct) {
       // Reset form with data using our centralized helper
       form.reset(getDefaultProductValues(initialProduct));
+      
+      // Update product state
+      setProduct(initialProduct);
 
       // Set image preview if available
       if (initialProduct.primary_image_large) {
@@ -336,7 +350,18 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
         });
     },
     onSuccess: (product) => {
+      // Invalidate both the products list and the specific product's cache
       queryClient.invalidateQueries({ queryKey: ['products'] });
+      if (product && product.id) {
+        // Specifically invalidate the individual product cache
+        queryClient.invalidateQueries({ queryKey: ['product', product.id] });
+        
+        // For edit mode, we can also refetch to force an immediate update
+        if (isEditMode && product.id) {
+          queryClient.refetchQueries({ queryKey: ['product', product.id] });
+        }
+      }
+      
       toast({ title: `Product ${isEditMode ? 'updated' : 'created'} successfully`, variant: "default" });
       
       // Ensure we have a valid product ID before navigating
@@ -475,6 +500,38 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
     form.handleSubmit(onSubmit)();
   };
 
+  // Extracted PricingModal handler with proper cache invalidation
+  const handlePricesUpdated = async () => {
+    // Refresh product data to get updated prices
+    if (productId) {
+      try {
+        // Force invalidate and refetch the product and prices
+        queryClient.invalidateQueries({ queryKey: ['product', productId] });
+        queryClient.refetchQueries({ queryKey: ['product', productId] });
+        queryClient.invalidateQueries({ queryKey: ['prices', productId] });
+        
+        // Directly fetch the updated product to refresh our form state
+        const refreshedProduct = await productService.getProduct(productId);
+        if (refreshedProduct) {
+          // Reset form with refreshed data
+          form.reset(getDefaultProductValues(refreshedProduct));
+          
+          // Always update our local product state with the latest data
+          setProduct(refreshedProduct);
+
+          // Show success toast
+          toast({ title: "Prices updated successfully" });
+        }
+      } catch (error) {
+        console.error("Failed to refresh product after price update", error);
+        toast({ 
+          title: "Prices updated but failed to refresh product data", 
+          variant: "destructive" 
+        });
+      }
+    }
+  };
+
   if (queryLoading) {
     return <div>Loading...</div>;
   }
@@ -493,9 +550,13 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
           <Tabs defaultValue="basic" className="w-full">
             <TabsList className="mb-4">
               <TabsTrigger value="basic">Basic Information</TabsTrigger>
-              <TabsTrigger value="details">Details & Media</TabsTrigger>
-              <TabsTrigger value="description">Description</TabsTrigger>
-              <TabsTrigger value="attributes">Attributes</TabsTrigger>
+              {isEditMode && (
+                <>
+                  <TabsTrigger value="details">Details & Media</TabsTrigger>
+                  <TabsTrigger value="description">Description</TabsTrigger>
+                  <TabsTrigger value="attributes">Attributes</TabsTrigger>
+                </>
+              )}
             </TabsList>
           
             <TabsContent value="basic" className="space-y-4">
@@ -538,24 +599,26 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
                 </div>
               </div>
 
-              <div className="mb-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsPricingModalOpen(true)}
-                >
-                  Pricing
-                </Button>
-                {draftPrices.length > 0 && (
-                  <span className="ml-2 text-sm text-blue-600">
-                    ({draftPrices.length} draft price{draftPrices.length !== 1 ? 's' : ''})
-                  </span>
-                )}
-              </div>
+              {isEditMode && (
+                <div className="mb-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsPricingModalOpen(true)}
+                  >
+                    Pricing
+                  </Button>
+                  {draftPrices.length > 0 && (
+                    <span className="ml-2 text-sm text-blue-600">
+                      ({draftPrices.length} draft price{draftPrices.length !== 1 ? 's' : ''})
+                    </span>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-2">
                 <label htmlFor="description" className="block text-sm font-medium">
-                  Short Description
+                  Description
                 </label>
                 <FormField
                   control={form.control}
@@ -563,10 +626,10 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
                   render={({ field }) => (
                     <FormItem>
                       <FormControl>
-                        <Textarea
-                          {...field}
-                          placeholder="Enter short product description"
-                          className="min-h-[120px]"
+                        <RichTextEditor
+                          value={field.value || ''}
+                          onChange={field.onChange}
+                          placeholder="Enter product description..."
                         />
                       </FormControl>
                       <FormMessage />
@@ -598,164 +661,196 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <label htmlFor="tags" className="block text-sm font-medium">Tags</label>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Info className="h-4 w-4 ml-2 text-gray-400" />
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          Tags help categorize and search for products
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                  <FormField
-                    control={form.control}
-                    name="tags"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormControl>
-                          <AsyncCreatableSelect<{ label: string; value: string }, true>
-                            isMulti
-                            cacheOptions
-                            defaultOptions={tagOptions}
-                            loadOptions={productService.searchTags}
-                            onCreateOption={async (inputValue) => {
-                              if (!inputValue) return;
-                              try {
-                                const newTag = await productService.createTag({ name: inputValue });
-                                const newOption = { label: newTag.name, value: newTag.id };
-                                setTagOptions((prev) => [...prev, newOption]);
-                                field.onChange([...(field.value || []), newOption.value]); 
-                                toast({ title: `Tag "${inputValue}" created`, variant: "default" });
-                              } catch (error) {
-                                console.error("Failed to create tag:", error);
-                                toast({ title: "Failed to create tag", variant: "destructive" });
-                              }
-                            }}
-                            onChange={(options) => {
-                              const tagValues = options ? options.map(opt => opt.value) : [];
-                              field.onChange(tagValues);
-                            }}
-                            value={tagOptions.filter(opt => (field.value || []).includes(opt.value))}
-                            placeholder="Add or create tags..."
-                            getOptionLabel={(option) => option.label}
-                            getOptionValue={(option) => option.value}
-                            isLoading={isPending}
-                            styles={{
-                              menuPortal: (base) => ({ ...base, zIndex: 9999 }),
-                            }}
-                            menuPortalTarget={document.body}
-                            menuPosition="fixed"
+                {!isEditMode && (
+                  <div className="space-y-2">
+                    <label htmlFor="image" className="block text-sm font-medium">
+                      Product Image
+                    </label>
+                    <div className="flex flex-col items-center space-y-4">
+                      {imagePreview && (
+                        <div className="relative w-40 h-40 border rounded-md overflow-hidden">
+                          <img
+                            src={imagePreview}
+                            alt="Product preview"
+                            className="w-full h-full object-contain"
                           />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+                        </div>
+                      )}
+                      <Input
+                        id="image"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageChange}
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {isEditMode && (
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <label htmlFor="tags" className="block text-sm font-medium">Tags</label>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Info className="h-4 w-4 ml-2 text-gray-400" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            Tags help categorize and search for products
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                    <FormField
+                      control={form.control}
+                      name="tags"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <AsyncCreatableSelect<{ label: string; value: string }, true>
+                              isMulti
+                              cacheOptions
+                              defaultOptions={tagOptions}
+                              loadOptions={productService.searchTags}
+                              onCreateOption={async (inputValue) => {
+                                if (!inputValue) return;
+                                try {
+                                  const newTag = await productService.createTag({ name: inputValue });
+                                  const newOption = { label: newTag.name, value: newTag.id };
+                                  setTagOptions((prev) => [...prev, newOption]);
+                                  field.onChange([...(field.value || []), newOption.value]); 
+                                  toast({ title: `Tag "${inputValue}" created`, variant: "default" });
+                                } catch (error) {
+                                  console.error("Failed to create tag:", error);
+                                  toast({ title: "Failed to create tag", variant: "destructive" });
+                                }
+                              }}
+                              onChange={(options) => {
+                                const tagValues = options ? options.map(opt => opt.value) : [];
+                                field.onChange(tagValues);
+                              }}
+                              value={tagOptions.filter(opt => (field.value || []).includes(opt.value))}
+                              placeholder="Add or create tags..."
+                              getOptionLabel={(option) => option.label}
+                              getOptionValue={(option) => option.value}
+                              isLoading={isPending}
+                              styles={{
+                                menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                              }}
+                              menuPortalTarget={document.body}
+                              menuPosition="fixed"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                )}
               </div>
             </TabsContent>
           
-            <TabsContent value="details" className="space-y-4">
-              {/* Details & Media */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium">Product Details</h3>
-                  
-                  <div className="space-y-3">
-                    <FormField
-                      control={form.control}
-                      name="brand"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Brand</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="Enter brand name" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+            {isEditMode && (
+              <>
+                <TabsContent value="details" className="space-y-4">
+                  {/* Details & Media */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-medium">Product Details</h3>
+                      
+                      <div className="space-y-3">
+                        <FormField
+                          control={form.control}
+                          name="brand"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Brand</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Enter brand name" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
 
-                    <FormField
-                      control={form.control}
-                      name="barcode"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>GTIN / Barcode</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="Enter GTIN number" />
-                          </FormControl>
-                          <FormMessage />
-                          <p className="text-xs text-slate-500">
-                            Enter a valid EAN-8, EAN-13, UPC-A, or GTIN-14 code
-                          </p>
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium">Product Image</h3>
-                  <div className="flex flex-col items-center space-y-4">
-                    {imagePreview && (
-                      <div className="relative w-40 h-40 border rounded-md overflow-hidden">
-                        <img
-                          src={imagePreview}
-                          alt="Product preview"
-                          className="w-full h-full object-contain"
+                        <FormField
+                          control={form.control}
+                          name="barcode"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>GTIN / Barcode</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Enter GTIN number" />
+                              </FormControl>
+                              <FormMessage />
+                              <p className="text-xs text-slate-500">
+                                Enter a valid EAN-8, EAN-13, UPC-A, or GTIN-14 code
+                              </p>
+                            </FormItem>
+                          )}
                         />
                       </div>
-                    )}
-                    <Input
-                      id="image"
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageChange}
-                      className="w-full"
+                    </div>
+
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-medium">Product Image</h3>
+                      <div className="flex flex-col items-center space-y-4">
+                        {imagePreview && (
+                          <div className="relative w-40 h-40 border rounded-md overflow-hidden">
+                            <img
+                              src={imagePreview}
+                              alt="Product preview"
+                              className="w-full h-full object-contain"
+                            />
+                          </div>
+                        )}
+                        <Input
+                          id="image"
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageChange}
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="description" className="space-y-4">
+                  {/* Rich Text Description */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium">Detailed Description</h3>
+                    <p className="text-sm text-slate-500">Format product description with rich text editor</p>
+                    
+                    <FormField
+                      control={form.control}
+                      name="description"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <RichTextEditor
+                              value={field.value || ''}
+                              onChange={field.onChange}
+                              placeholder="Enter detailed product description..."
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
                   </div>
-                </div>
-              </div>
-            </TabsContent>
-            
-            <TabsContent value="description" className="space-y-4">
-              {/* Rich Text Description */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium">Detailed Description</h3>
-                <p className="text-sm text-slate-500">Format product description with rich text editor</p>
+                </TabsContent>
                 
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormControl>
-                        <RichTextEditor
-                          value={field.value || ''}
-                          onChange={field.onChange}
-                          placeholder="Enter detailed product description..."
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </TabsContent>
-            
-            <TabsContent value="attributes" className="space-y-4">
-              <Card className="p-6 text-center">
-                <p className="text-gray-600 mb-4">
-                  You can manage attributes once the product is saved.
-                </p>
-              </Card>
-            </TabsContent>
+                <TabsContent value="attributes" className="space-y-4">
+                  <Card className="p-6 text-center">
+                    <p className="text-gray-600 mb-4">
+                      You can manage attributes once the product is saved.
+                    </p>
+                  </Card>
+                </TabsContent>
+              </>
+            )}
           </Tabs>
           
           <div className="flex justify-end space-x-4">
@@ -778,32 +873,7 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
             productId={productId}
             draftPrices={draftPrices}
             setDraftPrices={setDraftPrices}
-            onPricesUpdated={async () => {
-              // Refresh product data to get updated prices
-              if (productId) {
-                try {
-                  const refreshedProduct = await productService.getProduct(productId);
-                  if (refreshedProduct) {
-                    // Reset form with refreshed data
-                    form.reset(getDefaultProductValues(refreshedProduct));
-                    
-                    // Update initial product if available
-                    if (initialProduct) {
-                      initialProduct.prices = refreshedProduct.prices;
-                    }
-
-                    // Show success toast
-                    toast({ title: "Prices updated successfully" });
-                  }
-                } catch (error) {
-                  console.error("Failed to refresh product after price update", error);
-                  toast({ 
-                    title: "Prices updated but failed to refresh product data", 
-                    variant: "destructive" 
-                  });
-                }
-              }
-            }}
+            onPricesUpdated={handlePricesUpdated}
           />
 
           <CategoryModal

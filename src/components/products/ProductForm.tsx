@@ -120,6 +120,9 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
   const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
   const [selectedLocale, setSelectedLocale] = useState('en-US');
   const [selectedChannel, setSelectedChannel] = useState('default');
+  
+  // State for draft prices (used in create mode)
+  const [draftPrices, setDraftPrices] = useState<ProductPrice[]>([]);
 
   // Use the passed-in product data or fetch it if needed
   const productId = initialProduct?.id || (id ? Number(id) : undefined);
@@ -289,7 +292,30 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
       if (isEditMode && productId) {
         return productService.updateProduct(productId, formData);
       } 
-      return productService.createProduct(formData);
+
+      // Create product and then add any draft prices
+      return productService.createProduct(formData)
+        .then(createdProduct => {
+          // If we have draft prices, create them now
+          if (draftPrices.length > 0) {
+            console.log(`Adding ${draftPrices.length} draft prices to new product ${createdProduct.id}`);
+            
+            // Create each price by calling the API for each draft
+            return Promise.all(
+              draftPrices.map(dp =>
+                productService.addPrice(createdProduct.id, {
+                  price_type: dp.price_type,
+                  currency: dp.currency,
+                  channel_id: dp.channel_id,
+                  amount: dp.amount,
+                  valid_from: dp.valid_from,
+                  valid_to: dp.valid_to,
+                })
+              )
+            ).then(() => createdProduct);
+          }
+          return createdProduct;
+        });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
@@ -443,6 +469,11 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
                 >
                   Pricing
                 </Button>
+                {draftPrices.length > 0 && (
+                  <span className="ml-2 text-sm text-blue-600">
+                    ({draftPrices.length} draft price{draftPrices.length !== 1 ? 's' : ''})
+                  </span>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -725,6 +756,8 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
             isOpen={isPricingModalOpen} 
             onClose={() => setIsPricingModalOpen(false)}
             productId={productId}
+            draftPrices={draftPrices}
+            setDraftPrices={setDraftPrices}
             onPricesUpdated={async () => {
               // Refresh product data to get updated prices
               if (productId) {

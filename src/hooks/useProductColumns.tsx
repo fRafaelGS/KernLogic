@@ -20,6 +20,7 @@ import {
   TrashIcon,
   type LucideIcon,
   InfoIcon,
+  Loader2,
 } from "lucide-react";
 
 import {
@@ -64,6 +65,7 @@ import { formatPrice, getProductPriceDisplay } from "@/utils/formatPrice";
 import { PriceSummaryBadge } from "@/components/products/PriceSummaryBadge";
 import CreatableSelect from 'react-select/creatable'
 import '@/styles/editable-cell.scss'
+import { pickPrimaryImage } from '@/lib/imageUtils';
 
 // Helper function to safely format price amounts
 const formatAmount = (amount: number | string | null | undefined): string => {
@@ -77,6 +79,15 @@ const formatAmount = (amount: number | string | null | undefined): string => {
     return '0.00';
   }
 };
+
+// After the imports and helper functions but before the useProductColumns function
+// Add the CategoryCellPlaceholder component
+const CategoryCellPlaceholder = () => (
+  <div className="flex items-center space-x-2 p-1">
+    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+    <span className="text-muted-foreground text-sm">Loading categories...</span>
+  </div>
+);
 
 /* ---------------------------------------------------------- */
 /*  Helper / shared types                                     */
@@ -95,12 +106,12 @@ export interface TagOption {
 export interface UseProductColumnsOpts {
   /* --- table‐level state --- */
   editingCell: { rowIndex: number; columnId: string } | null;
-  editValue: string;
+  editValue: string | any; // Allow any to accommodate different types for tags
   tagOptions: TagOption[];
   categoryOptions: CategoryOption[];
 
   /* --- setters that columns mutate --- */
-  setEditValue(v: string): void;
+  setEditValue(v: string | any): void; // Allow any to accommodate different types for tags
   setCategoryOptions(
     updater: (prev: CategoryOption[]) => CategoryOption[]
   ): void;
@@ -114,7 +125,7 @@ export interface UseProductColumnsOpts {
   handleSaveCellEdit(): void;
   handleCancelEdit(): void;
   handleCellEdit(row: number, col: string, v: string): void;
-  handleCreateTagOption(input: string): void;
+  handleCreateTagOption(input: string): Promise<TagOption | null>;
   updateData(row: number, col: string, v: any): void;
 
   /* --- navigation / actions --- */
@@ -212,16 +223,8 @@ export function useProductColumns({
         </Button>
       ),
       cell: ({ row }) => {
-        // Add a local images variable with correct typing
-        const images = (row.original.images as ProductImage[]) || [];
-
-        const primary =
-          row.original.primary_image_thumb ||
-          row.original.primary_image_large ||
-          row.original.primary_image_url ||
-          row.original.primary_image ||
-          images.find(i => i.is_primary)?.url ||
-          images[0]?.url;
+        // Use the centralized pickPrimaryImage utility for consistent image selection
+        const primary = pickPrimaryImage(row.original);
 
         return (
           <div className="flex items-center space-x-2">
@@ -404,6 +407,9 @@ export function useProductColumns({
         console.log('ProductTable categoryRaw:', raw);
         const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.columnId === 'category';
         
+        // Check if categories have been loaded yet
+        const categoriesLoading = categoryOptions.length === 0;
+        
         // Determine category ID for editing
         let categoryId = null;
         if (raw) {
@@ -430,9 +436,15 @@ export function useProductColumns({
               <CategoryTreeSelect
                 selectedValue={categoryId}
                 onChange={newId => updateData(rowIndex, 'category', newId)}
+                disabled={categoriesLoading}
               />
             </div>
           );
+        }
+        
+        // Show loading state if categories aren't loaded yet
+        if (categoriesLoading) {
+          return <CategoryCellPlaceholder />;
         }
         
         // Read-only: show breadcrumb, and clicking the cell enters edit mode
@@ -589,12 +601,30 @@ export function useProductColumns({
                 value={editTagOptions}
                 options={tagOptions}
                 onChange={(options: OnChangeValue<TagOption, true>) => {
-                  setEditValue(Array.isArray(options) ? options.map(opt => String(opt.value)) : [])
+                  // Handle options based on whether we need string or array format
+                  const values = Array.isArray(options) ? options.map(opt => String(opt.value)) : []
+                  
+                  // Determine if we need JSON string or direct array based on current editValue type
+                  if (typeof editValue === 'string') {
+                    setEditValue(JSON.stringify(values))
+                  } else {
+                    setEditValue(values)
+                  }
                 }}
                 onCreateOption={async (inputValue: string) => {
-                  const maybeOption = await handleCreateTagOption(inputValue) as TagOption | undefined
-                  if (maybeOption && typeof maybeOption.value === 'string') {
-                    setEditValue([...(Array.isArray(editValue) ? editValue : []), maybeOption.value])
+                  // Call handleCreateTagOption which now returns TagOption or null
+                  const newOption = await handleCreateTagOption(inputValue);
+                  
+                  // Only proceed if we got a valid tag option back
+                  if (newOption && newOption.value) {
+                    // Parse current value from JSON string if it exists
+                    const currentValues = editValue ? 
+                      (typeof editValue === 'string' ? JSON.parse(editValue) : editValue) as string[] : 
+                      [];
+                    
+                    // Update with new value and convert back to JSON string if needed
+                    const newValues = [...currentValues, String(newOption.value)];
+                    setEditValue(typeof editValue === 'string' ? JSON.stringify(newValues) : newValues);
                   }
                 }}
                 isClearable

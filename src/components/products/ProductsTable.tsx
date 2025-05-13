@@ -58,7 +58,8 @@ import {
   PencilIcon,
   TagIcon,
   FolderIcon,
-  LucideIcon
+  LucideIcon,
+  Loader2
 } from "lucide-react";
 import { Product, productService, ProductImage, ProductAttribute, ProductAsset, PaginatedResponse } from "@/services/productService";
 import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
@@ -90,11 +91,12 @@ import { useUniqueCategories, useUniqueTags } from "@/hooks/useProductDerived";
 import { useProductColumns } from "@/hooks/useProductColumns";    
 import ProductRowDetails from "./productstable/ProductRowDetails";
 import { motion, AnimatePresence } from 'framer-motion';
-import { normalizeCategory, getCategoryNamePath } from '@/types/categories';
-import { Category as CategoryType } from '@/types/categories'; // Import the correct type
+import { normalizeCategory, getCategoryNamePath, Category as CategoryType, Category as ProductCategory } from '@/types/categories';
 import { SubcategoryManager } from '@/components/categories/SubcategoryManager/SubcategoryManager';
 import { getCategoryName, matchesCategoryFilter } from '@/lib/utils';
 import { PriceSummaryBadge } from './PriceSummaryBadge';
+import { Breadcrumb } from "@/components/ui/breadcrumb";
+import { CategoryTreeSelect } from "@/components/categories/CategoryTreeSelect";
 
 // Define constants for fixed widths
 const ACTION_W = 112; // Width of action column in pixels
@@ -143,6 +145,50 @@ interface TagObject {
 type ProductWithAttributeArray = Omit<Product, 'attributes'> & {
   attributes?: ProductAttribute[];
 };
+
+// Flattens a nested category tree into a flat array
+function flattenCategories(categories: any[]): any[] {
+  if (!Array.isArray(categories)) return [];
+  
+  return categories.reduce<any[]>((acc, cat) => {
+    if (cat) acc.push(cat);
+    if (cat && Array.isArray(cat.children) && cat.children.length > 0) {
+      acc.push(...flattenCategories(cat.children));
+    }
+    return acc;
+  }, []);
+}
+
+// Helper function to safely convert any category to CategoryOption format
+function toCategoryOption(category: any): CategoryOption {
+  if (!category) return { label: 'Uncategorized', value: 0 };
+  
+  // Handle case where category is already in the right shape
+  if (category.label && (category.value || category.value === 0)) {
+    return {
+      label: String(category.label),
+      value: typeof category.value === 'string' ? 
+        parseInt(category.value, 10) || category.value : 
+        Number(category.value)
+    };
+  }
+  
+  // Handle case where category is a regular Category object
+  if (typeof category === 'object') {
+    return {
+      label: category.name || '',
+      value: typeof category.id === 'string' ? 
+        parseInt(category.id, 10) || category.id : 
+        Number(category.id || 0)
+    };
+  }
+  
+  // Fallback for primitive values
+  return {
+    label: String(category),
+    value: typeof category === 'string' ? category : Number(category || 0)
+  };
+}
 
 export function ProductsTable() {
   const { toast } = useToast();
@@ -327,27 +373,17 @@ export function ProductsTable() {
         window.matchesCategoryFilter = (raw: unknown, filterValue: string) => matchesCategoryFilter(raw, filterValue);
       }
       
-      // Create category options with proper type casting
-      const categoryOpts: CategoryOption[] = fetchedCategories.map(c => {
-        // Safely extract id and name
-        let categoryId: string | number;
-        let categoryName: string;
-        
-        if (typeof c === 'object' && c !== null) {
-          // Handle object with id and name properties
-          categoryId = typeof c.id === 'undefined' ? 0 : c.id;
-          categoryName = c.name || '';
-        } else {
-          // Handle primitive value
-          categoryId = c;
-          categoryName = String(c);
-        }
-        
-        return {
-          label: categoryName,
-          value: categoryId
-        };
-      });
+      // Flatten the entire tree so we include subcategories
+      const flatCategories = flattenCategories(fetchedCategories);
+      
+      // Log the flattened categories for debugging
+      console.log('Flattened categories:', flatCategories);
+      
+      // Create category options from the flattened list using our safe converter
+      const categoryOpts: CategoryOption[] = flatCategories.map(toCategoryOption);
+      
+      // Log the complete category options for debugging
+      console.log('Complete category options:', categoryOpts);
       
       setCategoryOptions(categoryOpts);
       
@@ -677,18 +713,52 @@ export function ProductsTable() {
         formattedValue = value === 'true' || value === true;
       }
 
-      // Create update payload
-      const updateData: Partial<Product> = {
-        [columnId]: formattedValue,
-      };
+      // Create API payload with correct field names
+      let apiPayload: Record<string, any>;
+      
+      if (columnId === 'category') {
+        // Backend expects category_id, not category
+        apiPayload = { 
+          category_id: formattedValue === 0 ? null : formattedValue 
+        };
+        console.log('Sending category update with payload:', apiPayload);
+      } else {
+        // For all other fields, use the column ID as the key
+        apiPayload = { 
+          [columnId]: formattedValue 
+        };
+      }
 
-      // Optimistically update UI using ID instead of index
-      setProducts(prev =>
-        prev.map(p => (p.id === productId ? { ...p, [columnId]: formattedValue } : p))
-      );
+      // Special handling for category updates to maintain correct data structure in UI
+      if (columnId === 'category') {
+        // Find the selected category in our options
+        const selectedCat = categoryOptions.find(c => c.value === formattedValue);
+        
+        if (selectedCat) {
+          // Update with proper category object structure - ensure we match the ProductCategory type
+          const categoryObj: ProductCategory = {
+            id: typeof selectedCat.value === 'string' ? parseInt(selectedCat.value, 10) : selectedCat.value,
+            name: selectedCat.label
+          };
+          
+          setProducts(prev =>
+            prev.map(p => (p.id === productId ? { ...p, category: [categoryObj] } : p))
+          );
+        } else {
+          // If category not found, default to empty array (uncategorized)
+          setProducts(prev =>
+            prev.map(p => (p.id === productId ? { ...p, category: [] } : p))
+          );
+        }
+      } else {
+        // Normal optimistic update for non-category fields
+        setProducts(prev =>
+          prev.map(p => (p.id === productId ? { ...p, [columnId]: formattedValue } : p))
+        );
+      }
 
-      // Save to API
-      await productService.updateProduct(productId, updateData);
+      // Save to API with the correct payload
+      await productService.updateProduct(productId, apiPayload);
       
       toast({ title: `${columnId.charAt(0).toUpperCase() + columnId.slice(1)} updated`, variant: 'default' });
       setEditingCell(null); // Clear editing state
@@ -698,7 +768,7 @@ export function ProductsTable() {
       // Revert optimistic update
       fetchData();
     }
-  }, [fetchData, productRowMap, toast]);
+  }, [fetchData, productRowMap, toast, categoryOptions]);
 
   // Move the price cell input handler to avoid recreating it on each render
   const handlePriceCellChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -730,7 +800,9 @@ export function ProductsTable() {
     if (editingCell) {
       if (editingCell.columnId === 'tags') {
         let tagsArray: string[] = []
+        
         if (Array.isArray(editValue)) {
+          // Handle case where editValue is already an array
           tagsArray = editValue.map(tag => {
             if (typeof tag === 'string') return tag
             if (tag && typeof tag === 'object') {
@@ -740,11 +812,27 @@ export function ProductsTable() {
             return ''
           }).filter(Boolean)
         } else if (typeof editValue === 'string') {
-          tagsArray = editValue
-            .split(',')
-            .map(tag => tag.trim())
-            .filter(Boolean)
+          try {
+            // First try to parse it as JSON (our new format)
+            const parsed = JSON.parse(editValue)
+            if (Array.isArray(parsed)) {
+              tagsArray = parsed
+            } else {
+              // Fall back to original comma-splitting logic
+              tagsArray = editValue
+                .split(',')
+                .map(tag => tag.trim())
+                .filter(Boolean)
+            }
+          } catch (e) {
+            // If JSON parsing fails, use the original comma-splitting logic
+            tagsArray = editValue
+              .split(',')
+              .map(tag => tag.trim())
+              .filter(Boolean)
+          }
         }
+        
         updateData(editingCell.rowIndex, editingCell.columnId, tagsArray)
       } else {
         updateData(editingCell.rowIndex, editingCell.columnId, editValue)
@@ -797,7 +885,7 @@ export function ProductsTable() {
 
   // Improve the function to handle tag creation for inline editing
   const handleCreateTagOption = useCallback(async (inputValue: string) => {
-    if (!inputValue) return;
+    if (!inputValue) return null;
     try {
       const newTag = await productService.createTag({ name: inputValue });
       const newOption = { label: newTag.name, value: newTag.id };
@@ -828,9 +916,11 @@ export function ProductsTable() {
       // Show success message
       toast({ title: `Tag "${inputValue}" created`, variant: "default" });
       
+      // Explicitly return the new option
       return newOption;
     } catch (error) {
       toast({ title: 'Failed to create tag', variant: 'destructive' });
+      return null;
     }
   }, [editingCell, productRowMap, products, updateData, toast]);
 
@@ -1231,18 +1321,17 @@ export function ProductsTable() {
     expandedIds.forEach(async rowId => {
       const row = table.getRow(rowId);
       const pid = row?.original?.id;
+      // Always log attempt to fetch or use cached attrGroups
+      console.log('Expander: pid', pid, 'productAttributes[pid]:', productAttributes[pid]);
       if (!pid || productAttributes[pid] !== undefined) return; // already cached
       if (attrGroupsInFlight.current.has(pid)) return; // already fetching
 
       try {
-        console.log(`[ProductsTable] Loading attributes for product ${pid}`);
         attrGroupsInFlight.current.add(pid); // mark as in-flight
 
-        // Always fetch with locale/channel = null ("all") to match AttributesTab
         const attrs = await productService.getProductAttributes(pid);
         const attrGroups = await productService.getProductAttributeGroups(pid);
-
-        console.log(`[ProductsTable] Product ${pid} received ${attrs?.length || 0} attributes and ${attrGroups?.length || 0} attribute groups`);
+        console.log('attrGroups for pid', pid, '→', attrGroups);
 
         let mergedAttributes = [];
         if (Array.isArray(attrGroups) && attrGroups.length > 0) {

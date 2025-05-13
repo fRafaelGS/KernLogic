@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Trash2, 
@@ -19,13 +19,20 @@ import {
   PinOff,
   Tag,
   Loader2,
-  Sparkles
+  Sparkles,
+  Plus,
+  Check,
+  Info,
+  MoreHorizontal,
+  ChevronDown,
 } from 'lucide-react';
 import { 
   Card, 
   CardContent, 
   CardFooter, 
-  CardHeader 
+  CardHeader, 
+  CardTitle, 
+  CardDescription 
 } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -70,6 +77,42 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  TableFooter,
+} from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useQueryClient } from '@tanstack/react-query';
+import { pickPrimaryImage } from '@/lib/imageUtils';
 
 // Helper function to format currency
 const formatCurrency = (price: number): string => {
@@ -212,7 +255,7 @@ const RelatedProductsPanel: React.FC<RelatedProductsPanelProps> = ({
       enhancedProducts = await Promise.all(
         enhancedProducts.map(async (p) => {
           if (
-            p.primary_image_thumb ||
+            pickPrimaryImage(p) ||
             (Array.isArray(p.images) && p.images.length > 0)
           ) {
             return p;
@@ -289,12 +332,14 @@ const RelatedProductsPanel: React.FC<RelatedProductsPanelProps> = ({
   const handleAddRelatedProduct = async (product: Product, relType: RelationshipType = 'general', notes: string = '') => {
     console.log('Adding related product:', product);
     
+    // Get base price from prices array if available
+    const basePrice = product.prices?.find(p => p.price_type === 'base')?.amount || 0;
+    
     // Ensure product has all required properties for display
     const newProduct: EnhancedProduct = {
       ...product,
       name: product.name || 'Unknown Product',
       sku: product.sku || '',
-      price: product.price || 0,
       is_active: true,
       relation: {
         id: 0, // Temporary ID
@@ -1077,9 +1122,9 @@ const RelatedProductCard: React.FC<RelatedProductCardProps> = ({
         <Link to={`/app/products/${product.id}`} className="block">
           <CardContent className="p-4 pt-12">
             <div className="aspect-square bg-accent rounded-md mb-3 flex items-center justify-center">
-              {product.primary_image_thumb ? (
+              {pickPrimaryImage(product) ? (
                 <img 
-                  src={product.primary_image_thumb} 
+                  src={pickPrimaryImage(product)} 
                   alt={product.name} 
                   className="w-full h-full object-contain p-2"
                 />
@@ -1097,7 +1142,9 @@ const RelatedProductCard: React.FC<RelatedProductCardProps> = ({
           <CardFooter className="flex flex-col p-4 pt-0">
             <div className="flex justify-between w-full">
               <div className="text-sm font-medium">
-                {product.price !== undefined ? formatCurrency(product.price) : 'N/A'}
+                {product.prices && product.prices.length > 0 
+                  ? formatCurrency(product.prices[0].amount) 
+                  : 'N/A'}
               </div>
             </div>
             

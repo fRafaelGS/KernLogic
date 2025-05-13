@@ -50,6 +50,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { pickPrimaryImage } from '@/lib/imageUtils';
 
 interface EnhancedAddRelatedProductPanelProps {
   productId: number;
@@ -413,10 +414,10 @@ export const EnhancedAddRelatedProductPanel: React.FC<EnhancedAddRelatedProductP
                       
                       <HoverCardContent side="right" align="start" className="w-80">
                         <div className="flex space-x-4">
-                          {product.primary_image_thumb && (
+                          {pickPrimaryImage(product) && (
                             <div className="w-20 h-20 rounded-md overflow-hidden flex-shrink-0 bg-muted">
                               <img 
-                                src={product.primary_image_thumb} 
+                                src={pickPrimaryImage(product)} 
                                 alt={product.name} 
                                 className="w-full h-full object-contain"
                               />
@@ -426,7 +427,9 @@ export const EnhancedAddRelatedProductPanel: React.FC<EnhancedAddRelatedProductP
                           <div className="space-y-1 flex-1 min-w-0">
                             <h4 className="text-sm font-semibold">{product.name}</h4>
                             <p className="text-sm">SKU: {product.sku}</p>
-                            <p className="text-sm">Price: ${product.price}</p>
+                            <p className="text-sm">Price: {product.prices && product.prices.length > 0 
+                              ? `$${product.prices[0].amount.toFixed(2)}` 
+                              : 'N/A'}</p>
                             {product.description && (
                               <p className="text-xs text-muted-foreground line-clamp-2">{product.description}</p>
                             )}
@@ -478,10 +481,10 @@ export const EnhancedAddRelatedProductPanel: React.FC<EnhancedAddRelatedProductP
                     
                     <HoverCardContent side="right" align="start" className="w-80">
                       <div className="flex space-x-4">
-                        {product.primary_image_thumb && (
+                        {pickPrimaryImage(product) && (
                           <div className="w-20 h-20 rounded-md overflow-hidden flex-shrink-0 bg-muted">
                             <img 
-                              src={product.primary_image_thumb} 
+                              src={pickPrimaryImage(product)} 
                               alt={product.name} 
                               className="w-full h-full object-contain"
                             />
@@ -491,7 +494,9 @@ export const EnhancedAddRelatedProductPanel: React.FC<EnhancedAddRelatedProductP
                         <div className="space-y-1 flex-1 min-w-0">
                           <h4 className="text-sm font-semibold">{product.name}</h4>
                           <p className="text-sm">SKU: {product.sku}</p>
-                          <p className="text-sm">Price: ${product.price}</p>
+                          <p className="text-sm">Price: {product.prices && product.prices.length > 0 
+                            ? `$${product.prices[0].amount.toFixed(2)}` 
+                            : 'N/A'}</p>
                           {product.description && (
                             <p className="text-xs text-muted-foreground line-clamp-2">{product.description}</p>
                           )}

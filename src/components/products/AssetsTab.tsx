@@ -16,6 +16,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { DateRange } from 'react-day-picker';
 import { Toast } from '@/components/ui/toast';
 import { formatFileSize } from '@/utils/formatFileSize'
+import { useQueryClient } from '@tanstack/react-query';
 
 // UI Components
 import { Button } from '@/components/ui/button';
@@ -96,6 +97,7 @@ interface UploadingAsset {
 
 export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) => {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // Only proceed if feature flag is enabled
   if (!ENABLE_ASSET_GALLERY) {
@@ -414,8 +416,56 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
       updateUploadStatus(upload.id, 'success');
       console.log(`[uploadFile] Successful upload: Asset ID ${asset.id}, is_primary: ${asset.is_primary}`);
       
+      // Check if this is an image
+      const fileIsImage = /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(upload.file.name) ||
+                          upload.file.type.startsWith('image/');
+      
       // Add the new asset to the list
       setAssets(prev => {
+        // Check if there are no existing image assets and this is an image
+        const hasExistingImageAssets = prev.some(a => 
+          (a.type === 'image' || a.asset_type === 'image' || a.type?.startsWith('image/'))
+        );
+        
+        // If this is an image and there are no existing image assets, make it primary automatically
+        let shouldSetAsPrimary = fileIsImage && !hasExistingImageAssets && !asset.is_primary;
+        
+        // If this asset should be primary but isn't marked that way yet
+        if (shouldSetAsPrimary) {
+          console.log(`[uploadFile] No existing images found. Setting this image as primary automatically`);
+          // Make API call to set as primary (async)
+          productService.setAssetPrimary(productId, asset.id)
+            .then(success => {
+              if (success) {
+                console.log(`[uploadFile] Successfully set asset ${asset.id} as primary`);
+                
+                // IMPROVED: More thorough invalidation and refetching similar to makeAssetPrimary function
+                queryClient.invalidateQueries({ queryKey: ['product'] });
+                queryClient.invalidateQueries({ queryKey: ['product', productId] });
+                queryClient.invalidateQueries({ queryKey: ['productAssets'] });
+                queryClient.invalidateQueries({ queryKey: ['productAssets', productId] });
+                
+                // Force refetch the product data to ensure the UI updates
+                queryClient.refetchQueries({ queryKey: ['product', productId], exact: true })
+                  .catch(err => console.error(`[uploadFile] Error refetching product:`, err));
+                
+                // Update the product object directly - similar to makeAssetPrimary
+                if (product) {
+                  product.primary_image_url = asset.url;
+                  product.primary_image_large = asset.url; 
+                  product.primary_image_thumb = asset.url;
+                }
+                
+                // Force refresh assets to ensure UI is updated
+                fetchAssets();
+              }
+            })
+            .catch(err => console.error(`[uploadFile] Error setting asset as primary:`, err));
+          
+          // Update the asset locally to show as primary immediately
+          asset.is_primary = true;
+        }
+        
         // If this is primary, make sure other assets are not primary
         const updatedAssets = asset.is_primary 
           ? prev.map(a => ({...a, is_primary: false}))
@@ -602,7 +652,7 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     setIsMakingPrimary(asset.id);
     console.log(`[makeAssetPrimary] Setting asset ${asset.id} as primary for product ${product.id}`);
 
-    // Optimistically update UI
+    // Optimistically update UI - mark this asset as primary, all others as not primary
     const oldAssets = [...assets];
     const newAssets = assets.map(a => ({
       ...a,
@@ -612,15 +662,30 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     // Update the UI immediately
     setAssets(newAssets);
     
-    // Clear localStorage cache to force a refresh from server on next load
-    localStorage.removeItem(`product_assets_${product.id}`);
-    
     try {
       // Call the service to set the asset as primary
+      // The backend will update both the asset and product primary image fields in one transaction
       const success = await productService.setAssetPrimary(product.id, asset.id);
       console.log(`[makeAssetPrimary] setAssetPrimary result: ${success ? 'success' : 'failure'}`);
       
       if (success) {
+        // IMPROVEMENT: More aggressive cache invalidation and forced refetches
+        console.log('[makeAssetPrimary] Invalidating all related cache keys');
+        
+        // Invalidate product, productAssets, and any related queries in the cache
+        queryClient.invalidateQueries({ queryKey: ['product'] });
+        queryClient.invalidateQueries({ queryKey: ['product', product.id] });
+        queryClient.invalidateQueries({ queryKey: ['productAssets'] });
+        queryClient.invalidateQueries({ queryKey: ['productAssets', product.id] });
+        
+        // Force refetch product directly
+        try {
+          await queryClient.refetchQueries({ queryKey: ['product', product.id], exact: true });
+          console.log('[makeAssetPrimary] Successfully refetched product data');
+        } catch (refetchError) {
+          console.error('[makeAssetPrimary] Error refetching product data:', refetchError);
+        }
+        
         toast({
           title: 'Success',
           description: 'Primary image updated'
@@ -632,19 +697,33 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
           onAssetUpdate(newAssets);
         }
         
-        // Force a refresh of the assets to ensure we have the latest data from the server
+        // IMPROVEMENT: Update both local state AND product object's primary_image fields
         try {
+          // Force a refresh of the assets to ensure we have the latest data from the server
           const refreshedAssets = await productService.getProductAssets(product.id);
           console.log(`[makeAssetPrimary] Refreshed ${refreshedAssets.length} assets from server`);
           setAssets(refreshedAssets);
           
-          // Pass the refreshed assets to parent if needed
-          if (onAssetUpdate) {
-            onAssetUpdate(refreshedAssets);
+          // Get the updated asset URL for the primary image
+          const primaryAssetUrl = asset.url;
+          
+          // Update the product object directly to ensure immediate UI updates
+          if (product.primary_image_url !== primaryAssetUrl) {
+            console.log('[makeAssetPrimary] Updating product primary_image_url:', primaryAssetUrl);
+            product.primary_image_url = primaryAssetUrl;
+            product.primary_image_large = primaryAssetUrl;
+            product.primary_image_thumb = primaryAssetUrl;
+            
+            // Set the asset as primary in the product's assets array too
+            if (product.assets) {
+              product.assets = product.assets.map(a => ({
+                ...a,
+                is_primary: a.id === asset.id
+              }));
+            }
           }
         } catch (refreshError) {
           console.error('[makeAssetPrimary] Error refreshing assets:', refreshError);
-          // Already updated optimistically, so no UI rollback needed
         }
       } else {
         console.error('[makeAssetPrimary] Failed to set asset as primary');

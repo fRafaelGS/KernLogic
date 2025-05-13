@@ -20,6 +20,8 @@ import { CategoryDisplay } from '../common/CategoryDisplay';
 import { normalizeCategory, Category } from '@/types/categories';
 import { CategoryTreeSelect } from '../categories/CategoryTreeSelect';
 import { useQueryClient } from '@tanstack/react-query';
+import { isImageAsset } from '@/utils/isImageAsset';
+import { pickPrimaryImage } from '@/lib/imageUtils';
 
 // Mock user permissions - in a real app, these would come from auth context
 const hasEditPermission = true;
@@ -83,67 +85,58 @@ export default function ProductDetailSidebar({ product, prices, isPricesLoading 
     ? product.category as Category
     : null;
   
+  // Add a function to force refresh the product data
+  const refreshProduct = useCallback(async () => {
+    try {
+      console.log('[ProductDetailSidebar] Forcing product refresh');
+      // Use the React Query client to refetch this specific product
+      await queryClient.refetchQueries({ queryKey: ['product', product.id], exact: true });
+      console.log('[ProductDetailSidebar] Product data refreshed successfully');
+    } catch (error) {
+      console.error('[ProductDetailSidebar] Error refreshing product data:', error);
+    }
+  }, [product.id, queryClient]);
+
+  // Listen for localStorage events that might indicate a primary image change
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === `product_${product.id}`) {
+        console.log('[ProductDetailSidebar] Detected product update in localStorage, refreshing');
+        refreshProduct();
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [product.id, refreshProduct]);
+
   // Handle thumbnail display with improved priority for primary assets
   const thumbUrl = useMemo(() => {
     console.log('[ProductDetailSidebar] Recalculating thumbUrl, assets count:', product.assets?.length);
     
-    // Check sources in priority order
-    // 1. First check assets for primary image
-    const primaryAsset = product.assets?.find(img => 
-      img.is_primary && (img.type === 'image' || img.asset_type === 'image')
-    );
-    
-    if (primaryAsset?.url) {
-      console.log('[ProductDetailSidebar] Using primary asset URL:', primaryAsset.url);
-      return primaryAsset.url;
+    // Check for updates in localStorage cache first
+    try {
+      const cachedProductJSON = localStorage.getItem(`product_${product.id}`);
+      if (cachedProductJSON) {
+        const cachedProduct = JSON.parse(cachedProductJSON);
+        // Use primary image from cache if it exists and is more recent
+        if (cachedProduct.primary_image_url) {
+          console.log('[ProductDetailSidebar] Using primary_image_url from localStorage cache');
+          return cachedProduct.primary_image_url;
+        }
+      }
+    } catch (error) {
+      console.warn('[ProductDetailSidebar] Error reading from localStorage:', error);
     }
     
-    // 2. Check primary_image fields (set via backend)
-    if (product.primary_image_thumb) {
-      console.log('[ProductDetailSidebar] Using primary_image_thumb:', product.primary_image_thumb);
-      return product.primary_image_thumb;
-    }
-    
-    if (product.primary_image_large) {
-      console.log('[ProductDetailSidebar] Using primary_image_large:', product.primary_image_large);
-      return product.primary_image_large;
-    }
-    
-    // 3. Check assets for ANY image (not just primary)
-    const anyImageAsset = product.assets?.find(img => 
-      img.type === 'image' || img.asset_type === 'image'
-    );
-    
-    if (anyImageAsset?.url) {
-      console.log('[ProductDetailSidebar] Using first available image asset:', anyImageAsset.url);
-      return anyImageAsset.url;
-    }
-    
-    // 4. Check images array for primary or first image
-    const primaryImage = product.images?.find(img => img.is_primary);
-    
-    if (primaryImage?.url) {
-      console.log('[ProductDetailSidebar] Using primary image from images array:', primaryImage.url);
-      return primaryImage.url;
-    }
-    
-    if (product.images?.[0]?.url) {
-      console.log('[ProductDetailSidebar] Using first image from images array:', product.images[0].url);
-      return product.images[0].url;
-    }
-    
-    console.log('[ProductDetailSidebar] No image found for product, product data:', {
-      hasAssets: !!product.assets?.length,
-      hasPrimaryImageThumb: !!product.primary_image_thumb,
-      hasPrimaryImageLarge: !!product.primary_image_large,
-      hasImages: !!product.images?.length
-    });
-    return undefined;
+    // Continue with existing logic
+    return pickPrimaryImage(product);
   }, [product]);
   
-  const largeImageUrl = product.primary_image_large || 
-    product.images?.find(img => img.is_primary)?.url || 
-    product.images?.[0]?.url;
+  const largeImageUrl = useMemo(() => {
+    // Use the same utility for large image to maintain consistency
+    return pickPrimaryImage(product) || product.primary_image_large;
+  }, [product]);
   
   const isGtinValid = validateGTIN(product.barcode);
   
@@ -232,6 +225,21 @@ export default function ProductDetailSidebar({ product, prices, isPricesLoading 
   const handleShowPricing = () => {
     if (!product?.id) return;
     setShowPricingModal(true);
+  };
+
+  // Function to refresh product data
+  const handleRefreshProduct = async () => {
+    if (!product?.id) return;
+    
+    try {
+      // Invalidate and refetch product query
+      await queryClient.invalidateQueries({ queryKey: ['product', product.id] });
+      await queryClient.refetchQueries({ queryKey: ['product', product.id] });
+      toast.success('Product data refreshed');
+    } catch (error) {
+      console.error('Error refreshing product data:', error);
+      toast.error('Failed to refresh product data');
+    }
   };
 
   return (

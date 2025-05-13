@@ -1169,44 +1169,65 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def set_primary(self, request, pk=None, product_pk=None):
-        # First update the is_primary status in all assets
-        ProductAsset.objects.filter(product_id=product_pk).update(is_primary=False)
+        from django.db import transaction
         
-        # Get the asset that's being set as primary
-        try:
-            asset = ProductAsset.objects.get(pk=pk, product_id=product_pk)
+        # Perform all updates in a single atomic transaction
+        with transaction.atomic():
+            # First update the is_primary status in all assets
+            ProductAsset.objects.filter(product_id=product_pk).update(is_primary=False)
             
-            # Update this asset as primary
-            asset.is_primary = True
-            asset.save()
-            
-            # Now update the parent Product model with this asset's file
-            if asset.file:
-                product = Product.objects.get(pk=product_pk)
+            # Get the asset that's being set as primary
+            try:
+                asset = ProductAsset.objects.select_for_update().get(pk=pk, product_id=product_pk)
                 
-                # Update primary_image field and also primary_image_thumb and primary_image_large fields
-                # First get the full URL for the file
-                file_url = asset.file.url if hasattr(asset.file, 'url') else str(asset.file)
+                # Update this asset as primary
+                asset.is_primary = True
+                asset.save(update_fields=['is_primary'])
                 
-                product.primary_image = asset.file
-                product.primary_image_thumb = file_url  # Use URL directly for frontend
-                product.primary_image_large = file_url  # Use URL directly for frontend
-                product.save(update_fields=['primary_image', 'primary_image_thumb', 'primary_image_large'])
+                # Now update the parent Product model with this asset's file
+                if asset.file:
+                    product = Product.objects.select_for_update().get(pk=product_pk)
+                    
+                    # Update all primary image fields in one operation
+                    # First get the full URL for the file
+                    file_url = asset.file.url if hasattr(asset.file, 'url') else str(asset.file)
+                    
+                    # Update all primary image fields to ensure consistency
+                    product.primary_image = asset.file
+                    product.primary_image_url = file_url
+                    product.primary_image_thumb = file_url
+                    product.primary_image_large = file_url
+                    
+                    # Save all updates in a single operation
+                    product.save(update_fields=[
+                        'primary_image', 
+                        'primary_image_url', 
+                        'primary_image_thumb', 
+                        'primary_image_large'
+                    ])
+                    
+                    return Response({
+                        'success': True, 
+                        'message': 'Asset set as primary successfully',
+                        'primary_image_url': file_url,
+                        'asset_id': asset.id
+                    }, status=status.HTTP_200_OK)
                 
-                return Response({'success': True, 'message': 'Asset set as primary successfully'}, status=status.HTTP_200_OK)
-            
-            return Response({'success': True, 'message': 'Asset set as primary, but no file was found'}, status=status.HTTP_200_OK)
-            
-        except ProductAsset.DoesNotExist:
-            return Response(
-                {"error": "Asset not found"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        except Exception as e:
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+                return Response({
+                    'success': True, 
+                    'message': 'Asset set as primary, but no file was found'
+                }, status=status.HTTP_200_OK)
+                
+            except ProductAsset.DoesNotExist:
+                return Response(
+                    {"error": "Asset not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            except Exception as e:
+                return Response(
+                    {"error": str(e)},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
 
     # New action for managing prices for a product
     @action(detail=True, methods=['get', 'post'], url_path='prices')
@@ -2012,44 +2033,65 @@ class AssetViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def set_primary(self, request, pk=None, product_pk=None):
-        # First update the is_primary status in all assets
-        ProductAsset.objects.filter(product_id=product_pk).update(is_primary=False)
+        from django.db import transaction
         
-        # Get the asset that's being set as primary
-        try:
-            asset = ProductAsset.objects.get(pk=pk, product_id=product_pk)
+        # Perform all updates in a single atomic transaction
+        with transaction.atomic():
+            # First update the is_primary status in all assets
+            ProductAsset.objects.filter(product_id=product_pk).update(is_primary=False)
             
-            # Update this asset as primary
-            asset.is_primary = True
-            asset.save()
-            
-            # Now update the parent Product model with this asset's file
-            if asset.file:
-                product = Product.objects.get(pk=product_pk)
+            # Get the asset that's being set as primary
+            try:
+                asset = ProductAsset.objects.select_for_update().get(pk=pk, product_id=product_pk)
                 
-                # Update primary_image field and also primary_image_thumb and primary_image_large fields
-                # First get the full URL for the file
-                file_url = asset.file.url if hasattr(asset.file, 'url') else str(asset.file)
+                # Update this asset as primary
+                asset.is_primary = True
+                asset.save(update_fields=['is_primary'])
                 
-                product.primary_image = asset.file
-                product.primary_image_thumb = file_url  # Use URL directly for frontend
-                product.primary_image_large = file_url  # Use URL directly for frontend
-                product.save(update_fields=['primary_image', 'primary_image_thumb', 'primary_image_large'])
+                # Now update the parent Product model with this asset's file
+                if asset.file:
+                    product = Product.objects.select_for_update().get(pk=product_pk)
+                    
+                    # Update all primary image fields in one operation
+                    # First get the full URL for the file
+                    file_url = asset.file.url if hasattr(asset.file, 'url') else str(asset.file)
+                    
+                    # Update all primary image fields to ensure consistency
+                    product.primary_image = asset.file
+                    product.primary_image_url = file_url
+                    product.primary_image_thumb = file_url
+                    product.primary_image_large = file_url
+                    
+                    # Save all updates in a single operation
+                    product.save(update_fields=[
+                        'primary_image', 
+                        'primary_image_url', 
+                        'primary_image_thumb', 
+                        'primary_image_large'
+                    ])
+                    
+                    return Response({
+                        'success': True, 
+                        'message': 'Asset set as primary successfully',
+                        'primary_image_url': file_url,
+                        'asset_id': asset.id
+                    }, status=status.HTTP_200_OK)
                 
-                return Response({'success': True, 'message': 'Asset set as primary successfully'}, status=status.HTTP_200_OK)
-            
-            return Response({'success': True, 'message': 'Asset set as primary, but no file was found'}, status=status.HTTP_200_OK)
-            
-        except ProductAsset.DoesNotExist:
-            return Response(
-                {"error": "Asset not found"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        except Exception as e:
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+                return Response({
+                    'success': True, 
+                    'message': 'Asset set as primary, but no file was found'
+                }, status=status.HTTP_200_OK)
+                
+            except ProductAsset.DoesNotExist:
+                return Response(
+                    {"error": "Asset not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            except Exception as e:
+                return Response(
+                    {"error": str(e)},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
 
     @action(detail=False, methods=['post'], url_path='bulk-update')
     def bulk_update(self, request, product_pk=None):

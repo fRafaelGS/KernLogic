@@ -447,7 +447,7 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
               </div>
             )}
             {setMediaUploading && <div className='text-xs text-muted-foreground'>Uploading…</div>}
-            {setMediaUploadError && <div className='text-xs text-red-500'>{mediaUploadError}</div>}
+            {setMediaUploadError && mediaUploadError && <div className='text-xs text-red-500'>{mediaUploadError}</div>}
           </div>
         )
       case 'select': {
@@ -526,6 +526,19 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
   const [mediaUploading, setMediaUploading] = useState(false)
   const [mediaUploadError, setMediaUploadError] = useState<string | null>(null)
 
+  // Add function wrappers to handle type issues
+  const handleLocaleChange = (locale: string) => {
+    if (LOCALES.some(l => l.code === locale)) {
+      setSelectedLocale(locale as LocaleCode);
+    }
+  };
+
+  const handleChannelChange = (channel: string) => {
+    if (CHANNELS.some(c => c.code === channel)) {
+      setSelectedChannel(channel as ChannelCode);
+    }
+  };
+
   // MODIFIED: Relax the bailout condition to allow rendering in create mode
   if (isPending) {
     return (
@@ -548,10 +561,8 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
       <LocaleChannelSelector
         selectedLocale={selectedLocale}
         selectedChannel={selectedChannel}
-        availableLocales={LOCALES}
-        availableChannels={CHANNELS}
-        onLocaleChange={setSelectedLocale}
-        onChannelChange={setSelectedChannel}
+        onLocaleChange={handleLocaleChange}
+        onChannelChange={handleChannelChange}
       />
 
       {/* Group management UI */}

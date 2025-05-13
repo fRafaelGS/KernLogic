@@ -97,8 +97,7 @@ const ProductRowDetails: React.FC<ProductRowDetailsProps> = ({ product, zebra })
         return {
           name: group.name,
           attributes: (group.items || [])
-            // Filter out items without values
-            .filter((item: any) => item.value !== undefined && item.value !== null && item.value !== '')
+            .filter((item: any) => item.value !== undefined && item.value !== null)
             .map((item: any) => {
               // Extract attribute info from each item
               const attrName = item.attribute_label || 

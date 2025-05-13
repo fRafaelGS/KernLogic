@@ -6,6 +6,7 @@ from drf_spectacular.utils import extend_schema, extend_schema_view
 from django.db import models
 from rest_framework import status
 from django.db import transaction
+from rest_framework.views import APIView
 
 from django.db.models import Prefetch, Q
 
@@ -255,66 +256,18 @@ class ProductAttributeGroupViewSet(OrganizationQuerySetMixin, viewsets.ReadOnlyM
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
-        """Build a filtered queryset of attribute groups that have *at least one* value
-        for this product/localisation combination.
-
-        Steps:
-        1.  Compute a Q() object (`value_filter`) matching the product, locale and
-            channel requested by the client.  This will be re-used both for the
-            annotation and for prefetching the concrete `AttributeValue` rows.
-        2.  Annotate every `AttributeGroup` with `num_values`, the count of
-            `AttributeValue` rows reachable through the M2M relation
-            `attributegroupitem → attribute → attributevalue` that match the
-            filter.
-        3.  Keep only the groups where `num_values > 0` – these are the groups
-            that have relevant data for the current product.
-        4.  Prefetch the related items/attributes/values so the serializer can
-            render them without additional queries.
+        """Build a queryset of all attribute groups for this organization.
+        
+        This returns all groups regardless of whether the product has values for them,
+        which allows the frontend to render empty groups/items as needed.
         """
-
         product_id = self.kwargs.get('product_pk')
         locale     = self.request.query_params.get('locale')
         channel    = self.request.query_params.get('channel')
         org        = get_user_organization(self.request.user)
 
-        # If the product has no values yet, return all groups for the org
-        from ..models import AttributeValue, AttributeGroup
-        has_values = AttributeValue.objects.filter(
-            product_id=product_id,
+        return AttributeGroup.objects.filter(
             organization=org
-        ).exists()
-        if not has_values:
-            return AttributeGroup.objects.filter(
-                organization=org
-            ).prefetch_related(
-                'attributegroupitem_set__attribute'
-            )
-
-        # Otherwise (edit mode), only return groups with values
-        value_filter = Q(
-            attributegroupitem__attribute__attributevalue__product_id=product_id,
-            attributegroupitem__attribute__attributevalue__organization=org
-        )
-
-        # Optional locale / channel specificity.  Only add these conditions
-        # when the client explicitly requests them – otherwise we allow *any*
-        # locale/channel so that existing values are counted.
-        if locale not in [None, '']:
-            value_filter &= Q(attributegroupitem__attribute__attributevalue__locale=locale)
-
-        if channel not in [None, '']:
-            value_filter &= Q(attributegroupitem__attribute__attributevalue__channel=channel)
-
-        queryset = AttributeGroup.objects.filter(
-            organization=org
-        ).annotate(
-            # Count AttributeValue rows that match our filter.
-            num_values=models.Count(
-                'attributegroupitem__attribute__attributevalue',
-                filter=value_filter,
-            )
-        ).filter(
-            num_values__gt=0  # keep only groups that have values
         ).prefetch_related(
             'attributegroupitem_set__attribute',
             # Prefetch only the relevant values so the serializer can access
@@ -330,8 +283,6 @@ class ProductAttributeGroupViewSet(OrganizationQuerySetMixin, viewsets.ReadOnlyM
                 to_attr='product_values'
             )
         )
-
-        return queryset
     
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
@@ -342,8 +293,6 @@ class ProductAttributeGroupViewSet(OrganizationQuerySetMixin, viewsets.ReadOnlyM
         product_id = self.kwargs.get('product_pk')
         locale = request.query_params.get('locale')
         channel = request.query_params.get('channel')
-        
-        print(f"Processing attribute groups for product {product_id}")
         
         # First, fetch ALL attribute values for this product directly
         # This ensures we don't miss any values that may not be correctly prefetched
@@ -402,21 +351,17 @@ class ProductAttributeGroupViewSet(OrganizationQuerySetMixin, viewsets.ReadOnlyM
                     # No specific locale/channel requested, just use the attribute ID as key
                     attribute_value_map[key] = value
         
-        print(f"Found {len(attribute_value_map)} direct attribute values after filtering")
-        for k, v in attribute_value_map.items():
-            print(f"  Map entry: {k} -> value={v.value}, locale={v.locale}, channel={v.channel}")
-        
         # Now process each group and item
         for group in data:
-            print(f"Group: {group['name']} (id: {group['id']})")
             for item in group.get('items', []):
                 attribute_id = item['attribute']
                 
                 # Generate keys for this attribute with the current locale/channel context
                 attr_key = f"{attribute_id}::{locale or ''}::{channel or ''}"
-                attr_key_any = f"{attribute_id}:::::"  # Key for values that apply to all locales/channels
-                
-                print(f"  Item: id={item['id']}, attribute={attribute_id}, looking for keys {attr_key} or {attr_key_any}")
+                # Fix: correct format for the any-locale/channel key to match how keys are generated
+                attr_key_any = f"{attribute_id}::{''}{''}"
+                # Also try with simple attribute ID for fallback
+                simple_attr_key = str(attribute_id)
                 
                 # First try to find an exact match for the locale/channel
                 if attr_key in attribute_value_map:
@@ -425,7 +370,6 @@ class ProductAttributeGroupViewSet(OrganizationQuerySetMixin, viewsets.ReadOnlyM
                     item['locale'] = value_obj.locale
                     item['channel'] = value_obj.channel
                     item['value_id'] = value_obj.id
-                    print(f"  → Setting value from EXACT match: {value_obj.value} (ID: {value_obj.id})")
                 # Then try to find a value that applies to all locales/channels
                 elif attr_key_any in attribute_value_map:
                     value_obj = attribute_value_map[attr_key_any]
@@ -433,7 +377,13 @@ class ProductAttributeGroupViewSet(OrganizationQuerySetMixin, viewsets.ReadOnlyM
                     item['locale'] = value_obj.locale
                     item['channel'] = value_obj.channel
                     item['value_id'] = value_obj.id
-                    print(f"  → Setting value from ALL match: {value_obj.value} (ID: {value_obj.id})")
+                # Try with simple attribute ID
+                elif simple_attr_key in attribute_value_map:
+                    value_obj = attribute_value_map[simple_attr_key]
+                    item['value'] = value_obj.value
+                    item['locale'] = value_obj.locale
+                    item['channel'] = value_obj.channel
+                    item['value_id'] = value_obj.id
                 # If no specific match, look for a partial match
                 else:
                     # Look for any key that starts with the attribute ID
@@ -445,7 +395,6 @@ class ProductAttributeGroupViewSet(OrganizationQuerySetMixin, viewsets.ReadOnlyM
                         item['locale'] = value_obj.locale
                         item['channel'] = value_obj.channel
                         item['value_id'] = value_obj.id
-                        print(f"  → Setting value from PARTIAL match: {value_obj.value} (ID: {value_obj.id})")
                     else:
                         # Fall back to the original prefetch-based logic
                         for attr_group_item in queryset:
@@ -453,31 +402,11 @@ class ProductAttributeGroupViewSet(OrganizationQuerySetMixin, viewsets.ReadOnlyM
                                 if attr_item.id == item['id']:
                                     # Found the attribute, now get its values for this product
                                     values = getattr(attr_item.attribute, 'product_values', [])
-                                    # Debug log for attribute values
-                                    print(f"Item {item['id']} (attr: {attr_item.attribute.id}): Found {len(values)} values from prefetch")
                                     if values:
                                         item['value'] = values[0].value
                                         item['locale'] = values[0].locale
                                         item['channel'] = values[0].channel
                                         # Add the actual attributevalue id
                                         item['value_id'] = values[0].id
-                                        print(f"  → Setting value from prefetch: {values[0].value} (ID: {values[0].id})")
         
-        # Final review of populated data
-        for group in data:
-            for item in group.get('items', []):
-                if 'value' in item:
-                    print(f"Final item {item['id']} has value: {item['value']} (attribute {item['attribute']})")
-                else:
-                    print(f"Final item {item['id']} has NO value (attribute {item['attribute']})")
-        
-        # Add a debug query to directly check if any attribute values exist for this product
-        print(f"\n\nDIRECT DB CHECK: Checking attribute values for product {product_id}")
-        direct_values = AttributeValue.objects.filter(product_id=product_id)
-        if direct_values.exists():
-            for val in direct_values:
-                print(f"Found direct value: attr_id={val.attribute_id}, value={val.value}, locale={val.locale}, channel={val.channel}")
-        else:
-            print("NO direct attribute values found for this product")
-            
         return Response(data) 

@@ -1449,92 +1449,36 @@
             try {
                 console.log(`[setAssetPrimary] Setting asset ${assetId} as primary for product ${productId}`);
                 
-                // First get the asset details to get its URL
-                const assetUrl = `${PRODUCTS_API_URL}/${productId}/assets/${assetId}/`;
-                const assetResponse = await axiosInstance.get(assetUrl);
-                const asset = assetResponse.data;
+                // The backend endpoint handles updating both the asset and product fields in one atomic transaction
+                const setPrimaryUrl = `${PRODUCTS_API_URL}/${productId}/assets/${assetId}/set_primary/`;
+                const response = await axiosInstance.post(setPrimaryUrl);
                 
-                if (!asset) {
-                    console.error('[setAssetPrimary] Asset not found');
-                    return false;
-                }
+                // Response should include success flag and updated fields
+                console.log(`[setAssetPrimary] Successfully set asset ${assetId} as primary`);
                 
-                // Get the image URL from the asset
-                const imageUrl = asset.file || asset.url;
-                if (!imageUrl) {
-                    console.error('[setAssetPrimary] Asset has no URL');
-                    return false;
-                }
-                
-                console.log(`[setAssetPrimary] Using image URL: ${imageUrl}`);
-                
-                // Update all assets to set this one as primary
+                // Make an additional call to immediately get the updated product to ensure all clients have latest data
                 try {
-                    // 1. Get all assets for this product
-                    const allAssetsResponse = await axiosInstance.get(`${PRODUCTS_API_URL}/${productId}/assets/`);
-                    let allAssets = allAssetsResponse.data;
+                    // This helps ensure all components have access to the updated product data
+                    const productResponse = await axiosInstance.get(`${PRODUCTS_API_URL}/${productId}/`);
+                    const productData = productResponse.data;
                     
-                    // Handle both array and paginated response formats
-                    if (allAssets && allAssets.results) {
-                        allAssets = allAssets.results;
+                    // Use localStorage to help with immediate data sync across components
+                    try {
+                        // Clear any existing cached product data
+                        localStorage.removeItem(`product_${productId}`);
+                        // Store the fresh product data
+                        localStorage.setItem(`product_${productId}`, JSON.stringify(productData));
+                        console.log('[setAssetPrimary] Updated local product cache with fresh data');
+                    } catch (storageError) {
+                        console.warn('[setAssetPrimary] Could not update localStorage cache:', storageError);
                     }
-                    
-                    if (!Array.isArray(allAssets)) {
-                        console.error('[setAssetPrimary] Unexpected assets response format', allAssets);
-                        allAssets = [];
-                    }
-                    
-                    console.log(`[setAssetPrimary] Found ${allAssets.length} assets for product ${productId}`);
-                    
-                    // 2. Update each asset's is_primary status
-                    let updatedCount = 0;
-                    for (const assetItem of allAssets) {
-                        if (assetItem.id === assetId) {
-                            // This is the one we want to make primary
-                            if (!assetItem.is_primary) {
-                                console.log(`[setAssetPrimary] Setting asset ${assetId} to primary=true`);
-                                await axiosInstance.patch(
-                                    `${PRODUCTS_API_URL}/${productId}/assets/${assetItem.id}/`, 
-                                    { is_primary: true }
-                                );
-                                updatedCount++;
-                            }
-                        } else if (assetItem.is_primary) {
-                            // Set any other primary assets to non-primary
-                            console.log(`[setAssetPrimary] Setting asset ${assetItem.id} to primary=false`);
-                            await axiosInstance.patch(
-                                `${PRODUCTS_API_URL}/${productId}/assets/${assetItem.id}/`, 
-                                { is_primary: false }
-                            );
-                            updatedCount++;
-                        }
-                    }
-                    
-                    console.log(`[setAssetPrimary] Updated ${updatedCount} assets' primary status`);
-                    
-                    // Clear the cached assets to force a refresh from server next time
-                    localStorage.removeItem(`product_assets_${productId}`);
-                    
-                } catch (assetUpdateError) {
-                    console.error('[setAssetPrimary] Error updating asset primary status:', assetUpdateError);
-                    // Continue anyway to update the product
+                } catch (fetchError) {
+                    console.warn('[setAssetPrimary] Could not fetch updated product data:', fetchError);
                 }
                 
-                // 3. Update the product's primary_image fields directly
-                try {
-                    await productService.updateProduct(productId, {
-                        primary_image_thumb: imageUrl,
-                        primary_image_large: imageUrl
-                    });
-                    console.log(`[setAssetPrimary] Updated product ${productId} with primary image: ${imageUrl}`);
-                    return true;
-                } catch (productUpdateError) {
-                    console.error('[setAssetPrimary] Error updating product with primary image:', productUpdateError);
-                    return false;
-                }
-                
+                return true;
             } catch (error) {
-                console.error('[setAssetPrimary] Error setting asset as primary:', error);
+                console.error(`[setAssetPrimary] Error setting asset ${assetId} as primary:`, error);
                 return false;
             }
         },

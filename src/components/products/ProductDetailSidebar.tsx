@@ -19,6 +19,7 @@ import { formatCurrency } from '@/lib/utils';
 import { CategoryDisplay } from '../common/CategoryDisplay';
 import { normalizeCategory, Category } from '@/types/categories';
 import { CategoryTreeSelect } from '../categories/CategoryTreeSelect';
+import { useQueryClient } from '@tanstack/react-query';
 
 // Mock user permissions - in a real app, these would come from auth context
 const hasEditPermission = true;
@@ -66,6 +67,7 @@ const validateGTIN = (gtin: string | undefined): boolean => {
 };
 
 export default function ProductDetailSidebar({ product, prices, isPricesLoading }: ProductDetailSidebarProps) {
+  const queryClient = useQueryClient();
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showPricingModal, setShowPricingModal] = useState(false);
@@ -206,9 +208,24 @@ export default function ProductDetailSidebar({ product, prices, isPricesLoading 
   }, [prices]);
 
   // Update handlePricesUpdated to return a Promise
-  const handlePricesUpdated = (): Promise<void> => {
+  const handlePricesUpdated = async (): Promise<void> => {
     setShowPricingModal(false);
-    return Promise.resolve();
+    
+    // Invalidate and refetch both product and prices queries
+    if (product?.id) {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['product', product.id] }),
+        queryClient.invalidateQueries({ queryKey: ['prices', product.id] }),
+      ]);
+      
+      // Force an immediate refetch
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ['product', product.id] }),
+        queryClient.refetchQueries({ queryKey: ['prices', product.id] }),
+      ]);
+    }
+    
+    toast.success('Prices updated successfully');
   };
   
   // Update the handleShowPricing function

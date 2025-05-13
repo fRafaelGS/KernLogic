@@ -188,6 +188,25 @@ export function PriceTab({ productId, prices, isPricesLoading, onPricesUpdated }
     }
   }
 
+  const handlePriceUpdateSuccess = async () => {
+    // Refresh the local state
+    refresh();
+    setDrawerOpen(false);
+    setSelectedPrice(null);
+    
+    // Invalidate and refetch both product and prices queries
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['product', productId] }),
+      queryClient.invalidateQueries({ queryKey: ['prices', productId] }),
+    ]);
+    
+    // Force immediate refetch
+    await Promise.all([
+      queryClient.refetchQueries({ queryKey: ['product', productId] }),
+      queryClient.refetchQueries({ queryKey: ['prices', productId] }),
+    ]);
+  };
+
   if (error) {
     return (
       <Card className="mb-6">
@@ -434,11 +453,7 @@ export function PriceTab({ productId, prices, isPricesLoading, onPricesUpdated }
               initialData={selectedPrice || undefined}
               onAdd={add}
               onUpdate={update}
-              onSuccess={() => {
-                refresh()
-                setDrawerOpen(false)
-                setSelectedPrice(null)
-              }}
+              onSuccess={handlePriceUpdateSuccess}
             />
           </div>
           <DrawerFooter>

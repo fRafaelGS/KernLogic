@@ -33,8 +33,6 @@ export const ProductDetail = () => {
   const { id } = useParams<{ id: string }>();
   const productId = id ? Number(id) : 0;
   const navigate = useNavigate();
-  const [prices, setPrices] = useState<ProductPrice[]>([]);
-  const [isPricesLoading, setIsPricesLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Get user permissions from auth context
@@ -65,19 +63,12 @@ export const ProductDetail = () => {
         }
         
         // Fetch additional data
-        const [pricesData, assetsData] = await Promise.all([
-          productService.getPrices(productId),
-          productService.getProductAssets(productId)
-        ]);
+        const assetsData = await productService.getProductAssets(productId);
         
-        // Set prices in state for other components
-        setPrices(pricesData);
-        
-        // Build complete product with assets and prices
+        // Build complete product with assets
         const productWithAssets: Product = {
           ...productData,
-          assets: Array.isArray(assetsData) && assetsData.length > 0 ? assetsData : [],
-          prices: pricesData
+          assets: Array.isArray(assetsData) && assetsData.length > 0 ? assetsData : []
         };
         
         // Set page title
@@ -101,6 +92,17 @@ export const ProductDetail = () => {
       return !isNotFound && failureCount < 3;
     },
     retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 10000), // Exponential backoff
+    refetchOnWindowFocus: false
+  });
+
+  // Use React Query to fetch prices
+  const { 
+    data: prices, 
+    isLoading: isPricesLoading 
+  } = useQuery({
+    queryKey: ['prices', productId],
+    queryFn: () => productService.getPrices(productId),
+    enabled: !!productId,
     refetchOnWindowFocus: false
   });
 
@@ -386,14 +388,14 @@ export const ProductDetail = () => {
           sidebar={
             <ProductDetailSidebar 
               product={product} 
-              prices={prices}
+              prices={prices || []}
               isPricesLoading={isPricesLoading}
             />
           }
           content={
             <ProductDetailTabs 
               product={product} 
-              prices={prices}
+              prices={prices || []}
               isPricesLoading={isPricesLoading}
               onProductUpdate={handleProductUpdate} 
             />

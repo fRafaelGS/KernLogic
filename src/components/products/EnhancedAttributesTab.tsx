@@ -76,6 +76,8 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { LOCALES, LocaleCode } from '@/config/locales'
+import { CHANNELS, ChannelCode } from '@/config/channels'
 
 interface EnhancedAttributesTabProps {
   productId: number;
@@ -91,21 +93,8 @@ const EnhancedAttributesTab: React.FC<EnhancedAttributesTabProps> = ({ productId
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   
-  // Available locales and channels
-  const [availableLocales] = useState([
-    { code: 'en_US', label: 'English (US)' },
-    { code: 'fr_FR', label: 'French' },
-    { code: 'es_ES', label: 'Spanish' },
-    { code: 'de_DE', label: 'German' },
-    { code: 'it_IT', label: 'Italian' },
-  ]);
-  
-  const [availableChannels] = useState([
-    { code: 'ecommerce', label: 'E-commerce' },
-    { code: 'mobile', label: 'Mobile App' },
-    { code: 'pos', label: 'Point of Sale' },
-    { code: 'marketplace', label: 'Marketplace' },
-  ]);
+  const [selectedLocale, setSelectedLocale] = useState<LocaleCode>(LOCALES[0].code)
+  const [selectedChannel, setSelectedChannel] = useState<ChannelCode>(CHANNELS[0].code)
 
   // Use our custom hook for attribute management
   const {
@@ -115,10 +104,6 @@ const EnhancedAttributesTab: React.FC<EnhancedAttributesTabProps> = ({ productId
     attributeGroups,
     
     // State
-    selectedLocale,
-    selectedChannel,
-    setSelectedLocale,
-    setSelectedChannel,
     editableAttributeIds,
     savingStates,
     currentGroupId,
@@ -278,8 +263,8 @@ const EnhancedAttributesTab: React.FC<EnhancedAttributesTabProps> = ({ productId
           <LocaleChannelSelector
             selectedLocale={selectedLocale}
             selectedChannel={selectedChannel}
-            availableLocales={availableLocales}
-            availableChannels={availableChannels}
+            availableLocales={LOCALES}
+            availableChannels={CHANNELS}
             onLocaleChange={setSelectedLocale}
             onChannelChange={setSelectedChannel}
           />
@@ -352,8 +337,8 @@ const EnhancedAttributesTab: React.FC<EnhancedAttributesTabProps> = ({ productId
             onUpdateValue={handleUpdateValue}
             onRemoveAttribute={handleRemoveAttribute}
             onRemoveAttributeValue={handleRemoveAttributeValue}
-            availableLocales={availableLocales}
-            availableChannels={availableChannels}
+            availableLocales={LOCALES}
+            availableChannels={CHANNELS}
             selectedLocale={selectedLocale}
             selectedChannel={selectedChannel}
           />
@@ -422,8 +407,8 @@ const EnhancedAttributesTab: React.FC<EnhancedAttributesTabProps> = ({ productId
                       onUpdate={handleUpdateValue}
                       savingState={savingStates[attribute.id] || 'idle'}
                       isStaff={isStaff}
-                      availableLocales={availableLocales}
-                      availableChannels={availableChannels}
+                      availableLocales={LOCALES}
+                      availableChannels={CHANNELS}
                       selectedLocale={selectedLocale}
                       selectedChannel={selectedChannel}
                       onRemove={value && value.id ? () => handleRemoveAttributeValue(value.id) : undefined}
@@ -473,14 +458,14 @@ const EnhancedAttributesTab: React.FC<EnhancedAttributesTabProps> = ({ productId
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-muted-foreground">Locale:</span>
                   <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                    {availableLocales.find(l => l.code === selectedLocale)?.label || selectedLocale}
+                    {LOCALES.find(l => l.code === selectedLocale)?.label || selectedLocale}
                   </Badge>
                 </div>
                 
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-muted-foreground">Channel:</span>
                   <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
-                    {availableChannels.find(c => c.code === selectedChannel)?.label || selectedChannel}
+                    {CHANNELS.find(c => c.code === selectedChannel)?.label || selectedChannel}
                   </Badge>
                 </div>
               </div>
@@ -555,8 +540,8 @@ const EnhancedAttributesTab: React.FC<EnhancedAttributesTabProps> = ({ productId
         availableAttributes={getUnassignedAttributes()}
         onAddAttribute={handleAddAttribute}
         isPending={false}
-        availableLocales={availableLocales}
-        availableChannels={availableChannels}
+        availableLocales={LOCALES}
+        availableChannels={CHANNELS}
         selectedLocale={selectedLocale}
         selectedChannel={selectedChannel}
         groupId={currentGroupId}

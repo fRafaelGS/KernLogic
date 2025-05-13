@@ -4,6 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { TableRow, TableCell } from "@/components/ui/table";
 import { motion } from 'framer-motion';
+import { Check, X } from 'lucide-react'
+import { format } from 'date-fns'
 
 interface ProductRowDetailsProps {
   product: Product & { attributes?: ProductAttribute[] };
@@ -22,7 +24,56 @@ interface AttributeGroup {
   attributes: Attribute[];
 }
 
+// Format attribute value for display (enterprise-grade, handles objects, booleans, etc.)
+function formatAttributeValue(value: any): React.ReactNode {
+  if (value === null || value === undefined || value === '') {
+    return <span className="text-slate-400 italic">No value</span>
+  }
+  if (typeof value === 'boolean') {
+    return value ? (
+      <Badge variant="outline" className="bg-green-50 text-green-600 border-green-100"><Check className="h-3 w-3 mr-1" />Yes</Badge>
+    ) : (
+      <Badge variant="outline" className="bg-red-50 text-red-600 border-red-100"><X className="h-3 w-3 mr-1" />No</Badge>
+    )
+  }
+  if (typeof value === 'object') {
+    // Price: { amount, currency }
+    if ('amount' in value && 'currency' in value) {
+      return `${value.amount} ${value.currency}`
+    }
+    // Measurement: { amount, unit }
+    if ('amount' in value && 'unit' in value) {
+      return `${value.amount} ${value.unit || ''}`
+    }
+    // Media: { asset_id }
+    if ('asset_id' in value) {
+      return `Asset #${value.asset_id}`
+    }
+    // Fallback: JSON stringify
+    return JSON.stringify(value)
+  }
+  // Date (ISO string)
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+    try {
+      return format(new Date(value), 'yyyy-MM-dd')
+    } catch { /* ignore */ }
+  }
+  // URL/email/phone
+  if (typeof value === 'string' && (value.startsWith('http') || value.includes('@'))) {
+    return <a href={value.startsWith('http') ? value : `mailto:${value}`} target="_blank" rel="noopener noreferrer" className="text-primary underline">{value}</a>
+  }
+  // Rich text (basic)
+  if (typeof value === 'string' && /<[^>]+>/.test(value)) {
+    return <span dangerouslySetInnerHTML={{ __html: value }} />
+  }
+  // Default: string
+  return String(value)
+}
+
 const ProductRowDetails: React.FC<ProductRowDetailsProps> = ({ product, zebra }) => {
+  // Debug: log the raw attributes prop for this product
+  console.log('[ProductRowDetails] attributes for product', product.id, product.attributes)
+
   // Process and organize attributes into groups
   const attributeGroups = useMemo(() => {
     if (!product.attributes || !Array.isArray(product.attributes) || product.attributes.length === 0) {
@@ -86,7 +137,7 @@ const ProductRowDetails: React.FC<ProductRowDetailsProps> = ({ product, zebra })
             return {
               id: `value-attr-${index}`,
               name: 'Value',
-              value: String(attr.value),
+              value: attr.value,
               group: ''
             };
           }
@@ -101,21 +152,21 @@ const ProductRowDetails: React.FC<ProductRowDetailsProps> = ({ product, zebra })
             attr.key ||                  // another possible field
             'Unnamed';
           
-          // Determine attribute value
-          let attrValue = '';
+          // Determine attribute value (keep raw value, not string)
+          let attrValue: any = undefined;
           if (attr.value !== undefined) {
-            attrValue = String(attr.value);
+            attrValue = attr.value;
           } else if (attr.display_value !== undefined) {
-            attrValue = String(attr.display_value);
+            attrValue = attr.display_value;
           } else if (label !== 'Unnamed' && attr[label] !== undefined && typeof attr[label] !== 'object') {
-            attrValue = String(attr[label]);
+            attrValue = attr[label];
           } else {
             const valueKeys = Object.keys(attr).filter(key => 
               typeof attr[key] !== 'object' && 
               !['id', 'name', 'attribute_name', 'key', 'label', 'group', 'attribute_group'].includes(key));
             
             if (valueKeys.length > 0) {
-              attrValue = String(attr[valueKeys[0]]);
+              attrValue = attr[valueKeys[0]];
             }
           }
           
@@ -255,17 +306,14 @@ const ProductRowDetails: React.FC<ProductRowDetailsProps> = ({ product, zebra })
 
                   <dl className="space-y-1">
                     {group.attributes
-                      .filter(a => a.value && String(a.value).trim() !== '')
                       .map(attr => (
-                      <div key={attr.id} className="grid grid-cols-2 text-xs">
-                        <dt className="text-slate-700 font-medium truncate">{attr.name}:</dt>
-                        <dd className="text-slate-900 truncate pl-1">
-                          {attr.value || (
-                            <span className="text-slate-400 italic">No value</span>
-                          )}
-                        </dd>
-                      </div>
-                    ))}
+                        <div key={attr.id} className="grid grid-cols-2 text-xs">
+                          <dt className="text-slate-700 font-medium truncate">{attr.name}:</dt>
+                          <dd className="text-slate-900 truncate pl-1">
+                            {formatAttributeValue(attr.value)}
+                          </dd>
+                        </div>
+                      ))}
                   </dl>
                 </div>
 

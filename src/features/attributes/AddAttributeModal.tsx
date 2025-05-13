@@ -45,6 +45,8 @@ import {
   TooltipProvider, 
   TooltipTrigger 
 } from "@/components/ui/tooltip";
+import { LOCALES, LocaleCode } from '@/config/locales'
+import { CHANNELS, ChannelCode } from '@/config/channels'
 
 interface AddAttributeModalProps {
   isOpen: boolean;
@@ -52,8 +54,6 @@ interface AddAttributeModalProps {
   availableAttributes: Attribute[];
   onAddAttribute: (attribute: Attribute, locale?: string | null, channel?: string | null) => Promise<any>;
   isPending: boolean;
-  availableLocales: Array<{ code: string, label: string }>;
-  availableChannels: Array<{ code: string, label: string }>;
   selectedLocale: string;
   selectedChannel: string;
   groupId?: number | null;
@@ -69,8 +69,6 @@ const AddAttributeModal: React.FC<AddAttributeModalProps> = ({
   availableAttributes,
   onAddAttribute,
   isPending,
-  availableLocales,
-  availableChannels,
   selectedLocale,
   selectedChannel,
   groupId,
@@ -357,7 +355,7 @@ const AddAttributeModal: React.FC<AddAttributeModalProps> = ({
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="default">All locales</SelectItem>
-                            {availableLocales.map((locale) => (
+                            {LOCALES.map((locale) => (
                               <SelectItem key={locale.code} value={locale.code}>
                                 {locale.label}
                               </SelectItem>
@@ -381,7 +379,7 @@ const AddAttributeModal: React.FC<AddAttributeModalProps> = ({
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="default">All channels</SelectItem>
-                            {availableChannels.map((channel) => (
+                            {CHANNELS.map((channel) => (
                               <SelectItem key={channel.code} value={channel.code}>
                                 {channel.label}
                               </SelectItem>

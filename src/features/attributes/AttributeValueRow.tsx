@@ -11,6 +11,8 @@ import { useDebouncedCallback } from '@/hooks/useDebouncedCallback';
 import { Edit, Calendar as CalendarIcon, Globe, Monitor } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { LOCALES, LocaleCode } from '@/config/locales'
+import { CHANNELS, ChannelCode } from '@/config/channels'
 
 // Types
 export interface Attribute {
@@ -54,8 +56,6 @@ interface AttributeValueRowProps {
   onUpdate: (valueId: number, value: any) => void;
   savingState: SavingState;
   isStaff: boolean;
-  availableLocales?: Array<{ code: string, label: string }>;
-  availableChannels?: Array<{ code: string, label: string }>;
   onRemove?: () => void;
   isSettingsContext?: boolean;
   groupName?: string;
@@ -77,8 +77,6 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
   onUpdate,
   savingState,
   isStaff,
-  availableLocales = [],
-  availableChannels = [],
   onRemove,
   isSettingsContext = false,
   groupName = "",
@@ -523,7 +521,7 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="default">All locales</SelectItem>
-                {availableLocales.map(locale => (
+                {LOCALES.map(locale => (
                   <SelectItem key={locale.code} value={locale.code}>
                     {locale.label}
                   </SelectItem>
@@ -550,7 +548,7 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="default">All channels</SelectItem>
-                {availableChannels.map(channel => (
+                {CHANNELS.map(channel => (
                   <SelectItem key={channel.code} value={channel.code}>
                     {channel.label}
                   </SelectItem>
@@ -655,8 +653,8 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
                   <Globe className="w-3 h-3 mr-1 text-blue-500" />
                   <span>
                     {value?.locale 
-                      ? availableLocales.find(l => l.code === value.locale)?.label || value.locale
-                      : attribute.is_localisable ? 'All locales' : selectedLocale === 'default' ? 'Default locale' : availableLocales.find(l => l.code === selectedLocale)?.label || selectedLocale}
+                      ? LOCALES.find(l => l.code === value.locale)?.label || value.locale
+                      : attribute.is_localisable ? 'All locales' : selectedLocale === 'default' ? 'Default locale' : LOCALES.find(l => l.code === selectedLocale)?.label || selectedLocale}
                   </span>
                   {attribute.is_localisable && (
                     <Badge variant="outline" className="ml-1 h-4 px-1 bg-blue-50 border-blue-200">
@@ -684,8 +682,8 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
                   <Monitor className="w-3 h-3 mr-1 text-purple-500" />
                   <span>
                     {value?.channel 
-                      ? availableChannels.find(c => c.code === value.channel)?.label || value.channel
-                      : attribute.is_scopable ? 'All channels' : selectedChannel === 'default' ? 'Default channel' : availableChannels.find(c => c.code === selectedChannel)?.label || selectedChannel}
+                      ? CHANNELS.find(c => c.code === value.channel)?.label || value.channel
+                      : attribute.is_scopable ? 'All channels' : selectedChannel === 'default' ? 'Default channel' : CHANNELS.find(c => c.code === selectedChannel)?.label || selectedChannel}
                   </span>
                   {attribute.is_scopable && (
                     <Badge variant="outline" className="ml-1 h-4 px-1 bg-purple-50 border-purple-200">

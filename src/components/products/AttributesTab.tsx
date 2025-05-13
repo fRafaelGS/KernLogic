@@ -56,18 +56,28 @@ interface AttributesTabProps {
   productId: number;
 }
 
+// Add 'default' option to LOCALES and CHANNELS for dropdowns
+const LOCALE_OPTIONS = [{ code: 'default', label: 'All locales' }, ...LOCALES]
+const CHANNEL_OPTIONS = [{ code: 'default', label: 'All channels' }, ...CHANNELS]
+
 const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const isStaff = (user as any)?.is_staff || false;
   
   // State
-  const [selectedLocale, setSelectedLocale] = useState<LocaleCode>(LOCALES[0].code)
-  const [selectedChannel, setSelectedChannel] = useState<ChannelCode>(CHANNELS[0].code)
+  const [selectedLocale, setSelectedLocale] = useState<string>('default')
+  const [selectedChannel, setSelectedChannel] = useState<string>('default')
   
-  // Helper values for API calls
-  const apiLocale = selectedLocale === 'default' ? null : selectedLocale;
-  const apiChannel = selectedChannel === 'default' ? null : selectedChannel;
+  // When loading, if locale/channel is null, set to 'default'
+  React.useEffect(() => {
+    if (!selectedLocale && selectedLocale !== 'default') setSelectedLocale('default')
+    if (!selectedChannel && selectedChannel !== 'default') setSelectedChannel('default')
+  }, [])
+  
+  // When sending to backend, map 'default' to null
+  const apiLocale = selectedLocale === 'default' ? null : selectedLocale
+  const apiChannel = selectedChannel === 'default' ? null : selectedChannel
   
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [currentGroupId, setCurrentGroupId] = useState<number | null>(null);
@@ -1071,10 +1081,8 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
         <LocaleChannelSelector
           selectedLocale={selectedLocale}
           selectedChannel={selectedChannel}
-          availableLocales={LOCALES}
-          availableChannels={CHANNELS}
-          onLocaleChange={setSelectedLocale}
-          onChannelChange={setSelectedChannel}
+          onLocaleChange={value => setSelectedLocale(value)}
+          onChannelChange={value => setSelectedChannel(value)}
         />
         
         {isStaff && !ENABLE_ATTRIBUTE_GROUPS && (
@@ -1117,15 +1125,13 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
               editableAttributeIds={editableAttributeIds}
               savingStates={savingStates}
               isStaff={isStaff}
-              onAddAttributeClick={(gid) => { setCurrentGroupId(gid); setIsAddModalOpen(true); }}
+              onAddAttributeClick={gid => { setCurrentGroupId(gid); setIsAddModalOpen(true); }}
               onEditAttribute={handleEditAttribute}
               onCancelEdit={handleCancelEdit}
               onSaveNewValue={handleSaveNewValue}
               onUpdateValue={handleUpdateValue}
               onRemoveAttribute={handleRemoveAttribute}
               onRemoveAttributeValue={handleRemoveAttributeValue}
-              availableLocales={LOCALES}
-              availableChannels={CHANNELS}
               makeAttrKey={makeAttributeKey}
             />
           ) : attributes.length === 0 ? (
@@ -1176,8 +1182,6 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
                     onUpdate={handleUpdateValue}
                     savingState={savingStates[attribute.id] || 'idle'}
                     isStaff={isStaff}
-                    availableLocales={LOCALES}
-                    availableChannels={CHANNELS}
                     onRemove={value && value.id ? () => handleRemoveAttributeValue(value.id) : undefined}
                   />
                 );
@@ -1193,8 +1197,6 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
         availableAttributes={getUnassignedAttributes()}
         onAddAttribute={handleAddAttribute}
         isPending={createAttributeValueMutation.isPending}
-        availableLocales={LOCALES}
-        availableChannels={CHANNELS}
         selectedLocale={selectedLocale}
         selectedChannel={selectedChannel}
         groupId={currentGroupId}

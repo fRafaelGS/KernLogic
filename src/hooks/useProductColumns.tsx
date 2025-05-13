@@ -62,6 +62,8 @@ import { CategoryTreeSelect } from '@/components/categories/CategoryTreeSelect';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { formatPrice, getProductPriceDisplay } from "@/utils/formatPrice";
 import { PriceSummaryBadge } from "@/components/products/PriceSummaryBadge";
+import CreatableSelect from 'react-select/creatable'
+import '@/styles/editable-cell.scss'
 
 // Helper function to safely format price amounts
 const formatAmount = (amount: number | string | null | undefined): string => {
@@ -305,7 +307,12 @@ export function useProductColumns({
             }}
             data-editable
           >
-            {value}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="editable-cell">{value}</span>
+              </TooltipTrigger>
+              <TooltipContent>Click to edit</TooltipContent>
+            </Tooltip>
           </div>
         );
       },
@@ -363,7 +370,12 @@ export function useProductColumns({
             }}
             data-editable
           >
-            {value}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="editable-cell">{value}</span>
+              </TooltipTrigger>
+              <TooltipContent>Click to edit</TooltipContent>
+            </Tooltip>
           </div>
         );
       },
@@ -524,7 +536,12 @@ export function useProductColumns({
             }}
             data-editable="true"
           >
-            {value.length > 18 ? `${value.slice(0,18)}…` : value || '—'}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="editable-cell">{value.length > 18 ? `${value.slice(0,18)}…` : value || '—'}</span>
+              </TooltipTrigger>
+              <TooltipContent>Click to edit</TooltipContent>
+            </Tooltip>
           </div>
         );
       },
@@ -555,103 +572,73 @@ export function useProductColumns({
         const rowIndex = row.index;
         const tags = (row.getValue("tags") as string[] | undefined) || [];
         const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.columnId === 'tags';
-        
-        // Convert tag strings/IDs to options for react-select
-        const currentTagOptions = tags.map(tag => {
-          // Check if this tag exists in our tagOptions
-          const existingOption = tagOptions.find(opt => opt.value === tag || opt.label === tag);
-          if (existingOption) {
-            return existingOption;
-          }
-          // If not found, create a new option
-          return { label: tag, value: tag };
-        });
-
+        // Map editValue (array of tag strings) to tag option objects for the select's value
+        const editTagOptions: TagOption[] = Array.isArray(editValue)
+          ? editValue.map(tag => {
+              const existingOption = tagOptions.find(opt => opt.value === tag || opt.label === tag)
+              if (existingOption) return existingOption
+              return { label: tag, value: tag }
+            })
+          : []
         if (isEditing) {
           return (
-            <div 
-              className="min-w-[200px] p-1" 
-              onClick={(e) => e.stopPropagation()}
-              data-editing="true"
-            >
-              <div 
-                className="flex flex-wrap gap-1 max-w-[150px] cursor-pointer group p-1"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // Start editing this cell
-                  handleCellEdit(rowIndex, 'tags', tags.length > 0 ? tags.join(',') : '');
+            <div className="min-w-[240px] p-2 bg-white rounded shadow border" onClick={e => e.stopPropagation()} data-editing="true">
+              <CreatableSelect
+                isMulti
+                autoFocus
+                value={editTagOptions}
+                options={tagOptions}
+                onChange={(options: OnChangeValue<TagOption, true>) => {
+                  setEditValue(Array.isArray(options) ? options.map(opt => String(opt.value)) : [])
                 }}
-                data-editable="true"
-              >
-                {tags && tags.length > 0 ? (
-                  <>
-                    {tags.slice(0, 2).map((tag, i) => (
-                      <Badge key={i} variant="outline" className="text-xs whitespace-nowrap">
-                        {tag}
-                      </Badge>
-                    ))}
-                    {tags.length > 2 && (
-                      <Badge variant="outline" className="text-xs">
-                        +{tags.length - 2}
-                      </Badge>
-                    )}
-                  </>
-                ) : (
-                  <span className="text-slate-400 group-hover:text-primary transition-colors">
-                    Add tags
-                  </span>
-                )}
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="h-5 w-5 ml-1 opacity-0 group-hover:opacity-100"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleCellEdit(rowIndex, 'tags', tags.length > 0 ? tags.join(',') : '');
-                  }}
-                >
-                  <PlusIcon className="h-3 w-3" />
+                onCreateOption={async (inputValue: string) => {
+                  const maybeOption = await handleCreateTagOption(inputValue) as TagOption | undefined
+                  if (maybeOption && typeof maybeOption.value === 'string') {
+                    setEditValue([...(Array.isArray(editValue) ? editValue : []), maybeOption.value])
+                  }
+                }}
+                isClearable
+                placeholder="Add or select tags..."
+                menuPortalTarget={document.body}
+                menuPosition="fixed"
+                styles={{ menuPortal: base => ({ ...base, zIndex: 9999 }), control: base => ({ ...base, minHeight: 38 }) }}
+                noOptionsMessage={() => 'No tags found'}
+                formatCreateLabel={(inputValue: string) => `Create tag \"${inputValue}\"`}
+              />
+              <div className="flex gap-2 mt-3 justify-end">
+                <Button size="sm" variant="outline" onClick={handleCancelEdit}>
+                  Cancel
+                </Button>
+                <Button size="sm" variant="secondary" onClick={handleSaveCellEdit}>
+                  Save
                 </Button>
               </div>
             </div>
-          );
+          )
         }
-        
+        // Non-editing mode: show tags as badges and a single + button
         return (
-          <div 
-            className="flex flex-wrap gap-1 max-w-[150px] cursor-pointer group p-1"
-            onClick={(e) => {
-              e.stopPropagation();
-              // Start editing this cell
-              handleCellEdit(rowIndex, 'tags', tags.length > 0 ? tags.join(',') : '');
-            }}
-            data-editable="true"
-          >
+          <div className="flex flex-wrap gap-1 max-w-[220px] items-center">
             {tags && tags.length > 0 ? (
-              <>
-                {tags.slice(0, 2).map((tag, i) => (
-                  <Badge key={i} variant="outline" className="text-xs whitespace-nowrap">
-                    {tag}
-                  </Badge>
-                ))}
-                {tags.length > 2 && (
-                  <Badge variant="outline" className="text-xs">
-                    +{tags.length - 2}
-                  </Badge>
-                )}
-              </>
+              tags.slice(0, 3).map((tag, i) => (
+                <Badge key={i} variant="outline" className="text-xs whitespace-nowrap">
+                  {tag}
+                </Badge>
+              ))
             ) : (
-              <span className="text-slate-400 group-hover:text-primary transition-colors">
-                Add tags
-              </span>
+              <span className="text-slate-400">No tags</span>
+            )}
+            {tags.length > 3 && (
+              <Badge variant="outline" className="text-xs">+{tags.length - 3}</Badge>
             )}
             <Button 
               variant="ghost" 
               size="icon" 
-              className="h-5 w-5 ml-1 opacity-0 group-hover:opacity-100"
-              onClick={(e) => {
+              className="h-5 w-5 ml-1" 
+              aria-label="Edit tags"
+              onClick={e => {
                 e.stopPropagation();
-                handleCellEdit(rowIndex, 'tags', tags.length > 0 ? tags.join(',') : '');
+                handleCellEdit(rowIndex, 'tags', tags.join(','));
               }}
             >
               <PlusIcon className="h-3 w-3" />
@@ -660,27 +647,14 @@ export function useProductColumns({
         );
       },
       enableSorting: true,
-      // Add these properties to enable filtering
       enableColumnFilter: true,
       filterFn: (row: Row<Product>, columnId: string, filterValue: any): boolean => {
-        // Skip if no filter value
         if (!filterValue || !Array.isArray(filterValue) || filterValue.length === 0) return true;
-        
-        // Get tags from the row
         const tags = row.getValue(columnId) as any[];
-        
-        // If no tags, no match
         if (!tags || !Array.isArray(tags) || tags.length === 0) return false;
-        
-        // Check if ALL of the filter tags exist in the row's tags (AND logic)
         return filterValue.every(filterTag => 
           tags.some((tag: any) => {
-            // Handle tag as string
-            if (typeof tag === 'string') {
-              return tag === filterTag;
-            }
-            
-            // Handle tag as object
+            if (typeof tag === 'string') return tag === filterTag;
             if (tag && typeof tag === 'object') {
               const tagObj = tag as any;
               return (
@@ -690,7 +664,6 @@ export function useProductColumns({
                 String(tagObj.label) === filterTag
               );
             }
-            
             return false;
           })
         );
@@ -752,7 +725,12 @@ export function useProductColumns({
             }}
             data-editable="true"
           >
-            {value || "—"}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="editable-cell">{value || "—"}</span>
+              </TooltipTrigger>
+              <TooltipContent>Click to edit</TooltipContent>
+            </Tooltip>
           </div>
         );
       },

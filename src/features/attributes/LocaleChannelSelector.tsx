@@ -16,12 +16,12 @@ import {
   saveLastChannel, 
   getLastChannel 
 } from '@/lib/attributePreferences';
+import { LOCALES, LocaleCode } from '@/config/locales'
+import { CHANNELS, ChannelCode } from '@/config/channels'
 
 interface LocaleChannelSelectorProps {
   selectedLocale: string;
   selectedChannel: string;
-  availableLocales: { code: string; label: string }[];
-  availableChannels: { code: string; label: string }[];
   onLocaleChange: (locale: string) => void;
   onChannelChange: (channel: string) => void;
   disableLocalePersistence?: boolean;
@@ -34,8 +34,6 @@ interface LocaleChannelSelectorProps {
 const LocaleChannelSelector: React.FC<LocaleChannelSelectorProps> = ({
   selectedLocale,
   selectedChannel,
-  availableLocales,
-  availableChannels,
   onLocaleChange,
   onChannelChange,
   disableLocalePersistence = false,
@@ -81,8 +79,8 @@ const LocaleChannelSelector: React.FC<LocaleChannelSelectorProps> = ({
   };
   
   // Find the current locale and channel labels
-  const localeLabel = availableLocales.find(l => l.code === selectedLocale)?.label || selectedLocale;
-  const channelLabel = availableChannels.find(c => c.code === selectedChannel)?.label || selectedChannel;
+  const localeLabel = LOCALES.find(l => l.code === selectedLocale)?.label || selectedLocale;
+  const channelLabel = CHANNELS.find(c => c.code === selectedChannel)?.label || selectedChannel;
   
   return (
     <div className="flex items-center space-x-4 border p-3 rounded-md bg-slate-50">
@@ -98,7 +96,7 @@ const LocaleChannelSelector: React.FC<LocaleChannelSelectorProps> = ({
           <SelectContent>
             <SelectGroup>
               <SelectLabel>Locales</SelectLabel>
-              {availableLocales.map((locale) => (
+              {LOCALES.map((locale) => (
                 <SelectItem key={locale.code} value={locale.code}>
                   {locale.label}
                 </SelectItem>
@@ -120,7 +118,7 @@ const LocaleChannelSelector: React.FC<LocaleChannelSelectorProps> = ({
           <SelectContent>
             <SelectGroup>
               <SelectLabel>Channels</SelectLabel>
-              {availableChannels.map((channel) => (
+              {CHANNELS.map((channel) => (
                 <SelectItem key={channel.code} value={channel.code}>
                   {channel.label}
                 </SelectItem>

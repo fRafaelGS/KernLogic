@@ -1,0 +1,20 @@
+.editable-cell {
+  position: relative;
+  cursor: pointer;
+  border-bottom: 1px dashed #9ca3af; /* gray-400 */
+  transition: background 0.15s, border-color 0.15s;
+}
+.editable-cell:hover {
+  background-color: rgba(0,0,0,0.03);
+  border-color: #374151; /* gray-700 */
+}
+.editable-cell:hover::after {
+  content: '✏️'; /* Unicode pencil */
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6b7280; /* gray-500 */
+  font-size: 0.85em;
+  pointer-events: none;
+} 

@@ -73,6 +73,7 @@ import { FieldStatusModal } from './FieldStatusModal'
 import { normalizeCategory } from '@/types/categories'
 import { isImageAsset, getAssetUrl } from '@/utils/isImageAsset'
 import { PriceTab } from './PriceTab'
+import { LOCALES, LocaleCode } from '@/config/locales'
 
 // ====== ATTRIBUTES INTERFACES (EXACT MATCH TO SPEC) ======
 // (Following exactly the backend shape specified in the requirements)
@@ -153,8 +154,8 @@ export const ProductDetailTabs = ({
   const [currentEditValue, setCurrentEditValue] = useState<any>(null);
   const [isAddAttributeOpen, setIsAddAttributeOpen] = useState(false);
   const [attributeSearchTerm, setAttributeSearchTerm] = useState('');
-  const [selectedLocale, setSelectedLocale] = useState('en-US');
-  const [availableLocales, setAvailableLocales] = useState(['en-US', 'es-ES', 'fr-FR', 'de-DE']);
+  const [selectedLocale, setSelectedLocale] = useState<LocaleCode>(LOCALES[0].code);
+  const [availableLocales, setAvailableLocales] = useState(LOCALES.map(locale => locale.code));
   const [savingAttributeId, setSavingAttributeId] = useState<number | null>(null);
   const [attributeSaveError, setAttributeSaveError] = useState<{id: number, message: string} | null>(null);
   const [attributeSetId, setAttributeSetId] = useState<number | null>(null);

@@ -8,6 +8,8 @@ import { makeAttributeKey } from '@/lib/attributeUtils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { LOCALES, LocaleCode } from '@/config/locales'
+import { CHANNELS, ChannelCode } from '@/config/channels'
 
 interface AttributeGroupTabsProps {
   groups: AttributeGroup[];
@@ -23,8 +25,6 @@ interface AttributeGroupTabsProps {
   onUpdateValue: (valueId: number, value: any) => void;
   onRemoveAttribute: (itemId: number, groupId: number) => void;
   onRemoveAttributeValue: (valueId: number) => void;
-  availableLocales: Array<{ code: string, label: string }>;
-  availableChannels: Array<{ code: string, label: string }>;
   makeAttrKey?: (attributeId: number, locale?: string | null, channel?: string | null) => string;
   isSettingsContext?: boolean;
   selectedLocale?: string;
@@ -45,8 +45,6 @@ const AttributeGroupTabs: React.FC<AttributeGroupTabsProps> = ({
   onUpdateValue,
   onRemoveAttribute,
   onRemoveAttributeValue,
-  availableLocales,
-  availableChannels,
   makeAttrKey = makeAttributeKey,
   isSettingsContext = false,
   selectedLocale = "default",
@@ -222,8 +220,6 @@ const AttributeGroupTabs: React.FC<AttributeGroupTabsProps> = ({
                         onUpdate={onUpdateValue}
                         savingState={savingStates[attribute.id] || 'idle'}
                         isStaff={isStaff}
-                        availableLocales={availableLocales}
-                        availableChannels={availableChannels}
                         isSettingsContext={isSettingsContext}
                         groupName={group.name}
                         selectedLocale={selectedLocale}

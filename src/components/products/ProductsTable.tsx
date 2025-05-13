@@ -440,15 +440,29 @@ export function ProductsTable() {
     }
     // Apply numeric range filters
     if (filters.minPrice) {
-      const min = parseFloat(filters.minPrice);
+      const min = parseFloat(filters.minPrice)
       if (!isNaN(min)) {
-        filtered = filtered.filter(product => product.price >= min);
+        filtered = filtered.filter(product => {
+          let price: number | undefined
+          if (Array.isArray(product.prices) && product.prices.length > 0) {
+            const amount = product.prices[0].amount
+            price = typeof amount === 'number' ? amount : parseFloat(amount)
+          }
+          return typeof price === 'number' && price >= min
+        })
       }
     }
     if (filters.maxPrice) {
-      const max = parseFloat(filters.maxPrice);
+      const max = parseFloat(filters.maxPrice)
       if (!isNaN(max)) {
-        filtered = filtered.filter(product => product.price <= max);
+        filtered = filtered.filter(product => {
+          let price: number | undefined
+          if (Array.isArray(product.prices) && product.prices.length > 0) {
+            const amount = product.prices[0].amount
+            price = typeof amount === 'number' ? amount : parseFloat(amount)
+          }
+          return typeof price === 'number' && price <= max
+        })
       }
     }
     
@@ -714,18 +728,29 @@ export function ProductsTable() {
   // Handle saving cell edit
   const handleSaveCellEdit = useCallback(() => {
     if (editingCell) {
-      // Special handling for tags - convert comma-separated string to array
       if (editingCell.columnId === 'tags') {
-        const tagsArray = editValue
-          .split(',')
-          .map(tag => tag.trim())
-          .filter(Boolean); // Remove empty strings
-        updateData(editingCell.rowIndex, editingCell.columnId, tagsArray);
+        let tagsArray: string[] = []
+        if (Array.isArray(editValue)) {
+          tagsArray = editValue.map(tag => {
+            if (typeof tag === 'string') return tag
+            if (tag && typeof tag === 'object') {
+              if (typeof tag.label === 'string') return tag.label
+              if (typeof tag.value === 'string') return tag.value
+            }
+            return ''
+          }).filter(Boolean)
+        } else if (typeof editValue === 'string') {
+          tagsArray = editValue
+            .split(',')
+            .map(tag => tag.trim())
+            .filter(Boolean)
+        }
+        updateData(editingCell.rowIndex, editingCell.columnId, tagsArray)
       } else {
-        updateData(editingCell.rowIndex, editingCell.columnId, editValue);
+        updateData(editingCell.rowIndex, editingCell.columnId, editValue)
       }
     }
-  }, [editingCell, editValue, updateData]);
+  }, [editingCell, editValue, updateData])
 
   // Handle canceling cell edit
   const handleCancelEdit = useCallback(() => {
@@ -1212,28 +1237,23 @@ export function ProductsTable() {
       try {
         console.log(`[ProductsTable] Loading attributes for product ${pid}`);
         attrGroupsInFlight.current.add(pid); // mark as in-flight
-        
-        // First fetch the detailed attributes
+
+        // Always fetch with locale/channel = null ("all") to match AttributesTab
         const attrs = await productService.getProductAttributes(pid);
-        // Then fetch the attribute groups structure
         const attrGroups = await productService.getProductAttributeGroups(pid);
-        
+
         console.log(`[ProductsTable] Product ${pid} received ${attrs?.length || 0} attributes and ${attrGroups?.length || 0} attribute groups`);
-        
-        // Create a merged data structure with group information
+
         let mergedAttributes = [];
-        
-        // If we have attribute groups, use that structure as the primary data
         if (Array.isArray(attrGroups) && attrGroups.length > 0) {
-          console.log(`[ProductsTable] Using attribute group structure for product ${pid}`);
-          mergedAttributes = attrGroups;
-        } 
-        // Otherwise fall back to using the attributes with default grouping
-        else if (Array.isArray(attrs) && attrs.length > 0) {
-          console.log(`[ProductsTable] Falling back to individual attributes for product ${pid}`);
-          // Process attributes into a group-compatible structure
+          // Use all groups and all items, do not filter by value
+          mergedAttributes = attrGroups.map(group => ({
+            ...group,
+            items: (group.items || []).map(item => ({ ...item }))
+          }));
+        } else if (Array.isArray(attrs) && attrs.length > 0) {
+          // Fallback: group all attributes by group name, do not filter by value
           const groupMap = {};
-          
           attrs.forEach(attr => {
             const groupName = attr.group || 'General';
             if (!groupMap[groupName]) {
@@ -1243,19 +1263,15 @@ export function ProductsTable() {
                 items: []
               };
             }
-            
             groupMap[groupName].items.push({
               ...attr,
               attribute_label: attr.name,
               value: attr.value
             });
           });
-          
           mergedAttributes = Object.values(groupMap);
         }
-        
-        console.log(`[ProductsTable] Final merged attributes for product ${pid}:`, mergedAttributes);
-        
+
         setProductAttributes(prev => {
           const newState = { ...prev, [pid]: mergedAttributes };
           return newState;

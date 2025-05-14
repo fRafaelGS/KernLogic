@@ -1,54 +1,61 @@
 import { z } from 'zod'
+import { AttributeGroup } from './attributeGroup'
 
 // Family interfaces
 export interface Family {
   id: number
   code: string
   label: string
-  description: string
-  created_by: number
-  created_at: string
-  updated_at: string
-  attribute_groups: FamilyAttributeGroup[]
+  description?: string
+  created_at?: string
+  updated_at?: string
+  organization?: number
+  created_by?: number
+  attribute_groups?: FamilyAttributeGroup[]
+}
+
+export interface FamilyInput {
+  code: string
+  label: string
+  description?: string
+  attribute_groups?: Partial<FamilyAttributeGroup>[]
 }
 
 export interface FamilyAttributeGroup {
-  id: number
-  family: number
+  id?: number
+  family?: number
   attribute_group: number
-  attribute_group_object?: {
-    id: number
-    name: string
-    description?: string
-  }
+  attribute_group_object?: AttributeGroup
   required: boolean
   order: number
 }
 
+export interface FamilyOverride {
+  id?: number
+  attribute_group: number
+  removed: boolean
+}
+
 // Zod schemas
 export const familyAttributeGroupSchema = z.object({
-  id: z.number().optional(),
-  family: z.number(),
   attribute_group: z.number(),
-  attribute_group_object: z.object({
-    id: z.number(),
-    name: z.string(),
-    description: z.string().optional()
-  }).optional(),
-  required: z.boolean(),
-  order: z.number()
+  required: z.boolean().default(false),
+  order: z.number().default(0)
 })
 
 export const familySchema = z.object({
-  id: z.number().optional(),
-  code: z.string().min(1, 'Code is required'),
-  label: z.string().min(1, 'Label is required'),
+  code: z.string()
+    .min(1, 'Code is required')
+    .max(64, 'Code must be at most 64 characters')
+    .regex(/^[a-zA-Z0-9-]+$/, {
+      message: 'Code must contain only letters, numbers, and hyphens'
+    }),
+  label: z.string()
+    .min(1, 'Name is required')
+    .max(255, 'Name must be at most 255 characters'),
   description: z.string().optional(),
-  created_by: z.number().optional(),
-  created_at: z.string().optional(),
-  updated_at: z.string().optional(),
   attribute_groups: z.array(familyAttributeGroupSchema).optional()
 })
 
-export type FamilyInput = z.infer<typeof familySchema>
-export type FamilyAttributeGroupInput = z.infer<typeof familyAttributeGroupSchema> 
+// Export FamilyFormSchema type
+export type FamilyFormValues = z.infer<typeof familySchema> 

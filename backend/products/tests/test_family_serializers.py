@@ -21,9 +21,8 @@ class FamilySerializerTests(TestCase):
         # Create mocks
         self.user = mock.MagicMock()
         self.org = mock.MagicMock()
-        self.user.organization = self.org
         
-        # Mock get_user_organization function
+        # Mock get_user_organization function to return the organization
         self.get_user_organization_patcher = mock.patch('products.serializers.get_user_organization')
         self.mock_get_user_organization = self.get_user_organization_patcher.start()
         self.mock_get_user_organization.return_value = self.org

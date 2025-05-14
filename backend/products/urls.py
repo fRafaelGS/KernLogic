@@ -19,9 +19,9 @@ from products.views_category import CategoryViewSet
 # Import the PDF export view
 from products.views.pdf_export import generate_product_pdf
 from .views_main import AssetBundleViewSet
-# Import new family views
+# Import family views
 from products.views.family import FamilyViewSet
-from products.views.attribute_group_override import override_attribute_group
+from products.views.attribute_group_override import override_attribute_group, ProductFamilyOverrideViewSet
 
 # /api/products/…
 router = DefaultRouter()
@@ -43,6 +43,14 @@ assets_router = NestedSimpleRouter(router, r"products", lookup="product")
 assets_router.register(r"assets", AssetViewSet, basename="product-assets")
 assets_router.register(r"asset-bundles", AssetBundleViewSet, basename="asset-bundles")
 
+# /api/products/<product_pk>/family-overrides/…
+family_overrides_router = NestedSimpleRouter(router, r"products", lookup="product")
+family_overrides_router.register(
+    r"family-overrides", 
+    ProductFamilyOverrideViewSet, 
+    basename="product-family-overrides"
+)
+
 # 🆕  nested router for the four read-only sub-resources
 details_router = NestedSimpleRouter(router, r"products", lookup="product")
 details_router.register(r"attributes", AttributeValueViewSet, basename="product-attributes")
@@ -56,6 +64,7 @@ urlpatterns = [
     path("", include(router.urls)),
     path("", include(assets_router.urls)),
     path("", include(details_router.urls)),
+    path("", include(family_overrides_router.urls)),
     path("products/sku-check/", SkuCheckAPIView.as_view(), name="products-sku-check"),
     # Add PDF export endpoint
     path("products/<int:product_id>/pdf/", generate_product_pdf, name="product-pdf-export"),

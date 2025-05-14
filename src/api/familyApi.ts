@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import axiosInstance from '@/lib/axiosInstance'
 import { isAxiosError } from 'axios'
-import { Family, FamilyInput } from '../types/family'
+import { Family, FamilyInput, FamilyOverride } from '../types/family'
+import { Attribute } from '../types/attribute'
+import { AttributeGroup } from '../types/attributeGroup'
 
 // Query keys
 export const familyKeys = {
@@ -110,6 +112,11 @@ interface OverrideAttributeGroupParams {
   removed: boolean
 }
 
+export interface FamilyOverridePayload {
+  attribute_group: number
+  removed: boolean
+}
+
 export const overrideAttributeGroup = async (
   productId: number,
   params: OverrideAttributeGroupParams
@@ -118,6 +125,21 @@ export const overrideAttributeGroup = async (
     const { data } = await axiosInstance.post(
       `/api/products/${productId}/override-group/`,
       params
+    )
+    return data
+  } catch (error) {
+    return handleApiError(error)
+  }
+}
+
+export const overrideFamilyGroups = async (
+  productId: number,
+  overrides: FamilyOverridePayload[]
+): Promise<any> => {
+  try {
+    const { data } = await axiosInstance.post(
+      `/api/products/${productId}/family-overrides/`,
+      overrides
     )
     return data
   } catch (error) {
@@ -230,13 +252,34 @@ export const useRemoveAttributeGroupFromFamily = (familyId: number) => {
   })
 }
 
+export const useOverrideFamilyGroups = (productId: number) => {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: (overrides: FamilyOverridePayload[]) => 
+      overrideFamilyGroups(productId, overrides),
+    onSuccess: () => {
+      // Invalidate both the specific product and the product list
+      queryClient.invalidateQueries({ queryKey: ['products', productId] })
+      queryClient.invalidateQueries({ queryKey: ['products', 'list'] })
+    },
+    onError: (error: Error) => {
+      console.error('Failed to override family groups:', error.message)
+      return error
+    }
+  })
+}
+
 export const useOverrideAttributeGroup = (productId: number) => {
   const queryClient = useQueryClient()
+  
   return useMutation({
-    mutationFn: (params: OverrideAttributeGroupParams) =>
+    mutationFn: (params: { groupId: number, removed: boolean }) => 
       overrideAttributeGroup(productId, params),
     onSuccess: () => {
-      queryClient.invalidateQueries()
+      // Invalidate both the specific product and the product list
+      queryClient.invalidateQueries({ queryKey: ['products', productId] })
+      queryClient.invalidateQueries({ queryKey: ['products', 'list'] })
     },
     onError: (error: Error) => {
       console.error('Failed to override attribute group:', error.message)

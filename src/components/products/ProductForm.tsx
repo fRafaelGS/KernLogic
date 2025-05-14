@@ -73,6 +73,7 @@ import { LOCALES, LocaleCode } from '@/config/locales'
 import { CHANNELS, ChannelCode } from '@/config/channels'
 import { useFamilies, useOverrideAttributeGroup } from '@/api/familyApi';
 import { Family } from '@/types/family';
+import { ProductAttributeGroups } from '@/components/product/ProductAttributeGroups'
 
 const PRODUCTS_BASE_URL = `${API_URL}/products`;
 
@@ -408,144 +409,111 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
 
   // Handle form submission
   const onSubmit = (values: ProductFormValues) => {
-    console.log('Form submitted with values:', values);
-    
-    // Show immediate feedback to the user
     setIsLoading(true);
-    toast({ title: "Processing your request...", description: isEditMode ? "Updating product" : "Creating product" });
     
-    try {
-      // Keep original values for validation and mutation
-      const productValues = { ...values };
-      
-      // Log values to verify they exist before submission
-      console.log('Product name:', productValues.name);
-      console.log('Product SKU:', productValues.sku);
-      
-      // Make sure required fields are present
-      if (!productValues.name || !productValues.sku) {
-        console.error('Name or SKU is missing');
-        setIsLoading(false);
-        toast({ 
-          title: "Required fields missing", 
-          description: "Please enter both a name and SKU for the product",
-          variant: "destructive" 
-        });
-        return;
-      }
-      
-      // Create FormData object for file uploads
+    // Merge in selected family ID (or null)
+    const payload = {
+      ...values,
+      family: selectedFamily?.id || null
+    };
+
+    // Set up function to call based on mode
+    const apiFunction = isEditMode && productId !== undefined
+      ? productService.updateProduct.bind(null, productId)
+      : productService.createProduct;
+
+    // If creating, handle image specially
+    if (!isEditMode && imageFile) {
+      // For new products with an image, use the create with image endpoint
       const formData = new FormData();
-      
-      // Explicitly add name and SKU first to ensure they're included
-      formData.append('name', productValues.name || '');
-      formData.append('sku', productValues.sku || '');
-      
-      // Add all other form fields to FormData
-      Object.entries(productValues).forEach(([key, value]) => {
-        // Skip name and SKU since we already added them
-        if (key === 'name' || key === 'sku') return;
-        
-        if (key === 'tags') {
-          // Always send tags as a JSON array string
-          formData.append('tags', JSON.stringify(value || []))
-        } else if (key === 'attributes') {
-          formData.append(key, JSON.stringify(value || {}));
-        } else if (key === 'category') {
-          // Handle category, which comes as an object from react-select
-          if (value) {
-            if (typeof value === 'string') {
-              formData.append(key, value);
-            } else if (typeof value === 'object') {
-              const categoryId = (value as any).value || '';
-              formData.append('category_id', categoryId.toString());
-              const categoryName = (value as any).label || '';
-              formData.append(key, categoryName);
-            }
+      // Add all form fields to FormData
+      Object.entries(values).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          if (typeof value === 'object' && !(value instanceof File)) {
+            formData.append(key, JSON.stringify(value));
           } else {
-            formData.append(key, '');
+            formData.append(key, String(value));
           }
-        } else if (key !== 'primary_image') {
-          // Handle all other fields
-          formData.append(key, value?.toString() || '');
         }
       });
       
-      // Handle image file separately
-      if (imageFile) {
-        formData.append('primary_image', imageFile);
-      } else if (isEditMode && imagePreview && imagePreview.startsWith('http')) {
-        formData.append('keep_existing_image', 'true');
-      }
+      // Add image file
+      formData.append('image', imageFile);
       
-      // Log the FormData content for debugging
-      console.log('FormData entries:');
-      for (const pair of formData.entries()) {
-        console.log(`[FormData] ${pair[0]}: ${typeof pair[1] === 'object' ? 'File object' : pair[1]}`);
-      }
-      
-      // Submit the form using the original mutate function which expects FormData
-      if (isEditMode && productId) {
-        mutate(formData, {
-          onError: (error) => {
-            console.error('Mutation error:', error);
-            setIsLoading(false);
-            
-            // Display detailed error information
-            if (axios.isAxiosError(error)) {
-              console.error('API error response:', error.response?.data);
-              console.error('API error status:', error.response?.status);
-              console.error('API error headers:', error.response?.headers);
-            }
-            
-            toast({ 
-              title: `Error ${isEditMode ? 'updating' : 'creating'} product`, 
-              description: axios.isAxiosError(error) 
-                ? (error.response?.data?.detail || error.message) 
-                : "An unexpected error occurred",
-              variant: "destructive" 
-            });
-          },
-          onSuccess: (data) => {
-            console.log(`Product ${isEditMode ? 'updated' : 'created'} successfully:`, data);
-            setIsLoading(false);
-          }
+      // Explicitly cast formData to the expected type
+      productService.createProduct(formData as FormData)
+        .then((result: Product) => {
+          toast({ title: 'Product created successfully' });
+          navigate(`/app/products/${result.id}`);
+        })
+        .catch((error: unknown) => {
+          console.error('Failed to create product:', error);
+          const errorMessage = error instanceof Error ? error.message : 'Failed to create product';
+          toast({ title: errorMessage, variant: 'destructive' });
+        })
+        .finally(() => {
+          setIsLoading(false);
         });
+    } else {
+      if (isEditMode) {
+        // Use direct payload for edit mode
+        apiFunction(payload as any) // Cast to any to bypass type checking temporarily
+          .then((result: Product | number) => {
+            toast({ title: `Product updated successfully` });
+            const resultId = typeof result === 'number' ? result : result.id;
+            navigate(`/app/products/${resultId}`);
+            
+            if (productId) {
+              // If we're in edit mode, invalidate the product query to refresh the data
+              queryClient.invalidateQueries({ queryKey: ['product', productId] });
+            }
+          })
+          .catch((error: unknown) => {
+            console.error(`Failed to update product:`, error);
+            const errorMessage = error instanceof Error ? error.message : `Failed to update product`;
+            toast({ title: errorMessage, variant: 'destructive' });
+          })
+          .finally(() => {
+            setIsLoading(false);
+          });
       } else {
-        mutate(formData, {
-          onError: (error) => {
-            console.error('Mutation error:', error);
-            setIsLoading(false);
-            
-            // Display detailed error information
-            if (axios.isAxiosError(error)) {
-              console.error('API error response:', error.response?.data);
-              console.error('API error status:', error.response?.status);
-              console.error('API error headers:', error.response?.headers);
+        // Create mode with a FormData object
+        const formData = new FormData();
+        
+        // Add all form fields to FormData
+        Object.entries(payload).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            if (key === 'family') {
+              formData.append(key, String(value));
+            } else if (typeof value === 'object' && !(value instanceof File)) {
+              formData.append(key, JSON.stringify(value));
+            } else {
+              formData.append(key, String(value));
             }
-            
-            toast({ 
-              title: `Error ${isEditMode ? 'updating' : 'creating'} product`, 
-              description: axios.isAxiosError(error) 
-                ? (error.response?.data?.detail || error.message) 
-                : "An unexpected error occurred",
-              variant: "destructive" 
-            });
-          },
-          onSuccess: (data) => {
-            console.log(`Product ${isEditMode ? 'updated' : 'created'} successfully:`, data);
-            setIsLoading(false);
           }
         });
+        
+        // Add draft prices separately if needed
+        if (draftPrices.length > 0) {
+          formData.append('prices', JSON.stringify(draftPrices));
+        }
+        
+        // Create the product
+        apiFunction(formData)
+          .then((result: Product | number) => {
+            toast({ title: `Product created successfully` });
+            const resultId = typeof result === 'number' ? result : result.id;
+            navigate(`/app/products/${resultId}`);
+          })
+          .catch((error: unknown) => {
+            console.error(`Failed to create product:`, error);
+            const errorMessage = error instanceof Error ? error.message : `Failed to create product`;
+            toast({ title: errorMessage, variant: 'destructive' });
+          })
+          .finally(() => {
+            setIsLoading(false);
+          });
       }
-    } catch (error) {
-      console.error('Error in submit handler:', error);
-      setIsLoading(false);
-      toast({ 
-        title: `Error ${isEditMode ? 'updating' : 'creating'} product`, 
-        description: "An unexpected error occurred in the form submission",
-        variant: "destructive" 
-      });
     }
   };
 
@@ -645,9 +613,9 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
     if (!selectedFamily) return true;
     
     // Check if this group is in the family
-    const isInFamily = selectedFamily.attribute_groups.some(
+    const isInFamily = selectedFamily?.attribute_groups?.some(
       group => group.attribute_group === groupId
-    );
+    ) ?? false;
     
     // Check if it's been hidden by an override
     const isHidden = hiddenAttributeGroups.includes(groupId);
@@ -870,7 +838,7 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
                   {selectedFamily ? (
                     <>
                       Family defines required attribute groups for this product.
-                      {selectedFamily.attribute_groups.length > 0 ? (
+                      {selectedFamily?.attribute_groups && selectedFamily.attribute_groups.length > 0 ? (
                         <span className="block mt-1">
                           Contains {selectedFamily.attribute_groups.length} attribute groups, 
                           {selectedFamily.attribute_groups.filter(g => g.required).length} required.
@@ -911,12 +879,7 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
             
             <TabsContent value="attributes">
               <AttributesTab 
-                form={form}
-                product={product} 
-                selectedFamily={selectedFamily}
-                hiddenGroups={hiddenAttributeGroups}
-                onToggleGroupVisibility={toggleAttributeGroup}
-                shouldShowGroup={shouldShowAttributeGroup}
+                productId={productId || 0}
               />
             </TabsContent>
           </Tabs>
@@ -956,6 +919,24 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
               setIsCategoryModalOpen(false)
             }}
           />
+
+          {product && product.family && (
+            <div className="mt-6">
+              <h3 className="text-lg font-semibold mb-4">Family Attribute Groups</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Manage which attribute groups from the product family should appear for this product.
+              </p>
+              <ProductAttributeGroups 
+                product={product as any}
+                onGroupsChange={() => {
+                  // Optionally refresh the product data or UI
+                  if (productId) {
+                    queryClient.invalidateQueries({ queryKey: ['product', productId] });
+                  }
+                }}
+              />
+            </div>
+          )}
         </form>
       </Form>
     </div>

@@ -750,3 +750,26 @@ class FamilyAttributeGroup(models.Model):
 
     def __str__(self):
         return f"{self.family.code} - {self.attribute_group.name}"
+
+class ProductFamilyOverride(models.Model):
+    """
+    Allows individual products to override (remove or add) attribute groups
+    inherited from their family.
+    """
+    product = models.ForeignKey(
+        'Product', on_delete=models.CASCADE, related_name="family_overrides"
+    )
+    attribute_group = models.ForeignKey(
+        AttributeGroup, on_delete=models.CASCADE
+    )
+    removed = models.BooleanField(default=True)
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, db_index=True, null=True)
+
+    class Meta:
+        unique_together = (("product", "attribute_group"),)
+        verbose_name = "Product Family Override"
+        verbose_name_plural = "Product Family Overrides"
+        
+    def __str__(self):
+        action = "Remove" if self.removed else "Add"
+        return f"{action} {self.attribute_group} from {self.product}"

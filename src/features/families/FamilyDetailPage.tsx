@@ -54,6 +54,14 @@ export function FamilyDetailPage() {
         <p className="text-red-700">
           {error instanceof Error ? error.message : t('common.unknownError')}
         </p>
+        <Button
+          variant="outline"
+          className="mt-4"
+          onClick={() => navigate('/app/products/families')}
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          {t('common.backToList')}
+        </Button>
       </div>
     )
   }
@@ -70,7 +78,7 @@ export function FamilyDetailPage() {
         <Button
           variant="outline"
           className="mt-4"
-          onClick={() => navigate('/app/settings/families')}
+          onClick={() => navigate('/app/products/families')}
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
           {t('common.backToList')}
@@ -87,7 +95,7 @@ export function FamilyDetailPage() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigate('/app/settings/families')}
+              onClick={() => navigate('/app/products/families')}
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
               {t('common.back')}
@@ -95,7 +103,7 @@ export function FamilyDetailPage() {
             <h1 className="text-2xl font-bold">{family.label}</h1>
           </div>
           <Button
-            onClick={() => navigate(`/app/settings/families/${family.id}/edit`)}
+            onClick={() => navigate(`/app/products/families/${family.id}/edit`)}
           >
             <PencilIcon className="h-4 w-4 mr-2" />
             {t('common.edit')}
@@ -117,11 +125,11 @@ export function FamilyDetailPage() {
                   </div>
                   <div className="flex justify-between">
                     <dt className="font-medium text-enterprise-600">{t('common.createdAt')}:</dt>
-                    <dd>{formatDate(family.created_at)}</dd>
+                    <dd>{family.created_at ? formatDate(family.created_at) : '-'}</dd>
                   </div>
                   <div className="flex justify-between">
                     <dt className="font-medium text-enterprise-600">{t('common.updatedAt')}:</dt>
-                    <dd>{formatDate(family.updated_at)}</dd>
+                    <dd>{family.updated_at ? formatDate(family.updated_at) : '-'}</dd>
                   </div>
                 </dl>
               </div>
@@ -139,7 +147,7 @@ export function FamilyDetailPage() {
             <h2 className="text-lg font-medium mb-2">
               {t('settings.families.form.attributeGroups')}
             </h2>
-            {family.attribute_groups?.length > 0 ? (
+            {(family.attribute_groups && family.attribute_groups.length > 0) ? (
               <div className="border rounded-md">
                 <Table>
                   <TableHeader>
@@ -151,7 +159,7 @@ export function FamilyDetailPage() {
                   </TableHeader>
                   <TableBody>
                     {family.attribute_groups
-                      .sort((a, b) => a.order - b.order)
+                      ?.sort((a, b) => a.order - b.order)
                       .map(group => (
                         <TableRow key={group.id}>
                           <TableCell className="font-medium">

@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import ProductRowDetails from './ProductRowDetails';
 
 // Mock the Product type for tests
@@ -32,22 +32,22 @@ describe('ProductRowDetails', () => {
   };
 
   it('renders attribute groups correctly', () => {
-    render(<ProductRowDetails product={mockProduct as any} zebra={false} />);
+    const { getByText } = render(<ProductRowDetails product={mockProduct as any} zebra={false} />);
     
     // Check group headings
-    expect(screen.getByText('Physical')).toBeInTheDocument();
-    expect(screen.getByText('Materials')).toBeInTheDocument();
-    expect(screen.getByText('Shipping')).toBeInTheDocument();
+    expect(getByText('Physical')).toBeInTheDocument();
+    expect(getByText('Materials')).toBeInTheDocument();
+    expect(getByText('Shipping')).toBeInTheDocument();
     
     // Check attribute names and values
-    expect(screen.getByText('Color')).toBeInTheDocument();
-    expect(screen.getByText('Red')).toBeInTheDocument();
-    expect(screen.getByText('Size')).toBeInTheDocument();
-    expect(screen.getByText('Large')).toBeInTheDocument();
-    expect(screen.getByText('Material')).toBeInTheDocument();
-    expect(screen.getByText('Cotton')).toBeInTheDocument();
-    expect(screen.getByText('Weight')).toBeInTheDocument();
-    expect(screen.getByText('2kg')).toBeInTheDocument();
+    expect(getByText('Color')).toBeInTheDocument();
+    expect(getByText('Red')).toBeInTheDocument();
+    expect(getByText('Size')).toBeInTheDocument();
+    expect(getByText('Large')).toBeInTheDocument();
+    expect(getByText('Material')).toBeInTheDocument();
+    expect(getByText('Cotton')).toBeInTheDocument();
+    expect(getByText('Weight')).toBeInTheDocument();
+    expect(getByText('2kg')).toBeInTheDocument();
   });
 
   it('handles string attributes', () => {
@@ -56,15 +56,15 @@ describe('ProductRowDetails', () => {
       attributes: ['Size', 'Color', 'Material']
     };
     
-    render(<ProductRowDetails product={productWithStringAttrs as any} zebra={true} />);
+    const { getByText, getAllByText } = render(<ProductRowDetails product={productWithStringAttrs as any} zebra={true} />);
     
     // With string attributes, they should all be under "General" group
-    expect(screen.getByText('General')).toBeInTheDocument();
-    expect(screen.getByText('Size')).toBeInTheDocument();
-    expect(screen.getByText('Color')).toBeInTheDocument();
-    expect(screen.getByText('Material')).toBeInTheDocument();
+    expect(getByText('General')).toBeInTheDocument();
+    expect(getByText('Size')).toBeInTheDocument();
+    expect(getByText('Color')).toBeInTheDocument();
+    expect(getByText('Material')).toBeInTheDocument();
     // Values should be empty
-    expect(screen.getAllByText('No value').length).toBe(3);
+    expect(getAllByText('No value').length).toBe(3);
   });
 
   it('handles attributes with different object structures', () => {
@@ -77,19 +77,19 @@ describe('ProductRowDetails', () => {
       ]
     };
     
-    render(<ProductRowDetails product={productWithMixedAttrs as any} zebra={false} />);
+    const { getByText } = render(<ProductRowDetails product={productWithMixedAttrs as any} zebra={false} />);
     
     // Should find groups
-    expect(screen.getByText('General')).toBeInTheDocument();
-    expect(screen.getByText('Dimensions')).toBeInTheDocument();
+    expect(getByText('General')).toBeInTheDocument();
+    expect(getByText('Dimensions')).toBeInTheDocument();
     
     // Should find all attributes and values
-    expect(screen.getByText('Color')).toBeInTheDocument();
-    expect(screen.getByText('Blue')).toBeInTheDocument();
-    expect(screen.getByText('Height')).toBeInTheDocument();
-    expect(screen.getByText('100cm')).toBeInTheDocument();
-    expect(screen.getByText('Warranty')).toBeInTheDocument();
-    expect(screen.getByText('2 years')).toBeInTheDocument();
+    expect(getByText('Color')).toBeInTheDocument();
+    expect(getByText('Blue')).toBeInTheDocument();
+    expect(getByText('Height')).toBeInTheDocument();
+    expect(getByText('100cm')).toBeInTheDocument();
+    expect(getByText('Warranty')).toBeInTheDocument();
+    expect(getByText('2 years')).toBeInTheDocument();
   });
 
   it('shows a message when there are no attributes', () => {
@@ -98,9 +98,9 @@ describe('ProductRowDetails', () => {
       attributes: []
     };
     
-    render(<ProductRowDetails product={productWithNoAttrs as any} zebra={false} />);
+    const { getByText } = render(<ProductRowDetails product={productWithNoAttrs as any} zebra={false} />);
     
-    expect(screen.getByText('No attributes available for this product.')).toBeInTheDocument();
+    expect(getByText('No attributes available for this product.')).toBeInTheDocument();
   });
 
   it('handles undefined attributes', () => {
@@ -109,9 +109,9 @@ describe('ProductRowDetails', () => {
       attributes: undefined
     };
     
-    render(<ProductRowDetails product={productWithUndefinedAttrs as any} zebra={false} />);
+    const { getByText } = render(<ProductRowDetails product={productWithUndefinedAttrs as any} zebra={false} />);
     
-    expect(screen.getByText('No attributes available for this product.')).toBeInTheDocument();
+    expect(getByText('No attributes available for this product.')).toBeInTheDocument();
   });
 
   it('applies zebra styling when zebra prop is true', () => {

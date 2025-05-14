@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { useNavigate, useParams, useBlocker } from 'react-router-dom'
+import { useState, useEffect, useRef } from 'react'
+import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useForm, useFieldArray, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -177,7 +177,8 @@ export function FamilyFormPage({ mode }: FamilyFormPageProps) {
     handleSubmit, 
     formState: { errors, isDirty, isSubmitting }, 
     reset,
-    watch 
+    watch,
+    getValues
   } = form
   
   // Setup attribute groups field array
@@ -193,13 +194,13 @@ export function FamilyFormPage({ mode }: FamilyFormPageProps) {
         code: family.code,
         label: family.label,
         description: family.description || '',
-        attributeGroups: family.attribute_groups.map(group => ({
+        attributeGroups: family.attribute_groups?.map(group => ({
           id: group.id,
           attribute_group: group.attribute_group,
           attribute_group_name: group.attribute_group_object?.name,
           required: group.required,
           order: group.order
-        }))
+        })) || []
       })
     }
   }, [mode, family, reset])
@@ -212,46 +213,60 @@ export function FamilyFormPage({ mode }: FamilyFormPageProps) {
     })
   )
   
-  // Handle DnD end event
-  const handleDragEnd = (event: any) => {
-    const { active, over } = event
-    
-    if (active.id !== over.id) {
-      const oldIndex = fields.findIndex(field => `group-${field.id || field.attribute_group}` === active.id)
-      const newIndex = fields.findIndex(field => `group-${field.id || field.attribute_group}` === over.id)
-      
-      move(oldIndex, newIndex)
-    }
-  }
-  
-  // Navigate away blocker
-  const blocker = useBlocker(
-    ({ currentLocation, nextLocation }) => 
-      isDirty && 
-      currentLocation.pathname !== nextLocation.pathname
-  )
-  
+  // Track current location
+  const location = useLocation();
+  const prevLocationRef = useRef(location);
+
+  // Handle browser navigation (refresh, close, etc)
   useEffect(() => {
-    if (blocker.state === 'blocked') {
-      setShowUnsavedDialog(true)
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
+
+  // Handle in-app navigation
+  useEffect(() => {
+    if (prevLocationRef.current !== location && isDirty) {
+      // If location changed and there are unsaved changes
+      setShowUnsavedDialog(true);
     }
-  }, [blocker])
-  
+    prevLocationRef.current = location;
+  }, [location, isDirty]);
+
   // Handle form submission
   const onSubmit = async (data: FamilyFormValues) => {
     try {
-      if (mode === 'create') {
-        await createFamily.mutateAsync(data)
-      } else {
-        await updateFamily.mutateAsync(data)
+      // build payload matching Django serializer
+      const payload = {
+        code: data.code,
+        label: data.label,
+        description: data.description,
+        attribute_groups: data.attributeGroups.map((g) => ({
+          attribute_group: g.attribute_group,
+          required: g.required,
+          order: g.order,
+        })),
       }
-      navigate('/app/settings/families')
+
+      if (mode === 'create') {
+        await createFamily.mutateAsync(payload)
+      } else {
+        await updateFamily.mutateAsync(payload)
+      }
+      navigate('/app/products/families')
     } catch (err: any) {
       if (err?.message?.includes('attribute group')) {
         toast({
           title: t('settings.families.messages.attributeGroupRace'),
           description: t('settings.families.messages.attributeGroupRaceDesc'),
-          status: 'error'
+          variant: 'destructive'
         })
         // Optionally reload attribute groups
         // refetch attribute groups here if needed
@@ -259,7 +274,7 @@ export function FamilyFormPage({ mode }: FamilyFormPageProps) {
         toast({
           title: t('common.error'),
           description: err?.message || t('common.unknownError'),
-          status: 'error'
+          variant: 'destructive'
         })
       }
     }
@@ -291,6 +306,32 @@ export function FamilyFormPage({ mode }: FamilyFormPageProps) {
     })
   }
 
+  // Update the function names to be clearer
+  const handleStayOnPage = () => {
+    setShowUnsavedDialog(false);
+    // Just close the dialog, stay on current page
+  };
+
+  const handleDiscardAndNavigate = () => {
+    setShowUnsavedDialog(false);
+    // Reset the form and allow navigation
+    reset();
+    // Navigate to the families list page
+    navigate('/app/products/families');
+  };
+
+  // Handle DnD end event
+  const handleDragEnd = (event: any) => {
+    const { active, over } = event
+    
+    if (active.id !== over.id) {
+      const oldIndex = fields.findIndex(field => `group-${field.id || field.attribute_group}` === active.id)
+      const newIndex = fields.findIndex(field => `group-${field.id || field.attribute_group}` === over.id)
+      
+      move(oldIndex, newIndex)
+    }
+  }
+
   return (
     <ErrorBoundary>
       <div className="space-y-6">
@@ -298,7 +339,13 @@ export function FamilyFormPage({ mode }: FamilyFormPageProps) {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => navigate('/app/settings/families')}
+            onClick={() => {
+              if (isDirty) {
+                setShowUnsavedDialog(true);
+              } else {
+                navigate('/app/settings/families');
+              }
+            }}
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
             {t('common.back')}
@@ -490,7 +537,7 @@ export function FamilyFormPage({ mode }: FamilyFormPageProps) {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => navigate('/app/settings/families')}
+                onClick={handleStayOnPage}
               >
                 {t('common.cancel')}
               </Button>
@@ -517,20 +564,13 @@ export function FamilyFormPage({ mode }: FamilyFormPageProps) {
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => {
-                setShowUnsavedDialog(false)
-                blocker.reset()
-              }}
+              onClick={handleStayOnPage}
             >
               {t('common.cancel')}
             </Button>
             <Button
               variant="destructive"
-              onClick={() => {
-                setShowUnsavedDialog(false)
-                reset()
-                blocker.proceed()
-              }}
+              onClick={handleDiscardAndNavigate}
             >
               {t('common.discard')}
             </Button>

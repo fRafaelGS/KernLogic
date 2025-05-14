@@ -61,8 +61,9 @@ class FamilyViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             user=self.request.user,
             organization=org,
             action='create',
-            family=instance,
-            details={'name': instance.name}
+            entity='family',
+            entity_id=str(instance.id),
+            message=f"Created family: {instance.label}"
         )
 
     def perform_update(self, serializer):
@@ -71,8 +72,9 @@ class FamilyViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             user=self.request.user,
             organization=instance.organization,
             action='update',
-            family=instance,
-            details={'name': instance.name}
+            entity='family',
+            entity_id=str(instance.id),
+            message=f"Updated family: {instance.label}"
         )
 
     def perform_destroy(self, instance):
@@ -82,8 +84,9 @@ class FamilyViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             user=self.request.user,
             organization=instance.organization,
             action='delete',
-            family=instance,
-            details={'name': instance.name}
+            entity='family',
+            entity_id=str(instance.id),
+            message=f"Deleted family: {instance.label}"
         )
 
     @action(detail=True, methods=['post'], url_path='attribute-groups')
@@ -114,8 +117,9 @@ class FamilyViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             user=request.user,
             organization=org,
             action='attribute_group',
-            family=family,
-            details={'attribute_group': attribute_group.id, 'required': family_group.required, 'order': family_group.order}
+            entity='family',
+            entity_id=str(family.id),
+            message=f"{'Added' if created else 'Updated'} attribute group {attribute_group.name} to family {family.label}"
         )
         return Response(FamilyAttributeGroupSerializer(family_group).data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
@@ -129,13 +133,15 @@ class FamilyViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 attribute_group_id=group_id,
                 organization=org
             )
+            group_name = family_group.attribute_group.name
             family_group.delete()
             Activity.objects.create(
                 user=request.user,
                 organization=org,
                 action='attribute_group',
-                family=family,
-                details={'attribute_group': group_id, 'removed': True}
+                entity='family',
+                entity_id=str(family.id),
+                message=f"Removed attribute group {group_name} from family {family.label}"
             )
             return Response(status=status.HTTP_204_NO_CONTENT)
         except FamilyAttributeGroup.DoesNotExist:
@@ -150,6 +156,7 @@ class FamilyViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         org = get_user_organization(request.user)
         group_ids = request.data.get('attribute_group_ids', [])
         created_groups = []
+        group_names = []
         for group_id in group_ids:
             try:
                 attribute_group = AttributeGroup.objects.get(id=group_id, organization=org)
@@ -160,13 +167,16 @@ class FamilyViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 )
                 if created:
                     created_groups.append(family_group)
+                    group_names.append(attribute_group.name)
             except AttributeGroup.DoesNotExist:
                 continue
-        Activity.objects.create(
-            user=request.user,
-            organization=org,
-            action='attribute_group',
-            family=family,
-            details={'bulk_added': [g.attribute_group.id for g in created_groups]}
-        )
+        if created_groups and group_names:
+            Activity.objects.create(
+                user=request.user,
+                organization=org,
+                action='attribute_group',
+                entity='family',
+                entity_id=str(family.id),
+                message=f"Bulk added attribute groups to family {family.label}: {', '.join(group_names)}"
+            )
         return Response(FamilyAttributeGroupSerializer(created_groups, many=True).data, status=status.HTTP_201_CREATED) 

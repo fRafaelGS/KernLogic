@@ -161,4 +161,89 @@ def override_attribute_group(request, product_id):
     # Return success response with current hidden groups
     return Response({
         "hidden_attribute_groups": ProductGroupOverride.get_hidden_groups(product)
-    }) 
+    })
+
+
+from rest_framework import viewsets, mixins, status
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from django.db import transaction
+from django.shortcuts import get_object_or_404
+
+from kernlogic.org_queryset import OrganizationQuerySetMixin
+from kernlogic.utils import get_user_organization
+from products.permissions import HasProductChangePermission
+from products.models import ProductFamilyOverride, Product, AttributeGroup
+from products.serializers import ProductFamilyOverrideSerializer
+
+class ProductFamilyOverrideViewSet(
+    OrganizationQuerySetMixin,
+    mixins.CreateModelMixin,
+    mixins.DestroyModelMixin,
+    mixins.ListModelMixin,
+    viewsets.GenericViewSet,
+):
+    """
+    API endpoints for managing product family attribute group overrides.
+    
+    This viewset allows products to override (remove or add) attribute groups
+    inherited from their family.
+    """
+    serializer_class = ProductFamilyOverrideSerializer
+    permission_classes = [IsAuthenticated, HasProductChangePermission]
+    queryset = ProductFamilyOverride.objects.all()
+    
+    def get_queryset(self):
+        """Filter overrides by product ID from URL"""
+        queryset = super().get_queryset()
+        product_pk = self.kwargs.get('product_pk')
+        if product_pk:
+            queryset = queryset.filter(product_id=product_pk)
+        return queryset
+    
+    def get_serializer_context(self):
+        """Add product ID to serializer context"""
+        context = super().get_serializer_context()
+        context['product_id'] = self.kwargs.get('product_pk')
+        return context
+    
+    def create(self, request, *args, **kwargs):
+        """Handle creation of a single override or bulk override operations"""
+        product_pk = self.kwargs.get('product_pk')
+        product = get_object_or_404(Product, id=product_pk)
+        organization = get_user_organization(request.user)
+        
+        # Check if bulk operation
+        if isinstance(request.data, list):
+            created_overrides = []
+            with transaction.atomic():
+                # Clear existing overrides
+                ProductFamilyOverride.objects.filter(product_id=product_pk).delete()
+                
+                # Create new overrides
+                for item in request.data:
+                    # Validate attribute group exists and belongs to user's org
+                    try:
+                        attribute_group = AttributeGroup.objects.get(
+                            id=item.get('attribute_group'),
+                            organization=organization
+                        )
+                    except AttributeGroup.DoesNotExist:
+                        return Response(
+                            {"error": f"Attribute group {item.get('attribute_group')} not found"},
+                            status=status.HTTP_404_NOT_FOUND
+                        )
+                    
+                    override = ProductFamilyOverride.objects.create(
+                        product=product,
+                        attribute_group=attribute_group,
+                        removed=item.get('removed', True),
+                        organization=organization
+                    )
+                    created_overrides.append(override)
+            
+            serializer = self.get_serializer(created_overrides, many=True)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        
+        # Handle single override
+        return super().create(request, *args, **kwargs) 

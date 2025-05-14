@@ -1,6 +1,6 @@
 from rest_framework import serializers
 import json
-from .models import Product, ProductImage, Activity, ProductRelation, ProductAsset, ProductEvent, Attribute, AttributeValue, AttributeGroupItem, AttributeGroup, SalesChannel, ProductPrice, Category, AttributeOption, AssetBundle, Family, FamilyAttributeGroup
+from .models import Product, ProductImage, Activity, ProductRelation, ProductAsset, ProductEvent, Attribute, AttributeValue, AttributeGroupItem, AttributeGroup, SalesChannel, ProductPrice, Category, AttributeOption, AssetBundle, Family, FamilyAttributeGroup, ProductFamilyOverride
 from django.db.models import Sum, F, Count, Case, When, Value, FloatField
 from decimal import Decimal
 from django.conf import settings
@@ -114,6 +114,38 @@ class ProductImageSerializer(serializers.ModelSerializer):
         return None
 # --- End ProductImage Serializer ---
 
+class ProductFamilyOverrideSerializer(serializers.ModelSerializer):
+    """Serializer for Product Family Override model"""
+    
+    class Meta:
+        model = ProductFamilyOverride
+        fields = ['id', 'attribute_group', 'removed']
+        read_only_fields = ['id']
+        
+    def create(self, validated_data):
+        """Create with organization and product from context"""
+        request = self.context.get('request')
+        product_id = self.context.get('product_id')
+        
+        if not product_id:
+            raise serializers.ValidationError({'product': 'Product ID is required'})
+            
+        # Get organization from product to ensure consistency
+        try:
+            product = Product.objects.get(id=product_id)
+            organization = product.organization
+        except Product.DoesNotExist:
+            raise serializers.ValidationError({'product': 'Product not found'})
+        
+        # Create the override
+        override = ProductFamilyOverride.objects.create(
+            **validated_data,
+            product_id=product_id,
+            organization=organization
+        )
+        
+        return override
+
 class ProductSerializer(serializers.ModelSerializer):
     """
     Serializer for Product model
@@ -145,6 +177,8 @@ class ProductSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True
     )
+    family_overrides = ProductFamilyOverrideSerializer(many=True, required=False, read_only=True)
+    effective_attribute_groups = serializers.SerializerMethodField()
     
     class Meta:
         model = Product
@@ -153,7 +187,9 @@ class ProductSerializer(serializers.ModelSerializer):
             'barcode', 'tags', 'attribute_values', 'is_active', 'is_archived', 'created_at',
             'updated_at', 'primary_image', 'completeness_percent', 'missing_fields',
             'assets', 'has_primary_image', 'primary_image_url', 'primary_asset', 'organization',
-            'created_by', 'images', 'primary_image_thumb', 'primary_image_large', 'family'
+            'created_by', 'images', 'primary_image_thumb', 'primary_image_large', 'family',
+            'family_overrides',
+            'effective_attribute_groups',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'completeness_percent', 
                            'missing_fields', 'assets', 'has_primary_image', 'primary_image_url',
@@ -454,6 +490,61 @@ class ProductSerializer(serializers.ModelSerializer):
             )
             
         return value
+
+    def get_effective_attribute_groups(self, obj):
+        """
+        Calculate effective attribute groups for a product based on:
+        1. Family's attribute groups
+        2. Minus any removed via overrides
+        3. Plus any added via overrides
+        """
+        # Get family groups if a family is assigned
+        family_groups = []
+        if obj.family:
+            family_groups = obj.family.attribute_groups.all().values_list(
+                'attribute_group_id', flat=True
+            )
+            
+        # Get overrides
+        removed_groups = obj.family_overrides.filter(removed=True).values_list(
+            'attribute_group_id', flat=True
+        )
+        added_groups = obj.family_overrides.filter(removed=False).values_list(
+            'attribute_group_id', flat=True
+        )
+        
+        # Calculate effective groups
+        effective_group_ids = (set(family_groups) - set(removed_groups)) | set(added_groups)
+        
+        # Get the actual groups and serialize them
+        if effective_group_ids:
+            effective_groups = AttributeGroup.objects.filter(id__in=effective_group_ids)
+            return AttributeGroupSerializer(effective_groups, many=True).data
+        return []
+
+    def update(self, instance, validated_data):
+        """Handle family overrides in update"""
+        # Extract and handle family_overrides if present
+        overrides_data = self.context.get('overrides')
+        
+        if overrides_data is not None:
+            # Get organization to maintain consistency
+            organization = instance.organization
+            
+            # Clear existing overrides and create new ones
+            with transaction.atomic():
+                instance.family_overrides.all().delete()
+                
+                for override_data in overrides_data:
+                    ProductFamilyOverride.objects.create(
+                        product=instance,
+                        attribute_group_id=override_data['attribute_group'],
+                        removed=override_data['removed'],
+                        organization=organization
+                    )
+        
+        # Continue with normal update
+        return super().update(instance, validated_data)
 
 class ProductRelationSerializer(serializers.ModelSerializer):
     """Serializer for product relations"""
@@ -1021,7 +1112,10 @@ class FamilyAttributeGroupSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
     def validate(self, data):
-        org = self.context['request'].user.organization if 'request' in self.context else None
+        from kernlogic.utils import get_user_organization
+        
+        # Use get_user_organization instead of directly accessing user.organization
+        org = get_user_organization(self.context['request'].user) if 'request' in self.context else None
         if org and data['attribute_group'].organization != org:
             raise serializers.ValidationError('Attribute group must belong to your organization.')
         return data
@@ -1038,7 +1132,7 @@ class FamilySerializer(serializers.ModelSerializer):
         
     def validate_code(self, value):
         """Ensure code is unique within the organization"""
-        org = self.context['request'].user.organization if 'request' in self.context else None
+        org = get_user_organization(self.context['request'].user) if 'request' in self.context else None
         qs = Family.objects.filter(code=value)
         if org:
             qs = qs.filter(organization=org)
@@ -1052,18 +1146,23 @@ class FamilySerializer(serializers.ModelSerializer):
         """Create a new family with nested attribute groups"""
         attribute_groups_data = validated_data.pop('attribute_groups', [])
         
-        # Get organization from context
+        # Get organization and created_by from kwargs if not in validated_data
         request = self.context.get('request')
-        organization = get_user_organization(request.user) if request else None
         
+        # Only set organization and created_by if they're not already in validated_data
+        create_kwargs = {**validated_data}
+        
+        if 'organization' not in validated_data and request:
+            create_kwargs['organization'] = get_user_organization(request.user)
+            
+        if 'created_by' not in validated_data and request:
+            create_kwargs['created_by'] = request.user
+            
         # Create the family
-        family = Family.objects.create(
-            **validated_data,
-            organization=organization,
-            created_by=request.user if request else None
-        )
+        family = Family.objects.create(**create_kwargs)
         
         # Create attribute group associations
+        organization = create_kwargs.get('organization')
         for group_data in attribute_groups_data:
             FamilyAttributeGroup.objects.create(
                 family=family,

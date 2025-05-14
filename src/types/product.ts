@@ -1,16 +1,37 @@
+import { AttributeGroup } from './attributeGroup'
+import { Family, FamilyOverride } from './family'
+
 export interface Product {
-  id: string;
+  id: number;
   name: string;
   sku: string;
-  category?: Category;
-  brand?: Brand;
-  tags?: Tag[];
-  gtin?: string;
-  price?: number;
+  description?: string;
+  stock?: number;
+  is_active: boolean;
+  is_archived?: boolean;
+  created_by?: number;
+  created_at: string;
+  updated_at: string;
+  primary_image?: string;
+  primary_image_url?: string;
+  primary_image_thumb?: string;
+  primary_image_large?: string;
+  primary_asset?: number;
+  completeness_percent?: number;
+  missing_fields?: string[];
+  has_primary_image?: boolean;
+  organization?: number;
+  family?: Family | number;
+  family_overrides?: FamilyOverride[];
+  effective_attribute_groups?: AttributeGroup[];
+  images?: ProductImage[];
+  category?: any;
+  brand?: string;
+  barcode?: string;
+  tags?: string[];
   status: 'active' | 'inactive' | 'draft';
   createdAt: string;
   updatedAt: string;
-  description?: string;
   dataCompleteness?: DataCompleteness;
   primaryImage?: Image;
   attributeGroups?: AttributeGroup[];
@@ -43,15 +64,12 @@ export interface DataCompleteness {
   missingFields?: string[];
 }
 
-export interface AttributeGroup {
-  id: string;
-  name: string;
-  attributes?: Attribute[];
-}
-
-export interface Attribute {
-  id: string;
-  name: string;
-  value: string;
-  unit?: string;
+export interface ProductImage {
+  id: number;
+  product: number;
+  image: string;
+  order?: number;
+  is_primary?: boolean;
+  created_at: string;
+  updated_at: string;
 } 

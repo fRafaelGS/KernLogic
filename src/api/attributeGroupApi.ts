@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import axios from 'axios'
+import axiosInstance from '@/lib/axiosInstance'
+import { isAxiosError } from 'axios'
 
 // Define types
 export interface AttributeGroup {
@@ -21,15 +22,40 @@ export const attributeGroupKeys = {
   detail: (id: number) => [...attributeGroupKeys.details(), id] as const
 }
 
+// Error handling helper
+const handleApiError = (error: unknown) => {
+  if (isAxiosError(error)) {
+    const axiosError = error
+    if (axiosError.response?.status === 403) {
+      throw new Error('You do not have permission to perform this action')
+    }
+    if (axiosError.response?.data) {
+      if (axiosError.response.data.detail) {
+        throw new Error(axiosError.response.data.detail)
+      }
+      throw new Error(JSON.stringify(axiosError.response.data))
+    }
+  }
+  throw error
+}
+
 // API functions
 export const getAttributeGroups = async (): Promise<AttributeGroup[]> => {
-  const { data } = await axios.get('/api/attribute-groups/')
-  return data
+  try {
+    const { data } = await axiosInstance.get('/api/attribute-groups/')
+    return data
+  } catch (error) {
+    return handleApiError(error)
+  }
 }
 
 export const getAttributeGroup = async (id: number): Promise<AttributeGroup> => {
-  const { data } = await axios.get(`/api/attribute-groups/${id}/`)
-  return data
+  try {
+    const { data } = await axiosInstance.get(`/api/attribute-groups/${id}/`)
+    return data
+  } catch (error) {
+    return handleApiError(error)
+  }
 }
 
 // React Query hooks
@@ -37,7 +63,13 @@ export const useAttributeGroups = () => {
   return useQuery({
     queryKey: attributeGroupKeys.lists(),
     queryFn: getAttributeGroups,
-    staleTime: 5 * 60 * 1000 // 5 minutes
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: (failureCount, error) => {
+      if (error instanceof Error && error.message.includes('permission')) {
+        return false
+      }
+      return failureCount < 3
+    }
   })
 }
 
@@ -45,6 +77,12 @@ export const useAttributeGroup = (id: number) => {
   return useQuery({
     queryKey: attributeGroupKeys.detail(id),
     queryFn: () => getAttributeGroup(id),
-    enabled: !!id
+    enabled: !!id,
+    retry: (failureCount, error) => {
+      if (error instanceof Error && error.message.includes('permission')) {
+        return false
+      }
+      return failureCount < 3
+    }
   })
 } 

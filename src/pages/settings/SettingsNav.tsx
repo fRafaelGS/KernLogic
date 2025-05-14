@@ -8,7 +8,7 @@ export function SettingsNav() {
   const navItems = [
     { label: t('settings.general'), path: '/app/settings' },
     { label: t('settings.teams'), path: '/app/settings/teams' },
-    { label: t('settings.families'), path: '/app/settings/families' },
+    { label: t('settings.families'), path: '/app/products/families' },
     { label: t('settings.attributes'), path: '/app/settings/attributes' },
     { label: t('settings.integrations'), path: '/app/settings/integrations' },
   ]

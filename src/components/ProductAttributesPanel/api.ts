@@ -10,7 +10,7 @@ const ATTRIBUTES_QUERY_KEY = (productId: string, locale?: string, channel?: stri
   channel ?? 'all'
 ]
 
-const GROUPS_QUERY_KEY = (productId: string) => ['attributeGroups', productId]
+export const GROUPS_QUERY_KEY = (productId: string) => ['attributeGroups', productId]
 
 export function useAttributes(productId: string, locale?: string, channel?: string) {
   return useQuery<AttributesResponse, Error>({

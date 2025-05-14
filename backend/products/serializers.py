@@ -195,7 +195,7 @@ class ProductSerializer(serializers.ModelSerializer):
                            'missing_fields', 'assets', 'has_primary_image', 'primary_image_url',
                            'primary_asset', 'organization', 'created_by', 'images',
                            'primary_image_thumb', 'primary_image_large', 'attribute_values',
-                           'prices', 'category']
+                           'prices', 'category', 'family_overrides', 'effective_attribute_groups']
     
     def to_representation(self, instance):
         """
@@ -497,6 +497,9 @@ class ProductSerializer(serializers.ModelSerializer):
         1. Family's attribute groups
         2. Minus any removed via overrides
         3. Plus any added via overrides
+        
+        Products can ONLY have attribute groups through family inheritance and overrides,
+        not through direct assignment.
         """
         # Get family groups if a family is assigned
         family_groups = []
@@ -513,7 +516,7 @@ class ProductSerializer(serializers.ModelSerializer):
             'attribute_group_id', flat=True
         )
         
-        # Calculate effective groups
+        # Calculate effective groups - strictly based on family and overrides
         effective_group_ids = (set(family_groups) - set(removed_groups)) | set(added_groups)
         
         # Get the actual groups and serialize them
@@ -523,7 +526,10 @@ class ProductSerializer(serializers.ModelSerializer):
         return []
 
     def update(self, instance, validated_data):
-        """Handle family overrides in update"""
+        """
+        Update method that only persists family and handles family_overrides.
+        Discards any direct attribute_groups assignments that might be in the payload.
+        """
         # Extract and handle family_overrides if present
         overrides_data = self.context.get('overrides')
         
@@ -542,6 +548,10 @@ class ProductSerializer(serializers.ModelSerializer):
                         removed=override_data['removed'],
                         organization=organization
                     )
+        
+        # Remove any attribute_groups data if present (we don't allow direct assignment)
+        if 'attribute_groups' in validated_data:
+            validated_data.pop('attribute_groups')
         
         # Continue with normal update
         return super().update(instance, validated_data)

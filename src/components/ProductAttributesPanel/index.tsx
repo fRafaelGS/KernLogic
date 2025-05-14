@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { PlusIcon, PencilIcon, Save, X, Trash2, Sparkles, Layers } from 'lucide-react'
-import { useAttributes, useUpdateAttribute, useDeleteAttribute, useCreateAttribute, useAllAttributes, useAllAttributeGroups, useAttributeGroups } from './api'
+import { useAttributes, useUpdateAttribute, useDeleteAttribute, useCreateAttribute, useAllAttributes, useAllAttributeGroups, useAttributeGroups, GROUPS_QUERY_KEY } from './api'
 import type { Attribute, AttributeGroup } from './types'
 import { cn } from '@/lib/utils'
 import LocaleChannelSelector from '@/features/attributes/LocaleChannelSelector'
@@ -17,6 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useQueryClient } from '@tanstack/react-query'
 import { LOCALES, LocaleCode } from '@/config/locales'
 import { CHANNELS, ChannelCode } from '@/config/channels'
+import axiosInstance from '@/lib/axiosInstance'
 
 interface ProductAttributesPanelProps {
   productId: string
@@ -56,7 +57,7 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
   const { data, isPending, isError } = useAttributes(productId, selectedLocale, selectedChannel)
   const updateMutation = useUpdateAttribute(productId, selectedLocale, selectedChannel)
   const deleteMutation = useDeleteAttribute(productId, selectedLocale, selectedChannel)
-  const deleteGlobalMutation = useDeleteAttribute(productId, null, null)
+  const deleteGlobalMutation = useDeleteAttribute(productId, undefined, undefined)
   const createMutation = useCreateAttribute(productId, selectedLocale, selectedChannel)
   const { data: allAttributes = [] } = useAllAttributes()
   const { data: allGroups = [], isLoading: loadingAllGroups } = useAllAttributeGroups()
@@ -183,15 +184,15 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
   const [newAttrId, setNewAttrId] = useState<number | null>(null)
   const [newAttrValue, setNewAttrValue] = useState<string>('')
 
-  const [addingAllGroup, setAddingAllGroup] = useState<string | null>(null)
+  const [addingAllGroup, setAddingAllGroup] = useState<string | undefined>(undefined)
 
   // Compute missing groups (by id): show button if group is not in product's group list
   const productGroupIds = new Set(Object.keys(grouped).filter(name => name !== 'Ungrouped'))
   const missingGroups = (allGroups || []).filter(g => !productGroupIds.has(g.name))
   
-  // Add state for the delete group modal
+  // State for Delete Group modal
   const [isDeleteGroupModalOpen, setIsDeleteGroupModalOpen] = useState(false)
-  const [groupToDelete, setGroupToDelete] = useState<string | null>(null)
+  const [groupToDelete, setGroupToDelete] = useState<string | undefined>(undefined)
   
   // Function to delete a group from the product
   const handleDeleteGroup = async (groupName: string) => {
@@ -212,7 +213,7 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
       await queryClient.invalidateQueries({ queryKey: ['attributes', productId, selectedLocale, selectedChannel] })
       toast.success(`Successfully removed all attributes from group "${groupName}"`)
       setIsDeleteGroupModalOpen(false)
-      setGroupToDelete(null)
+      setGroupToDelete(undefined)
     } catch (error) {
       console.error('Error deleting group attributes:', error)
       toast.error('Failed to remove some attributes')
@@ -221,42 +222,41 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
 
   // Helper: add all attributes from a group to the product
   async function handleAddGroupToProduct(group: AttributeGroup) {
+    // With the new backend changes, groups can only be added via family overrides
+    // If the product doesn't have a family, show an error message
+    // If it does, use the family override mechanism
+    
     setAddingAllGroup(group.name)
     try {
-      // Find which attributes are not present in the product
-      // Convert all attributes to numbers for consistent comparison
-      const presentIds = new Set(data?.attributes?.map(a => {
-        const attrId = (a as any).attribute ?? a.id
-        return typeof attrId === 'string' ? Number(attrId) : attrId
-      }) || [])
+      // Check if product has a family assigned
+      const productResponse = await axiosInstance.get(`/api/products/${productId}/`)
+      const productData = productResponse.data
       
-      const toAdd = group.items.filter(item => !presentIds.has(item.attribute))
-      
-      if (toAdd.length === 0) {
-        toast('All attributes in this group are already present')
-        setAddingAllGroup(null)
+      if (!productData.family) {
+        toast.error('This product has no family assigned. Attribute groups can only be inherited from a family.')
+        setAddingAllGroup(undefined)
         return
       }
       
-      // Use Promise.all to add all attributes in parallel
-      await Promise.all(toAdd.map(item => 
-        createMutation.mutateAsync({
-          attributeId: item.attribute,
-          value: '',
-          locale: selectedLocale,
-          channel: selectedChannel
-        })
-      ))
+      // Use family override mechanism to add group
+      // POST to /api/products/{productId}/family-overrides/
+      await axiosInstance.post(`/api/products/${productId}/family-overrides/`, [
+        {
+          attribute_group: group.id,
+          removed: false // false means "add this group"
+        }
+      ])
       
-      // 🔄 REFRESH DATA
+      // Refresh data after override is applied
       await queryClient.invalidateQueries({ queryKey: ['attributes', productId, selectedLocale, selectedChannel] })
+      await queryClient.invalidateQueries({ queryKey: GROUPS_QUERY_KEY(productId) })
       
-      toast.success(`Added group '${group.name}' to product (${toAdd.length} attributes)`) 
+      toast.success(`Added group '${group.name}' to product via family override`)
     } catch (err) {
       console.error('Error adding group to product:', err)
-      toast.error('Failed to add group to product')
+      toast.error('Failed to add group to product. Groups can only be added via family inheritance.')
     } finally {
-      setAddingAllGroup(null)
+      setAddingAllGroup(undefined)
     }
   }
 
@@ -283,7 +283,7 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
     isDisabled: boolean,
     validationError?: string,
     setMediaUploading?: (v: boolean) => void,
-    setMediaUploadError?: (v: string | null) => void
+    setMediaUploadError?: (v: string | undefined) => void
   ) {
     const type = attr.attribute_type || attr.type
     switch (type) {
@@ -422,7 +422,7 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
                 const file = e.target.files?.[0]
                 if (file) {
                   if (setMediaUploading) setMediaUploading(true)
-                  if (setMediaUploadError) setMediaUploadError(null)
+                  if (setMediaUploadError) setMediaUploadError(undefined)
                   try {
                     const assetId = await uploadMedia(file)
                     setDraftValue({ asset_id: assetId })
@@ -441,7 +441,7 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
                 <Button
                   size='xs'
                   variant='outline'
-                  onClick={() => setDraftValue(null)}
+                  onClick={() => setDraftValue(undefined)}
                   disabled={isDisabled}
                 >Remove</Button>
               </div>
@@ -524,7 +524,7 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
 
   // Add media upload state
   const [mediaUploading, setMediaUploading] = useState(false)
-  const [mediaUploadError, setMediaUploadError] = useState<string | null>(null)
+  const [mediaUploadError, setMediaUploadError] = useState<string | undefined>(undefined)
 
   // Add function wrappers to handle type issues
   const handleLocaleChange = (locale: string) => {
@@ -672,7 +672,7 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
                             } catch (err) {
                               toast.error('Failed to add all attributes')
                             } finally {
-                              setAddingAllGroup(null)
+                              setAddingAllGroup(undefined)
                             }
                           }}
                           onKeyDown={e => {

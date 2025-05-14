@@ -415,6 +415,7 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
     const payload = {
       ...values,
       family: selectedFamily?.id || null
+      // Don't include attribute_groups - they are controlled by family inheritance
     };
 
     // Set up function to call based on mode
@@ -429,7 +430,10 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
       // Add all form fields to FormData
       Object.entries(values).forEach(([key, value]) => {
         if (value !== undefined && value !== null) {
-          if (typeof value === 'object' && !(value instanceof File)) {
+          if (key === 'family') {
+            // Make sure to send the family ID or null (not "none")
+            formData.append(key, String(selectedFamily?.id || ''));
+          } else if (typeof value === 'object' && !(value instanceof File)) {
             formData.append(key, JSON.stringify(value));
           } else {
             formData.append(key, String(value));
@@ -484,7 +488,8 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
         Object.entries(payload).forEach(([key, value]) => {
           if (value !== undefined && value !== null) {
             if (key === 'family') {
-              formData.append(key, String(value));
+              // Make sure to send the family ID or null (not "none")
+              formData.append(key, String(selectedFamily?.id || ''));
             } else if (typeof value === 'object' && !(value instanceof File)) {
               formData.append(key, JSON.stringify(value));
             } else {
@@ -550,24 +555,37 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
   };
 
   // Handle family change
-  const handleFamilyChange = async (familyId: number | null) => {
-    if (!familyId) {
+  const handleFamilyChange = async (value: number | null) => {
+    // Check if "none" was selected (which we'll treat as null)
+    if (value === null) {
       setSelectedFamily(null);
+      toast({
+        title: "Family Removed",
+        description: "No family selected. All attribute groups will be shown; please assign a family to control group assignments.",
+        variant: "default"
+      });
       return;
     }
     
-    const family = families?.find(f => f.id === familyId);
+    const family = families?.find(f => f.id === value);
     if (family) {
       setSelectedFamily(family);
+      
+      // Show toast notification about inheritance
+      toast({
+        title: "Family Selected",
+        description: `This product will now inherit all attribute groups from the '${family.label}' family.`,
+        variant: "default"
+      });
       
       // Check if required attribute groups have values
       if (product && family.attribute_groups) {
         const requiredGroups = family.attribute_groups.filter(group => group.required);
         
-        // Warn about required attribute groups
+        // Additional warning about required attribute groups if needed
         if (requiredGroups.length > 0) {
           toast({
-            title: "Family Selected",
+            title: "Required Attributes",
             description: `This family requires ${requiredGroups.length} attribute groups. Please fill in all required attributes.`,
             variant: "default"
           });
@@ -817,8 +835,12 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
               <FormItem className="flex flex-col">
                 <FormLabel>Product Family</FormLabel>
                 <Select
-                  onValueChange={(value) => handleFamilyChange(value ? Number(value) : null)}
-                  defaultValue={initialProduct?.family?.id?.toString() || ''}
+                  onValueChange={(value) => {
+                    // Convert value to number or null
+                    const familyId = value === "none" ? null : value ? Number(value) : null;
+                    handleFamilyChange(familyId);
+                  }}
+                  defaultValue={initialProduct?.family?.id?.toString() || "none"}
                 >
                   <FormControl>
                     <SelectTrigger>
@@ -826,7 +848,7 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {families?.map((family) => (
                       <SelectItem key={family.id} value={family.id.toString()}>
                         {family.label} ({family.code})

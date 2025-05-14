@@ -250,39 +250,82 @@ class AttributeGroupViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
 class ProductAttributeGroupViewSet(OrganizationQuerySetMixin, viewsets.ReadOnlyModelViewSet):
     """
     API endpoint for retrieving product attribute groups with values.
-    This is a read-only endpoint.
+    This is a read-only endpoint that only returns attribute groups 
+    that are inherited from the product's family or modified via overrides.
+    
+    Products can ONLY have attribute groups through family inheritance and overrides,
+    not through direct assignment.
     """
     serializer_class = AttributeGroupSerializer
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
-        """Build a queryset of all attribute groups for this organization.
+        """Build a queryset of attribute groups for this product based on its family.
         
-        This returns all groups regardless of whether the product has values for them,
-        which allows the frontend to render empty groups/items as needed.
+        This only returns groups that are:
+        1. Associated with the product's family (via FamilyAttributeGroup)
+        2. Modified by any ProductFamilyOverride entries for the product
         """
         product_id = self.kwargs.get('product_pk')
         locale     = self.request.query_params.get('locale')
         channel    = self.request.query_params.get('channel')
         org        = get_user_organization(self.request.user)
 
-        return AttributeGroup.objects.filter(
-            organization=org
-        ).prefetch_related(
-            'attributegroupitem_set__attribute',
-            # Prefetch only the relevant values so the serializer can access
-            # them without extra queries.
-            Prefetch(
-                'attributegroupitem_set__attribute__attributevalue_set',
-                queryset=AttributeValue.objects.filter(
-                    product_id=product_id,
-                    organization=org,
-                    **({'locale': locale} if locale not in [None, ''] else {}),
-                    **({'channel': channel} if channel not in [None, ''] else {}),
-                ).select_related('attribute'),
-                to_attr='product_values'
+        if not product_id:
+            # Return empty queryset if no product specified
+            return AttributeGroup.objects.none()
+            
+        try:
+            # Get the product and its family
+            product = Product.objects.get(id=product_id, organization=org)
+            
+            # If product has no family, return empty queryset
+            if not product.family:
+                return AttributeGroup.objects.none()
+                
+            # Get attribute groups associated with the family
+            family_group_ids = product.family.attribute_groups.values_list(
+                'attribute_group_id', flat=True
             )
-        )
+            
+            # Get overrides for the product
+            removed_group_ids = product.family_overrides.filter(
+                removed=True
+            ).values_list('attribute_group_id', flat=True)
+            
+            added_group_ids = product.family_overrides.filter(
+                removed=False
+            ).values_list('attribute_group_id', flat=True)
+            
+            # Calculate effective group IDs
+            effective_group_ids = (set(family_group_ids) - set(removed_group_ids)) | set(added_group_ids)
+            
+            # If no effective groups, return empty queryset
+            if not effective_group_ids:
+                return AttributeGroup.objects.none()
+                
+            # Return only the attribute groups that are effective for this product
+            return AttributeGroup.objects.filter(
+                id__in=effective_group_ids,
+                organization=org
+            ).prefetch_related(
+                'attributegroupitem_set__attribute',
+                # Prefetch only the relevant values so the serializer can access
+                # them without extra queries.
+                Prefetch(
+                    'attributegroupitem_set__attribute__attributevalue_set',
+                    queryset=AttributeValue.objects.filter(
+                        product_id=product_id,
+                        organization=org,
+                        **({'locale': locale} if locale not in [None, ''] else {}),
+                        **({'channel': channel} if channel not in [None, ''] else {}),
+                    ).select_related('attribute'),
+                    to_attr='product_values'
+                )
+            )
+        except Product.DoesNotExist:
+            # Product not found, return empty queryset
+            return AttributeGroup.objects.none()
     
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()

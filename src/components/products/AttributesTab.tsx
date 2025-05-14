@@ -29,7 +29,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, AlertCircle } from 'lucide-react';
+import { PlusCircle, AlertCircle, Info } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { 
   AlertDialog,
@@ -82,7 +82,7 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [currentGroupId, setCurrentGroupId] = useState<number | null>(null);
   const [editableAttributeIds, setEditableAttributeIds] = useState<Record<number, boolean>>({});
-  const [attributeValues, setAttributeValues] = useState<Record<number, AttributeValue>>({});
+  const [attributeValues, setAttributeValues] = useState<Record<string, AttributeValue>>({});
   const [savingStates, setSavingStates] = useState<Record<number, SavingState>>({});
   
   // Confirmation dialog for removing attributes
@@ -93,6 +93,17 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
     | null
   >(null);
   const [confirmRemoveType, setConfirmRemoveType] = useState<'value' | 'group_item'>('value');
+
+  // Fetch product details to check for family
+  const { data: productData } = useQuery({
+    queryKey: ['product', productId],
+    queryFn: async () => {
+      if (!productId) return null;
+      const { data } = await axiosInstance.get(`/api/products/${productId}/`);
+      return data;
+    },
+    enabled: !!productId
+  });
 
   // Load attributes (with stable key and staleTime)
   const { 
@@ -112,7 +123,7 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
     enabled: ENABLE_CUSTOM_ATTRIBUTES,
   });
   
-  // Load attribute groups (always fetch every group assigned to this product)
+  // Load attribute groups (only if product has a family)
   const {
     data: attributeGroups = [],
     isLoading: isLoadingGroups,
@@ -125,7 +136,7 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
         { headers: { 'Accept': 'application/json' } }
       ).then(r => r.data);
     },
-    enabled: ENABLE_ATTRIBUTE_GROUPS && !!productId,
+    enabled: ENABLE_ATTRIBUTE_GROUPS && !!productId && !!productData?.family,
   });
   
   // Load attribute values when not using groups
@@ -189,7 +200,7 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
           let displayValue = item.value;
           
           // Find the attribute definition to convert value to the right type if needed
-          const attribute = attributes.find(a => a.id === item.attribute);
+          const attribute = attributes.find((a: Attribute) => a.id === item.attribute);
           if (attribute?.data_type === 'number' && typeof displayValue === 'string') {
             displayValue = parseFloat(displayValue) || 0;
           } else if (attribute?.data_type === 'boolean' && typeof displayValue === 'string') {
@@ -215,7 +226,7 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
     if (Object.keys(apiMap).length > 0) {
       // Do NOT replace the entire state - merge properly
       setAttributeValues(prev => {
-        const mergedMap = { ...prev };
+        const mergedMap: Record<string, AttributeValue> = { ...prev };
         
         // Merge in the API values
         Object.keys(apiMap).forEach(key => {
@@ -356,7 +367,7 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
       }
       
       // Find attribute definition to format the value correctly
-      const attrDef = attributes.find(a => a.id === attributeId);
+      const attrDef = attributes.find((a: Attribute) => a.id === attributeId);
       console.log('Attribute definition:', attrDef);
       
       // Format value based on data type
@@ -463,7 +474,7 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
       setAttributeValues(prev => {
         console.log('Previous attribute values:', prev);
         // Create a shallow copy to ensure React detects the change
-        const updated = { ...prev };
+        const updated: Record<string, AttributeValue> = { ...prev };
         // Add the new value without disturbing existing ones
         const key = makeAttributeKey(data.attribute, data.locale, data.channel);
         updated[key] = {
@@ -500,14 +511,15 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
       // Force refetch to ensure data consistency
       queryClient.invalidateQueries({ queryKey });
     },
-    onError: (error: any, variables, context) => {
+    onError: (error: unknown, variables, context) => {
       console.error('Error creating attribute value:', error);
-      let errorMessage = error.response?.data?.detail || 'Failed to save attribute value';
+      const err = error as any; // Cast to any for accessing response properties
+      let errorMessage = err.response?.data?.detail || 'Failed to save attribute value';
       
       // If we have a uniqueness error, show a more helpful message
-      if (error.response?.status === 400 && 
-         (error.response?.data?.non_field_errors || 
-          error.response?.data?.detail?.includes('unique'))) {
+      if (err.response?.status === 400 && 
+         (err.response?.data?.non_field_errors || 
+          err.response?.data?.detail?.includes('unique'))) {
         errorMessage = 'This attribute value already exists';
       }
       
@@ -522,10 +534,12 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
         queryClient.setQueryData(queryKey, context.previousData);
         
         // Set saving state to 'error'
-        setSavingStates(prev => ({
-          ...prev,
-          [context.attributeId]: 'error'
-        }));
+        if (context.attributeId) {
+          setSavingStates(prev => ({
+            ...prev,
+            [context.attributeId]: 'error'
+          }));
+        }
       }
     }
   });
@@ -566,7 +580,7 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
       const attribute = attrValue.attribute;
       
       // Find attribute definition
-      const attrDef = attributes.find(a => a.id === attribute);
+      const attrDef = attributes.find((a: Attribute) => a.id === attribute);
       let formattedValue = value;
       
       // Handle special value types
@@ -616,7 +630,7 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
       
       // Update attribute values in local state immediately
       setAttributeValues(prev => {
-        const updated = { ...prev };
+        const updated: Record<string, AttributeValue> = { ...prev };
         const key = makeAttributeKey(data.attribute, data.locale, data.channel);
         updated[key] = {
           ...data,
@@ -652,7 +666,7 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
       toast.error(errorMessage);
       
       // Revert to previous data on error
-      if (context?.attrId) {
+      if (context?.attrId !== undefined) {
         const queryKey = ENABLE_ATTRIBUTE_GROUPS 
           ? qkAttributeGroups(productId, selectedLocale, selectedChannel)
           : qkAttributeValues(productId, selectedLocale, selectedChannel);
@@ -761,7 +775,7 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
     }));
     
     // Find attribute definition to format the value correctly
-    const attrDef = attributes.find(a => a.id === attributeId);
+    const attrDef = attributes.find((a: Attribute) => a.id === attributeId);
     
     // Format value based on data type
     let formattedValue = value;
@@ -816,7 +830,7 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
       // Update attribute values in local state immediately
       const data = response.data;
       setAttributeValues(prev => {
-        const updated = { ...prev };
+        const updated: Record<string, AttributeValue> = { ...prev };
         const key = makeAttributeKey(data.attribute, data.locale, data.channel);
         updated[key] = {
           ...data,
@@ -855,7 +869,7 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
         
       queryClient.invalidateQueries({ queryKey });
       
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to create attribute value:', error);
       
       // Set saving state to 'error'
@@ -864,12 +878,13 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
         [attributeId]: 'error'
       }));
       
-      let errorMessage = error.response?.data?.detail || 'Failed to save attribute value';
+      const err = error as any; // Cast to any for accessing response properties
+      let errorMessage = err.response?.data?.detail || 'Failed to save attribute value';
       
       // If we have a uniqueness error, show a more helpful message
-      if (error.response?.status === 400 && 
-         (error.response?.data?.non_field_errors || 
-          error.response?.data?.detail?.includes('unique'))) {
+      if (err.response?.status === 400 && 
+         (err.response?.data?.non_field_errors || 
+          err.response?.data?.detail?.includes('unique'))) {
         errorMessage = 'This attribute value already exists';
       }
       
@@ -897,7 +912,7 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
     }));
     
     // Find attribute definition
-    const attrDef = attributes.find(a => a.id === attributeId);
+    const attrDef = attributes.find((a: Attribute) => a.id === attributeId);
     let formattedValue = value;
       
     // Handle special value types
@@ -932,7 +947,7 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
       // Update attribute values in local state immediately
       const data = response.data;
       setAttributeValues(prev => {
-        const updated = { ...prev };
+        const updated: Record<string, AttributeValue> = { ...prev };
         const key = makeAttributeKey(data.attribute, data.locale, data.channel);
         updated[key] = {
           ...data,
@@ -944,21 +959,21 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
       // Set saving state to 'saved' momentarily
       setSavingStates(prev => ({
         ...prev,
-        [attributeId]: 'saved'
+        [data.attribute]: 'saved'
       }));
       
       // Reset saving state after a delay
       setTimeout(() => {
         setSavingStates(prev => ({
           ...prev,
-          [attributeId]: 'idle'
+          [data.attribute]: 'idle'
         }));
       }, 2000);
       
       // Reset editable state
       setEditableAttributeIds(prev => {
         const newState = { ...prev };
-        delete newState[attributeId];
+        delete newState[data.attribute];
         return newState;
       });
       
@@ -969,16 +984,17 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
         
       queryClient.invalidateQueries({ queryKey });
       
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to update attribute value:', error);
       
       // Set saving state to 'error'
       setSavingStates(prev => ({
         ...prev,
-        [attributeId]: 'error'
+        [data.attribute]: 'error'
       }));
       
-      const errorMessage = error.response?.data?.detail || 'Failed to update attribute value';
+      const err = error as any; // Cast to any for accessing response properties
+      const errorMessage = err.response?.data?.detail || 'Failed to update attribute value';
       toast.error(errorMessage);
     }
   }, [attributes, attributeValues, productId, selectedLocale, selectedChannel, queryClient]);
@@ -1072,8 +1088,9 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
     return null;
   }
   
-  const isLoading = isLoadingAttributes || isLoadingGroups || isLoadingValues;
-  const hasError = Boolean(attributesError || groupsError || valuesError);
+  const isLoading = isLoadingAttributes || isLoadingGroups;
+  const hasError = Boolean(attributesError || groupsError);
+  const hasFamily = Boolean(productData?.family);
   
   return (
     <div className="space-y-4">
@@ -1084,16 +1101,6 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
           onLocaleChange={value => setSelectedLocale(value)}
           onChannelChange={value => setSelectedChannel(value)}
         />
-        
-        {isStaff && !ENABLE_ATTRIBUTE_GROUPS && (
-          <Button 
-            onClick={() => setIsAddModalOpen(true)}
-            disabled={createAttributeValueMutation.isPending}
-          >
-            <PlusCircle className="h-4 w-4 mr-2" />
-            Add Attribute
-          </Button>
-        )}
       </div>
       
       <Card>
@@ -1105,6 +1112,21 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
         </CardHeader>
         
         <CardContent>
+          {!hasFamily && (
+            <div className="bg-amber-50 border border-amber-200 rounded-md p-4 mb-4">
+              <div className="flex items-start gap-2">
+                <Info className="h-5 w-5 text-amber-600 mt-0.5" />
+                <div>
+                  <h3 className="font-medium text-amber-800">No family selected</h3>
+                  <p className="text-amber-700 text-sm">
+                    This product has no family assigned. Attribute groups can only be inherited from a product family.
+                    Please assign this product to a family in the Basic Info tab to manage attribute groups.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {isLoading ? (
             <div className="space-y-4 py-4">
               <Skeleton className="h-8 w-1/3" />
@@ -1117,28 +1139,43 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
               <AlertCircle className="h-6 w-6 mr-2" />
               <p>Failed to load attributes. Please try again later.</p>
             </div>
-          ) : ENABLE_ATTRIBUTE_GROUPS ? (
-            <AttributeGroupTabs
-              groups={attributeGroups}
-              attributes={uniqueAttributes as Attribute[]}
-              attributeValues={attributeValues}
-              editableAttributeIds={editableAttributeIds}
-              savingStates={savingStates}
-              isStaff={isStaff}
-              onAddAttributeClick={gid => { setCurrentGroupId(gid); setIsAddModalOpen(true); }}
-              onEditAttribute={handleEditAttribute}
-              onCancelEdit={handleCancelEdit}
-              onSaveNewValue={handleSaveNewValue}
-              onUpdateValue={handleUpdateValue}
-              onRemoveAttribute={handleRemoveAttribute}
-              onRemoveAttributeValue={handleRemoveAttributeValue}
-              makeAttrKey={makeAttributeKey}
-            />
+          ) : ENABLE_ATTRIBUTE_GROUPS && hasFamily ? (
+            <>
+              <div className="bg-enterprise-50 border border-enterprise-200 rounded-md p-4 mb-4">
+                <div className="flex items-start gap-2">
+                  <Info className="h-5 w-5 text-enterprise-600 mt-0.5" />
+                  <div>
+                    <h3 className="font-medium text-enterprise-800">Family-Inherited Attribute Groups</h3>
+                    <p className="text-enterprise-700 text-sm">
+                      These attribute groups are inherited from the family assigned to this product.
+                      You can override which groups are shown by using the Family Attribute Groups section in the Basic Info tab.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <AttributeGroupTabs
+                groups={attributeGroups}
+                attributes={uniqueAttributes as Attribute[]}
+                attributeValues={attributeValues}
+                editableAttributeIds={editableAttributeIds}
+                savingStates={savingStates}
+                isStaff={isStaff}
+                onAddAttributeClick={gid => { setCurrentGroupId(gid); setIsAddModalOpen(true); }}
+                onEditAttribute={handleEditAttribute}
+                onCancelEdit={handleCancelEdit}
+                onSaveNewValue={handleSaveNewValue}
+                onUpdateValue={handleUpdateValue}
+                onRemoveAttribute={handleRemoveAttribute}
+                onRemoveAttributeValue={handleRemoveAttributeValue}
+                makeAttrKey={makeAttributeKey}
+              />
+            </>
           ) : attributes.length === 0 ? (
             <div className="py-6 text-center text-enterprise-500">
               <p>No attributes defined yet.</p>
-              {isStaff && (
-                <p className="text-sm mt-1">Click "Add Attribute" to get started.</p>
+              {isStaff && !hasFamily && (
+                <p className="text-sm mt-1">Assign a family to this product to inherit attribute groups.</p>
               )}
             </div>
           ) : (
@@ -1146,7 +1183,7 @@ const AttributesTab: React.FC<AttributesTabProps> = ({ productId }) => {
               {attributes.map((attribute: Attribute) => {
                 const key = makeAttributeKey(attribute.id, selectedLocale, selectedChannel);
                 const value = attributeValues[key];
-                const isEditable = editableAttributeIds[attribute.id];
+                const isEditable = Boolean(editableAttributeIds[attribute.id]);
                 
                 if (!isEditable && !value) return null;
                 

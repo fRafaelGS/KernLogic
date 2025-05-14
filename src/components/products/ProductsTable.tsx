@@ -192,11 +192,17 @@ function toCategoryOption(category: any): CategoryOption {
   };
 }
 
-// Add an interface for ProductsTable props
-// interface ProductsTableProps { ... }
+// Add interface for ProductsTable props with more specific controls
+interface ProductsTableProps {
+  hideTopControls?: boolean;
+  hideTopSearch?: boolean; // Keep the search box hidden
+}
 
-// Update the component definition to accept props
-export function ProductsTable() {
+// Update the component to accept more specific hiding props
+export function ProductsTable({ 
+  hideTopControls = false,
+  hideTopSearch = false
+}: ProductsTableProps = {}) {
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -243,13 +249,24 @@ export function ProductsTable() {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
-  const [pagination, setPagination] = useState<PaginationState>({
+  
+  // Use prop pagination if provided, otherwise use internal state
+  const [paginationState, setPaginationState] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: 10,
   });
   
-  // Add totalCount state to track the total number of products
-  const [totalCount, setTotalCount] = useState<number>(100); // Default to 100 to enable pagination initially
+  // Create computed pagination property that uses props if available
+  const pagination = paginationState;
+  // Create a function to update pagination that uses the prop function if available
+  const setPagination = (newPagination: PaginationState) => {
+    setPaginationState(newPagination);
+  };
+  
+  // Use prop totalCount if provided, otherwise use internal state
+  const [totalCountState, setTotalCountState] = useState<number>(100);
+  // Create a computed totalCount property that uses props if available
+  const totalCount = totalCountState;
   
   // Add scroll container ref
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -336,23 +353,23 @@ export function ProductsTable() {
           // Update total count
           if (typeof anyResponse.count === 'number') {
             console.log(`Setting total count from server: ${anyResponse.count}`);
-            setTotalCount(anyResponse.count);
+            setTotalCountState(anyResponse.count);
           }
           fetchedProducts = anyResponse.results;
         } else if (Array.isArray(anyResponse)) {
           // It's directly an array of products
           fetchedProducts = anyResponse;
           // If we get an array without count info, update totalCount to match array length
-          setTotalCount(anyResponse.length);
+          setTotalCountState(anyResponse.length);
         } else {
           // Fallback to empty array
           fetchedProducts = [];
-          setTotalCount(0);
+          setTotalCountState(0);
         }
       } catch (productsError) {
         // Don't throw, continue to fetch categories
         fetchedProducts = [];
-        setTotalCount(0); // Reset total count on error
+        setTotalCountState(0); // Reset total count on error
       }
       
       try {
@@ -1110,10 +1127,10 @@ export function ProductsTable() {
         // Load page size
         const savedPageSize = localStorage.getItem('productTablePageSize');
         if (savedPageSize) {
-          setPagination(prev => ({
-            ...prev,
+          setPagination({
+            ...pagination,
             pageSize: parseInt(savedPageSize, 10)
-          }));
+          });
         }
       } catch (e) {
         console.error('Error loading user preferences:', e);
@@ -1300,18 +1317,19 @@ export function ProductsTable() {
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
     onPaginationChange: (updater) => {
-      setPagination(prev => {
-        const next = typeof updater === 'function' ? updater(prev) : updater;
-
-        // 🔐 nothing actually changed – bail early
-        if (next.pageIndex === prev.pageIndex && next.pageSize === prev.pageSize) {
-          return prev;
-        }
-
-        // mark this as a *new* pagination state, so fetchData may run once
+      // Simplify the function to avoid TypeScript errors while preserving behavior
+      const newPagination = typeof updater === 'function'
+        ? updater(pagination)
+        : updater;
+      
+      // Check if anything actually changed before updating
+      if (newPagination.pageIndex !== pagination.pageIndex || 
+          newPagination.pageSize !== pagination.pageSize) {
+        // Mark as new pagination state so fetchData may run once
         fetchedOnceRef.current = false;
-        return next;
-      });
+        // Use the setPagination function we defined
+        setPagination(newPagination);
+      }
     },
     onColumnOrderChange: setColumnOrder,
     onExpandedChange: handleExpandedChange,
@@ -1626,41 +1644,51 @@ export function ProductsTable() {
         {/* Table Toolbar */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-1 px-1 border-b gap-1 sm:gap-1">
           <div className="flex items-center space-x-2 w-full sm:w-auto">
-            <div className="relative flex-1 sm:max-w-xs">
-              <ProductsSearchBox
-                value={searchTerm}
-                onChange={handleSearchChange}
-                className="w-full"
-              />
-            </div>
-            <Button 
-              variant={filtersVisible ? "primary" : "outline"} 
-              size="sm" 
-              onClick={handleFilterToggle}
-              className={filtersVisible ? "text-white" : ""}
-            >
-              <FilterIcon className="mr-2 h-4 w-4" />
-              Filter {filtersVisible ? "(on)" : ""}
-            </Button>
+            {/* Only show search and filter button if not hidden */}
+            {!hideTopSearch && (
+              <>
+                <div className="relative flex-1 sm:max-w-xs">
+                  <ProductsSearchBox
+                    value={searchTerm}
+                    onChange={handleSearchChange}
+                    className="w-full"
+                  />
+                </div>
+                <Button 
+                  variant={filtersVisible ? "primary" : "outline"} 
+                  size="sm" 
+                  onClick={handleFilterToggle}
+                  className={filtersVisible ? "text-white" : ""}
+                >
+                  <FilterIcon className="mr-2 h-4 w-4" />
+                  Filter {filtersVisible ? "(on)" : ""}
+                </Button>
+              </>
+            )}
           </div>
           
           <div className="flex items-center space-x-2">
-            <ViewToggle 
-              view={viewMode} 
-              onViewChange={setViewMode} 
-            />
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleRefresh}
-              disabled={loading}
-              className="h-8"
-            >
-              <RefreshCw className={`mr-1 h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
+            {/* Only show view toggle and refresh if not hidden */}
+            {!hideTopControls && (
+              <>
+                <ViewToggle 
+                  view={viewMode} 
+                  onViewChange={setViewMode} 
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleRefresh}
+                  disabled={loading}
+                  className="h-8"
+                >
+                  <RefreshCw className={`mr-1 h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+              </>
+            )}
 
-            {/* Add the SubcategoryManager here */}
+            {/* Always show the SubcategoryManager */}
             <div className="flex items-center">
               <SubcategoryManager 
                 isOpen={showSubcategoryManager}
@@ -1668,7 +1696,7 @@ export function ProductsTable() {
               />
             </div>
 
-            {/* Always show Bulk Actions but disable if no selection */}
+            {/* Always show Bulk Actions */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button 
@@ -1716,6 +1744,7 @@ export function ProductsTable() {
               </DropdownMenuContent>
             </DropdownMenu>
 
+            {/* Always show Columns dropdown */}
             <DropdownMenu open={columnsMenuOpen} onOpenChange={setColumnsMenuOpen}>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="h-9">
@@ -1741,12 +1770,15 @@ export function ProductsTable() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <Button className="h-9" asChild>
-              <Link to="/app/products/new">
-                <PlusIcon className="mr-2 h-4 w-4" />
-                New Product
-              </Link>
-            </Button>
+            {/* Show New Product button only if not hidden */}
+            {!hideTopControls && (
+              <Button className="h-9" asChild>
+                <Link to="/app/products/new">
+                  <PlusIcon className="mr-2 h-4 w-4" />
+                  New Product
+                </Link>
+              </Button>
+            )}
           </div>
         </div>
 

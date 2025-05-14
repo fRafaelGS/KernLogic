@@ -15,7 +15,19 @@ export interface PaginationState {
   pageSize: number
 }
 
-export function useFetchProducts(pagination: PaginationState) {
+export interface FilterParams {
+  searchTerm?: string
+  category?: string
+  status?: 'all' | 'active' | 'inactive'
+  minPrice?: string
+  maxPrice?: string
+  tags?: string[]
+}
+
+export function useFetchProducts(
+  pagination: PaginationState,
+  filterParams: FilterParams = {}
+) {
   const { isAuthenticated } = useAuth()
   const [state, setState] = useState<ProductsState>({
     products: [],
@@ -32,12 +44,44 @@ export function useFetchProducts(pagination: PaginationState) {
       setState(prev => ({ ...prev, loading: true, error: null }))
       
       try {
+        // Map our filter params to API query parameters
+        const queryParams: Record<string, any> = {
+          page: pagination.pageIndex + 1, // API uses 1-based indexing
+          page_size: pagination.pageSize
+        }
+        
+        // Add search term if provided
+        if (filterParams.searchTerm) {
+          queryParams.search = filterParams.searchTerm
+        }
+        
+        // Add category filter if provided
+        if (filterParams.category && filterParams.category !== 'all') {
+          queryParams.category = filterParams.category
+        }
+        
+        // Add status filter if provided
+        if (filterParams.status && filterParams.status !== 'all') {
+          queryParams.is_active = filterParams.status === 'active'
+        }
+        
+        // Add price range filters if provided
+        if (filterParams.minPrice) {
+          queryParams.min_price = filterParams.minPrice
+        }
+        
+        if (filterParams.maxPrice) {
+          queryParams.max_price = filterParams.maxPrice
+        }
+        
+        // Add tags filter if provided
+        if (filterParams.tags && filterParams.tags.length > 0) {
+          queryParams.tags = filterParams.tags.join(',')
+        }
+        
         // Use pagination for server-side paging
         const response = await productService.getProducts(
-          {
-            page: pagination.pageIndex + 1, // API uses 1-based indexing
-            page_size: pagination.pageSize
-          },
+          queryParams,
           /* fetchAll */ false,
           /* includeAssets */ false
         )
@@ -82,7 +126,18 @@ export function useFetchProducts(pagination: PaginationState) {
     }
     
     fetchData()
-  }, [isAuthenticated, pagination.pageIndex, pagination.pageSize])
+  }, [
+    isAuthenticated, 
+    pagination.pageIndex, 
+    pagination.pageSize,
+    filterParams.searchTerm,
+    filterParams.category,
+    filterParams.status,
+    filterParams.minPrice,
+    filterParams.maxPrice,
+    // Join tags array to a string for dependency comparison
+    filterParams.tags?.join(',')
+  ])
   
   return state
 } 

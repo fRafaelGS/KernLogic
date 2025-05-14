@@ -3,17 +3,40 @@ import { ProductsTableAdapter } from '@/components/products/ProductsTableAdapter
 import { ProductGrid } from '@/components/products/ProductGrid'
 import { ViewToggle } from '@/components/products/ViewToggle'
 import { PaginationControls } from '@/components/products/PaginationControls'
-import { useFetchProducts, PaginationState } from '@/hooks/useFetchProducts'
+import { useFetchProducts, PaginationState, FilterParams } from '@/hooks/useFetchProducts'
 import { Button } from '@/components/ui/button'
 import { RefreshCw, Plus, Filter } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useToast } from '@/components/ui/use-toast'
+import { ProductsSearchBox } from '@/components/products/ProductsSearchBox'
+import { useDebounce } from '@/hooks/useDebounce'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
+import { useUniqueCategories, useUniqueTags } from '@/hooks/useProductDerived'
 
 type ViewMode = 'list' | 'grid'
 
 export default function ProductsPage() {
   const { toast } = useToast()
   const [viewMode, setViewMode] = useState<ViewMode>('list')
+  
+  // Add search state here
+  const [searchTerm, setSearchTerm] = useState('')
+  const debouncedSearchTerm = useDebounce(searchTerm, 300)
+  
+  // Add filter toggle state
+  const [filtersVisible, setFiltersVisible] = useState(false)
+  
+  // Add filter state
+  const [filters, setFilters] = useState<FilterParams>({
+    searchTerm: '',
+    category: 'all',
+    status: 'all',
+    minPrice: '',
+    maxPrice: '',
+    tags: []
+  })
   
   // Separate pagination states
   const [listPagination, setListPagination] = useState<PaginationState>({ 
@@ -30,8 +53,20 @@ export default function ProductsPage() {
   const activePagination = viewMode === 'list' ? listPagination : gridPagination
   const setActivePagination = viewMode === 'list' ? setListPagination : setGridPagination
   
-  // Fetch products with the active pagination
-  const { products, filteredData, totalCount, loading, error } = useFetchProducts(activePagination)
+  // Update filters when search term changes
+  useEffect(() => {
+    setFilters(prev => ({
+      ...prev,
+      searchTerm: debouncedSearchTerm
+    }))
+  }, [debouncedSearchTerm])
+  
+  // Fetch products with the active pagination and filters
+  const { products, filteredData, totalCount, loading, error } = useFetchProducts(activePagination, filters)
+  
+  // Use these hooks to get unique categories and tags
+  const uniqueCategories = useUniqueCategories(products)
+  const uniqueTags = useUniqueTags(products)
   
   // Compute page count for controls
   const pageCount = Math.ceil(totalCount / activePagination.pageSize)
@@ -59,18 +94,53 @@ export default function ProductsPage() {
     })
   }
   
+  // Handle filter toggle
+  const handleFilterToggle = () => {
+    setFiltersVisible(prev => !prev)
+  }
+  
+  // Handle search change
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value)
+  }
+  
+  // Handle filter change
+  const handleFilterChange = <K extends keyof FilterParams>(key: K, value: FilterParams[K]) => {
+    setFilters(prev => ({ ...prev, [key]: value }))
+  }
+  
+  // Handle clearing all filters
+  const handleClearFilters = () => {
+    setFilters({
+      searchTerm: debouncedSearchTerm, // Keep the search term
+      category: 'all',
+      status: 'all',
+      minPrice: '',
+      maxPrice: '',
+      tags: []
+    })
+  }
+  
   return (
     <div className="flex flex-col flex-1 w-full h-full mx-auto max-w-screen-2xl px-2 lg:px-4 min-h-0">
       {/* Table Toolbar */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-1 px-1 border-b gap-1 sm:gap-1">
         <div className="flex items-center space-x-2 w-full sm:w-auto">
-          {/* Add your search box here */}
+          <div className="relative flex-1 sm:max-w-xs">
+            <ProductsSearchBox
+              value={searchTerm}
+              onChange={handleSearchChange}
+              className="w-full"
+            />
+          </div>
           <Button 
-            variant="outline" 
-            size="sm"
+            variant={filtersVisible ? "primary" : "outline"} 
+            size="sm" 
+            onClick={handleFilterToggle}
+            className={filtersVisible ? "text-white" : ""}
           >
             <Filter className="mr-2 h-4 w-4" />
-            Filter
+            Filter {filtersVisible ? "(on)" : ""}
           </Button>
         </div>
         
@@ -98,6 +168,82 @@ export default function ProductsPage() {
           </Button>
         </div>
       </div>
+
+      {/* Filter Panel - Based on filtersVisible */}
+      {filtersVisible && (
+        <div className="border-b border-slate-200 bg-slate-50 p-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
+          <div className="space-y-2">
+            <Label htmlFor="category-filter">Category</Label>
+            <Select
+              value={filters.category || "all"}
+              onValueChange={(value) => handleFilterChange('category', value)}
+            >
+              <SelectTrigger id="category-filter">
+                <SelectValue placeholder="All Categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                <SelectItem value="uncategorized">Uncategorized</SelectItem>
+                {uniqueCategories.map((category) => (
+                  <SelectItem key={category} value={category}>
+                    {category}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="status-filter">Status</Label>
+            <Select
+              value={filters.status}
+              onValueChange={(value) => handleFilterChange('status', value as 'all' | 'active' | 'inactive')}
+            >
+              <SelectTrigger id="status-filter">
+                <SelectValue placeholder="All Statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="min-price">Min Price</Label>
+            <Input
+              id="min-price"
+              type="number"
+              min={0}
+              placeholder="Min Price"
+              value={filters.minPrice}
+              onChange={(e) => handleFilterChange('minPrice', e.target.value)}
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="max-price">Max Price</Label>
+            <Input
+              id="max-price"
+              type="number"
+              min={0}
+              placeholder="Max Price"
+              value={filters.maxPrice}
+              onChange={(e) => handleFilterChange('maxPrice', e.target.value)}
+            />
+          </div>
+          
+          <div className="col-span-full flex justify-end space-x-2">
+            <Button variant="outline" size="sm" onClick={handleClearFilters}>
+              Clear Filters
+            </Button>
+            <Button size="sm" onClick={handleFilterToggle}>
+              Apply Filters
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <section className="flex flex-col flex-1 min-h-0">

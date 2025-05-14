@@ -19,16 +19,15 @@ interface ProductsTableAdapterProps {
  * 
  * Implementation notes:
  * - ProductsTable handles its own data fetching and pagination internally
- * - This adapter renders the original component with no modification
- * - In a future refactor, we would pass the props from ProductsPage down to ProductsTable
- * 
- * NOTE: We are suppressing TypeScript errors because the current ProductsTable
- * implementation doesn't accept props. In a real-world scenario, we would
- * properly refactor it to accept these props.
+ * - Currently, we don't pass props to prevent TypeScript errors since
+ *   ProductsTable doesn't fully support them yet
+ * - We hide only specific controls that are duplicated in the parent component
  */
 export function ProductsTableAdapter(props: ProductsTableAdapterProps) {
-  // We intentionally ignore TypeScript errors here while migrating to the new architecture
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore - ProductsTable doesn't define props currently but we're migrating gradually
-  return <ProductsTable />
+  // Hide only the search box, filter button, view toggle, refresh button, and new product button
+  // but keep bulk actions, category management, and columns control
+  return <ProductsTable 
+    hideTopSearch={true} 
+    hideTopControls={true} 
+  />;
 } 

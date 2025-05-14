@@ -927,7 +927,12 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
                 Manage which attribute groups from the product family should appear for this product.
               </p>
               <ProductAttributeGroups 
-                product={product as any}
+                product={{
+                  id: productId || 0,
+                  family: product.family,
+                  effective_attribute_groups: product.attributes?.effective_attribute_groups || [],
+                  family_overrides: product.attributes?.family_overrides || []
+                } as any}
                 onGroupsChange={() => {
                   // Optionally refresh the product data or UI
                   if (productId) {

@@ -49,10 +49,10 @@ export function FamilyDetailPage() {
     return (
       <div className="p-6 bg-red-50 rounded-md border border-red-200">
         <h2 className="text-lg font-medium text-red-800 mb-2">
-          {t('common.error')}
+          {t('common.messages.error')}
         </h2>
         <p className="text-red-700">
-          {error instanceof Error ? error.message : t('common.unknownError')}
+          {error instanceof Error ? error.message : t('common.messages.unknownError')}
         </p>
         <Button
           variant="outline"
@@ -60,7 +60,7 @@ export function FamilyDetailPage() {
           onClick={() => navigate('/app/products/families')}
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
-          {t('common.backToList')}
+          {t('families.form.back')}
         </Button>
       </div>
     )
@@ -70,10 +70,10 @@ export function FamilyDetailPage() {
     return (
       <div className="p-6 bg-yellow-50 rounded-md border border-yellow-200">
         <h2 className="text-lg font-medium text-yellow-800 mb-2">
-          {t('common.notFound')}
+          {t('common.messages.notFound')}
         </h2>
         <p className="text-yellow-700">
-          {t('settings.families.notFound')}
+          {t('families.noData')}
         </p>
         <Button
           variant="outline"
@@ -81,7 +81,7 @@ export function FamilyDetailPage() {
           onClick={() => navigate('/app/products/families')}
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
-          {t('common.backToList')}
+          {t('families.form.back')}
         </Button>
       </div>
     )
@@ -98,7 +98,7 @@ export function FamilyDetailPage() {
               onClick={() => navigate('/app/products/families')}
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
-              {t('common.back')}
+              {t('families.form.back')}
             </Button>
             <h1 className="text-2xl font-bold">{family.label}</h1>
           </div>
@@ -106,29 +106,29 @@ export function FamilyDetailPage() {
             onClick={() => navigate(`/app/products/families/${family.id}/edit`)}
           >
             <PencilIcon className="h-4 w-4 mr-2" />
-            {t('common.edit')}
+            {t('common.actions.edit')}
           </Button>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-4">
             <div>
-              <h2 className="text-lg font-medium mb-2">{t('settings.families.details')}</h2>
+              <h2 className="text-lg font-medium mb-2">{t('families.title')}</h2>
               <div className="bg-enterprise-50 p-4 rounded-md">
                 <dl className="space-y-2">
                   <div className="flex justify-between">
-                    <dt className="font-medium text-enterprise-600">{t('settings.families.form.code')}:</dt>
+                    <dt className="font-medium text-enterprise-600">{t('families.table.code')}:</dt>
                     <dd>{family.code}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="font-medium text-enterprise-600">{t('settings.families.form.label')}:</dt>
+                    <dt className="font-medium text-enterprise-600">{t('families.table.label')}:</dt>
                     <dd>{family.label}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="font-medium text-enterprise-600">{t('common.createdAt')}:</dt>
+                    <dt className="font-medium text-enterprise-600">{t('families.table.createdAt')}:</dt>
                     <dd>{family.created_at ? formatDate(family.created_at) : '-'}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="font-medium text-enterprise-600">{t('common.updatedAt')}:</dt>
+                    <dt className="font-medium text-enterprise-600">{t('common.fields.updatedAt')}:</dt>
                     <dd>{family.updated_at ? formatDate(family.updated_at) : '-'}</dd>
                   </div>
                 </dl>
@@ -136,7 +136,7 @@ export function FamilyDetailPage() {
             </div>
             {family.description && (
               <div>
-                <h2 className="text-lg font-medium mb-2">{t('settings.families.form.description')}</h2>
+                <h2 className="text-lg font-medium mb-2">{t('families.form.description')}</h2>
                 <div className="bg-enterprise-50 p-4 rounded-md">
                   <p className="whitespace-pre-wrap">{family.description}</p>
                 </div>
@@ -145,16 +145,16 @@ export function FamilyDetailPage() {
           </div>
           <div>
             <h2 className="text-lg font-medium mb-2">
-              {t('settings.families.form.attributeGroups')}
+              {t('families.table.attributeGroups')}
             </h2>
             {(family.attribute_groups && family.attribute_groups.length > 0) ? (
               <div className="border rounded-md">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>{t('settings.families.form.group')}</TableHead>
-                      <TableHead>{t('settings.families.form.required')}</TableHead>
-                      <TableHead>{t('settings.families.form.order')}</TableHead>
+                      <TableHead>{t('families.form.group')}</TableHead>
+                      <TableHead>{t('families.form.required')}</TableHead>
+                      <TableHead>{t('common.fields.order')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -180,7 +180,7 @@ export function FamilyDetailPage() {
               </div>
             ) : (
               <div className="border rounded-md p-8 text-center text-enterprise-400">
-                {t('settings.families.noAttributeGroups')}
+                {t('families.form.noAssignedGroups')}
               </div>
             )}
           </div>

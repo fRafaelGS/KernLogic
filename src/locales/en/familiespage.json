@@ -1,0 +1,37 @@
+{
+  "families": {
+    "title": "Product Families",
+    "createNew": "Create New Family",
+    "searchPlaceholder": "Search families...",
+    "edit": "Edit Family {{code}}",
+    "table": {
+      "code": "Code",
+      "label": "Label",
+      "attributeGroups": "Attribute Groups",
+      "createdAt": "Created At",
+      "actions": "Actions"
+    },
+    "noData": "No families found.",
+    "messages": {
+      "deleteConfirm": "Are you sure you want to delete the family \"{{code}}\"?",
+      "saveSuccess": "Family saved successfully.",
+      "deleteSuccess": "Family deleted.",
+      "attributeGroupRace": "Attribute Group Changed",
+      "attributeGroupRaceDesc": "Another user may have modified the attribute groups. Please refresh and try again."
+    },
+    "form": {
+      "back": "Back",
+      "code": "Code",
+      "label": "Label",
+      "description": "Description",
+      "attributeGroups": "Attribute Groups",
+      "addGroup": "Add Group",
+      "group": "Group",
+      "required": "Required",
+      "cancel": "Cancel",
+      "save": "Save",
+      "noGroups": "Add an attribute group using the button above.",
+      "noAssignedGroups": "No attribute groups assigned to this family."
+    }
+  }
+} 

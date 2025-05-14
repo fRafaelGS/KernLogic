@@ -108,7 +108,7 @@ function SortableGroupItem({
       <div className="flex flex-1 items-center space-x-4">
         <div className="w-full sm:w-64">
           <Label htmlFor={`attributeGroups.${index}.attribute_group`}>
-            {t('settings.families.form.group')}
+            {t('families.form.group')}
           </Label>
           <div className="mt-1">
             <span className="block p-2 border border-enterprise-200 rounded-md bg-enterprise-50 text-enterprise-700 text-sm">
@@ -127,7 +127,7 @@ function SortableGroupItem({
               onCheckedChange={(checked) => item.required = checked === true}
             />
             <Label htmlFor={`attributeGroups.${index}.required`} className="ml-2">
-              {t('settings.families.form.required')}
+              {t('families.form.required')}
             </Label>
           </div>
         </div>
@@ -141,7 +141,7 @@ function SortableGroupItem({
         className="text-red-500 hover:text-red-600 hover:bg-red-50"
       >
         <Trash2Icon className="h-4 w-4" />
-        <span className="sr-only">{t('common.remove')}</span>
+        <span className="sr-only">{t('common.actions.remove')}</span>
       </Button>
     </div>
   )
@@ -257,23 +257,31 @@ export function FamilyFormPage({ mode }: FamilyFormPageProps) {
 
       if (mode === 'create') {
         await createFamily.mutateAsync(payload)
+        toast({
+          title: t('families.messages.saveSuccess'),
+          variant: 'default'
+        })
       } else {
         await updateFamily.mutateAsync(payload)
+        toast({
+          title: t('families.messages.saveSuccess'),
+          variant: 'default'
+        })
       }
       navigate('/app/products/families')
     } catch (err: any) {
       if (err?.message?.includes('attribute group')) {
         toast({
-          title: t('settings.families.messages.attributeGroupRace'),
-          description: t('settings.families.messages.attributeGroupRaceDesc'),
+          title: t('families.messages.attributeGroupRace'),
+          description: t('families.messages.attributeGroupRaceDesc'),
           variant: 'destructive'
         })
         // Optionally reload attribute groups
         // refetch attribute groups here if needed
       } else {
         toast({
-          title: t('common.error'),
-          description: err?.message || t('common.unknownError'),
+          title: t('common.messages.error'),
+          description: err?.message || t('common.messages.unknownError'),
           variant: 'destructive'
         })
       }
@@ -343,17 +351,17 @@ export function FamilyFormPage({ mode }: FamilyFormPageProps) {
               if (isDirty) {
                 setShowUnsavedDialog(true);
               } else {
-                navigate('/app/settings/families');
+                navigate('/app/products/families');
               }
             }}
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
-            {t('common.back')}
+            {t('families.form.back')}
           </Button>
           <h1 className="text-2xl font-bold">
             {mode === 'create' 
-              ? t('settings.families.create') 
-              : t('settings.families.edit', { code: family?.code })}
+              ? t('families.createNew') 
+              : t('families.edit', { code: family?.code || '' })}
           </h1>
         </div>
         
@@ -378,7 +386,7 @@ export function FamilyFormPage({ mode }: FamilyFormPageProps) {
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="code">
-                    {t('settings.families.form.code')}
+                    {t('families.form.code')}
                     <span className="text-red-500 ml-1">*</span>
                   </Label>
                   <Controller
@@ -399,7 +407,7 @@ export function FamilyFormPage({ mode }: FamilyFormPageProps) {
                 
                 <div className="space-y-2">
                   <Label htmlFor="label">
-                    {t('settings.families.form.label')}
+                    {t('families.form.label')}
                     <span className="text-red-500 ml-1">*</span>
                   </Label>
                   <Controller
@@ -420,7 +428,7 @@ export function FamilyFormPage({ mode }: FamilyFormPageProps) {
                 
                 <div className="space-y-2">
                   <Label htmlFor="description">
-                    {t('settings.families.form.description')}
+                    {t('families.form.description')}
                   </Label>
                   <Controller
                     name="description"
@@ -439,7 +447,7 @@ export function FamilyFormPage({ mode }: FamilyFormPageProps) {
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
                   <Label className="text-base">
-                    {t('settings.families.form.attributeGroups')}
+                    {t('families.form.attributeGroups')}
                     <span className="text-red-500 ml-1">*</span>
                   </Label>
                   
@@ -447,19 +455,19 @@ export function FamilyFormPage({ mode }: FamilyFormPageProps) {
                     <PopoverTrigger asChild>
                       <Button size="sm">
                         <PlusIcon className="h-4 w-4 mr-2" />
-                        {t('settings.families.addGroup')}
+                        {t('families.form.addGroup')}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-72 p-4">
                       <div className="space-y-4">
                         <h4 className="font-medium">
-                          {t('settings.families.selectGroup')}
+                          {t('families.form.addGroup')}
                         </h4>
                         
                         <div className="relative">
                           <SearchIcon className="h-4 w-4 absolute left-3 top-3 text-enterprise-400" />
                           <Input
-                            placeholder={t('common.search')}
+                            placeholder={t('families.searchPlaceholder')}
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="pl-9"
@@ -482,8 +490,8 @@ export function FamilyFormPage({ mode }: FamilyFormPageProps) {
                           ) : (
                             <p className="text-sm text-enterprise-400 p-2">
                               {searchTerm 
-                                ? t('common.noSearchResults') 
-                                : t('settings.families.noGroupsAvailable')}
+                                ? t('common.messages.noSearchResults') 
+                                : t('families.noData')}
                             </p>
                           )}
                         </div>
@@ -525,7 +533,7 @@ export function FamilyFormPage({ mode }: FamilyFormPageProps) {
                   {fields.length === 0 && (
                     <div className="border border-dashed border-enterprise-300 rounded-md p-6 text-center">
                       <p className="text-enterprise-500">
-                        {t('settings.families.dropGroupsHere')}
+                        {t('families.form.noGroups')}
                       </p>
                     </div>
                   )}
@@ -539,13 +547,13 @@ export function FamilyFormPage({ mode }: FamilyFormPageProps) {
                 variant="outline"
                 onClick={handleStayOnPage}
               >
-                {t('common.cancel')}
+                {t('families.form.cancel')}
               </Button>
               <Button
                 type="submit"
                 disabled={!form.formState.isValid || form.formState.isSubmitting}
               >
-                {mode === 'create' ? t('common.save') : t('common.update')}
+                {t('families.form.save')}
               </Button>
             </div>
           </form>
@@ -556,9 +564,9 @@ export function FamilyFormPage({ mode }: FamilyFormPageProps) {
       <Dialog open={showUnsavedDialog} onOpenChange={setShowUnsavedDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t('common.unsavedChanges')}</DialogTitle>
+            <DialogTitle>{t('common.dialogs.unsavedChanges')}</DialogTitle>
             <DialogDescription>
-              {t('common.unsavedChangesDescription')}
+              {t('common.messages.unsavedChangesDescription')}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -566,13 +574,13 @@ export function FamilyFormPage({ mode }: FamilyFormPageProps) {
               variant="outline"
               onClick={handleStayOnPage}
             >
-              {t('common.cancel')}
+              {t('families.form.cancel')}
             </Button>
             <Button
               variant="destructive"
               onClick={handleDiscardAndNavigate}
             >
-              {t('common.discard')}
+              {t('common.actions.discard')}
             </Button>
           </DialogFooter>
         </DialogContent>

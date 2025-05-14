@@ -98,10 +98,10 @@ export function FamilyListPage() {
     return (
       <div className="p-6 bg-red-50 rounded-md border border-red-200">
         <h2 className="text-lg font-medium text-red-800 mb-2">
-          {t('common.error')}
+          {t('common.messages.error')}
         </h2>
         <p className="text-red-700">
-          {error instanceof Error ? error.message : t('common.unknownError')}
+          {error instanceof Error ? error.message : t('common.messages.unknownError')}
         </p>
       </div>
     )
@@ -111,11 +111,10 @@ export function FamilyListPage() {
     <ErrorBoundary>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold">{t('products.families.title')}</h1>
+          <h1 className="text-2xl font-bold">{t('families.title')}</h1>
           <Button onClick={() => navigate('/app/products/families/new')}>
             <PlusIcon className="h-4 w-4 mr-2" />
-            {t('products.families.create')}
-            {t('settings.families.create')}
+            {t('families.createNew')}
           </Button>
         </div>
         
@@ -123,7 +122,7 @@ export function FamilyListPage() {
           <div className="relative w-64">
             <SearchIcon className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-enterprise-400" />
             <Input
-              placeholder={t('common.search')}
+              placeholder={t('families.searchPlaceholder')}
               value={search}
               onChange={(e) => handleSearch(e.target.value)}
               className="pl-9"
@@ -133,13 +132,9 @@ export function FamilyListPage() {
           {!isLoading && (
             <div className="text-sm text-enterprise-500">
               {totalPages > 0 ? (
-                t('pagination.showing', {
-                  start: (page - 1) * PAGE_SIZE + 1,
-                  end: Math.min(page * PAGE_SIZE, filteredFamilies.length),
-                  total: filteredFamilies.length
-                })
+                `Showing ${(page - 1) * PAGE_SIZE + 1}-${Math.min(page * PAGE_SIZE, filteredFamilies.length)} of ${filteredFamilies.length}`
               ) : (
-                t('pagination.noResults')
+                'No results found'
               )}
             </div>
           )}
@@ -149,11 +144,11 @@ export function FamilyListPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{t('settings.families.form.code')}</TableHead>
-                <TableHead>{t('settings.families.form.label')}</TableHead>
-                <TableHead>{t('settings.families.form.attributeGroups')}</TableHead>
-                <TableHead>{t('common.createdAt')}</TableHead>
-                <TableHead className="text-right">{t('common.actions')}</TableHead>
+                <TableHead>{t('families.table.code')}</TableHead>
+                <TableHead>{t('families.table.label')}</TableHead>
+                <TableHead>{t('families.table.attributeGroups')}</TableHead>
+                <TableHead>{t('families.table.createdAt')}</TableHead>
+                <TableHead className="text-right">{t('families.table.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -177,7 +172,7 @@ export function FamilyListPage() {
                         {family.attribute_groups?.length || 0}
                       </Badge>
                     </TableCell>
-                    <TableCell>{formatDate(family.created_at)}</TableCell>
+                    <TableCell>{family.created_at ? formatDate(family.created_at) : '-'}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end space-x-2">
                         <Button
@@ -186,7 +181,7 @@ export function FamilyListPage() {
                           onClick={() => navigate(`/app/products/families/${family.id}`)}
                         >
                           <EyeIcon className="h-4 w-4" />
-                          <span className="sr-only">{t('common.view')}</span>
+                          <span className="sr-only">{t('common.actions.view')}</span>
                         </Button>
                         <Button
                           variant="ghost"
@@ -194,7 +189,7 @@ export function FamilyListPage() {
                           onClick={() => navigate(`/app/products/families/${family.id}/edit`)}
                         >
                           <PencilIcon className="h-4 w-4" />
-                          <span className="sr-only">{t('common.edit')}</span>
+                          <span className="sr-only">{t('common.actions.edit')}</span>
                         </Button>
                         
                         <AlertDialog>
@@ -206,23 +201,23 @@ export function FamilyListPage() {
                               onClick={() => setSelectedFamily(family)}
                             >
                               <TrashIcon className="h-4 w-4" />
-                              <span className="sr-only">{t('common.delete')}</span>
+                              <span className="sr-only">{t('common.actions.delete')}</span>
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
-                              <AlertDialogTitle>{t('common.delete')}</AlertDialogTitle>
+                              <AlertDialogTitle>{t('common.actions.delete')}</AlertDialogTitle>
                               <AlertDialogDescription>
-                                {t('settings.families.messages.deleteConfirm', { code: family.code })}
+                                {t('families.messages.deleteConfirm', { code: family.code || '' })}
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
-                              <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+                              <AlertDialogCancel>{t('families.form.cancel')}</AlertDialogCancel>
                               <AlertDialogAction
                                 className="bg-red-500 hover:bg-red-600"
                                 onClick={handleDelete}
                               >
-                                {t('common.delete')}
+                                {t('common.actions.delete')}
                               </AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>
@@ -235,8 +230,8 @@ export function FamilyListPage() {
                 <TableRow>
                   <TableCell colSpan={5} className="text-center h-24 text-enterprise-400">
                     {search 
-                      ? t('common.noSearchResults')
-                      : t('settings.families.noFamilies')}
+                      ? t('common.messages.noSearchResults')
+                      : t('families.noData')}
                   </TableCell>
                 </TableRow>
               )}
@@ -253,10 +248,10 @@ export function FamilyListPage() {
               disabled={page === 1}
             >
               <ChevronLeftIcon className="h-4 w-4" />
-              <span className="ml-1">{t('pagination.prev')}</span>
+              <span className="ml-1">Previous</span>
             </Button>
             <div className="text-sm text-enterprise-500">
-              {t('pagination.page', { page, total: totalPages })}
+              Page {page} of {totalPages}
             </div>
             <Button
               variant="outline"
@@ -264,7 +259,7 @@ export function FamilyListPage() {
               onClick={goToNextPage}
               disabled={page === totalPages}
             >
-              <span className="mr-1">{t('pagination.next')}</span>
+              <span className="mr-1">Next</span>
               <ChevronRightIcon className="h-4 w-4" />
             </Button>
           </div>

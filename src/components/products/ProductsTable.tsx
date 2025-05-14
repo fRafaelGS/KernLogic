@@ -192,16 +192,16 @@ function toCategoryOption(category: any): CategoryOption {
   };
 }
 
-// Add interface for ProductsTable props with more specific controls
+// Add interface for ProductsTable props
 interface ProductsTableProps {
   hideTopControls?: boolean;
-  hideTopSearch?: boolean; // Keep the search box hidden
+  hideTopSearch?: boolean;
 }
 
-// Update the component to accept more specific hiding props
+// Update the function signature to accept props
 export function ProductsTable({ 
   hideTopControls = false,
-  hideTopSearch = false
+  hideTopSearch = false 
 }: ProductsTableProps = {}) {
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
@@ -1644,31 +1644,29 @@ export function ProductsTable({
         {/* Table Toolbar */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-1 px-1 border-b gap-1 sm:gap-1">
           <div className="flex items-center space-x-2 w-full sm:w-auto">
-            {/* Only show search and filter button if not hidden */}
+            {/* Only show search box if hideTopSearch is false */}
             {!hideTopSearch && (
-              <>
-                <div className="relative flex-1 sm:max-w-xs">
-                  <ProductsSearchBox
-                    value={searchTerm}
-                    onChange={handleSearchChange}
-                    className="w-full"
-                  />
-                </div>
-                <Button 
-                  variant={filtersVisible ? "primary" : "outline"} 
-                  size="sm" 
-                  onClick={handleFilterToggle}
-                  className={filtersVisible ? "text-white" : ""}
-                >
-                  <FilterIcon className="mr-2 h-4 w-4" />
-                  Filter {filtersVisible ? "(on)" : ""}
-                </Button>
-              </>
+              <div className="relative flex-1 sm:max-w-xs">
+                <ProductsSearchBox
+                  value={searchTerm}
+                  onChange={handleSearchChange}
+                  className="w-full"
+                />
+              </div>
             )}
+            <Button 
+              variant={filtersVisible ? "primary" : "outline"} 
+              size="sm" 
+              onClick={handleFilterToggle}
+              className={filtersVisible ? "text-white" : ""}
+            >
+              <FilterIcon className="mr-2 h-4 w-4" />
+              Filter {filtersVisible ? "(on)" : ""}
+            </Button>
           </div>
           
           <div className="flex items-center space-x-2">
-            {/* Only show view toggle and refresh if not hidden */}
+            {/* Only show view toggle and refresh if hideTopControls is false */}
             {!hideTopControls && (
               <>
                 <ViewToggle 
@@ -1696,7 +1694,7 @@ export function ProductsTable({
               />
             </div>
 
-            {/* Always show Bulk Actions */}
+            {/* Bulk Actions and other buttons remain the same */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button 
@@ -1744,7 +1742,6 @@ export function ProductsTable({
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Always show Columns dropdown */}
             <DropdownMenu open={columnsMenuOpen} onOpenChange={setColumnsMenuOpen}>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="h-9">
@@ -1770,7 +1767,7 @@ export function ProductsTable({
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Show New Product button only if not hidden */}
+            {/* Only show New Product button if hideTopControls is false */}
             {!hideTopControls && (
               <Button className="h-9" asChild>
                 <Link to="/app/products/new">

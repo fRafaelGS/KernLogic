@@ -51,7 +51,7 @@ export default function ProductsPage() {
   
   // Get the active pagination based on view mode
   const activePagination = viewMode === 'list' ? listPagination : gridPagination
-  const setActivePagination = viewMode === 'list' ? setListPagination : setGridPagination
+  const onPaginationChange = viewMode === 'list' ? setListPagination : setGridPagination
   
   // Update filters when search term changes
   useEffect(() => {
@@ -62,7 +62,7 @@ export default function ProductsPage() {
   }, [debouncedSearchTerm])
   
   // Fetch products with the active pagination and filters
-  const { products, filteredData, totalCount, loading, error } = useFetchProducts(activePagination, filters)
+  const { products, totalCount, loading, error } = useFetchProducts(activePagination, filters)
   
   // Use these hooks to get unique categories and tags
   const uniqueCategories = useUniqueCategories(products)
@@ -87,7 +87,7 @@ export default function ProductsPage() {
   // Handle refresh button click
   const handleRefresh = () => {
     // Just trigger a re-fetch by updating the pagination state with the same values
-    setActivePagination({ ...activePagination })
+    onPaginationChange({ ...activePagination })
     toast({ 
       title: 'Refreshing products', 
       variant: 'default' 
@@ -249,10 +249,9 @@ export default function ProductsPage() {
       <section className="flex flex-col flex-1 min-h-0">
         {viewMode === 'list' ? (
           <div className="flex-1 overflow-auto min-h-0">
-            {/* Use the adapter for now until we properly migrate the component */}
             <ProductsTableAdapter 
               products={products}
-              filteredData={filteredData}
+              filteredData={products}
               loading={loading}
               error={error}
               pagination={listPagination}
@@ -263,7 +262,7 @@ export default function ProductsPage() {
         ) : (
           <div className="flex-1 overflow-auto min-h-0">
             <ProductGrid 
-              products={filteredData}
+              products={products}
               loading={loading}
               error={error}
             />
@@ -276,7 +275,7 @@ export default function ProductsPage() {
         <PaginationControls
           pagination={gridPagination}
           onChange={setGridPagination}
-          pageCount={pageCount}
+          pageCount={Math.ceil(totalCount / gridPagination.pageSize)}
           pageSizeOptions={[50, 100]}
         />
       )}

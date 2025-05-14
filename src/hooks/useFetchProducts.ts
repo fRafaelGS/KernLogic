@@ -79,6 +79,9 @@ export function useFetchProducts(
           queryParams.tags = filterParams.tags.join(',')
         }
         
+        // Log the query parameters before making the API call
+        console.log('[useFetchProducts] calling API with:', queryParams);
+        
         // Use pagination for server-side paging
         const response = await productService.getProducts(
           queryParams,

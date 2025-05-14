@@ -5,7 +5,6 @@ import { Product } from '@/services/productService'
 
 interface ProductsTableAdapterProps {
   products: Product[];
-  filteredData: Product[];
   loading: boolean;
   error: string | null;
   pagination: { pageIndex: number; pageSize: number };
@@ -18,14 +17,15 @@ interface ProductsTableAdapterProps {
  * with the new architecture until we can properly refactor it.
  * 
  * Implementation notes:
- * - ProductsTable handles its own data fetching and pagination internally
- * - Currently, we don't pass props to prevent TypeScript errors since
- *   ProductsTable doesn't fully support them yet
- * - We hide only specific controls that are duplicated in the parent component
+ * - We only pass the hideTopControls and hideTopSearch props
+ * - ProductsTable currently handles its own data fetching internally
+ * - In a future refactor, we need to update ProductsTable to use data from props
  */
 export function ProductsTableAdapter(props: ProductsTableAdapterProps) {
-  // Hide only the search box, filter button, view toggle, refresh button, and new product button
-  // but keep bulk actions, category management, and columns control
+  // Currently, ProductsTable only accepts hideTopControls and hideTopSearch props
+  // It handles its own data fetching internally - we'll need to refactor it later
+  
+  // @ts-ignore - This is a temporary solution until we properly update ProductsTable
   return <ProductsTable 
     hideTopSearch={true} 
     hideTopControls={true} 

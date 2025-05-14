@@ -139,6 +139,9 @@ class UserSerializer(serializers.ModelSerializer):
             return None
             
     def get_role(self, user):
+        # Always return 'admin' for staff or superuser
+        if user.is_superuser or user.is_staff:
+            return 'admin'
         try:
             from teams.models import Membership
             membership = Membership.objects.filter(user=user, status='active').select_related('role').first()

@@ -78,34 +78,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Update the normalizeUserData function to fetch role permissions
   const normalizeUserData = (data: any): ExtendedUser => {
-    // Get the user's role and role permissions if available
-    let role: 'admin' | 'editor' | 'viewer' | undefined = undefined;
-    let rolePermissions: string[] | undefined = undefined;
-    
-    if (data.memberships && data.memberships.length > 0) {
-      const membership = data.memberships[0];
+    let role: 'admin' | 'editor' | 'viewer' | undefined = undefined
+    let rolePermissions: string[] | undefined = undefined
+
+    // Use role from backend if present
+    if (data.role) {
+      role = data.role
+    } else if (data.memberships && data.memberships.length > 0) {
+      const membership = data.memberships[0]
       if (membership.role) {
-        // Set role based on role name
-        if (membership.role.name === 'Admin') role = 'admin';
-        else if (membership.role.name === 'Editor') role = 'editor';
-        else if (membership.role.name === 'Viewer') role = 'viewer';
-        
-        // Get permissions from the role object if available
+        if (membership.role.name === 'Admin') role = 'admin'
+        else if (membership.role.name === 'Editor') role = 'editor'
+        else if (membership.role.name === 'Viewer') role = 'viewer'
         if (membership.role.permissions && Array.isArray(membership.role.permissions)) {
-          rolePermissions = membership.role.permissions;
+          rolePermissions = membership.role.permissions
         }
       }
     }
-    
-    const userData = {
+    // Fallback: if no membership role, use is_staff or is_superuser
+    if (!role && (data.is_staff || data.is_superuser)) {
+      role = 'admin'
+      rolePermissions = rolePermissions || ['product.view', 'product.edit', 'product.revert', 'product.delete']
+    }
+
+    return {
       id: data.id,
       email: data.email,
       name: data.name || data.username,
       avatar_url: data.avatar_url,
       is_staff: Boolean(data.is_staff),
-      role, // Add role from membership
-      rolePermissions, // Add permissions from role
-      // Look for organization_id in different possible locations
+      role,
+      rolePermissions,
       organization_id: data.organization_id 
         ?? data.organization?.id 
         ?? data.profile?.organization?.id 
@@ -113,25 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ?? (data.memberships && data.memberships.length > 0 && data.memberships[0].organization 
             ? data.memberships[0].organization.id : null)
         ?? null,
-    };
-    
-    if (process.env.NODE_ENV === 'development') {
-      console.log('Normalized user data with organization ID:', userData.organization_id || 'Not available');
-      if (data.organization) {
-        console.log('Organization data from API:', data.organization);
-      }
-      if (data.profile?.organization) {
-        console.log('Profile organization data from API:', data.profile.organization);
-      }
-      if (data.organizations && data.organizations.length > 0) {
-        console.log('First organization from organizations array:', data.organizations[0]);
-      }
-      if (data.memberships && data.memberships.length > 0) {
-        console.log('First membership from memberships array:', data.memberships[0]);
-      }
     }
-    
-    return userData;
   };
 
   // Update auth flow to use async IIFE and proper token handling

@@ -39,6 +39,7 @@ import { formatDate } from '@/utils/date'
 import ErrorBoundary from '@/components/ErrorBoundary'
 
 export function FamilyListPage() {
+  console.log('FamilyListPage rendered')
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
@@ -110,9 +111,10 @@ export function FamilyListPage() {
     <ErrorBoundary>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold">{t('settings.families.title')}</h1>
-          <Button onClick={() => navigate('/app/settings/families/new')}>
+          <h1 className="text-2xl font-bold">{t('products.families.title')}</h1>
+          <Button onClick={() => navigate('/app/products/families/new')}>
             <PlusIcon className="h-4 w-4 mr-2" />
+            {t('products.families.create')}
             {t('settings.families.create')}
           </Button>
         </div>
@@ -181,7 +183,7 @@ export function FamilyListPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => navigate(`/app/settings/families/${family.id}`)}
+                          onClick={() => navigate(`/app/products/families/${family.id}`)}
                         >
                           <EyeIcon className="h-4 w-4" />
                           <span className="sr-only">{t('common.view')}</span>
@@ -189,7 +191,7 @@ export function FamilyListPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => navigate(`/app/settings/families/${family.id}/edit`)}
+                          onClick={() => navigate(`/app/products/families/${family.id}/edit`)}
                         >
                           <PencilIcon className="h-4 w-4" />
                           <span className="sr-only">{t('common.edit')}</span>

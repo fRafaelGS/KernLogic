@@ -17,6 +17,10 @@ import ButtonDemo from "@/pages/ButtonDemo";
 import AttributesPage from '@/pages/AttributesPage';
 import AttributeGroupsPage from '@/pages/AttributeGroupsPage';
 import { ENABLE_CUSTOM_ATTRIBUTES, ENABLE_ATTRIBUTE_GROUPS } from '@/config/featureFlags';
+import AdminOnly from '@/components/auth/AdminOnly'
+import { FamilyListPage } from '@/features/families/FamilyListPage'
+import { FamilyFormPage } from '@/features/families/FamilyFormPage'
+import { FamilyDetailPage } from '@/features/families/FamilyDetailPage'
 
 // Marketing Pages
 import LandingPage from "./pages/marketing/LandingPage";
@@ -130,6 +134,54 @@ export const App: React.FC = () => {
                             <ProtectedRoute>
                                 <DashboardLayout>
                                     <NewProduct />
+                                </DashboardLayout>
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/app/products/families"
+                        element={
+                            <ProtectedRoute>
+                                <DashboardLayout>
+                                    <AdminOnly>
+                                        <FamilyListPage />
+                                    </AdminOnly>
+                                </DashboardLayout>
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/app/products/families/new"
+                        element={
+                            <ProtectedRoute>
+                                <DashboardLayout>
+                                    <AdminOnly>
+                                        <FamilyFormPage mode="create" />
+                                    </AdminOnly>
+                                </DashboardLayout>
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/app/products/families/:id"
+                        element={
+                            <ProtectedRoute>
+                                <DashboardLayout>
+                                    <AdminOnly>
+                                        <FamilyDetailPage />
+                                    </AdminOnly>
+                                </DashboardLayout>
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/app/products/families/:id/edit"
+                        element={
+                            <ProtectedRoute>
+                                <DashboardLayout>
+                                    <AdminOnly>
+                                        <FamilyFormPage mode="edit" />
+                                    </AdminOnly>
                                 </DashboardLayout>
                             </ProtectedRoute>
                         }

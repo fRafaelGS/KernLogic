@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import axios, { AxiosError } from 'axios'
+import axiosInstance from '@/lib/axiosInstance'
+import { isAxiosError } from 'axios'
 import { Family, FamilyInput } from '../types/family'
 
 // Query keys
@@ -13,28 +14,25 @@ export const familyKeys = {
 
 // Error handling helper
 const handleApiError = (error: unknown) => {
-  if (axios.isAxiosError(error)) {
-    const axiosError = error as AxiosError<{ detail?: string, [key: string]: any }>
+  if (isAxiosError(error)) {
+    const axiosError = error
     if (axiosError.response?.status === 403) {
       throw new Error('You do not have permission to perform this action')
     }
     if (axiosError.response?.data) {
-      // If the error has a detail message, use it
       if (axiosError.response.data.detail) {
         throw new Error(axiosError.response.data.detail)
       }
-      // Otherwise stringify the error data
       throw new Error(JSON.stringify(axiosError.response.data))
     }
   }
-  // If not an Axios error or no response data, throw the original error
   throw error
 }
 
 // API functions
 export const getFamilies = async (): Promise<Family[]> => {
   try {
-    const { data } = await axios.get('/api/families/')
+    const { data } = await axiosInstance.get('/api/families/')
     return data
   } catch (error) {
     return handleApiError(error)
@@ -43,7 +41,7 @@ export const getFamilies = async (): Promise<Family[]> => {
 
 export const getFamily = async (id: number): Promise<Family> => {
   try {
-    const { data } = await axios.get(`/api/families/${id}/`)
+    const { data } = await axiosInstance.get(`/api/families/${id}/`)
     return data
   } catch (error) {
     return handleApiError(error)
@@ -52,7 +50,7 @@ export const getFamily = async (id: number): Promise<Family> => {
 
 export const createFamily = async (familyData: Partial<FamilyInput>): Promise<Family> => {
   try {
-    const { data } = await axios.post('/api/families/', familyData)
+    const { data } = await axiosInstance.post('/api/families/', familyData)
     return data
   } catch (error) {
     return handleApiError(error)
@@ -61,7 +59,7 @@ export const createFamily = async (familyData: Partial<FamilyInput>): Promise<Fa
 
 export const updateFamily = async (id: number, familyData: Partial<FamilyInput>): Promise<Family> => {
   try {
-    const { data } = await axios.patch(`/api/families/${id}/`, familyData)
+    const { data } = await axiosInstance.patch(`/api/families/${id}/`, familyData)
     return data
   } catch (error) {
     return handleApiError(error)
@@ -70,7 +68,7 @@ export const updateFamily = async (id: number, familyData: Partial<FamilyInput>)
 
 export const deleteFamily = async (id: number): Promise<void> => {
   try {
-    await axios.delete(`/api/families/${id}/`)
+    await axiosInstance.delete(`/api/families/${id}/`)
   } catch (error) {
     return handleApiError(error)
   }
@@ -85,7 +83,7 @@ export const addAttributeGroupToFamily = async (
   }
 ): Promise<any> => {
   try {
-    const { data } = await axios.post(
+    const { data } = await axiosInstance.post(
       `/api/families/${familyId}/attribute-groups/`, 
       payload
     )
@@ -100,7 +98,7 @@ export const removeAttributeGroupFromFamily = async (
   attributeGroupId: number
 ): Promise<void> => {
   try {
-    await axios.delete(`/api/families/${familyId}/attribute-groups/${attributeGroupId}/`)
+    await axiosInstance.delete(`/api/families/${familyId}/attribute-groups/${attributeGroupId}/`)
   } catch (error) {
     return handleApiError(error)
   }
@@ -117,8 +115,8 @@ export const overrideAttributeGroup = async (
   params: OverrideAttributeGroupParams
 ): Promise<any> => {
   try {
-    const { data } = await axios.post(
-      `/api/products/${productId}/attribute-group-overrides/`,
+    const { data } = await axiosInstance.post(
+      `/api/products/${productId}/override-group/`,
       params
     )
     return data
@@ -133,7 +131,6 @@ export const useFamilies = () => {
     queryKey: familyKeys.lists(),
     queryFn: getFamilies,
     retry: (failureCount, error) => {
-      // Don't retry on 4xx errors
       if (error instanceof Error && error.message.includes('permission')) {
         return false
       }
@@ -205,15 +202,14 @@ export const useDeleteFamily = () => {
 
 export const useAddAttributeGroupToFamily = (familyId: number) => {
   const queryClient = useQueryClient()
-  
   return useMutation({
-    mutationFn: (payload: { attribute_group: number; required: boolean; order: number }) => 
+    mutationFn: (payload: { attribute_group: number, required: boolean, order: number }) =>
       addAttributeGroupToFamily(familyId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: familyKeys.detail(familyId) })
     },
     onError: (error: Error) => {
-      console.error(`Failed to add attribute group to family ${familyId}:`, error.message)
+      console.error('Failed to add attribute group:', error.message)
       return error
     }
   })
@@ -221,15 +217,14 @@ export const useAddAttributeGroupToFamily = (familyId: number) => {
 
 export const useRemoveAttributeGroupFromFamily = (familyId: number) => {
   const queryClient = useQueryClient()
-  
   return useMutation({
-    mutationFn: (attributeGroupId: number) => 
+    mutationFn: (attributeGroupId: number) =>
       removeAttributeGroupFromFamily(familyId, attributeGroupId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: familyKeys.detail(familyId) })
     },
     onError: (error: Error) => {
-      console.error(`Failed to remove attribute group from family ${familyId}:`, error.message)
+      console.error('Failed to remove attribute group:', error.message)
       return error
     }
   })
@@ -237,16 +232,14 @@ export const useRemoveAttributeGroupFromFamily = (familyId: number) => {
 
 export const useOverrideAttributeGroup = (productId: number) => {
   const queryClient = useQueryClient()
-  
   return useMutation({
-    mutationFn: (params: OverrideAttributeGroupParams) => 
+    mutationFn: (params: OverrideAttributeGroupParams) =>
       overrideAttributeGroup(productId, params),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: familyKeys.all })
-      queryClient.invalidateQueries({ queryKey: ['product', productId] })
+      queryClient.invalidateQueries()
     },
     onError: (error: Error) => {
-      console.error(`Failed to override attribute group for product ${productId}:`, error.message)
+      console.error('Failed to override attribute group:', error.message)
       return error
     }
   })

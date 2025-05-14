@@ -71,8 +71,16 @@ import AttributesTab from '@/components/products/AttributesTab'
 
 import { LOCALES, LocaleCode } from '@/config/locales'
 import { CHANNELS, ChannelCode } from '@/config/channels'
+import { useFamilies, useOverrideAttributeGroup } from '@/api/familyApi';
+import { Family } from '@/types/family';
 
 const PRODUCTS_BASE_URL = `${API_URL}/products`;
+
+// Add family property to Product interface
+interface ProductWithFamily extends Product {
+  family?: Family | null;
+  attributes?: any;
+}
 
 // Add type for category options used by react-select
 interface CategoryOption {
@@ -81,7 +89,7 @@ interface CategoryOption {
 }
 
 interface ProductFormProps {
-  product?: Product;
+  product?: ProductWithFamily;
 }
 
 // Adapter component for price badges
@@ -112,6 +120,10 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const isEditMode = !!id || !!initialProduct;
+  
+  // Use the passed-in product data or fetch it if needed
+  const productId = initialProduct?.id || (id ? Number(id) : undefined);
+  
   const [showTechSpecs, setShowTechSpecs] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -122,7 +134,7 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
   const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
   const [selectedLocale, setSelectedLocale] = useState<LocaleCode>(LOCALES[0].code)
   const [selectedChannel, setSelectedChannel] = useState<ChannelCode>(CHANNELS[0].code)
-  const [product, setProduct] = useState<Product | null>(initialProduct || null);
+  const [product, setProduct] = useState<ProductWithFamily | null>(initialProduct || null);
   
   // State for draft prices (used in create mode)
   const [draftPrices, setDraftPrices] = useState<ProductPrice[]>([]);
@@ -130,8 +142,14 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<any>(initialProduct?.category || null)
 
-  // Use the passed-in product data or fetch it if needed
-  const productId = initialProduct?.id || (id ? Number(id) : undefined);
+  const [selectedFamily, setSelectedFamily] = useState<Family | null>(initialProduct?.family || null);
+  const [hiddenAttributeGroups, setHiddenAttributeGroups] = useState<number[]>([]);
+  
+  // Fetch families
+  const { data: families, isLoading: isFamiliesLoading } = useFamilies();
+  
+  // Add the override attribute group hook
+  const overrideAttributeGroup = useOverrideAttributeGroup(productId || 0);
 
   // Form definition using react-hook-form with zod resolver and centralized default values
   const form = useForm<ProductFormValues>({
@@ -156,7 +174,7 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
       
       // Update our local product state when we get the data
       if (data) {
-        setProduct(data);
+        setProduct(data as ProductWithFamily);
       }
       
       return data;
@@ -258,6 +276,13 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
     }
   }, [initialProduct, form]);
 
+  // Add effect to handle hidden attribute groups when family changes
+  useEffect(() => {
+    if (product?.attributes && typeof product.attributes === 'object' && 'hidden_attribute_groups' in product.attributes) {
+      setHiddenAttributeGroups(product.attributes.hidden_attribute_groups || []);
+    }
+  }, [product]);
+
   // Mutation for create/update
   const { mutate, isPending } = useMutation({
     mutationFn: async (data: FormData) => {
@@ -283,7 +308,7 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
             // Create each price by calling the API for each draft
             return Promise.all(
               draftPrices.map(dp =>
-                productService.addPrice(createdProduct.id, {
+                productService.addPrice(createdProduct.id || 0, {
                   price_type: dp.price_type,
                   currency: dp.currency,
                   channel_id: dp.channel_id,
@@ -541,7 +566,7 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
           form.reset(getDefaultProductValues(refreshedProduct));
           
           // Always update our local product state with the latest data
-          setProduct(refreshedProduct);
+          setProduct(refreshedProduct as ProductWithFamily);
 
           // Show success toast
           toast({ title: "Prices updated successfully" });
@@ -556,6 +581,80 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
     }
   };
 
+  // Handle family change
+  const handleFamilyChange = async (familyId: number | null) => {
+    if (!familyId) {
+      setSelectedFamily(null);
+      return;
+    }
+    
+    const family = families?.find(f => f.id === familyId);
+    if (family) {
+      setSelectedFamily(family);
+      
+      // Check if required attribute groups have values
+      if (product && family.attribute_groups) {
+        const requiredGroups = family.attribute_groups.filter(group => group.required);
+        
+        // Warn about required attribute groups
+        if (requiredGroups.length > 0) {
+          toast({
+            title: "Family Selected",
+            description: `This family requires ${requiredGroups.length} attribute groups. Please fill in all required attributes.`,
+            variant: "default"
+          });
+        }
+      }
+    }
+  };
+  
+  // Toggle attribute group visibility
+  const toggleAttributeGroup = async (groupId: number, isVisible: boolean) => {
+    if (!productId) return;
+    
+    try {
+      await overrideAttributeGroup.mutateAsync({
+        groupId,
+        removed: !isVisible
+      });
+      
+      // Update local state
+      setHiddenAttributeGroups(prev => 
+        isVisible 
+          ? prev.filter(id => id !== groupId)
+          : [...prev, groupId]
+      );
+      
+      toast({
+        title: isVisible ? "Group Shown" : "Group Hidden",
+        description: `Attribute group visibility updated.`,
+        variant: "default"
+      });
+    } catch (error) {
+      console.error('Failed to toggle attribute group visibility:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update attribute group visibility.",
+        variant: "destructive"
+      });
+    }
+  };
+  
+  // Check if an attribute group should be shown based on family and overrides
+  const shouldShowAttributeGroup = (groupId: number): boolean => {
+    if (!selectedFamily) return true;
+    
+    // Check if this group is in the family
+    const isInFamily = selectedFamily.attribute_groups.some(
+      group => group.attribute_group === groupId
+    );
+    
+    // Check if it's been hidden by an override
+    const isHidden = hiddenAttributeGroups.includes(groupId);
+    
+    return isInFamily && !isHidden;
+  };
+
   if (queryLoading) {
     return <div>Loading...</div>;
   }
@@ -567,42 +666,14 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
       </h1>
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit((values) => {
-          console.log('Form submitted with values:', values);
-          console.log('Form values - name:', values.name);
-          console.log('Form values - SKU:', values.sku);
-          
-          // Get the raw form data to see what's actually in the DOM
-          const formElement = document.querySelector('form');
-          if (formElement) {
-            const formData = new FormData(formElement);
-            console.log('Raw form data - name:', formData.get('name'));
-            console.log('Raw form data - SKU:', formData.get('sku'));
-          }
-          
-          // Only proceed if SKU is properly defined
-          if (!values.name || !values.sku) {
-            console.error('Name or SKU is required but missing from form values');
-            toast({
-              title: "Validation Error",
-              description: values.name ? "SKU is required" : values.sku ? "Name is required" : "Name and SKU are required",
-              variant: "destructive"
-            });
-            return;
-          }
-          
-          // If validation passes, handle submit with the original values
-          onSubmit(values);
-        })} className="space-y-6">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 pb-10">
           <Tabs defaultValue="basic" className="w-full">
             <TabsList className="mb-4">
-              <TabsTrigger value="basic">Basic Information</TabsTrigger>
-              {isEditMode && (
-                <>
-                  <TabsTrigger value="details">Details & Media</TabsTrigger>
-                  <TabsTrigger value="description">Description</TabsTrigger>
-                </>
-              )}
+              <TabsTrigger value="basic">Basic Info</TabsTrigger>
+              <TabsTrigger value="description">Description</TabsTrigger>
+              <TabsTrigger value="attributes">Attributes</TabsTrigger>
+              <TabsTrigger value="media">Media</TabsTrigger>
+              <TabsTrigger value="pricing">Pricing</TabsTrigger>
             </TabsList>
           
             <TabsContent value="basic" className="space-y-4">
@@ -773,100 +844,81 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
                   </div>
                 )}
               </div>
+
+              {/* Add Family select field */}
+              <FormItem className="flex flex-col">
+                <FormLabel>Product Family</FormLabel>
+                <Select
+                  onValueChange={(value) => handleFamilyChange(value ? Number(value) : null)}
+                  defaultValue={initialProduct?.family?.id?.toString() || ''}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a family" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="">None</SelectItem>
+                    {families?.map((family) => (
+                      <SelectItem key={family.id} value={family.id.toString()}>
+                        {family.label} ({family.code})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-enterprise-500 mt-1">
+                  {selectedFamily ? (
+                    <>
+                      Family defines required attribute groups for this product.
+                      {selectedFamily.attribute_groups.length > 0 ? (
+                        <span className="block mt-1">
+                          Contains {selectedFamily.attribute_groups.length} attribute groups, 
+                          {selectedFamily.attribute_groups.filter(g => g.required).length} required.
+                        </span>
+                      ) : null}
+                    </>
+                  ) : (
+                    "No family selected. All attribute groups will be shown."
+                  )}
+                </p>
+              </FormItem>
             </TabsContent>
           
-            {isEditMode && (
-              <>
-                <TabsContent value="details" className="space-y-4">
-                  {/* Details & Media */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="space-y-4">
-                      <h3 className="text-lg font-medium">Product Details</h3>
-                      
-                      <div className="space-y-3">
-                        <FormField
-                          control={form.control}
-                          name="brand"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Brand</FormLabel>
-                              <FormControl>
-                                <Input {...field} placeholder="Enter brand name" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="barcode"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>GTIN / Barcode</FormLabel>
-                              <FormControl>
-                                <Input {...field} placeholder="Enter GTIN number" />
-                              </FormControl>
-                              <FormMessage />
-                              <p className="text-xs text-slate-500">
-                                Enter a valid EAN-8, EAN-13, UPC-A, or GTIN-14 code
-                              </p>
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <h3 className="text-lg font-medium">Product Image</h3>
-                      <div className="flex flex-col items-center space-y-4">
-                        {imagePreview && (
-                          <div className="relative w-40 h-40 border rounded-md overflow-hidden">
-                            <img
-                              src={imagePreview}
-                              alt="Product preview"
-                              className="w-full h-full object-contain"
-                            />
-                          </div>
-                        )}
-                        <Input
-                          id="image"
-                          type="file"
-                          accept="image/*"
-                          onChange={handleImageChange}
-                          className="w-full"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </TabsContent>
+            <TabsContent value="description" className="space-y-4">
+              {/* Rich Text Description */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">Detailed Description</h3>
+                <p className="text-sm text-slate-500">Format product description with rich text editor</p>
                 
-                <TabsContent value="description" className="space-y-4">
-                  {/* Rich Text Description */}
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-medium">Detailed Description</h3>
-                    <p className="text-sm text-slate-500">Format product description with rich text editor</p>
-                    
-                    <FormField
-                      control={form.control}
-                      name="description"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormControl>
-                            <RichTextEditor
-                              value={field.value || ''}
-                              onChange={field.onChange}
-                              placeholder="Enter detailed product description..."
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </TabsContent>
-              </>
-            )}
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <RichTextEditor
+                          value={field.value || ''}
+                          onChange={field.onChange}
+                          placeholder="Enter detailed product description..."
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="attributes">
+              <AttributesTab 
+                form={form}
+                product={product} 
+                selectedFamily={selectedFamily}
+                hiddenGroups={hiddenAttributeGroups}
+                onToggleGroupVisibility={toggleAttributeGroup}
+                shouldShowGroup={shouldShowAttributeGroup}
+              />
+            </TabsContent>
           </Tabs>
           
           <div className="flex justify-end space-x-4">
@@ -895,7 +947,7 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
           <CategoryModal
             open={isCategoryModalOpen}
             onOpenChange={setIsCategoryModalOpen}
-            productId={productId}
+            productId={productId || 0}
             currentCategoryId={selectedCategory?.id || selectedCategory?.value || null}
             onCategoryUpdated={cat => {
               // Always set both label and value for the form and selectedCategory

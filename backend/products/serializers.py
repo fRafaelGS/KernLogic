@@ -1,6 +1,6 @@
 from rest_framework import serializers
 import json
-from .models import Product, ProductImage, Activity, ProductRelation, ProductAsset, ProductEvent, Attribute, AttributeValue, AttributeGroupItem, AttributeGroup, SalesChannel, ProductPrice, Category, AttributeOption, AssetBundle
+from .models import Product, ProductImage, Activity, ProductRelation, ProductAsset, ProductEvent, Attribute, AttributeValue, AttributeGroupItem, AttributeGroup, SalesChannel, ProductPrice, Category, AttributeOption, AssetBundle, Family, FamilyAttributeGroup
 from django.db.models import Sum, F, Count, Case, When, Value, FloatField
 from decimal import Decimal
 from django.conf import settings
@@ -140,6 +140,11 @@ class ProductSerializer(serializers.ModelSerializer):
         allow_null=True,
         write_only=True
     )
+    family = serializers.PrimaryKeyRelatedField(
+        queryset=Family.objects.all(),
+        required=False,
+        allow_null=True
+    )
     
     class Meta:
         model = Product
@@ -148,7 +153,7 @@ class ProductSerializer(serializers.ModelSerializer):
             'barcode', 'tags', 'attribute_values', 'is_active', 'is_archived', 'created_at',
             'updated_at', 'primary_image', 'completeness_percent', 'missing_fields',
             'assets', 'has_primary_image', 'primary_image_url', 'primary_asset', 'organization',
-            'created_by', 'images', 'primary_image_thumb', 'primary_image_large'
+            'created_by', 'images', 'primary_image_thumb', 'primary_image_large', 'family'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'completeness_percent', 
                            'missing_fields', 'assets', 'has_primary_image', 'primary_image_url',
@@ -399,6 +404,56 @@ class ProductSerializer(serializers.ModelSerializer):
         # Get all ancestors including self, ordered from root to leaf
         ancestors = obj.category.get_ancestors(include_self=True)
         return CategorySerializer(ancestors, many=True).data
+
+    def validate_family(self, value):
+        """
+        Validate that the product has values for all required attributes in the family.
+        Only runs on updates, not on creation (since attributes are added after creation).
+        """
+        # Skip validation for new products or when family is being removed
+        instance = getattr(self, 'instance', None)
+        if not instance or not value:
+            return value
+            
+        # Get all required attribute groups for this family
+        required_groups = FamilyAttributeGroup.objects.filter(
+            family=value,
+            required=True
+        ).select_related('attribute_group')
+        
+        # If no required groups, return early
+        if not required_groups:
+            return value
+            
+        # Get all attributes that are in required groups
+        required_attribute_ids = set()
+        for family_group in required_groups:
+            # Get all attributes in this group
+            group_attribute_ids = AttributeGroupItem.objects.filter(
+                group=family_group.attribute_group
+            ).values_list('attribute_id', flat=True)
+            required_attribute_ids.update(group_attribute_ids)
+            
+        # If no required attributes, return early
+        if not required_attribute_ids:
+            return value
+            
+        # Get all attribute values for this product
+        existing_attribute_ids = set(instance.attribute_values.values_list('attribute_id', flat=True))
+        
+        # Find missing required attributes
+        missing_attribute_ids = required_attribute_ids - existing_attribute_ids
+        
+        if missing_attribute_ids:
+            # Get attribute details for error message
+            missing_attributes = Attribute.objects.filter(id__in=missing_attribute_ids)
+            missing_names = [attr.label for attr in missing_attributes]
+            
+            raise serializers.ValidationError(
+                f"This product is missing required attributes for this family: {', '.join(missing_names)}"
+            )
+            
+        return value
 
 class ProductRelationSerializer(serializers.ModelSerializer):
     """Serializer for product relations"""
@@ -954,3 +1009,90 @@ class AssetBundleSerializer(serializers.ModelSerializer):
     class Meta:
         model = AssetBundle
         fields = ['id','name','asset_ids','created_at'] 
+
+# --- NEW FamilyAttributeGroupSerializer ---
+class FamilyAttributeGroupSerializer(serializers.ModelSerializer):
+    """Serializer for the FamilyAttributeGroup pivot model"""
+    attribute_group = serializers.PrimaryKeyRelatedField(queryset=AttributeGroup.objects.all())
+    
+    class Meta:
+        model = FamilyAttributeGroup
+        fields = ['id', 'attribute_group', 'required', 'order']
+        read_only_fields = ['id']
+
+    def validate(self, data):
+        org = self.context['request'].user.organization if 'request' in self.context else None
+        if org and data['attribute_group'].organization != org:
+            raise serializers.ValidationError('Attribute group must belong to your organization.')
+        return data
+
+# --- NEW FamilySerializer ---
+class FamilySerializer(serializers.ModelSerializer):
+    """Serializer for Product Family model"""
+    attribute_groups = FamilyAttributeGroupSerializer(many=True, required=False)
+    
+    class Meta:
+        model = Family
+        fields = ['id', 'code', 'label', 'description', 'attribute_groups', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+        
+    def validate_code(self, value):
+        """Ensure code is unique within the organization"""
+        org = self.context['request'].user.organization if 'request' in self.context else None
+        qs = Family.objects.filter(code=value)
+        if org:
+            qs = qs.filter(organization=org)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError('Family code must be unique within your organization.')
+        return value
+        
+    def create(self, validated_data):
+        """Create a new family with nested attribute groups"""
+        attribute_groups_data = validated_data.pop('attribute_groups', [])
+        
+        # Get organization from context
+        request = self.context.get('request')
+        organization = get_user_organization(request.user) if request else None
+        
+        # Create the family
+        family = Family.objects.create(
+            **validated_data,
+            organization=organization,
+            created_by=request.user if request else None
+        )
+        
+        # Create attribute group associations
+        for group_data in attribute_groups_data:
+            FamilyAttributeGroup.objects.create(
+                family=family,
+                organization=organization,
+                **group_data
+            )
+            
+        return family
+        
+    def update(self, instance, validated_data):
+        """Update a family with nested attribute groups"""
+        attribute_groups_data = validated_data.pop('attribute_groups', None)
+        
+        # Update family fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        
+        # Update attribute groups if provided
+        if attribute_groups_data is not None:
+            # Clear existing attribute groups
+            instance.attribute_groups.all().delete()
+            
+            # Create new attribute groups
+            for group_data in attribute_groups_data:
+                FamilyAttributeGroup.objects.create(
+                    family=instance,
+                    organization=instance.organization,
+                    **group_data
+                )
+                
+        return instance 

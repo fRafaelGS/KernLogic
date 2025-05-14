@@ -19,6 +19,9 @@ from products.views_category import CategoryViewSet
 # Import the PDF export view
 from products.views.pdf_export import generate_product_pdf
 from .views_main import AssetBundleViewSet
+# Import new family views
+from products.views.family import FamilyViewSet
+from products.views.attribute_group_override import override_attribute_group
 
 # /api/products/…
 router = DefaultRouter()
@@ -32,6 +35,8 @@ router.register(r"attributes", AttributeViewSet, basename="attribute")
 router.register(r"attribute-groups", AttributeGroupViewSet, basename="attribute-group")
 # Register the new CategoryViewSet
 router.register(r"categories", CategoryViewSet, basename="category")
+# Register the new FamilyViewSet
+router.register(r"families", FamilyViewSet, basename="family")
 
 # /api/products/<product_pk>/assets/…
 assets_router = NestedSimpleRouter(router, r"products", lookup="product")
@@ -54,4 +59,6 @@ urlpatterns = [
     path("products/sku-check/", SkuCheckAPIView.as_view(), name="products-sku-check"),
     # Add PDF export endpoint
     path("products/<int:product_id>/pdf/", generate_product_pdf, name="product-pdf-export"),
+    # Add attribute group override endpoint
+    path("products/<int:product_id>/override-group/", override_attribute_group, name="product-override-group"),
 ] 

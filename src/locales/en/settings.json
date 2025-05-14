@@ -1,0 +1,38 @@
+{
+  "settings": {
+    "title": "Settings",
+    "general": "General",
+    "teams": "Teams",
+    "families": {
+      "title": "Families",
+      "create": "New Family",
+      "edit": "Edit Family {{code}}",
+      "details": "Family Details",
+      "noFamilies": "No families found. Create your first family to organize products.",
+      "noAttributeGroups": "No attribute groups assigned to this family.",
+      "dropGroupsHere": "Add an attribute group using the button above.",
+      "noGroupsAvailable": "No more attribute groups available.",
+      "addGroup": "Add Group",
+      "selectGroup": "Select an attribute group",
+      "created": "Family {{code}} created successfully.",
+      "updated": "Family {{code}} updated successfully.",
+      "notFound": "The requested family doesn't exist or you don't have access to it.",
+      "form": {
+        "code": "Code",
+        "label": "Label",
+        "description": "Description",
+        "attributeGroups": "Attribute Groups",
+        "group": "Group",
+        "required": "Required",
+        "order": "Order"
+      },
+      "messages": {
+        "deleteConfirm": "Are you sure you want to delete family \"{{code}}\"? This will not affect products using this family.",
+        "saveSuccess": "Family saved successfully.",
+        "deleteSuccess": "Family deleted successfully."
+      }
+    },
+    "attributes": "Attributes",
+    "integrations": "Integrations"
+  }
+} 

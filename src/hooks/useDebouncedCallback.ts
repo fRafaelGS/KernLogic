@@ -1,19 +1,25 @@
-import { useEffect, useMemo } from 'react';
-import { debounce } from 'lodash';
+import { useRef, useCallback } from 'react';
 
 /**
- * A hook to create a debounced callback that is properly cleaned up
- * when component unmounts
+ * A hook that returns a debounced version of the callback function.
  * 
- * @param fn Function to debounce
- * @param ms Debounce time in milliseconds
- * @returns Debounced function
+ * @param callback Function to be debounced
+ * @param delay Delay in milliseconds before executing the callback
+ * @returns Debounced version of the callback function
  */
-export const useDebouncedCallback = <F extends (...args: any[]) => any>(fn: F, ms = 800) => {
-  const debounced = useMemo(() => debounce(fn, ms), [fn, ms]);
-  
-  // Clean up the debounce on unmount
-  useEffect(() => () => debounced.cancel(), [debounced]);
-  
-  return debounced;
-}; 
+export function useDebouncedCallback<T extends (...args: any[]) => any>(
+  callback: T,
+  delay: number
+): (...args: Parameters<T>) => void {
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  return useCallback((...args: Parameters<T>) => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+
+    timeoutRef.current = setTimeout(() => {
+      callback(...args);
+    }, delay);
+  }, [callback, delay]);
+} 

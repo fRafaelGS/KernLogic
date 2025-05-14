@@ -54,6 +54,29 @@ class Category(MPTTModel):
         verbose_name_plural = "Categories"
         unique_together = [('name', 'parent', 'organization')]
 
+class Family(models.Model):
+    """
+    Represents a product family that can have associated attribute groups
+    """
+    code = models.CharField(max_length=64, unique=True)
+    label = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, db_index=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Product Family"
+        verbose_name_plural = "Product Families"
+        ordering = ['code']
+        indexes = [
+            models.Index(fields=['organization']),
+        ]
+
+    def __str__(self):
+        return self.label
+
 class Product(models.Model):
     # Basic Product Information (Required)
     name = models.CharField(max_length=255)
@@ -68,6 +91,9 @@ class Product(models.Model):
     
     # Multi-tenant support
     organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, db_index=True, null=True)
+    
+    # Product family
+    family = models.ForeignKey("products.Family", on_delete=models.SET_NULL, null=True, blank=True, db_index=True)
     
     # Additional Product Information (Optional)
     brand = models.CharField(max_length=100, blank=True, null=True)
@@ -698,3 +724,29 @@ class AssetBundle(models.Model):
 
     def __str__(self):
         return f"{self.name} (Product: {self.product_id})"
+
+class FamilyAttributeGroup(models.Model):
+    """
+    Junction table to associate attribute groups with product families
+    and define order and requirement status
+    """
+    family = models.ForeignKey(Family, on_delete=models.CASCADE, related_name='attribute_groups')
+    attribute_group = models.ForeignKey(AttributeGroup, on_delete=models.CASCADE, related_name='families')
+    required = models.BooleanField(default=False)
+    order = models.PositiveSmallIntegerField(default=0)
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, db_index=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('family', 'attribute_group')
+        ordering = ('order',)
+        verbose_name = "Family Attribute Group"
+        verbose_name_plural = "Family Attribute Groups"
+        indexes = [
+            models.Index(fields=['family']),
+            models.Index(fields=['attribute_group']),
+            models.Index(fields=['organization']),
+        ]
+
+    def __str__(self):
+        return f"{self.family.code} - {self.attribute_group.name}"

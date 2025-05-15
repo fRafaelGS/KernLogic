@@ -18,7 +18,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query';
-import { toast } from 'react-hot-toast';
 import { useToast } from '@/components/ui/use-toast';
 import axios from 'axios';
 import AsyncCreatableSelect from 'react-select/async-creatable';
@@ -35,7 +34,6 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -43,39 +41,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
-import { TagInput } from '@/components/ui/tag-input';
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
-import { ChevronDown, ChevronRight, HelpCircle, X, Info } from 'lucide-react';
+import { Info } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Card, CardContent } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { CreatableSelect } from "@/components/ui/creatable-select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Spinner } from "@/components/ui/spinner";
-import { FileUpload } from "@/components/ui/file-upload";
-import { CategoryTreeSelect } from '../categories/CategoryTreeSelect';
 import { CategoryModal } from '@/components/products/CategoryModal'
 
 // Services
 import { productService, Product, ProductPrice } from '@/services/productService';
-import { API_URL } from '@/config';
-import { getCategories, createCategory } from "@/services/categoryService";
 
 // Custom components
 import { RichTextEditor } from '@/components/ui/RichTextEditor';
 import { PriceSummaryBadge } from '@/components/products/PriceSummaryBadge';
 import { PricingModal } from '@/components/products/PricingModal';
-import { AttributeManager } from '@/features/AttributeManager/AttributeManager';
-import AttributesTab from '@/components/products/AttributesTab'
 
 import { LOCALES, LocaleCode } from '@/config/locales'
 import { CHANNELS, ChannelCode } from '@/config/channels'
 import { useFamilies, useOverrideAttributeGroup } from '@/api/familyApi';
 import { Family } from '@/types/family';
 import { ProductAttributeGroups } from '@/components/product/ProductAttributeGroups'
-
-const PRODUCTS_BASE_URL = `${API_URL}/products`;
 
 // Update the ProductWithFamily interface
 interface ProductWithFamily extends Omit<Product, 'family'> {
@@ -886,9 +870,7 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
             </TabsContent>
             
             <TabsContent value="attributes">
-              <AttributesTab 
-                productId={productId || 0}
-              />
+              {/* Placeholder for attributes section */}
             </TabsContent>
           </Tabs>
           

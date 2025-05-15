@@ -667,6 +667,10 @@ export const useAttributes = (
   const isLoading = isLoadingAttributes || (enableGroups ? isLoadingGroups : isLoadingValues);
   const hasError = Boolean(attributesError || (enableGroups ? groupsError : valuesError));
   
+  useEffect(() => {
+    console.log('attributeGroups from useAttributes:', attributeGroups)
+  }, [attributeGroups])
+
   return {
     // Data
     attributes: uniqueAttributes,

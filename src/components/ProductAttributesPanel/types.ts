@@ -21,7 +21,15 @@ export interface UpdateAttributePayload {
 }
 
 export interface AttributeGroup {
-  id: number
-  name: string
-  items: { attribute: number }[]
+  id: number;
+  name: string;
+  description?: string;
+  items: Array<{
+    id: number;
+    attribute: number;
+    value?: any;
+    value_id?: number;
+    locale?: string | null;
+    channel?: string | null;
+  }>;
 } 

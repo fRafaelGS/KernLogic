@@ -1,9 +1,11 @@
-    import axios, { AxiosError, AxiosProgressEvent } from 'axios';
+    import axios, { AxiosError, AxiosProgressEvent, AxiosResponse } from 'axios';
     import { API_URL } from '@/config';
     import axiosInstance from '@/lib/axiosInstance';
     import { IncompleteProduct } from './dashboardService';
     import { getCategories as fetchCategories, createCategory as createCategoryService, Category as CategoryFromService } from './categoryService';
     import { Category as ProductCategory } from '@/types/categories';
+    import type { AttributeGroup } from '@/components/ProductAttributesPanel/types'
+    import type { Family } from '@/types/family'
 
     // PRODUCTS_PATH should be empty string to work with the backend URL structure
     // The backend routes 'api/' to products.urls which registers the viewset at ''
@@ -96,6 +98,9 @@
         
         // Multiple prices (new model)
         prices?: ProductPrice[];
+        
+        // Family relation (can be null)
+        family?: Family | null;
     }
 
     export const PRODUCTS_API_URL = `/api/products`;
@@ -399,7 +404,7 @@
                  * ------------------------------------------------------------------ */
                 while (nextPageUrl && (fetchAll || allProducts.length === 0)) {
                     console.log(`[getProducts] GET ${nextPageUrl}`);
-                    const response = await axiosInstance.get(nextPageUrl);
+                    const response: AxiosResponse<any> = await axiosInstance.get(nextPageUrl);
                     
                     console.log(`[productService.getProducts] Response from: ${nextPageUrl}`, response.data);
                     
@@ -415,7 +420,7 @@
                         if (response.data.products && allProducts.length === 0) {
                             console.log('[productService.getProducts] Detected API root, fetching actual products list...');
                             // Make a second request to get the actual products list
-                            const productsResponse = await axiosInstance.get(response.data.products);
+                            const productsResponse: AxiosResponse<any> = await axiosInstance.get(response.data.products);
                             
                             // Handle paginated response from second request
                             if (productsResponse.data && 'results' in productsResponse.data) {
@@ -880,7 +885,7 @@
             productId: number,
             locale: string = 'en_US',
             channel: string = 'ecommerce'
-          ): Promise<ProductAttribute[]> => {
+          ): Promise<AttributeGroup[]> => {
             try {
               /* 1. build { id: { label, code } } map */
               const { data: attrDefs } = await axiosInstance.get('/api/attributes/');
@@ -902,9 +907,17 @@
           
               /* 3. inject missing label/code into each item */
               return data.map((g: any) => ({
-                ...g,
+                id: g.id,
+                name: g.name,
+                description: g.description,
                 items: (g.items || []).map((it: any) => ({
-                  ...it,
+                  id: it.id,
+                  attribute: it.attribute,
+                  value: it.value,
+                  value_id: it.value_id,
+                  locale: it.locale,
+                  channel: it.channel,
+                  // Optionally include label/code if needed for UI
                   attribute_label: it.attribute_label ?? attrMap[it.attribute]?.label ?? '',
                   attribute_code:  it.attribute_code  ?? attrMap[it.attribute]?.code  ?? ''
                 }))

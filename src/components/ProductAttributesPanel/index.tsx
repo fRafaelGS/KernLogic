@@ -758,7 +758,7 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
                                       draftValue,
                                       setDraftValue,
                                       updateMutation.isPending,
-                                      validationError,
+                                      validationError ?? undefined,
                                       setMediaUploading,
                                       setMediaUploadError
                                     )}

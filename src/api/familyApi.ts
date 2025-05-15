@@ -132,6 +132,11 @@ export const overrideAttributeGroup = async (
   }
 }
 
+export interface AttributeOverridePayload {
+  attribute: number
+  removed: boolean
+}
+
 export const overrideFamilyGroups = async (
   productId: number,
   overrides: FamilyOverridePayload[]
@@ -139,6 +144,21 @@ export const overrideFamilyGroups = async (
   try {
     const { data } = await axiosInstance.post(
       `/api/products/${productId}/family-overrides/`,
+      overrides
+    )
+    return data
+  } catch (error) {
+    return handleApiError(error)
+  }
+}
+
+export const overrideAttributes = async (
+  productId: number,
+  overrides: AttributeOverridePayload[]
+): Promise<any> => {
+  try {
+    const { data } = await axiosInstance.post(
+      `/api/products/${productId}/attribute-overrides/`,
       overrides
     )
     return data
@@ -283,6 +303,24 @@ export const useOverrideAttributeGroup = (productId: number) => {
     },
     onError: (error: Error) => {
       console.error('Failed to override attribute group:', error.message)
+      return error
+    }
+  })
+}
+
+export const useOverrideAttributes = (productId: number) => {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: (overrides: AttributeOverridePayload[]) => 
+      overrideAttributes(productId, overrides),
+    onSuccess: () => {
+      // Invalidate both the specific product and the product list
+      queryClient.invalidateQueries({ queryKey: ['products', productId] })
+      queryClient.invalidateQueries({ queryKey: ['products', 'list'] })
+    },
+    onError: (error: Error) => {
+      console.error('Failed to override attributes:', error.message)
       return error
     }
   })

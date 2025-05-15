@@ -753,23 +753,34 @@ class FamilyAttributeGroup(models.Model):
 
 class ProductFamilyOverride(models.Model):
     """
-    Allows individual products to override (remove or add) attribute groups
-    inherited from their family.
+    Represents a family-level override for a product.
+    
+    This allows a product to override which attribute_groups it inherits from its family.
     """
-    product = models.ForeignKey(
-        'Product', on_delete=models.CASCADE, related_name="family_overrides"
-    )
-    attribute_group = models.ForeignKey(
-        AttributeGroup, on_delete=models.CASCADE
-    )
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='family_overrides')
+    attribute_group = models.ForeignKey(AttributeGroup, on_delete=models.CASCADE)
     removed = models.BooleanField(default=True)
-    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, db_index=True, null=True)
-
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.CASCADE)
+    
     class Meta:
-        unique_together = (("product", "attribute_group"),)
-        verbose_name = "Product Family Override"
-        verbose_name_plural = "Product Family Overrides"
+        unique_together = ('product', 'attribute_group')
         
     def __str__(self):
-        action = "Remove" if self.removed else "Add"
-        return f"{action} {self.attribute_group} from {self.product}"
+        return f"{self.product.name} - {self.attribute_group.name} - {'Removed' if self.removed else 'Added'}"
+
+class ProductAttributeOverride(models.Model):
+    """
+    Represents an attribute-level override for a product.
+    
+    This allows a product to override specific attributes within an attribute group.
+    """
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='attribute_overrides')
+    attribute = models.ForeignKey(Attribute, on_delete=models.CASCADE)
+    removed = models.BooleanField(default=True)
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.CASCADE)
+    
+    class Meta:
+        unique_together = ('product', 'attribute')
+        
+    def __str__(self):
+        return f"{self.product.name} - {self.attribute.label} - {'Removed' if self.removed else 'Added'}"

@@ -77,8 +77,8 @@ import { ProductAttributeGroups } from '@/components/product/ProductAttributeGro
 
 const PRODUCTS_BASE_URL = `${API_URL}/products`;
 
-// Add family property to Product interface
-interface ProductWithFamily extends Product {
+// Update the ProductWithFamily interface
+interface ProductWithFamily extends Omit<Product, 'family'> {
   family?: Family | null;
   attributes?: any;
 }
@@ -193,7 +193,7 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
       console.log('Default values from helper:', defaultValues);
       
       // Reset form with data using our centralized helper
-      form.reset(defaultValues);
+      form.reset(getDefaultProductValues(initialProduct as any));
       
       // Just to be extra sure, explicitly set these critical fields
       form.setValue('name', initialProduct.name || '');
@@ -418,77 +418,41 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
       // Don't include attribute_groups - they are controlled by family inheritance
     };
 
-    // Set up function to call based on mode
-    const apiFunction = isEditMode && productId !== undefined
-      ? productService.updateProduct.bind(null, productId)
-      : productService.createProduct;
+    console.log('Submitting product with family:', selectedFamily?.id || null);
 
-    // If creating, handle image specially
-    if (!isEditMode && imageFile) {
-      // For new products with an image, use the create with image endpoint
-      const formData = new FormData();
-      // Add all form fields to FormData
-      Object.entries(values).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          if (key === 'family') {
-            // Make sure to send the family ID or null (not "none")
-            formData.append(key, String(selectedFamily?.id || ''));
-          } else if (typeof value === 'object' && !(value instanceof File)) {
-            formData.append(key, JSON.stringify(value));
-          } else {
-            formData.append(key, String(value));
-          }
-        }
-      });
-      
-      // Add image file
-      formData.append('image', imageFile);
-      
-      // Explicitly cast formData to the expected type
-      productService.createProduct(formData as FormData)
-        .then((result: Product) => {
-          toast({ title: 'Product created successfully' });
-          navigate(`/app/products/${result.id}`);
+    // Set up function to call based on mode
+    if (isEditMode && productId !== undefined) {
+      // Edit mode - use direct JSON payload
+      productService.updateProduct(productId, payload as any)
+        .then(async (result: Product) => {
+          toast({ title: `Product updated successfully` });
+          
+          // Invalidate AND refetch queries to refresh data
+          await queryClient.invalidateQueries({ queryKey: ['product', productId] });
+          await queryClient.invalidateQueries({ queryKey: ['products', 'list'] });
+          
+          // Navigate to product detail page
+          navigate(`/app/products/${productId}`);
         })
         .catch((error: unknown) => {
-          console.error('Failed to create product:', error);
-          const errorMessage = error instanceof Error ? error.message : 'Failed to create product';
+          console.error(`Failed to update product:`, error);
+          const errorMessage = error instanceof Error ? error.message : `Failed to update product`;
           toast({ title: errorMessage, variant: 'destructive' });
         })
         .finally(() => {
           setIsLoading(false);
         });
     } else {
-      if (isEditMode) {
-        // Use direct payload for edit mode
-        apiFunction(payload as any) // Cast to any to bypass type checking temporarily
-          .then((result: Product | number) => {
-            toast({ title: `Product updated successfully` });
-            const resultId = typeof result === 'number' ? result : result.id;
-            navigate(`/app/products/${resultId}`);
-            
-            if (productId) {
-              // If we're in edit mode, invalidate the product query to refresh the data
-              queryClient.invalidateQueries({ queryKey: ['product', productId] });
-            }
-          })
-          .catch((error: unknown) => {
-            console.error(`Failed to update product:`, error);
-            const errorMessage = error instanceof Error ? error.message : `Failed to update product`;
-            toast({ title: errorMessage, variant: 'destructive' });
-          })
-          .finally(() => {
-            setIsLoading(false);
-          });
-      } else {
-        // Create mode with a FormData object
+      // Create mode
+      if (imageFile) {
+        // If we have an image, we need to use FormData
         const formData = new FormData();
         
         // Add all form fields to FormData
         Object.entries(payload).forEach(([key, value]) => {
           if (value !== undefined && value !== null) {
             if (key === 'family') {
-              // Make sure to send the family ID or null (not "none")
+              // Make sure to send the family ID or empty string for null
               formData.append(key, String(selectedFamily?.id || ''));
             } else if (typeof value === 'object' && !(value instanceof File)) {
               formData.append(key, JSON.stringify(value));
@@ -498,17 +462,39 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
           }
         });
         
+        // Add image file
+        formData.append('image', imageFile);
+        
         // Add draft prices separately if needed
         if (draftPrices.length > 0) {
           formData.append('prices', JSON.stringify(draftPrices));
         }
         
-        // Create the product
-        apiFunction(formData)
-          .then((result: Product | number) => {
+        // Create with FormData
+        productService.createProduct(formData)
+          .then((result: Product) => {
             toast({ title: `Product created successfully` });
-            const resultId = typeof result === 'number' ? result : result.id;
-            navigate(`/app/products/${resultId}`);
+            navigate(`/app/products/${result.id}`);
+          })
+          .catch((error: unknown) => {
+            console.error(`Failed to create product:`, error);
+            const errorMessage = error instanceof Error ? error.message : `Failed to create product`;
+            toast({ title: errorMessage, variant: 'destructive' });
+          })
+          .finally(() => {
+            setIsLoading(false);
+          });
+      } else {
+        // No image? Use direct JSON payload
+        // Add draft prices to payload if needed
+        const finalPayload = draftPrices.length > 0 
+          ? { ...payload, prices: draftPrices }
+          : payload;
+          
+        productService.createProduct(finalPayload as any)
+          .then((result: Product) => {
+            toast({ title: `Product created successfully` });
+            navigate(`/app/products/${result.id}`);
           })
           .catch((error: unknown) => {
             console.error(`Failed to create product:`, error);
@@ -536,10 +522,10 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
         const refreshedProduct = await productService.getProduct(productId);
         if (refreshedProduct) {
           // Reset form with refreshed data
-          form.reset(getDefaultProductValues(refreshedProduct));
+          form.reset(getDefaultProductValues(refreshedProduct as any));
           
           // Always update our local product state with the latest data
-          setProduct(refreshedProduct as ProductWithFamily);
+          setProduct(refreshedProduct as any);
 
           // Show success toast
           toast({ title: "Prices updated successfully" });
@@ -561,8 +547,8 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
       setSelectedFamily(null);
       toast({
         title: "Family Removed",
-        description: "No family selected. All attribute groups will be shown; please assign a family to control group assignments.",
-        variant: "default"
+        description: "No family selected. Attribute groups inheritance will be disabled. Please assign a family to enable attribute group management.",
+        variant: "destructive"
       });
       return;
     }
@@ -856,10 +842,10 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-sm text-enterprise-500 mt-1">
+                <p className="text-sm text-gray-500">
                   {selectedFamily ? (
                     <>
-                      Family defines required attribute groups for this product.
+                      <span className="block text-blue-600 font-medium">Family defines attribute groups for this product.</span>
                       {selectedFamily?.attribute_groups && selectedFamily.attribute_groups.length > 0 ? (
                         <span className="block mt-1">
                           Contains {selectedFamily.attribute_groups.length} attribute groups, 
@@ -868,7 +854,7 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
                       ) : null}
                     </>
                   ) : (
-                    "No family selected. All attribute groups will be shown."
+                    <span className="block text-amber-600">No family selected. Attribute groups will not be available until a family is selected.</span>
                   )}
                 </p>
               </FormItem>
@@ -947,6 +933,7 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
               <h3 className="text-lg font-semibold mb-4">Family Attribute Groups</h3>
               <p className="text-sm text-gray-600 mb-4">
                 Manage which attribute groups from the product family should appear for this product.
+                Groups are inherited from the '<span className="font-medium">{product.family.label}</span>' family.
               </p>
               <ProductAttributeGroups 
                 product={{

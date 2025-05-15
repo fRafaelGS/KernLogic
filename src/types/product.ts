@@ -1,4 +1,4 @@
-import { AttributeGroup } from './attributeGroup'
+import { AttributeGroup } from './attributeGroup.ts'
 import { Family, FamilyOverride } from './family'
 
 export interface Product {
@@ -21,7 +21,7 @@ export interface Product {
   missing_fields?: string[];
   has_primary_image?: boolean;
   organization?: number;
-  family?: Family | number;
+  family?: Family | null;
   family_overrides?: FamilyOverride[];
   effective_attribute_groups?: AttributeGroup[];
   images?: ProductImage[];

@@ -22,6 +22,7 @@ import { CategoryTreeSelect } from '../categories/CategoryTreeSelect';
 import { useQueryClient } from '@tanstack/react-query';
 import { isImageAsset } from '@/utils/isImageAsset';
 import { pickPrimaryImage } from '@/utils/images';
+import { useNavigate } from 'react-router-dom';
 
 // Mock user permissions - in a real app, these would come from auth context
 const hasEditPermission = true;
@@ -30,6 +31,12 @@ const hasEditPermission = true;
 interface ExtendedProduct extends Product {
   prices?: ProductPrice[];
   all_prices?: ProductPrice[];
+  family?: {
+    id: number;
+    code: string;
+    label: string;
+    description?: string;
+  };
 }
 
 interface ProductDetailSidebarProps {
@@ -74,6 +81,7 @@ export default function ProductDetailSidebar({ product, prices, isPricesLoading 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showPricingModal, setShowPricingModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const navigate = useNavigate();
   
   const createdDate = formatDate(product.created_at);
   const modifiedDate = formatDate(product.updated_at);
@@ -378,6 +386,36 @@ export default function ProductDetailSidebar({ product, prices, isPricesLoading 
               </BreadcrumbItem>
             )}
           </Breadcrumb>
+          
+          {/* Family */}
+          <div className="flex justify-between items-center mt-3 border-t border-slate-100 pt-3">
+            <h2 className="font-medium text-sm text-slate-500 uppercase tracking-wider">
+              Family
+            </h2>
+            {hasEditPermission && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs h-6"
+                onClick={() => navigate(`/app/products/${product.id}/edit?tab=basic`)}
+              >
+                Change
+              </Button>
+            )}
+          </div>
+          <div className="bg-slate-50 rounded-md px-3 py-2 border border-slate-200">
+            {product.family ? (
+              <div>
+                <span className="font-medium">{product.family.label}</span>
+                <Badge className="ml-2">{product.family.code}</Badge>
+                {product.family.description && (
+                  <div className="text-sm text-muted mt-1">{product.family.description}</div>
+                )}
+              </div>
+            ) : (
+              <span className="text-muted-foreground text-sm">No family assigned</span>
+            )}
+          </div>
           
           {/* Brand and GTIN in a 2-column layout */}
           <div className="grid grid-cols-2 gap-2 mt-3 border-t border-slate-100 pt-3">

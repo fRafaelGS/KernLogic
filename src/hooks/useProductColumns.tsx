@@ -46,6 +46,17 @@ import {
 } from "@/components/ui/popover";
 
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
+
+import { useFamilies } from '@/api/familyApi';
+import type { Family } from '@/types/family';
+
+import {
   Product,
   ProductImage,
   productService,
@@ -66,6 +77,21 @@ import { PriceSummaryBadge } from "@/components/products/PriceSummaryBadge";
 import CreatableSelect from 'react-select/creatable'
 import '@/styles/editable-cell.scss'
 import { pickPrimaryImage } from '@/utils/images';
+import { useUpdateProduct } from '@/hooks/useUpdateProduct'
+import { useNavigate } from "react-router-dom";
+import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from '@tanstack/react-query';
+
+// Extend the Product type to include family
+declare module '@/services/productService' {
+  interface Product {
+    family?: {
+      id: number;
+      label?: string;
+      code?: string;
+    };
+  }
+}
 
 // Helper function to safely format price amounts
 const formatAmount = (amount: number | string | null | undefined): string => {
@@ -144,6 +170,24 @@ export interface UseProductColumnsOpts {
     onClick(): void;
   }>;
 }
+
+// Function to handle setProducts which might be undefined
+const safeUpdateProducts = (
+  setProducts: UseProductColumnsOpts['setProducts'],
+  productId: number,
+  update: (product: Product) => Product
+): void => {
+  if (typeof setProducts === 'function') {
+    setProducts(prev => prev.map(p => (p.id === productId ? update(p) : p)));
+  }
+};
+
+// Function to safely call fetchData
+const safeCallFetchData = (fetchData?: () => void): void => {
+  if (typeof fetchData === 'function') {
+    fetchData();
+  }
+};
 
 /* ---------------------------------------------------------- */
 /*  The Hook                                                  */
@@ -487,6 +531,127 @@ export function useProductColumns({
       // Use our custom categoryFilter registered in the table's filterFns
       filterFn: "categoryFilter" as any,
     },
+
+    /**********  FAMILY **************************************************/
+    {
+      accessorKey: "family",
+      size: 160,
+      header: ({column}) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="p-0 hover:bg-transparent"
+          >
+            <span>Family</span>
+            <ArrowUpDown className="ml-1 h-4 w-4" />
+          </Button>
+        );
+      },
+      cell: ({ row }) => {
+        const rowIndex = row.index;
+        const family = row.original.family;
+        const familyId = family?.id;
+        const familyLabel = family?.label || family?.code || null;
+        const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.columnId === 'family';
+        
+        // Get families data using the hook imported at the top
+        const { data: familiesData } = useFamilies();
+        const families = familiesData || [];
+        const { mutateAsync: updateProduct } = useUpdateProduct();
+        const queryClient = useQueryClient();
+        
+        if (isEditing) {
+          return (
+            <div 
+              className="min-w-[200px] p-1" 
+              onClick={e => e.stopPropagation()}
+              onMouseDown={e => e.stopPropagation()} 
+              onKeyDown={e => e.stopPropagation()}
+              data-editing="true"
+            >
+              <Select
+                defaultValue={familyId ? String(familyId) : "none"}
+                onValueChange={async (value: string) => {
+                  const newFamilyId = value === "none" ? null : Number(value);
+                  try {
+                    // Direct API call to update the product
+                    if (row.original.id) {
+                      await updateProduct({ 
+                        id: row.original.id, 
+                        family: newFamilyId 
+                      });
+                      
+                      // Invalidate AND refetch queries to refresh data
+                      await queryClient.invalidateQueries({ queryKey: ['product', row.original.id] });
+                      await queryClient.invalidateQueries({ queryKey: ['products', 'list'] });
+                      
+                      // Show success toast
+                      toast({ 
+                        title: 'Family updated', 
+                        description: newFamilyId 
+                          ? `Product assigned to ${families.find(f => f.id === newFamilyId)?.label || 'family'}` 
+                          : 'Family assignment removed',
+                        variant: 'default' 
+                      });
+                    }
+                  } catch (error: any) {
+                    console.error('Error updating family:', error);
+                    toast({ 
+                      title: 'Error updating family', 
+                      description: error?.message || 'An unknown error occurred', 
+                      variant: 'destructive' 
+                    });
+                  }
+                }}
+              >
+                <SelectTrigger className="h-8">
+                  <SelectValue placeholder="Select a family" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {families.map((family: any) => (
+                    <SelectItem key={family.id} value={String(family.id)}>
+                      {family.label} ({family.code})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          );
+        }
+        
+        return (
+          <div
+            className="min-w-[160px] cursor-pointer p-1 hover:bg-muted rounded"
+            title={familyLabel || 'No family assigned'}
+            onClick={e => {
+              e.stopPropagation();
+              // Convert the familyId to a string or pass null
+              handleCellEdit(rowIndex, 'family', familyId !== undefined ? String(familyId) : '');
+            }}
+            tabIndex={0}
+            role="button"
+            aria-label="Edit family"
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                // Convert the familyId to a string or pass null
+                handleCellEdit(rowIndex, 'family', familyId !== undefined ? String(familyId) : '');
+              }
+            }}
+          >
+            {family ? (
+              <div>{family.label} <span className="text-xs text-muted">{family.code}</span></div>
+            ) : (
+              <span className="text-muted-foreground">None</span>
+            )}
+          </div>
+        );
+      },
+      enableSorting: true,
+    },
+
     /**********  BRAND **************************************************/
     {
       accessorKey: "brand",
@@ -817,8 +982,12 @@ export function useProductColumns({
               e.stopPropagation();
               // Handle click to edit price
               if (hasPrices) {
-                // Redirect to pricing modal
-                navigate(`/app/products/${row.original.id}/edit?tab=pricing`);
+                // Check for valid ID before navigation
+                const productId = row.original.id;
+                if (productId) {
+                  // Redirect to pricing modal
+                  navigate(`/app/products/${productId}/edit?tab=pricing`);
+                }
               } else {
                 // Only allow direct editing of the legacy price field if no prices array
                 handleCellEdit(rowIndex, columnId, ((row.original as any).price || 0).toString());
@@ -875,9 +1044,7 @@ export function useProductColumns({
             };
             
             // Optimistically update UI
-            setProducts(prev =>
-              prev.map(p => (p.id === productId ? { ...p, is_active: !isActive } : p))
-            );
+            safeUpdateProducts(setProducts, productId, p => ({ ...p, is_active: !isActive }));
             
             // Call API to update
             productService.updateProduct(productId, updatedData)
@@ -887,7 +1054,7 @@ export function useProductColumns({
               .catch((error) => {
                 toast({ title: 'Failed to update status', variant: 'destructive' });
                 // Revert optimistic update
-                fetchData();
+                safeCallFetchData(fetchData);
               });
           }
         };

@@ -197,8 +197,7 @@ export function Sidebar({ className, isMobile = false }: SidebarProps) {
       label: "Products",
       href: "/app/products",
       badge: location.pathname.includes('/app/products') ? '' : '24',
-      requiredPermission: "product.view",
-      isProducts: true
+      requiredPermission: "product.view"
     },
     {
       icon: BarChart2,
@@ -227,6 +226,14 @@ export function Sidebar({ className, isMobile = false }: SidebarProps) {
       href: "/app/team",
       requiredPermission: "team.view"
     },
+    // Families nav item, admin only
+    ...(user?.role === 'admin' ? [{
+      icon: BeakerIcon,
+      label: "Families",
+      href: "/app/products/families",
+      // Only visible to admins
+      requiredPermission: undefined
+    }] : []),
     {
       icon: Settings,
       label: "Settings",
@@ -304,64 +311,17 @@ export function Sidebar({ className, isMobile = false }: SidebarProps) {
             ? 'items-center space-y-8 mb-8'
             : 'items-start w-full space-y-1.5 mb-8'
         )}>
-          {(() => {
-            const navElements = []
-            for (const item of mainNavItems) {
-              if (item.isProducts && !effectiveCollapsed) {
-                navElements.push(
-                  <div key={item.href} className="w-full">
-                    <button
-                      className={cn(
-                        'flex items-center w-full px-3 py-2.5 rounded-md transition-colors text-enterprise-600 hover:bg-enterprise-100',
-                        location.pathname.startsWith('/app/products') && 'bg-primary-50 text-primary-700 font-medium'
-                      )}
-                      onClick={() => setProductsOpen(v => !v)}
-                      type="button"
-                      aria-expanded={productsOpen}
-                      aria-controls="products-submenu"
-                    >
-                      <Package size={22} className="mr-3 text-enterprise-500" />
-                      <span>Products</span>
-                      <span className="ml-auto flex items-center">
-                        {productsOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                      </span>
-                    </button>
-                    {productsOpen && (
-                      <div id="products-submenu" className="ml-8 mt-1 flex flex-col gap-1">
-                        <NavItem
-                          icon={Package}
-                          label="All Products"
-                          href="/app/products"
-                          requiredPermission="product.view"
-                          collapsed={false}
-                        />
-                        <NavItem
-                          icon={BeakerIcon}
-                          label="Families"
-                          href="/app/products/families"
-                          requiredPermission="product.view"
-                          collapsed={false}
-                        />
-                      </div>
-                    )}
-                  </div>
-                )
-              } else {
-                navElements.push(
-                  <NavItem
-                    key={item.href}
-                    icon={item.icon}
-                    label={item.label}
-                    href={item.href}
-                    badge={item.badge}
-                    requiredPermission={item.requiredPermission}
-                    collapsed={effectiveCollapsed}
-                  />
-                )
-              }
-            }
-            return navElements
-          })()}
+          {mainNavItems.map(item => (
+            <NavItem
+              key={item.href}
+              icon={item.icon}
+              label={item.label}
+              href={item.href}
+              badge={item.badge}
+              requiredPermission={item.requiredPermission}
+              collapsed={effectiveCollapsed}
+            />
+          ))}
         </div>
 
         {/* Group separator - only shown when collapsed */}

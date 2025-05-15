@@ -48,8 +48,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { CategoryModal } from '@/components/products/CategoryModal'
 
 // Services
-import { productService, Product, ProductPrice } from '@/services/productService';
-import { invalidateProductQueries } from '@/utils/queryInvalidation';
+import { productService, Product, ProductPrice, QUERY_KEYS, PRODUCTS_API_URL } from '@/services/productService';
+import { invalidateProductQueries, invalidateProductAndAssets } from '@/utils/queryInvalidation';
 import { normalizeFamily } from '@/utils/familyNormalizer';
 
 // Custom components
@@ -63,6 +63,7 @@ import { useFamilies, useOverrideAttributeGroup } from '@/api/familyApi';
 import { Family } from '@/types/family';
 import { ProductAttributeGroups } from '@/components/product/ProductAttributeGroups'
 import { ProductAttributesPanel } from '@/components/ProductAttributesPanel'
+import { useProductAssets } from '@/hooks/useProductAssets'
 
 // Update the ProductWithFamily interface
 interface ProductWithFamily extends Omit<Product, 'family'> {
@@ -138,6 +139,9 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
   
   // Add the override attribute group hook
   const overrideAttributeGroup = useOverrideAttributeGroup(productId || 0);
+
+  // This will be used for image upload operations
+  const productAssetsHook = useProductAssets(productId || 0);
 
   // Form definition using react-hook-form with zod resolver and centralized default values
   const form = useForm<ProductFormValues>({
@@ -404,38 +408,60 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
   const onSubmit = (values: ProductFormValues) => {
     setIsLoading(true);
     
-    // Merge in selected family ID (or null)
-    const payload = {
+    // Make a copy of the payload to modify it
+    let payload: any = {
       ...values,
-      family: selectedFamily?.id || null
-      // Don't include attribute_groups - they are controlled by family inheritance
+      family: selectedFamily?.id || null,
     };
+
+    // If in edit mode, include tags, otherwise exclude them completely
+    if (isEditMode) {
+      // For edit mode: ensure tags is an array
+      payload.tags = values.tags || [];
+    } else {
+      // For create mode: completely remove tags to avoid the API error
+      delete payload.tags;
+    }
 
     console.log('Submitting product with family:', selectedFamily?.id || null);
 
     // Set up function to call based on mode
     if (isEditMode && productId !== undefined) {
-      // Edit mode - use direct JSON payload
+      // Edit mode - use direct JSON payload (without image)
       productService.updateProduct(productId, payload as any)
         .then(async (result: Product) => {
           toast({ title: `Product updated successfully` });
           
-          // Invalidate ALL relevant queries to ensure both forms and detail views update
-          await Promise.all([
-            // Invalidate the product data
-            queryClient.invalidateQueries({ queryKey: ['product', productId] }),
-            // Invalidate product list
-            queryClient.invalidateQueries({ queryKey: ['products'] }),
-            // Invalidate family-specific queries
-            queryClient.invalidateQueries({ queryKey: ['familyAttributeGroups', selectedFamily?.id] }),
-            // Invalidate all attribute-related queries
-            queryClient.invalidateQueries({ queryKey: ['attributes'] }),
-            // Invalidate attribute groups
-            queryClient.invalidateQueries({ queryKey: ['attribute-groups'] })
-          ]);
+          // Invalidate product queries
+          await invalidateProductQueries(queryClient, productId);
           
-          // Force refetch the product data
-          await queryClient.refetchQueries({ queryKey: ['product', productId] });
+          // Handle image upload separately if present
+          if (imageFile) {
+            try {
+              console.log('Uploading image for existing product...');
+              
+              // Upload the image using the hook from component level
+              const asset = await productAssetsHook.uploadAssetAsync({
+                file: imageFile,
+                onProgress: (progress) => {
+                  console.log(`Upload progress: ${progress}%`);
+                }
+              });
+              
+              // Set as primary if successful
+              if (asset?.id) {
+                await productAssetsHook.setPrimaryAssetAsync(asset.id);
+              }
+              
+              console.log('Image uploaded and set as primary');
+            } catch (error) {
+              console.error('Failed to upload image:', error);
+              toast({ 
+                title: 'Product updated but image upload failed',
+                variant: 'destructive'
+              });
+            }
+          }
           
           // Navigate to product detail page
           navigate(`/app/products/${productId}`);
@@ -449,68 +475,89 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
           setIsLoading(false);
         });
     } else {
-      // Create mode
-      if (imageFile) {
-        // If we have an image, we need to use FormData
-        const formData = new FormData();
-        
-        // Add all form fields to FormData
-        Object.entries(payload).forEach(([key, value]) => {
-          if (value !== undefined && value !== null) {
-            if (key === 'family') {
-              // Make sure to send the family ID or empty string for null
-              formData.append(key, String(selectedFamily?.id || ''));
-            } else if (typeof value === 'object' && !(value instanceof File)) {
-              formData.append(key, JSON.stringify(value));
-            } else {
-              formData.append(key, String(value));
+      // Create mode - first create the product without the image
+      productService.createProduct(payload as any)
+        .then(async (result: Product) => {
+          const newProductId = result.id;
+          
+          if (!newProductId) {
+            throw new Error('Created product but no ID was returned');
+          }
+          
+          toast({ title: `Product created successfully` });
+          
+          // Add draft prices if needed
+          if (draftPrices.length > 0) {
+            console.log(`Adding ${draftPrices.length} draft prices to new product ${newProductId}`);
+            
+            try {
+              await Promise.all(
+                draftPrices.map(dp =>
+                  productService.addPrice(newProductId, {
+                    price_type: dp.price_type,
+                    currency: dp.currency,
+                    channel_id: dp.channel_id,
+                    amount: dp.amount,
+                    valid_from: dp.valid_from,
+                    valid_to: dp.valid_to,
+                  })
+                )
+              );
+              console.log('Prices added successfully');
+            } catch (error) {
+              console.error('Failed to add draft prices:', error);
+              toast({ 
+                title: 'Product created but prices could not be added',
+                variant: 'destructive'
+              });
             }
           }
-        });
-        
-        // Add image file
-        formData.append('image', imageFile);
-        
-        // Add draft prices separately if needed
-        if (draftPrices.length > 0) {
-          formData.append('prices', JSON.stringify(draftPrices));
-        }
-        
-        // Create with FormData
-        productService.createProduct(formData)
-          .then((result: Product) => {
-            toast({ title: `Product created successfully` });
-            navigate(`/app/products/${result.id}`);
-          })
-          .catch((error: unknown) => {
-            console.error(`Failed to create product:`, error);
-            const errorMessage = error instanceof Error ? error.message : `Failed to create product`;
-            toast({ title: errorMessage, variant: 'destructive' });
-          })
-          .finally(() => {
-            setIsLoading(false);
-          });
-      } else {
-        // No image? Use direct JSON payload
-        // Add draft prices to payload if needed
-        const finalPayload = draftPrices.length > 0 
-          ? { ...payload, prices: draftPrices }
-          : payload;
           
-        productService.createProduct(finalPayload as any)
-          .then((result: Product) => {
-            toast({ title: `Product created successfully` });
-            navigate(`/app/products/${result.id}`);
-          })
-          .catch((error: unknown) => {
-            console.error(`Failed to create product:`, error);
-            const errorMessage = error instanceof Error ? error.message : `Failed to create product`;
-            toast({ title: errorMessage, variant: 'destructive' });
-          })
-          .finally(() => {
-            setIsLoading(false);
-          });
-      }
+          // Upload image if present - IMPORTANT: For newly created products, we need to use productService directly
+          // since our hook is instantiated with the old productId (which is 0 for new products)
+          if (imageFile) {
+            try {
+              console.log('Uploading image for new product...');
+              
+              // Upload the image directly with productService
+              const uploadedAsset = await productService.uploadAsset(
+                newProductId, 
+                imageFile, 
+                (progressEvent) => {
+                  const progress = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 100));
+                  console.log(`Upload progress: ${progress}%`);
+                }
+              );
+              
+              // Set as primary
+              if (uploadedAsset?.id) {
+                await productService.setAssetPrimary(newProductId, uploadedAsset.id);
+                
+                // Invalidate relevant queries for the new product
+                await invalidateProductAndAssets(queryClient, newProductId);
+              }
+              
+              console.log('Image uploaded and set as primary');
+            } catch (error) {
+              console.error('Failed to upload image:', error);
+              toast({ 
+                title: 'Product created but image upload failed',
+                variant: 'destructive'
+              });
+            }
+          }
+          
+          // Navigate to the product detail page
+          navigate(`/app/products/${newProductId}`);
+        })
+        .catch((error: unknown) => {
+          console.error(`Failed to create product:`, error);
+          const errorMessage = error instanceof Error ? error.message : `Failed to create product`;
+          toast({ title: errorMessage, variant: 'destructive' });
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
     }
   };
 
@@ -658,6 +705,43 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
     
     return isInFamily && !isHidden;
   };
+
+  // Fix the SKU validation useEffect hook
+  useEffect(() => {
+    // Set up SKU validation
+    const validateSku = async (value: string) => {
+      if (value && value.length > 2) {
+        try {
+          // Call API to check if SKU exists
+          const response = await axios.get(`${PRODUCTS_API_URL}/check-sku/?sku=${encodeURIComponent(value)}`);
+          
+          // If SKU exists and we're not in edit mode (or editing a different product)
+          if (response.data?.exists && 
+              (!isEditMode || (isEditMode && response.data.product_id !== productId))) {
+            form.setError('sku', { 
+              message: 'A product with this SKU already exists' 
+            });
+          } else {
+            // Clear error if SKU is valid
+            form.clearErrors('sku');
+          }
+        } catch (error) {
+          // If endpoint doesn't exist or another error, don't block submission
+          console.warn('Failed to validate SKU:', error);
+        }
+      }
+    };
+    
+    // Set up the subscription
+    const subscription = form.watch((value, { name }) => {
+      if (name === 'sku' && typeof value.sku === 'string') {
+        validateSku(value.sku);
+      }
+    });
+    
+    // Cleanup subscription on unmount
+    return () => subscription.unsubscribe();
+  }, [form, isEditMode, productId]);
 
   if (queryLoading) {
     return <div>Loading...</div>;

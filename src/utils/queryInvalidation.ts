@@ -1,28 +1,56 @@
 import { QueryClient } from '@tanstack/react-query'
+import { QUERY_KEYS } from '@/services/productService'
 
 /**
- * Invalidates queries related to a product after it's been updated
- * 
- * This is particularly important for components like ProductAttributesPanel
- * that depend on the product's family ID which might have changed.
+ * Invalidates all product-related queries
+ * @param queryClient The React Query client
+ * @param productId The product ID
  */
-export function invalidateProductQueries(
-  queryClient: QueryClient, 
+export const invalidateProductQueries = async (
+  queryClient: QueryClient,
   productId: number | string
-) {
-  // Convert productId to number if it's a string
-  const numericId = typeof productId === 'string' ? parseInt(productId, 10) : productId
-  
-  // Invalidate product-specific queries
-  queryClient.invalidateQueries({ queryKey: ['product', numericId] })
-  
-  // Invalidate attribute-related queries
-  queryClient.invalidateQueries({ queryKey: ['attributes'] })
-  queryClient.invalidateQueries({ queryKey: ['attribute-groups'] })
-  
-  // Invalidate family-related queries if the product's family changed
-  queryClient.invalidateQueries({ queryKey: ['familyAttributeGroups'] })
-  
-  // Invalidate product list
-  queryClient.invalidateQueries({ queryKey: ['products'] })
+): Promise<void> => {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.PRODUCTS] }),
+    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PRODUCT(productId) }),
+  ])
+}
+
+/**
+ * Invalidates product assets queries
+ * @param queryClient The React Query client
+ * @param productId The product ID
+ */
+export const invalidateProductAssets = async (
+  queryClient: QueryClient,
+  productId: number | string
+): Promise<void> => {
+  await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PRODUCT_ASSETS(productId) })
+}
+
+/**
+ * Invalidates both product data and assets
+ * @param queryClient The React Query client
+ * @param productId The product ID
+ */
+export const invalidateProductAndAssets = async (
+  queryClient: QueryClient,
+  productId: number | string
+): Promise<void> => {
+  await Promise.all([
+    invalidateProductQueries(queryClient, productId),
+    invalidateProductAssets(queryClient, productId),
+  ])
+}
+
+/**
+ * Invalidates product prices queries
+ * @param queryClient The React Query client
+ * @param productId The product ID
+ */
+export const invalidateProductPrices = async (
+  queryClient: QueryClient,
+  productId: number | string
+): Promise<void> => {
+  await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PRODUCT_PRICES(productId) })
 } 

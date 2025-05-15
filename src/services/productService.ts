@@ -106,6 +106,15 @@
 
     export const PRODUCTS_API_URL = `/api/products`;
 
+    // Standardized query keys for React Query
+    export const QUERY_KEYS = {
+      PRODUCTS: 'products',
+      PRODUCT: (id: number | string) => ['product', id],
+      PRODUCT_ASSETS: (id: number | string) => ['assets', id],
+      PRODUCT_PRICES: (id: number | string) => ['prices', id],
+      CATEGORIES: 'categories',
+    };
+
     export interface ProductAttribute {
         id: number;
         name: string;

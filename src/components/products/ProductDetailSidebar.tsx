@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
-import { Product, productService, ProductAsset, ProductPrice } from '@/services/productService';
+import { Product, productService, ProductAsset, ProductPrice, QUERY_KEYS } from '@/services/productService';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Copy, ImageIcon, AlertCircle, UploadCloud, MoreHorizontal } from 'lucide-react';
@@ -23,6 +23,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { isImageAsset } from '@/utils/isImageAsset';
 import { pickPrimaryImage } from '@/utils/images';
 import { useNavigate } from 'react-router-dom';
+import { useProductAssets } from '@/hooks/useProductAssets';
+import { assetTypeService } from '@/services/assetTypeService';
+import { invalidateProductAndAssets } from '@/utils/queryInvalidation';
 
 // Mock user permissions - in a real app, these would come from auth context
 const hasEditPermission = true;
@@ -75,13 +78,22 @@ const validateGTIN = (gtin: string | undefined): boolean => {
   return checkDigit === calculatedCheckDigit;
 };
 
-export default function ProductDetailSidebar({ product, prices, isPricesLoading }: ProductDetailSidebarProps) {
+function ProductDetailSidebar({ product, prices, isPricesLoading }: ProductDetailSidebarProps) {
   const queryClient = useQueryClient();
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showPricingModal, setShowPricingModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const navigate = useNavigate();
+  
+  // Use the product assets hook for asset management
+  const {
+    assets,
+    isLoading: assetsLoading,
+    uploadAsset,
+    isUploading,
+    setPrimaryAsset
+  } = useProductAssets(product.id);
   
   const createdDate = formatDate(product.created_at);
   const modifiedDate = formatDate(product.updated_at);
@@ -93,43 +105,85 @@ export default function ProductDetailSidebar({ product, prices, isPricesLoading 
     ? product.category as Category
     : null;
   
-  // Add a function to force refresh the product data
-  const refreshProduct = useCallback(async () => {
-    try {
-      console.log('[ProductDetailSidebar] Forcing product refresh');
-      // Use the React Query client to refetch this specific product
-      await queryClient.refetchQueries({ queryKey: ['product', product.id], exact: true });
-      console.log('[ProductDetailSidebar] Product data refreshed successfully');
-    } catch (error) {
-      console.error('[ProductDetailSidebar] Error refreshing product data:', error);
+  // Get primary asset
+  const primaryAsset = useMemo(() => 
+    assets.find(asset => asset.is_primary && assetTypeService.isImageAsset(asset))
+  , [assets]);
+  
+  // Update image upload handler to use the hook
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!event.target.files || !event.target.files[0] || !product.id) {
+      return;
     }
-  }, [product.id, queryClient]);
-
-  // Listen for localStorage events that might indicate a primary image change
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === `product_${product.id}`) {
-        console.log('[ProductDetailSidebar] Detected product update in localStorage, refreshing');
-        refreshProduct();
+    
+    const file = event.target.files[0];
+    
+    // Skip if not an image
+    if (!file.type.startsWith('image/')) {
+      toast.error('The selected file is not an image');
+      return;
+    }
+    
+    try {
+      toast.info('Uploading image...', { duration: 3000 });
+      
+      // Track if upload was successful to set as primary afterward
+      let uploadSuccessful = false;
+      let uploadedAssetId: number | null = null;
+      
+      // Use a simpler approach - use the productService directly instead of the hook
+      const uploadedAsset = await productService.uploadAsset(
+        product.id, 
+        file, 
+        (progressEvent) => {
+          const progress = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 100));
+          console.log(`Upload progress: ${progress}%`);
+        }
+      );
+      
+      // If we get here, the upload was successful and we have the asset
+      if (uploadedAsset && uploadedAsset.id) {
+        // Set as primary
+        await productService.setAssetPrimary(product.id, uploadedAsset.id);
+        
+        // Invalidate queries to refresh UI
+        await invalidateProductAndAssets(queryClient, product.id);
+        
+        toast.success('Image uploaded and set as primary');
       }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, [product.id, refreshProduct]);
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      toast.error('Failed to upload image');
+    } finally {
+      // Reset the input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
 
   // Handle thumbnail display with improved priority for primary assets
   const thumbUrl = useMemo(() => {
-    console.log('[ProductDetailSidebar] Recalculating thumbUrl, assets count:', product.assets?.length);
+    // First try to find primary asset in assets array from our hook
+    const primaryAsset = assets?.find(asset => asset.is_primary);
+    if (primaryAsset && primaryAsset.url) {
+      return primaryAsset.url;
+    }
     
-    // Use the centralized helper for consistent image selection
+    // Fallback to centralized helper for product fields
     return pickPrimaryImage(product);
-  }, [product]);
+  }, [product, assets]);
   
   const largeImageUrl = useMemo(() => {
+    // First try to find primary asset in assets array from our hook
+    const primaryAsset = assets?.find(asset => asset.is_primary);
+    if (primaryAsset && primaryAsset.url) {
+      return primaryAsset.url;
+    }
+    
     // Use the same utility for large image to maintain consistency
     return pickPrimaryImage(product) || product.primary_image_large;
-  }, [product]);
+  }, [product, assets]);
   
   const isGtinValid = validateGTIN(product.barcode);
   
@@ -140,44 +194,6 @@ export default function ProductDetailSidebar({ product, prices, isPricesLoading 
       .catch(() => toast.error('Failed to copy to clipboard'));
   };
   
-  // Add a function to handle image upload
-  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file || !product.id) return;
-    
-    try {
-      toast.info('Uploading image...', { duration: 3000 });
-      
-      // Upload the image using the product service
-      const assetResponse = await productService.uploadAsset(
-        product.id, 
-        file,
-        (progressEvent) => {
-          // Optional: You could add progress tracking here if desired
-          const progress = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 100));
-          console.log(`Upload progress: ${progress}%`);
-        }
-      );
-      
-      // Set the uploaded image as primary
-      if (assetResponse?.id) {
-        await productService.setAssetPrimary(product.id, assetResponse.id);
-        toast.success('Image uploaded and set as primary');
-        
-        // Refresh the page to show the new image
-        window.location.reload();
-      }
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      toast.error('Failed to upload image. Please try again.');
-    }
-    
-    // Clear the file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
   // Get additional prices (excluding the base price)
   const additionalPrices = useMemo(() => {
     // Use directly fetched prices
@@ -195,23 +211,14 @@ export default function ProductDetailSidebar({ product, prices, isPricesLoading 
 
   // Update handlePricesUpdated to return a Promise
   const handlePricesUpdated = async (): Promise<void> => {
-    setShowPricingModal(false);
-    
-    // Invalidate and refetch both product and prices queries
-    if (product?.id) {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['product', product.id] }),
-        queryClient.invalidateQueries({ queryKey: ['prices', product.id] }),
-      ]);
-      
-      // Force an immediate refetch
-      await Promise.all([
-        queryClient.refetchQueries({ queryKey: ['product', product.id] }),
-        queryClient.refetchQueries({ queryKey: ['prices', product.id] }),
-      ]);
+    try {
+      // Refetch product and prices
+      await invalidateProductAndAssets(queryClient, product.id || 0);
+      toast.success('Prices updated successfully');
+    } catch (error) {
+      console.error('Error refreshing after price update:', error);
+      toast.error('Failed to refresh data after price update');
     }
-    
-    toast.success('Prices updated successfully');
   };
   
   // Update the handleShowPricing function
@@ -225,12 +232,10 @@ export default function ProductDetailSidebar({ product, prices, isPricesLoading 
     if (!product?.id) return;
     
     try {
-      // Invalidate and refetch product query
-      await queryClient.invalidateQueries({ queryKey: ['product', product.id] });
-      await queryClient.refetchQueries({ queryKey: ['product', product.id] });
+      await invalidateProductAndAssets(queryClient, product.id);
       toast.success('Product data refreshed');
     } catch (error) {
-      console.error('Error refreshing product data:', error);
+      console.error('Error refreshing product:', error);
       toast.error('Failed to refresh product data');
     }
   };
@@ -664,4 +669,6 @@ export default function ProductDetailSidebar({ product, prices, isPricesLoading 
       />
     </Card>
   );
-} 
+}
+
+export default ProductDetailSidebar; 

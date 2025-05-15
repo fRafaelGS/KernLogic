@@ -9,7 +9,7 @@ import {
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { Product, ProductAsset, productService, AssetBundle } from '@/services/productService';
+import { Product, ProductAsset, productService, AssetBundle, QUERY_KEYS } from '@/services/productService';
 import axiosInstance from '@/lib/axiosInstance';
 import { PRODUCTS_API_URL } from '@/services/productService';
 import { useToast } from '@/components/ui/use-toast';
@@ -17,6 +17,8 @@ import { DateRange } from 'react-day-picker';
 import { Toast } from '@/components/ui/toast';
 import { formatFileSize } from '@/utils/formatFileSize'
 import { useQueryClient } from '@tanstack/react-query';
+import { useProductAssets } from '@/hooks/useProductAssets';
+import { invalidateProductAndAssets } from '@/utils/queryInvalidation';
 
 // UI Components
 import { Button } from '@/components/ui/button';
@@ -81,7 +83,6 @@ import { assetTypeService } from '@/services/assetTypeService';
 
 interface AssetTabProps {
   product: Product;
-  onAssetUpdate?: (assets: ProductAsset[]) => void;
 }
 
 // Group assets by base name
@@ -100,8 +101,8 @@ interface UploadingAsset {
   status: 'uploading' | 'error' | 'success';
 }
 
-export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) => {
-  const { toast } = useToast();
+export const AssetsTab: React.FC<AssetTabProps> = ({ product }) => {
+  const { toast: uiToast } = useToast();
   const queryClient = useQueryClient();
 
   // Only proceed if feature flag is enabled
@@ -113,9 +114,21 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     );
   }
 
-  const [assets, setAssets] = useState<ProductAsset[]>(product.assets || []);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Use our hook to manage assets
+  const {
+    assets,
+    isLoading: loading,
+    isError,
+    error,
+    refetch,
+    uploadAsset,
+    isUploading,
+    setPrimaryAsset,
+    isSettingPrimary,
+    deleteAsset,
+    isDeleting
+  } = useProductAssets(product.id);
+
   const [selectedAssets, setSelectedAssets] = useState<Set<number>>(new Set());
   const [assetGroups, setAssetGroups] = useState<AssetGroup[]>([]);
   const [uploading, setUploading] = useState<UploadingAsset[]>([]);
@@ -135,6 +148,7 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     tags: new Set<string>() // Add tags filter
   });
   const [filterSidebarOpen, setFilterSidebarOpen] = useState(false);
+  
   // Bundle dialog state
   const [bundleDialogOpen, setBundleDialogOpen] = useState(false);
   const [bundleName, setBundleName] = useState('');
@@ -144,147 +158,12 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
   // Add state for the sidebar expanded status
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
 
-  /* ------------------------------------------------------------------ *
-   * fetchAssets() is wrapped in useCallback so the identity is stable; *
-   * isFetchingRef stops accidental re-entry.                           *
-   * ------------------------------------------------------------------ */
-  const isFetchingRef = useRef(false);
-
-  const fetchAssets = useCallback(async () => {
-    if (!product?.id || isFetchingRef.current) return;
-    isFetchingRef.current = true;
-    
-    setLoading(true);
-    setError(null);
-    
-    // Try to fetch from API first
-    let fetchedAssets: ProductAsset[] = [];
-    try {
-      console.log('Attempting to fetch assets for product ID:', product.id);
-      fetchedAssets = await productService.getProductAssets(product.id);
-      
-      // If we got a valid response with assets, use it
-      if (Array.isArray(fetchedAssets) && fetchedAssets.length > 0) {
-        console.log('Successfully fetched assets from API:', fetchedAssets.length);
-        setAssets(fetchedAssets);
-        
-        // Update cache with fresh server data
-        localStorage.setItem(`product_assets_${product.id}`, JSON.stringify(fetchedAssets));
-        setLoading(false);
-        isFetchingRef.current = false;
-        return;
-      } else {
-        console.warn('API returned empty asset array, will try cache');
-      }
-    } catch (err) {
-      console.error('Error fetching product assets from API:', err);
-      // Continue to try cache on error
-    }
-    
-    // If API failed or returned empty, try to use cache
-    try {
-      const cachedAssetsJSON = localStorage.getItem(`product_assets_${product.id}`);
-      if (cachedAssetsJSON) {
-        const cachedAssets = JSON.parse(cachedAssetsJSON);
-        if (Array.isArray(cachedAssets) && cachedAssets.length > 0) {
-          console.log(`Using ${cachedAssets.length} cached assets from localStorage for product ${product.id}`);
-          
-          // Check if we have exactly one primary asset
-          const primaryCount = cachedAssets.filter(asset => asset.is_primary).length;
-          
-          if (primaryCount !== 1) {
-            console.warn(`Found ${primaryCount} primary assets instead of 1, fixing...`);
-            // Fix by making only the first asset primary
-            const fixedAssets = cachedAssets.map((asset, index) => ({
-              ...asset,
-              is_primary: index === 0
-            }));
-            
-            // Save fixed assets back to localStorage
-            localStorage.setItem(`product_assets_${product.id}`, JSON.stringify(fixedAssets));
-            setAssets(fixedAssets);
-          } else {
-            setAssets(cachedAssets);
-          }
-          
-          setLoading(false);
-          isFetchingRef.current = false;
-          return; // Exit with cached data
-        }
-      }
-    } catch (err) {
-      console.error('Error reading from localStorage:', err);
-    }
-    
-    // If we got here, both API and cache failed - use fallback
-    console.warn('No assets from API or cache, using fallback data');
-    
-    // Generate fallback assets based on product images if available
-    if (product.images && product.images.length > 0) {
-      console.log('Using product images as fallback');
-      const mockAssets: ProductAsset[] = product.images.map((image, index) => ({
-        id: 1000 + index,
-        name: `Product Image ${index + 1}`,
-        type: 'image',
-        url: image.url,
-        size: 'Unknown',
-        resolution: 'Unknown',
-        uploaded_by: 'System',
-        uploaded_at: new Date().toISOString(),
-        is_primary: image.is_primary || index === 0
-      }));
-      setAssets(mockAssets);
-    } else if (product.primary_image_large) {
-      console.log('Using primary image as fallback');
-      // Use primary image as fallback
-      const mockAsset: ProductAsset = {
-        id: 1000,
-        name: 'Primary Product Image',
-        type: 'image',
-        url: product.primary_image_large,
-        size: 'Unknown',
-        resolution: 'Unknown',
-        uploaded_by: 'System',
-        uploaded_at: new Date().toISOString(),
-        is_primary: true
-      };
-      setAssets([mockAsset]);
-    } else {
-      console.log('No assets or images available');
-      setAssets([]);
-    }
-    
-    setLoading(false);
-    isFetchingRef.current = false;
-  }, [product?.id]);
-
-  useEffect(() => { 
-    fetchAssets();
-  }, [fetchAssets]);
-
-  // Save assets to localStorage whenever they change
+  // Group assets whenever they change
   useEffect(() => {
-    if (product?.id && assets.length > 0) {
-      try {
-        localStorage.setItem(`product_assets_${product.id}`, JSON.stringify(assets));
-        console.log(`Saved ${assets.length} assets to localStorage for product ${product.id}`);
-      } catch (err) {
-        console.error('Failed to save assets to localStorage:', err);
-      }
-    }
-  }, [assets, product?.id]);
-
-  // Process assets into groups whenever they change
-  useEffect(() => {
-    console.log('[AssetsTab] assets state changed:', assets);
-    console.log('[AssetsTab] Is assets an array?', Array.isArray(assets));
-    
-    if (Array.isArray(assets) && assets.length) {
-      groupAssetsByBaseName();
-    }
+    groupAssetsByBaseName();
   }, [assets]);
 
-  // Group assets by base name (for versioning)
+  // Group assets by base name
   const groupAssetsByBaseName = () => {
     if (!Array.isArray(assets)) {
       console.error('assets is not an array in groupAssetsByBaseName:', assets);
@@ -355,147 +234,67 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     );
   };
 
-  // Handle file drop
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    if (!product?.id) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Cannot upload files - product ID is missing'
-      });
+  // Upload file handler - now uses the hook
+  const uploadFile = async (upload: UploadingAsset, productId: number) => {
+    if (!productId) {
+      updateUploadStatus(upload.id, 'error', 'Product ID is missing');
       return;
     }
-    
-    // Create temporary uploading assets
-    const newUploads = acceptedFiles.map(file => ({
-      id: `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-      file,
-      progress: 0,
-      error: null,
-      status: 'uploading' as const
-    }));
-    
-    setUploading(prev => [...prev, ...newUploads]);
-    
-    // Upload each file
-    newUploads.forEach(upload => uploadFile(upload, product.id!));
-  }, [product?.id]);
 
-  // Dropzone setup
-  const { 
-    getRootProps, 
-    getInputProps, 
-    isDragActive 
-  } = useDropzone({ 
-    onDrop,
-    accept: {
-      'image/*': ['.png', '.jpeg', '.jpg', '.gif', '.webp'],
-      'application/pdf': ['.pdf'],
-      'application/vnd.ms-excel': ['.xls'],
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
-      'text/csv': ['.csv'],
-      'application/zip': ['.zip']
-    }
-  });
-
-  // Upload file to API
-  const uploadFile = async (upload: UploadingAsset, productId: number) => {
     try {
-      // Update progress to indicate we're starting
-      updateUploadProgress(upload.id, 10);
-      console.log(`[uploadFile] Uploading ${upload.file.name} (${upload.file.type}) to product ${productId}`);
+      // Mark as uploading and set initial progress
+      updateUploadStatus(upload.id, 'uploading');
+      updateUploadProgress(upload.id, 0);
       
-      // Upload the file to the assets endpoint
-      const asset = await productService.uploadAsset(
-        productId,
-        upload.file,
-        (progressEvent) => {
-          if (progressEvent.total) {
-            const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-            updateUploadProgress(upload.id, progress);
-          }
-        }
-      );
+      // Call the upload function from our hook
+      await uploadAsset({
+        file: upload.file,
+        onProgress: (progress) => updateUploadProgress(upload.id, progress)
+      });
       
-      // Handle successful upload
+      // Mark as success
       updateUploadStatus(upload.id, 'success');
-      console.log(`[uploadFile] Successful upload: Asset ID ${asset.id}, is_primary: ${asset.is_primary}`);
       
-      // Add the new asset to the list
-      setAssets(prev => {
-        // Simply add the new asset to the list without setting it as primary
-        const newAssets = [asset, ...prev];
-        
-        // Notify parent component if callback exists
-        if (onAssetUpdate) {
-          console.log(`[uploadFile] Notifying parent with ${newAssets.length} assets`);
-          onAssetUpdate(newAssets);
-        }
-        
-        return newAssets;
-      });
+      // Remove from the uploading list after a delay
+      setTimeout(() => {
+        setUploading(current => current.filter(u => u.id !== upload.id));
+      }, 2000);
       
-      toast({
-        title: 'Success',
-        description: `${asset.name} uploaded successfully`
-      });
-      
-      // Remove upload item immediately on success
-      setUploading(prev => prev.filter(item => item.id !== upload.id));
-      
-    } catch (error: any) {
-      console.error('[uploadFile] Error uploading file:', error);
-      
-      // Format error message for toast
-      let errorMessage = 'Upload failed';
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      } else if (typeof error === 'string') {
-        errorMessage = error;
-      }
-      
-      updateUploadStatus(upload.id, 'error', errorMessage);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: errorMessage
-      });
+    } catch (error) {
+      console.error('Error uploading asset:', error);
+      updateUploadStatus(upload.id, 'error', 'Failed to upload asset');
     }
   };
 
   // Update upload progress
   const updateUploadProgress = (uploadId: string, progress: number) => {
-    setUploading(prev => 
-      prev.map(item => 
-        item.id === uploadId
-          ? { ...item, progress }
-          : item
+    setUploading(current => 
+      current.map(upload => 
+        upload.id === uploadId ? { ...upload, progress } : upload
       )
     );
   };
 
   // Update upload status
   const updateUploadStatus = (uploadId: string, status: 'uploading' | 'error' | 'success', errorMessage?: string) => {
-    setUploading(prev => 
-      prev.map(item => 
-        item.id === uploadId
+    setUploading(current => 
+      current.map(upload => 
+        upload.id === uploadId 
           ? { 
-              ...item, 
+              ...upload, 
               status, 
-              error: errorMessage || null 
-            }
-          : item
+              error: status === 'error' ? errorMessage || 'Unknown error' : null 
+            } 
+          : upload
       )
     );
   };
 
-  // Retry failed upload
+  // Retry upload
   const retryUpload = (upload: UploadingAsset) => {
-    if (!product?.id) return;
-    
-    updateUploadStatus(upload.id, 'uploading');
-    updateUploadProgress(upload.id, 0);
-    uploadFile(upload, product.id);
+    if (product.id) {
+      uploadFile(upload, product.id);
+    }
   };
 
   // Cancel upload
@@ -510,174 +309,59 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
       return 'unknown';
     }
     
-    // Local implementation of type detection to avoid dependency issues
-    const detectType = (asset: ProductAsset): string => {
-      // Check content_type or type
-      const type = asset.content_type || asset.type || '';
-      
-      // Check based on MIME type
-      if (type) {
-        if (type.startsWith('image/')) return 'image';
-        if (type.startsWith('video/')) return 'video';
-        if (type.startsWith('audio/')) return 'audio';
-        if (type === 'application/pdf' || type.includes('pdf')) return 'pdf';
-        if (type.includes('spreadsheet') || type.includes('excel') || type.includes('csv')) return 'spreadsheet';
-        if (type.includes('document') || type.includes('word') || type.includes('text/')) return 'document';
-        if (type.includes('3d') || type.includes('stl') || type.includes('obj')) return 'model';
-      }
-      
-      // Check URL extension
-      const url = asset.url || '';
-      if (url && typeof url === 'string') {
-        const extension = url.split('.').pop()?.toLowerCase() || '';
-        
-        // Image extensions
-        if (/^(jpe?g|png|gif|svg|webp|bmp|tiff?|ico|heic|avif)$/.test(extension)) {
-          return 'image';
-        }
-        
-        // Video extensions
-        if (/^(mp4|webm|mov|avi|wmv|flv|mkv|m4v|mpg|mpeg)$/.test(extension)) {
-          return 'video';
-        }
-        
-        // Document extensions
-        if (/^(docx?|rtf|txt|md|pages|odt|pptx?|odp|key)$/.test(extension)) {
-          return 'document';
-        }
-        
-        // Spreadsheet extensions
-        if (/^(xlsx?|csv|numbers|ods|gsheet)$/.test(extension)) {
-          return 'spreadsheet';
-        }
-        
-        // 3D model extensions
-        if (/^(obj|stl|glb|gltf|fbx|3ds|dae|blend)$/.test(extension)) {
-          return 'model';
-        }
-      }
-      
-      return 'unknown';
-    };
-    
-    // Use our local implementation
-    const type = detectType(asset);
-    
-    // Convert 'model' type to '3d' for backward compatibility
-    if (type === 'model') return '3d';
-    
-    return type;
+    // Use assetTypeService for type detection
+    return assetTypeService.detectType(asset);
   };
 
-  // Local implementation of image asset detection to avoid dependency issues
+  // Use assetTypeService for image detection
   const isImageAsset = (asset?: ProductAsset): boolean => {
     if (!asset) return false;
-    
-    // Check content_type or type
-    const type = asset.content_type || asset.type || '';
-    if (type && type.toLowerCase().startsWith('image/')) {
-      return true;
-    }
-    
-    // Check URL extension
-    const url = asset.url || '';
-    if (url && typeof url === 'string') {
-      const extension = url.split('.').pop()?.toLowerCase() || '';
-      return ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp', 'tiff', 'ico', 'heic', 'avif'].includes(extension);
-    }
-    
-    return false;
+    return assetTypeService.isImageAsset(asset);
   };
 
-  // Make an asset primary (only for images)
+  // Make asset primary - now uses the hook
   const makeAssetPrimary = async (asset: ProductAsset) => {
-    if (asset.is_primary) {
-      console.log(`[makeAssetPrimary] Asset ${asset.id} is already primary`);
-      return; // Already primary
-    }
+    if (!asset || !asset.id || isSettingPrimary) return;
     
-    // Only allow images to be set as primary
-    if (!isImageAsset(asset)) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Only image files can be set as primary'
-      });
-      return;
-    }
-    
-    // Set loading state
+    // Set local loading state
     setIsMakingPrimary(asset.id);
-    console.log(`[makeAssetPrimary] Setting asset ${asset.id} as primary for product ${product.id}`);
-
-    // Use our new mutation hook for setting the primary asset
-    setPrimaryAsset(asset.id, {
-      onSuccess: () => {
-        // Clear loading state
-        setIsMakingPrimary(null);
-        console.log('[makeAssetPrimary] Primary asset updated successfully');
-        
-        // If the operation succeeded, update the local assets array to reflect the change
-        setAssets(prevAssets => {
-          return prevAssets.map(a => ({
-            ...a,
-            is_primary: a.id === asset.id
-          }));
-        });
-        
-        // Force refresh to ensure UI is consistent
-        fetchAssets();
-        
-        // Notify parent component if callback exists
-        if (onAssetUpdate) {
-          onAssetUpdate(assets.map(a => ({
-            ...a,
-            is_primary: a.id === asset.id
-          })));
-        }
-      },
-      onError: (error: any) => {
-        console.error('[makeAssetPrimary] Failed to set primary asset:', error);
-        setIsMakingPrimary(null);
-        
-        // Show error toast to the user
-        toast({
-          variant: 'destructive',
-          title: 'Error',
-          description: error?.message || 'Failed to set primary image'
-        });
-        
-        // Refresh assets to ensure UI shows correct state
-        fetchAssets();
-      }
-    });
-  };
-
-  // Delete an asset
-  const deleteAsset = async (assetId: number) => {
-    if (!product?.id) return;
-    
-    const confirmDelete = window.confirm('Are you sure you want to delete this asset?');
-    if (!confirmDelete) return;
     
     try {
-      await axiosInstance.delete(`${PRODUCTS_API_URL}/${product.id}/assets/${assetId}/`);
+      // Call the setPrimaryAsset from our hook
+      await setPrimaryAsset(asset.id);
       
-      // Update local state
-      setAssets(prev => prev.filter(asset => asset.id !== assetId));
-      setSelectedAssets(prev => {
-        const newSelected = new Set(prev);
-        newSelected.delete(assetId);
-        return newSelected;
+    } catch (error) {
+      console.error('Error setting primary asset:', error);
+      uiToast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to set primary asset'
       });
+    } finally {
+      setIsMakingPrimary(null);
+    }
+  };
+
+  // Delete asset - now uses the hook
+  const deleteAssetHandler = async (assetId: number) => {
+    if (!assetId || isDeleting) return;
+    
+    try {
+      // Call the deleteAsset from our hook
+      await deleteAsset(assetId);
       
-      toast({
-        title: 'Success',
-        description: 'Asset deleted'
-      });
-    } catch (err) {
-      console.error('Error deleting asset:', err);
-      toast({
+      // Clear selection if needed
+      if (selectedAssets.has(assetId)) {
+        setSelectedAssets(current => {
+          const updated = new Set(current);
+          updated.delete(assetId);
+          return updated;
+        });
+      }
+      
+    } catch (error) {
+      console.error('Error deleting asset:', error);
+      uiToast({
         variant: 'destructive',
         title: 'Error',
         description: 'Failed to delete asset'
@@ -685,34 +369,38 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     }
   };
 
-  // Archive an asset
+  // Archive an asset with proper invalidation
   const archiveAsset = async (assetId: number) => {
-    if (!product?.id) return
+    if (!product?.id) return;
     try {
-      const asset = assets.find(a => a.id === assetId)
+      const asset = assets.find(a => a.id === assetId);
+      if (!asset) return;
+      
       await productService.updateAsset(product.id, assetId, {
         is_archived: true,
         content_type: asset?.content_type || asset?.type || ''
-      })
-      // Refetch assets from backend to ensure UI is up to date
-      const updatedAssets = await productService.getProductAssets(product.id)
-      setAssets(updatedAssets)
-      // Refetch bundles in case any were deleted due to asset archive
-      fetchBundles()
-      toast({ title: 'Success', description: 'Asset archived' })
+      });
+      
+      // Invalidate the assets query to refresh data
+      await invalidateProductAndAssets(queryClient, product.id);
+      
+      // Refetch bundles in case any were affected
+      fetchBundles();
+      
+      uiToast({ title: 'Success', description: 'Asset archived' });
     } catch (err) {
-      console.error('Error archiving asset:', err)
-      toast({ variant: 'destructive', title: 'Error', description: 'Failed to archive asset' })
+      console.error('Error archiving asset:', err);
+      uiToast({ variant: 'destructive', title: 'Error', description: 'Failed to archive asset' });
     }
-  }
+  };
 
-  // Rename an asset
+  // Rename an asset with proper invalidation
   const renameAsset = async (asset: ProductAsset, newName: string) => {
     if (!product?.id || !asset?.id) return;
     
     // Validate the new name
     if (!newName.trim()) {
-      toast({
+      uiToast({
         variant: 'destructive',
         title: 'Error',
         description: 'Asset name cannot be empty'
@@ -727,26 +415,20 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
         { name: newName }
       );
       
-      // Update local state
-      setAssets(prev => 
-        prev.map(a => 
-          a.id === asset.id
-            ? { ...a, name: newName }
-            : a
-        )
-      );
+      // Invalidate the assets query to refresh data
+      await invalidateProductAndAssets(queryClient, product.id);
       
       // Close rename dialog
       setAssetToRename(null);
       setNewAssetName('');
       
-      toast({
+      uiToast({
         title: 'Success',
         description: 'Asset renamed successfully'
       });
     } catch (err) {
       console.error('Error renaming asset:', err);
-      toast({
+      uiToast({
         variant: 'destructive',
         title: 'Error',
         description: 'Failed to rename asset'
@@ -754,26 +436,32 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     }
   };
 
-  // Archive selected assets
+  // Archive selected assets with proper invalidation
   const archiveSelectedAssets = async () => {
     if (!product?.id || selectedAssets.size === 0) {
-      toast({ variant: 'destructive', title: 'Error', description: 'No assets selected' })
-      return
+      uiToast({ variant: 'destructive', title: 'Error', description: 'No assets selected' });
+      return;
     }
-    const confirmArchive = window.confirm(`Are you sure you want to archive ${selectedAssets.size} assets?`)
-    if (!confirmArchive) return
+    
+    const confirmArchive = window.confirm(`Are you sure you want to archive ${selectedAssets.size} assets?`);
+    if (!confirmArchive) return;
+    
     try {
-      const selected = assets.filter(a => selectedAssets.has(a.id))
-      await productService.bulkArchiveAssets(product.id, selected)
-      setAssets(prev => prev.map(asset => selectedAssets.has(asset.id) ? { ...asset, is_archived: true } : asset))
-      setSelectedAssets(new Set())
-      setAllSelected(false)
-      toast({ title: 'Success', description: `${selectedAssets.size} assets archived` })
+      const selected = assets.filter(a => selectedAssets.has(a.id));
+      await productService.bulkArchiveAssets(product.id, selected);
+      
+      // Invalidate the assets query to refresh data
+      await invalidateProductAndAssets(queryClient, product.id);
+      
+      setSelectedAssets(new Set());
+      setAllSelected(false);
+      
+      uiToast({ title: 'Success', description: `${selectedAssets.size} assets archived` });
     } catch (err) {
-      console.error('Error archiving assets:', err)
-      toast({ variant: 'destructive', title: 'Error', description: 'Failed to archive assets' })
+      console.error('Error archiving assets:', err);
+      uiToast({ variant: 'destructive', title: 'Error', description: 'Failed to archive assets' });
     }
-  }
+  };
 
   // Toggle selection of an asset
   const toggleAssetSelection = (assetId: number) => {
@@ -846,7 +534,7 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
       setBundles(bundlesList);
     } catch (error) {
       console.error('Failed to fetch asset bundles:', error);
-      toast({
+      uiToast({
         variant: 'destructive',
         title: 'Error',
         description: 'Failed to load asset bundles'
@@ -854,7 +542,7 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     } finally {
       setBundlesLoading(false);
     }
-  }, [product?.id, toast]);
+  }, [product?.id, uiToast]);
 
   // Fetch bundles on mount and when product changes
   useEffect(() => {
@@ -934,36 +622,23 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
     return Array.from(tagSet).sort();
   }, [assets]);
 
-  // Add function to handle asset updates
+  // Add function to handle asset updates with React Query
   const handleAssetUpdated = (updatedAsset: ProductAsset) => {
-    console.log(`Updating asset ${updatedAsset.id} with:`, updatedAsset)
-    
-    if (!updatedAsset) {
-      console.error('handleAssetUpdated called with undefined/null asset')
-      return
+    if (!updatedAsset || !product.id) {
+      console.error('handleAssetUpdated called with invalid data');
+      return;
     }
     
-    // Make sure we preserve all properties from the existing asset
-    setAssets(prevAssets => {
-      return prevAssets.map(asset => {
-        if (asset.id === updatedAsset.id) {
-          // Create a merged asset that keeps all existing properties but updates with new ones
-          const mergedAsset = { ...asset, ...updatedAsset }
-          console.log(`Asset updated from:`, asset, `to:`, mergedAsset)
-          return mergedAsset
-        }
-        return asset
-      })
-    })
-    
-    // If parent component has an update callback, pass the updated assets
-    if (onAssetUpdate) {
-      console.log('Notifying parent component of asset update')
-      onAssetUpdate(assets.map(asset => 
-        asset.id === updatedAsset.id ? { ...asset, ...updatedAsset } : asset
-      ))
-    }
-  }
+    // Update the asset in the React Query cache
+    queryClient.setQueryData(
+      QUERY_KEYS.PRODUCT_ASSETS(product.id),
+      (oldAssets: ProductAsset[] = []) => {
+        return oldAssets.map(asset => 
+          asset.id === updatedAsset.id ? { ...asset, ...updatedAsset } : asset
+        );
+      }
+    );
+  };
 
   // Update the toggleSelectAllFiltered function
   const toggleSelectAllFiltered = () => {
@@ -991,8 +666,68 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
   const { download: downloadAsset, isLoading: isDownloadingAsset } = useDownloadAsset()
   const { download: downloadBulkAssets, isLoading: isBulkDownloading } = useBulkDownload()
 
-  // Initialize our new hook for setting a primary asset
-  const { mutate: setPrimaryAsset } = useSetPrimaryAsset(product?.id || 0);
+  // Replace the fetchAssets call with refetch from our hook in the async onDrop handler
+  const onDrop = useCallback(
+    (acceptedFiles: File[]) => {
+      if (!product.id) {
+        uiToast({
+          variant: 'destructive',
+          title: 'Error',
+          description: 'Product ID is missing, cannot upload assets'
+        });
+        return;
+      }
+
+      // Process each dropped file
+      acceptedFiles.forEach(file => {
+        const uploadId = `upload-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        
+        // Add file to uploading list
+        setUploading(prev => [
+          ...prev,
+          {
+            id: uploadId,
+            file,
+            progress: 0,
+            error: null,
+            status: 'uploading'
+          }
+        ]);
+        
+        // Start upload
+        setTimeout(() => {
+          uploadFile(
+            {
+              id: uploadId,
+              file,
+              progress: 0,
+              error: null,
+              status: 'uploading'
+            },
+            product.id as number
+          );
+        }, 100);
+      });
+    },
+    [product.id, uiToast]
+  );
+
+  // Dropzone setup with the defined onDrop callback
+  const { 
+    getRootProps, 
+    getInputProps, 
+    isDragActive 
+  } = useDropzone({ 
+    onDrop,
+    accept: {
+      'image/*': ['.png', '.jpeg', '.jpg', '.gif', '.webp'],
+      'application/pdf': ['.pdf'],
+      'application/vnd.ms-excel': ['.xls'],
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+      'text/csv': ['.csv'],
+      'application/zip': ['.zip']
+    }
+  });
 
   return (
     <div className="p-6 space-y-8">
@@ -1411,7 +1146,7 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
                       productId={product?.id || 0}
                       onAssetUpdated={handleAssetUpdated}
                       onMakePrimary={makeAssetPrimary}
-                      onDelete={deleteAsset}
+                      onDelete={deleteAssetHandler}
                       onArchive={(assetId) => archiveAsset(assetId)}
                       onDownload={asset => {
                         if (!isDownloadingAsset && product?.id) {
@@ -1577,13 +1312,13 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
                         // Clear selection
                         setSelectedAssets(new Set());
                         
-                        toast({
+                        uiToast({
                           title: 'Success',
                           description: `"${bundleName}" bundle was created successfully`
                         });
                       } catch (error) {
                         console.error('Failed to create bundle:', error);
-                        toast({
+                        uiToast({
                           variant: 'destructive',
                           title: 'Error',
                           description: 'Failed to create asset bundle'
@@ -1618,7 +1353,7 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
                             .then(() => fetchBundles())
                             .catch(err => {
                               console.error('Failed to delete bundle:', err)
-                              toast({
+                              uiToast({
                                 variant: 'destructive',
                                 title: 'Error',
                                 description: 'Failed to delete asset bundle'

@@ -49,6 +49,8 @@ import { CategoryModal } from '@/components/products/CategoryModal'
 
 // Services
 import { productService, Product, ProductPrice } from '@/services/productService';
+import { invalidateProductQueries } from '@/utils/queryInvalidation';
+import { normalizeFamily } from '@/utils/familyNormalizer';
 
 // Custom components
 import { RichTextEditor } from '@/components/ui/RichTextEditor';
@@ -190,6 +192,12 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
       // Set image preview if available
       if (initialProduct.primary_image_large) {
         setImagePreview(initialProduct.primary_image_large);
+      }
+
+      // Normalize and set family data if available
+      if (initialProduct.family) {
+        const normalizedFamily = normalizeFamily(initialProduct.family, initialProduct.family_name);
+        setSelectedFamily(normalizedFamily || null);
       }
     }
   }, [initialProduct, form]);
@@ -561,9 +569,14 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
       return;
     }
     
+    // Find the family in the list of families
     const family = families?.find(f => f.id === value);
-    if (family) {
-      setSelectedFamily(family);
+    
+    // Create a normalized family object
+    const normalizedFamily = normalizeFamily(family);
+    
+    if (normalizedFamily) {
+      setSelectedFamily(normalizedFamily);
       
       // Invalidate and refetch all relevant queries
       if (productId) {
@@ -579,12 +592,12 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
       // Show toast notification about inheritance
       toast({
         title: "Family Selected",
-        description: `This product will now inherit all attribute groups from the '${family.label}' family.`,
+        description: `This product will now inherit all attribute groups from the '${normalizedFamily.label}' family.`,
         variant: "default"
       });
       
       // Check if required attribute groups have values
-      if (product && family.attribute_groups) {
+      if (product && family?.attribute_groups) {
         const requiredGroups = family.attribute_groups.filter(group => group.required);
         
         // Additional warning about required attribute groups if needed

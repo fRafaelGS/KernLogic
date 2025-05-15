@@ -29,6 +29,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
 import { useQueryClient } from '@tanstack/react-query';
+import { normalizeFamily } from '@/utils/familyNormalizer';
 
 export const ProductDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -402,13 +403,8 @@ export const ProductDetail = () => {
             <ProductDetailSidebar 
               product={{
                 ...product,
-                // Ensure family is in the correct format if it exists
-                family: product.family && typeof product.family === 'object' ? {
-                  id: product.family.id || 0,
-                  code: product.family.code || '',
-                  label: product.family.label || '',
-                  description: product.family.description
-                } : undefined
+                // Ensure family is in the correct format by using our normalizer
+                family: normalizeFamily(product.family, product.family_name)
               }}
               prices={prices || []}
               isPricesLoading={isPricesLoading}

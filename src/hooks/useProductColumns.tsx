@@ -55,6 +55,8 @@ import {
 
 import { useFamilies } from '@/api/familyApi';
 import type { Family } from '@/types/family';
+import { normalizeFamily, NormalizedFamily } from '@/utils/familyNormalizer';
+import { FamilyDisplay } from '@/components/products/FamilyDisplay';
 
 import {
   Product,
@@ -81,17 +83,6 @@ import { useUpdateProduct } from '@/hooks/useUpdateProduct'
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from '@tanstack/react-query';
-
-// Extend the Product type to include family
-declare module '@/services/productService' {
-  interface Product {
-    family?: {
-      id: number;
-      label?: string;
-      code?: string;
-    };
-  }
-}
 
 // Helper function to safely format price amounts
 const formatAmount = (amount: number | string | null | undefined): string => {
@@ -215,6 +206,8 @@ export function useProductColumns({
   fetchData,
   IconBtn,
 }: UseProductColumnsOpts) {
+  console.log('[useProductColumns] Hook initialized');
+
   /* -------- 1. main data columns -------------------------- */
   const columns = useMemo<ColumnDef<Product>[]>(() => [
     /* ------------------------------------------------------------------
@@ -426,6 +419,63 @@ export function useProductColumns({
       enableSorting: true,
     },
 
+    /**********  FAMILY **************************************************/
+    {
+      accessorKey: "family",
+      size: 160,
+      header: ({column}) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="p-0 hover:bg-transparent"
+          >
+            <span>Family</span>
+            <ArrowUpDown className="ml-1 h-4 w-4" />
+          </Button>
+        );
+      },
+      cell: ({ row }) => {
+        const family = row.original.family;
+        
+        // Get families data using the hook imported at the top
+        const { data: familiesData, isLoading: isFamiliesLoading } = useFamilies();
+        const families = familiesData || [];
+        
+        // First, normalize the family data for consistent format
+        let normalizedFamily = normalizeFamily(family);
+        
+        // If we have families data and normalized family shows a generic label ("Family X"),
+        // try to find the complete family data from the families list
+        if (normalizedFamily && families.length > 0 && !isFamiliesLoading) {
+          // Check if we need to enhance with full family data (when label is generic "Family X" or is missing properties)
+          const hasGenericLabel = normalizedFamily.label.includes(`Family ${normalizedFamily.id}`);
+          const isMissingProperties = !normalizedFamily.code || normalizedFamily.code === `family-${normalizedFamily.id}`;
+          
+          if (hasGenericLabel || isMissingProperties) {
+            const fullFamily = families.find(f => f.id === normalizedFamily?.id);
+            if (fullFamily) {
+              normalizedFamily = normalizeFamily(fullFamily);
+            }
+          }
+        }
+        
+        return (
+          <div className="flex justify-center p-1">
+            <FamilyDisplay 
+              family={normalizedFamily} 
+              badgeVariant="secondary"
+              showEmpty={true}
+              showCode={false}
+              hideTooltip={true}
+              className="bg-emerald-100 text-emerald-800 hover:bg-emerald-200 transition-colors"
+            />
+          </div>
+        );
+      },
+      enableSorting: true,
+    },
+
     /**********  CATEGORY **************************************************/
     {
       accessorKey: "category",
@@ -530,126 +580,6 @@ export function useProductColumns({
       enableColumnFilter: true,
       // Use our custom categoryFilter registered in the table's filterFns
       filterFn: "categoryFilter" as any,
-    },
-
-    /**********  FAMILY **************************************************/
-    {
-      accessorKey: "family",
-      size: 160,
-      header: ({column}) => {
-        return (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-            className="p-0 hover:bg-transparent"
-          >
-            <span>Family</span>
-            <ArrowUpDown className="ml-1 h-4 w-4" />
-          </Button>
-        );
-      },
-      cell: ({ row }) => {
-        const rowIndex = row.index;
-        const family = row.original.family;
-        const familyId = family?.id;
-        const familyLabel = family?.label || family?.code || null;
-        const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.columnId === 'family';
-        
-        // Get families data using the hook imported at the top
-        const { data: familiesData } = useFamilies();
-        const families = familiesData || [];
-        const { mutateAsync: updateProduct } = useUpdateProduct();
-        const queryClient = useQueryClient();
-        
-        if (isEditing) {
-          return (
-            <div 
-              className="min-w-[200px] p-1" 
-              onClick={e => e.stopPropagation()}
-              onMouseDown={e => e.stopPropagation()} 
-              onKeyDown={e => e.stopPropagation()}
-              data-editing="true"
-            >
-              <Select
-                defaultValue={familyId ? String(familyId) : "none"}
-                onValueChange={async (value: string) => {
-                  const newFamilyId = value === "none" ? null : Number(value);
-                  try {
-                    // Direct API call to update the product
-                    if (row.original.id) {
-                      await updateProduct({ 
-                        id: row.original.id, 
-                        family: newFamilyId 
-                      });
-                      
-                      // Invalidate AND refetch queries to refresh data
-                      await queryClient.invalidateQueries({ queryKey: ['product', row.original.id] });
-                      await queryClient.invalidateQueries({ queryKey: ['products', 'list'] });
-                      
-                      // Show success toast
-                      toast({ 
-                        title: 'Family updated', 
-                        description: newFamilyId 
-                          ? `Product assigned to ${families.find(f => f.id === newFamilyId)?.label || 'family'}` 
-                          : 'Family assignment removed',
-                        variant: 'default' 
-                      });
-                    }
-                  } catch (error: any) {
-                    console.error('Error updating family:', error);
-                    toast({ 
-                      title: 'Error updating family', 
-                      description: error?.message || 'An unknown error occurred', 
-                      variant: 'destructive' 
-                    });
-                  }
-                }}
-              >
-                <SelectTrigger className="h-8">
-                  <SelectValue placeholder="Select a family" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {families.map((family: any) => (
-                    <SelectItem key={family.id} value={String(family.id)}>
-                      {family.label} ({family.code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          );
-        }
-        
-        return (
-          <div
-            className="min-w-[160px] cursor-pointer p-1 hover:bg-muted rounded"
-            title={familyLabel || 'No family assigned'}
-            onClick={e => {
-              e.stopPropagation();
-              // Convert the familyId to a string or pass null
-              handleCellEdit(rowIndex, 'family', familyId !== undefined ? String(familyId) : '');
-            }}
-            tabIndex={0}
-            role="button"
-            aria-label="Edit family"
-            onKeyDown={e => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                // Convert the familyId to a string or pass null
-                handleCellEdit(rowIndex, 'family', familyId !== undefined ? String(familyId) : '');
-              }
-            }}
-          >
-            {family ? (
-              <div>{family.label} <span className="text-xs text-muted">{family.code}</span></div>
-            ) : (
-              <span className="text-muted-foreground">None</span>
-            )}
-          </div>
-        );
-      },
-      enableSorting: true,
     },
 
     /**********  BRAND **************************************************/

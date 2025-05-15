@@ -101,6 +101,7 @@
         
         // Family relation (can be null)
         family?: Family | null;
+        family_name?: string;
     }
 
     export const PRODUCTS_API_URL = `/api/products`;
@@ -546,6 +547,35 @@
             // Handle category data structure
             if (typeof product.category === 'string' && product.category !== '') {
                 product.category = { id: 0, name: product.category };
+            }
+            
+            // Ensure family data is complete
+            if (product.family) {
+                try {
+                    // If family is just an ID, fetch the full family data
+                    if (typeof product.family === 'number' || 
+                        (typeof product.family === 'object' && 
+                         !product.family.code && 
+                         !product.family.label)) {
+                        
+                        const familyId = typeof product.family === 'number' 
+                            ? product.family 
+                            : product.family.id;
+                            
+                        // Fetch the complete family data
+                        if (familyId) {
+                            const familyResponse = await axiosInstance.get(`/api/families/${familyId}/`);
+                            if (familyResponse.data) {
+                                product.family = familyResponse.data;
+                                // Store family name in a separate field for convenience
+                                product.family_name = familyResponse.data.label || familyResponse.data.name;
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error fetching family details:', error);
+                    // Keep the original family data if fetching fails
+                }
             }
             
             return product;

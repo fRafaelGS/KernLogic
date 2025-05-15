@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { productService } from '@/services/productService'
+import { invalidateProductQueries } from '@/utils/queryInvalidation'
 
 export function useUpdateProduct() {
   const queryClient = useQueryClient()
@@ -9,10 +10,9 @@ export function useUpdateProduct() {
       return productService.updateProduct(id, data)
     },
     onSuccess: (data) => {
-      // Invalidate queries to refresh data
-      queryClient.invalidateQueries({ queryKey: ['products'] })
+      // Use our utility function to invalidate all relevant queries
       if (data?.id) {
-        queryClient.invalidateQueries({ queryKey: ['product', data.id] })
+        invalidateProductQueries(queryClient, data.id)
       }
     }
   })

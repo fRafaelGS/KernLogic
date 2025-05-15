@@ -60,6 +60,8 @@ import { cn } from '@/lib/utils';
 import { CompletenessDrilldown } from './CompletenessDrilldown';
 import { Carousel, CarouselContent, CarouselItem, CarouselPrevious, CarouselNext } from '@/components/ui/carousel';
 import { Link } from 'react-router-dom';
+// Add lodash type declaration at the top
+// @ts-ignore
 import { debounce } from 'lodash';
 import RelatedProductsPanel from './RelatedProductsPanel';
 // Import the AssetsTab component
@@ -758,6 +760,11 @@ export const ProductDetailTabs = ({
       const hasExisting = attributeValues.some(
         v => v.attributeId === attributeId && v.locale === selectedLocale
       );
+
+      // Ensure product.id is defined
+      if (!product.id) {
+        throw new Error('Product ID is undefined');
+      }
       
       if (hasExisting) {
         // Update existing attribute value
@@ -771,7 +778,7 @@ export const ProductDetailTabs = ({
       await fetchAttributeValues();
       
       // Log activity (call backend if available)
-      if (productService.logAttributeActivity) {
+      if (productService.logAttributeActivity && product.id) {
         await productService.logAttributeActivity({
           action: 'ATTRIBUTE_VALUE_UPDATED',
           userId: user?.id,
@@ -2249,7 +2256,7 @@ export const ProductDetailTabs = ({
               open={isFieldStatusModalOpen}
               onOpenChange={setIsFieldStatusModalOpen}
               fieldCompleteness={productCompletenessDetails?.field_completeness || []}
-              productId={product.id}
+              productId={product.id ?? 0}
             />
             
             {/* CompletenessDrilldown component (keep this unchanged) */}
@@ -2373,7 +2380,7 @@ export const ProductDetailTabs = ({
         
         {/* Related Products */}
         <RelatedProductsPanel 
-          productId={product.id} 
+          productId={product.id ?? 0} 
           onRefresh={() => {/* handle refresh if needed */}}
         />
       </TabsContent>
@@ -2381,8 +2388,10 @@ export const ProductDetailTabs = ({
       <TabsContent value="attributes" className="space-y-6">
         {ENABLE_CUSTOM_ATTRIBUTES && (
           <ProductAttributesPanel 
-            productId={product.id ? String(product.id) : undefined} 
-            locale={selectedLocale} 
+            key={`attribute-panel-${product.id}-${product.family || 'no-family'}-${selectedLocale}`}
+            productId={product.id ? String(product.id) : ''} 
+            locale={selectedLocale}
+            familyId={typeof product.family === 'object' && product.family !== null ? product.family.id : undefined}
           />
         )}
       </TabsContent>
@@ -2396,12 +2405,12 @@ export const ProductDetailTabs = ({
       
       <TabsContent value="history" className="space-y-6">
         <Suspense fallback={<Skeleton className="h-48 w-full" />}>
-          <ProductHistoryTab productId={product.id} />
+          <ProductHistoryTab productId={product.id ?? 0} />
         </Suspense>
       </TabsContent>
       <TabsContent value="price">
         <PriceTab 
-          productId={product.id} 
+          productId={product.id ?? 0} 
           prices={prices}
           isPricesLoading={isPricesLoading}
           onPricesUpdated={async () => await onProductUpdate(product)}

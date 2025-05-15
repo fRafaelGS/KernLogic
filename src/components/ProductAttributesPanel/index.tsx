@@ -22,6 +22,7 @@ interface ProductAttributesPanelProps {
   productId: string
   locale?: string
   channel?: string
+  familyId?: number // can be undefined but not null
 }
 
 // Static fallback: currency list (replace with API-driven if available)
@@ -35,9 +36,17 @@ const currencies = [
 // Static fallback: measurement units (replace with API-driven if available)
 const units = ['mm','cm','m','in','ft','kg','g','lb','oz','l','ml']
 
-export function ProductAttributesPanel({ productId, locale, channel }: ProductAttributesPanelProps) {
+export function ProductAttributesPanel({ productId, locale, channel, familyId: propFamilyId }: ProductAttributesPanelProps) {
   // Initialize query client
   const queryClient = useQueryClient()
+  
+  // IMPORTANT NOTE FOR PRODUCT FAMILY UPDATES:
+  // When updating a product's family in other components (like Basic Info tab),
+  // you must invalidate the product query to update the familyId in this component:
+  //
+  // queryClient.invalidateQueries(['product', productId])
+  //
+  // Otherwise, this component will continue using the old familyId until page reload.
   
   const [selectedLocale, setSelectedLocale] = useState<LocaleCode>(locale as LocaleCode ?? LOCALES[0].code)
   const [selectedChannel, setSelectedChannel] = useState<ChannelCode>(channel as ChannelCode ?? CHANNELS[0].code)
@@ -52,8 +61,17 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
     enabled: !!productId
   })
 
-  const familyId = productData?.family
+  // Prefer familyId from props over product data
+  const familyId = propFamilyId !== undefined ? propFamilyId : productData?.family
   const hasFamily = Boolean(familyId)
+
+  // Refetch family groups when props.familyId changes
+  useEffect(() => {
+    if (propFamilyId !== undefined) {
+      console.log('▶️ propFamilyId changed, refetching family groups:', propFamilyId);
+      queryClient.invalidateQueries({ queryKey: ['familyAttributeGroups', propFamilyId] });
+    }
+  }, [propFamilyId, queryClient]);
 
   // Fetch family attribute groups if family exists
   const familyGroupsRaw = useFamilyAttributeGroups(familyId)
@@ -106,10 +124,12 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
     // Always ensure 'Ungrouped' exists
     map['Ungrouped'] = []
 
-    const attributes = productData?.attributes
-    // Ensure attributes is an array before iterating
-    if (attributes && Array.isArray(attributes)) {
-      attributes.forEach((attrVal: Attribute) => {
+    // Use attribute values from the attributes hook instead of productData?.attributes
+    const attributeValues = attributesHook.data?.attributes || []
+    
+    // Ensure attributeValues is an array before iterating
+    if (Array.isArray(attributeValues)) {
+      attributeValues.forEach((attrVal: Attribute) => {
         const attrId = Number((attrVal as any).attribute ?? attrVal.id)
         
         // Only look for a group if we have sourceGroups
@@ -137,13 +157,13 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
         familyId,
         hasNoGroups,
         sourceGroupsLength: sourceGroups?.length,
-        attributesLength: attributes?.length,
+        attributesLength: attributeValues?.length,
         attributeValues: map
       })
     }
     
     return map
-  }, [sourceGroups, productData?.attributes, productId, hasFamily, familyId, hasNoGroups])
+  }, [sourceGroups, attributesHook.data, productId, hasFamily, familyId, hasNoGroups])
 
   // Add validation state for phone, email, url, date
   const [validationError, setValidationError] = useState<string | null>(null)

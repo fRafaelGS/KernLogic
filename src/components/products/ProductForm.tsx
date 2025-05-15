@@ -60,6 +60,7 @@ import { CHANNELS, ChannelCode } from '@/config/channels'
 import { useFamilies, useOverrideAttributeGroup } from '@/api/familyApi';
 import { Family } from '@/types/family';
 import { ProductAttributeGroups } from '@/components/product/ProductAttributeGroups'
+import { ProductAttributesPanel } from '@/components/ProductAttributesPanel'
 
 // Update the ProductWithFamily interface
 interface ProductWithFamily extends Omit<Product, 'family'> {
@@ -411,9 +412,22 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
         .then(async (result: Product) => {
           toast({ title: `Product updated successfully` });
           
-          // Invalidate AND refetch queries to refresh data
-          await queryClient.invalidateQueries({ queryKey: ['product', productId] });
-          await queryClient.invalidateQueries({ queryKey: ['products', 'list'] });
+          // Invalidate ALL relevant queries to ensure both forms and detail views update
+          await Promise.all([
+            // Invalidate the product data
+            queryClient.invalidateQueries({ queryKey: ['product', productId] }),
+            // Invalidate product list
+            queryClient.invalidateQueries({ queryKey: ['products'] }),
+            // Invalidate family-specific queries
+            queryClient.invalidateQueries({ queryKey: ['familyAttributeGroups', selectedFamily?.id] }),
+            // Invalidate all attribute-related queries
+            queryClient.invalidateQueries({ queryKey: ['attributes'] }),
+            // Invalidate attribute groups
+            queryClient.invalidateQueries({ queryKey: ['attribute-groups'] })
+          ]);
+          
+          // Force refetch the product data
+          await queryClient.refetchQueries({ queryKey: ['product', productId] });
           
           // Navigate to product detail page
           navigate(`/app/products/${productId}`);
@@ -529,6 +543,16 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
     // Check if "none" was selected (which we'll treat as null)
     if (value === null) {
       setSelectedFamily(null);
+      
+      // Invalidate queries to refresh the UI
+      if (productId) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['product', productId] }),
+          queryClient.invalidateQueries({ queryKey: ['familyAttributeGroups', null] }),
+          queryClient.invalidateQueries({ queryKey: ['attributes', productId] })
+        ]);
+      }
+      
       toast({
         title: "Family Removed",
         description: "No family selected. Attribute groups inheritance will be disabled. Please assign a family to enable attribute group management.",
@@ -540,6 +564,17 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
     const family = families?.find(f => f.id === value);
     if (family) {
       setSelectedFamily(family);
+      
+      // Invalidate and refetch all relevant queries
+      if (productId) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['product', productId] }),
+          queryClient.invalidateQueries({ queryKey: ['familyAttributeGroups', value] }),
+          queryClient.invalidateQueries({ queryKey: ['attributes', productId] }),
+          // Force a refetch of the product data
+          queryClient.refetchQueries({ queryKey: ['product', productId] })
+        ]);
+      }
       
       // Show toast notification about inheritance
       toast({
@@ -869,8 +904,21 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
               </div>
             </TabsContent>
             
-            <TabsContent value="attributes">
-              {/* Placeholder for attributes section */}
+            <TabsContent value="attributes" className="space-y-4">
+              {productId && (
+                <ProductAttributesPanel
+                  key={`${productId}-${selectedFamily?.id ?? 'none'}-${selectedLocale}-${selectedChannel}`}
+                  productId={String(productId)}
+                  locale={selectedLocale}
+                  channel={selectedChannel}
+                  familyId={selectedFamily?.id}
+                />
+              )}
+              {!productId && (
+                <div className="p-4 text-center text-gray-500">
+                  <p>Attributes will be available after saving the product.</p>
+                </div>
+              )}
             </TabsContent>
           </Tabs>
           

@@ -28,6 +28,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 
 export const ProductDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -106,12 +107,24 @@ export const ProductDetail = () => {
     refetchOnWindowFocus: false
   });
 
+  // Use React Query Client to invalidate queries
+  const queryClient = useQueryClient();
+
   // Clean up on unmount
   useEffect(() => {
+    // Force refetch product data and related queries when component mounts
+    // This ensures we have fresh data when returning from edit form
+    if (productId) {
+      queryClient.invalidateQueries({ queryKey: ['product', productId] });
+      queryClient.invalidateQueries({ queryKey: ['familyAttributeGroups'] });
+      queryClient.invalidateQueries({ queryKey: ['attributes'] });
+      queryClient.refetchQueries({ queryKey: ['product', productId] });
+    }
+    
     return () => {
       document.title = 'KernLogic PIM';
     };
-  }, []);
+  }, [productId]);
 
   const handleEdit = () => {
     if (id) {
@@ -387,7 +400,16 @@ export const ProductDetail = () => {
         <ProductDetailLayout
           sidebar={
             <ProductDetailSidebar 
-              product={product} 
+              product={{
+                ...product,
+                // Ensure family is in the correct format if it exists
+                family: product.family && typeof product.family === 'object' ? {
+                  id: product.family.id || 0,
+                  code: product.family.code || '',
+                  label: product.family.label || '',
+                  description: product.family.description
+                } : undefined
+              }}
               prices={prices || []}
               isPricesLoading={isPricesLoading}
             />

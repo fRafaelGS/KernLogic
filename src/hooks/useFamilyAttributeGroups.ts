@@ -1,7 +1,20 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import axiosInstance from '@/lib/axiosInstance'
+import { useEffect } from 'react'
 
 export function useFamilyAttributeGroups(familyId?: number) {
+  const queryClient = useQueryClient()
+  
+  // This effect ensures the hook refetches when familyId changes
+  useEffect(() => {
+    if (familyId) {
+      // Refetch whenever the family ID changes
+      queryClient.invalidateQueries({ 
+        queryKey: ['familyAttributeGroups', familyId]
+      })
+    }
+  }, [familyId, queryClient])
+  
   return useQuery({
     queryKey: ['familyAttributeGroups', familyId],
     queryFn: async () => {

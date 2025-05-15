@@ -1453,7 +1453,7 @@ class DashboardViewSet(viewsets.ViewSet):
                     missing_fields_count.items(), 
                     key=lambda x: (x[1]['count'], x[1]['weight']), 
                     reverse=True
-                )[:3]
+                )[:7]
             ]
             
             # Get active/inactive counts (always exclude archived)
@@ -1462,7 +1462,7 @@ class DashboardViewSet(viewsets.ViewSet):
             
             # Get the 3 most recent products, with family relation (exclude archived)
             recent_products = []
-            recent_products_qs = queryset.select_related('family').order_by('-created_at')[:3]
+            recent_products_qs = queryset.select_related('family').order_by('-created_at')[:5]
             for p in recent_products_qs:
                 try:
                     family_label = ''

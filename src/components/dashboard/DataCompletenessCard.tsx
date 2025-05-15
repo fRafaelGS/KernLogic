@@ -22,7 +22,7 @@ export const DataCompletenessCard: React.FC<DataCompletenessCardProps> = ({
   mandatoryAttributes = []
 }) => {
   return (
-    <Card className="bg-white border-enterprise-200 shadow-sm hover:shadow-md transition-all">
+    <Card className="bg-white min-h-[363px] border-enterprise-200 shadow-sm hover:shadow-md hover:translate-y-[-2px] transition-all" tabIndex={0} aria-label="Product status donut chart">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div>
           <CardTitle className="text-sm font-medium uppercase tracking-wider text-gray-700 dark:text-gray-200">Data Completeness</CardTitle>
@@ -88,7 +88,7 @@ export const DataCompletenessCard: React.FC<DataCompletenessCardProps> = ({
             <div className="mt-6">
               <div className="text-sm font-medium text-enterprise-800 mb-3">Most missing fields</div>
               {mostMissingFields && mostMissingFields.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-6">
                   {mostMissingFields.map((item) => (
                     <TooltipProvider key={item.field}>
                       <Tooltip>

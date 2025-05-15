@@ -1,14 +1,10 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Activity } from '@/services/dashboardService';
 import { AnimatedValue } from '@/components/ui/animated-value';
 import { IncompleteProductsList } from '@/components/dashboard/IncompleteProductsList';
 import { DataCompletenessCard } from '@/components/dashboard/DataCompletenessCard';
@@ -19,26 +15,9 @@ import { RecentActivityCard } from '@/components/dashboard/RecentActivityCard';
 import { 
   Plus, 
   Package, 
-  BarChart3, 
-  DollarSign, 
   AlertTriangle, 
-  Users, 
-  ArrowUpRight,
-  ArrowDownRight,
-  LineChart,
   RefreshCcw,
-  Eye,
-  CalendarClock,
-  DownloadCloud,
-  UserPlus,
-  FileText,
-  ExternalLink,
-  CheckCircle2,
-  HelpCircle,
-  MessageSquare,
   Activity as ActivityIcon,
-  Info,
-  X
 } from 'lucide-react';
 
 /**
@@ -133,9 +112,9 @@ export const DashboardPage: React.FC = () => {
   const [trendRange, setTrendRange] = React.useState<30 | 60 | 90>(30);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pb-12">
+    <>
       {/* Header with welcome message and actions */}
-      <div className="col-span-full flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-2">
         <div>
           <h1 className="text-2xl font-bold text-enterprise-900">Welcome back, Admin</h1>
           <p className="text-enterprise-500 mt-1">Here's an overview of your inventory data</p>
@@ -161,15 +140,13 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       {/* Top KPIs Row */}
-      <div className="col-span-1">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-x-2 gap-y-1">
         <AnimatedDiv delay={0}>
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Card 
-                  className="bg-white border-enterprise-200 shadow-sm hover:shadow-md hover:translate-y-[-2px] transition-all cursor-pointer min-h-[220px]"
-                  tabIndex={0}
-                  aria-label="View all products"
+                  className="bg-white min-h-[363px] border-enterprise-200 shadow-sm hover:shadow-md hover:translate-y-[-2px] transition-all" tabIndex={0} aria-label="Product status donut chart"
                   onClick={() => navigate('/app/products')}
                   onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') navigate('/app/products') }}
                 >
@@ -177,7 +154,7 @@ export const DashboardPage: React.FC = () => {
                     <CardTitle className="text-sm font-medium uppercase tracking-wider text-gray-700 dark:text-gray-200">Total Products</CardTitle>
                     <Package className="h-4 w-4 text-primary-600" />
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="min-h-[270px]">
                     {loading.summary ? (
                       <Skeleton className="h-8 w-16" />
                     ) : (
@@ -187,11 +164,12 @@ export const DashboardPage: React.FC = () => {
                         </div>
                         <hr className="my-2 border-gray-200" />
                         {summary?.recent_products?.length ? (
-                          <div className="mt-2 mb-1 text-xs text-gray-400 font-medium">Last 3 products added</div>
+                          <div className="mt-2 mb-1 text-xs text-gray-400 font-medium">Last 5 products added</div>
                         ) : null}
-                        {summary?.recent_products?.length ? (
-                          <div className="space-y-2 mt-3 text-sm text-gray-700 max-h-[120px] overflow-auto">
-                            {summary.recent_products.map((p, i) => (
+                        <div className="space-y-2 mt-8 text-sm text-gray-700 max-h-[200px] overflow-auto">
+                          {Array.from({ length: 5 }).map((_, i) => {
+                            const p = summary?.recent_products?.slice(0, 5)[i]
+                            return p ? (
                               <div
                                 key={p.id}
                                 className="flex justify-between gap-2 items-center px-2 py-1 rounded hover:bg-gray-50 transition cursor-pointer border-b last:border-b-0 border-gray-100 focus:outline-none"
@@ -219,11 +197,15 @@ export const DashboardPage: React.FC = () => {
                                   <span className="mr-1">🏷</span>{p.family?.name || '–'}
                                 </div>
                               </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-sm text-gray-400 italic mt-2">No recent products found.</p>
-                        )}
+                            ) : (
+                              <div key={i} className="flex justify-between gap-2 items-center px-2 py-1 rounded border-b last:border-b-0 border-gray-100 text-gray-200 italic">
+                                <div className="w-[40%]">No product</div>
+                                <div className="w-[30%]">&nbsp;</div>
+                                <div className="w-[30%]">&nbsp;</div>
+                              </div>
+                            )
+                          })}
+                        </div>
                       </>
                     )}
                   </CardContent>
@@ -235,8 +217,6 @@ export const DashboardPage: React.FC = () => {
             </Tooltip>
           </TooltipProvider>
         </AnimatedDiv>
-      </div>
-      <div className="col-span-1">
         <AnimatedDiv delay={100}>
           <TooltipProvider>
             <Tooltip>
@@ -264,8 +244,6 @@ export const DashboardPage: React.FC = () => {
             </Tooltip>
           </TooltipProvider>
         </AnimatedDiv>
-      </div>
-      <div className="col-span-1">
         <AnimatedDiv delay={200}>
           <ProductStatusChart
             activeProducts={summary?.active_products || 0}
@@ -276,15 +254,13 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       {/* Row 2: Most Missing Attributes and Required Attributes */}
-      <div className="col-span-1 min-h-[280px]">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-2 gap-y-1 mt-2">
         <AnimatedDiv delay={300}>
           <MostMissingAttributesCard
             mostMissingFields={summary?.most_missing_fields || []}
             loading={loading.summary}
           />
         </AnimatedDiv>
-      </div>
-      <div className="col-span-1 min-h-[280px]">
         <AnimatedDiv delay={350}>
           <RequiredAttributesCard
             mandatoryAttributes={summary?.mandatory_attributes || []}
@@ -295,30 +271,28 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       {/* Row 3: Incomplete Products and Recent Activity side by side */}
-      <div className="col-span-full">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="min-h-[300px]">
-            <AnimatedDiv delay={400}>
-              <IncompleteProductsList
-                products={incompleteProducts}
-                loading={loading.incompleteProducts}
-                title="Incomplete Products"
-                description="Products missing required information"
-                maxItems={5}
-              />
-            </AnimatedDiv>
-          </div>
-          <div className="min-h-[300px]">
-            <AnimatedDiv delay={450}>
-              <RecentActivityCard
-                activities={activity}
-                loading={loading.activity}
-                maxItems={10}
-              />
-            </AnimatedDiv>
-          </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-2 gap-y-1 mt-2">
+        <div className="min-h-[300px]">
+          <AnimatedDiv delay={400}>
+            <IncompleteProductsList
+              products={incompleteProducts}
+              loading={loading.incompleteProducts}
+              title="Incomplete Products"
+              description="Products missing required information"
+              maxItems={5}
+            />
+          </AnimatedDiv>
+        </div>
+        <div className="min-h-[300px]">
+          <AnimatedDiv delay={450}>
+            <RecentActivityCard
+              activities={activity}
+              loading={loading.activity}
+              maxItems={10}
+            />
+          </AnimatedDiv>
         </div>
       </div>
-    </div>
+    </>
   );
 }; 

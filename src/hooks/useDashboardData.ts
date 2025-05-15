@@ -42,18 +42,15 @@ export function useDashboardData() {
   const organizationId = user?.organization_id;
   
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
-  const [inventoryTrend, setInventoryTrend] = useState<InventoryTrend | null>(null);
   const [activity, setActivity] = useState<Activity[] | null>(null);
   const [incompleteProducts, setIncompleteProducts] = useState<IncompleteProduct[] | null>(null);
   const [loading, setLoading] = useState({
     summary: false,
-    inventoryTrend: false,
     activity: false,
     incompleteProducts: false
   });
   const [error, setError] = useState({
     summary: null as Error | null,
-    inventoryTrend: null as Error | null,
     activity: null as Error | null,
     incompleteProducts: null as Error | null
   });
@@ -100,122 +97,34 @@ export function useDashboardData() {
    * Fetch dashboard summary
    */
   const fetchSummary = useCallback(async (force = false) => {
-    // Skip if no organization ID is available
     if (!organizationId) {
-      console.log('Cannot fetch dashboard summary: No organization ID available');
-      const emptyData = {
+      setSummary({
         total_products: 0,
-        inventory_value: 0,
-        inactive_product_count: 0, 
-        team_members: 0,
+        inactive_product_count: 0,
         data_completeness: 0,
         most_missing_fields: [],
         active_products: 0,
-        inactive_products: 0
-      };
-      setSummary(emptyData);
+        inactive_products: 0,
+        attributes_missing_count: 0,
+        mandatory_attributes: []
+      });
       return;
     }
-    
-    // Return cached data if valid
     if (!force && isCacheValid(cache.summary)) {
-      console.log('Using cached dashboard summary data:', cache.summary!.data);
       setSummary(cache.summary!.data);
       return;
     }
-
     setLoading(prev => ({ ...prev, summary: true }));
     setError(prev => ({ ...prev, summary: null }));
-
     try {
-      console.log('Fetching dashboard summary data for organization:', organizationId);
       const data = await dashboardService.getDashboardSummary(organizationId);
-      console.log('Dashboard summary data received:', data);
-      
-      // Check that data meets expected structure
-      if (data && typeof data === 'object') {
-        console.log('Dashboard data structure looks valid, setting state');
-        setSummary(data);
-        updateCache('summary', data);
-      } else {
-        console.error('Invalid dashboard data format received:', data);
-        throw new Error('Invalid data format received from API');
-      }
+      setSummary(data);
+      updateCache('summary', data);
     } catch (err: any) {
-      console.error('Dashboard summary error:', err);
-      // Don't logout on dashboard API failures
-      if (err.response?.status === 401) {
-        console.log('Authentication issue with dashboard summary. Using empty data.');
-        // Use empty data instead of failing completely
-        const emptyData = {
-          total_products: 0,
-          inventory_value: 0,
-          inactive_product_count: 0, 
-          team_members: 0,
-          data_completeness: 0,
-          most_missing_fields: [],
-          active_products: 0,
-          inactive_products: 0
-        };
-        setSummary(emptyData);
-      } else {
-        setError(prev => ({ ...prev, summary: err }));
-        toast.error('Failed to load dashboard summary');
-      }
+      setError(prev => ({ ...prev, summary: err }));
+      toast.error('Failed to load dashboard summary');
     } finally {
       setLoading(prev => ({ ...prev, summary: false }));
-    }
-  }, [organizationId]);
-
-  /**
-   * Fetch inventory trend
-   */
-  const fetchInventoryTrend = useCallback(async (range: 30 | 60 | 90 = 30, force = false) => {
-    // Skip if no organization ID is available
-    if (!organizationId) {
-      console.log('Cannot fetch inventory trend: No organization ID available');
-      const emptyData = {
-        dates: [],
-        values: []
-      };
-      setInventoryTrend(emptyData);
-      return;
-    }
-    
-    // Return cached data if valid and range matches
-    if (
-      !force && 
-      isCacheValid(cache.inventoryTrend) && 
-      cache.inventoryTrend!.range === range
-    ) {
-      setInventoryTrend(cache.inventoryTrend!.data);
-      return;
-    }
-
-    setLoading(prev => ({ ...prev, inventoryTrend: true }));
-    setError(prev => ({ ...prev, inventoryTrend: null }));
-
-    try {
-      const data = await dashboardService.getInventoryTrend(range, organizationId);
-      setInventoryTrend(data);
-      updateCache('inventoryTrend', data, { range });
-    } catch (err: any) {
-      console.error('Inventory trend error:', err);
-      // Don't logout on dashboard API failures
-      if (err.response?.status === 401) {
-        console.log('Authentication issue with inventory trend. Using empty data.');
-        // Use empty data instead of failing
-        const emptyData = {
-          dates: [],
-          values: []
-        };
-        setInventoryTrend(emptyData);
-      } else {
-        setError(prev => ({ ...prev, inventoryTrend: err }));
-        toast.error('Failed to load inventory trend');
-      }
-    } finally {
-      setLoading(prev => ({ ...prev, inventoryTrend: false }));
     }
   }, [organizationId]);
 
@@ -318,11 +227,10 @@ export function useDashboardData() {
   const fetchAll = useCallback(async (force = false) => {
     await Promise.all([
       fetchSummary(force),
-      fetchInventoryTrend(30, force),
       fetchActivity(force),
       fetchIncompleteProducts(force)
     ]);
-  }, [fetchSummary, fetchInventoryTrend, fetchActivity, fetchIncompleteProducts]);
+  }, [fetchSummary, fetchActivity, fetchIncompleteProducts]);
 
   /**
    * Invalidate all cache
@@ -353,14 +261,12 @@ export function useDashboardData() {
   return {
     data: {
       summary,
-      inventoryTrend,
       activity,
       incompleteProducts
     },
     loading,
     error,
     fetchSummary,
-    fetchInventoryTrend,
     fetchActivity,
     fetchIncompleteProducts,
     fetchAll,

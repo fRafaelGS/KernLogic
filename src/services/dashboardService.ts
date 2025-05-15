@@ -4,15 +4,14 @@ import { API_ENDPOINTS } from '@/config';
 // Define types for dashboard data
 export interface DashboardSummary {
   total_products: number;
-  inventory_value: number;
   inactive_product_count: number;
-  team_members: number;
   data_completeness: number;
   most_missing_fields: { field: string; count: number }[];
   active_products: number;
   inactive_products: number;
   attributes_missing_count: number;
   mandatory_attributes: string[];
+  recent_products: { name: string; sku: string; family: { name: string } }[];
 }
 
 export interface InventoryTrend {
@@ -109,30 +108,6 @@ export const getDashboardSummary = async (organizationId?: string): Promise<Dash
     return response.data;
   } catch (error) {
     console.error('Error fetching dashboard summary:', error);
-    throw error;
-  }
-};
-
-/**
- * Fetch inventory trend data
- * @param range Number of days (30, 60, 90)
- * @param organizationId Optional organization ID to filter data
- */
-export const getInventoryTrend = async (range: 30 | 60 | 90 = 30, organizationId?: string): Promise<InventoryTrend> => {
-  try {
-    let url = `${DASHBOARD_URL}/inventory-trend/?range=${range}`;
-    url = withOrgParam(url, organizationId);
-    
-    console.log('Inventory Trend API Call:', {
-      url,
-      range,
-      organizationId: organizationId || 'not provided'
-    });
-    
-    const response = await axiosInstance.get(url);
-    return response.data;
-  } catch (error) {
-    console.error('Error fetching inventory trend:', error);
     throw error;
   }
 };
@@ -242,7 +217,6 @@ export const getIncompleteProducts = async (
  */
 export const dashboardService = {
   getDashboardSummary,
-  getInventoryTrend,
   getRecentActivity,
   getIncompleteProducts,
 }; 

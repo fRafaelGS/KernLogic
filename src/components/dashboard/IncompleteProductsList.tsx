@@ -62,10 +62,20 @@ export const IncompleteProductsList: React.FC<IncompleteProductsListProps> = ({
               <div 
                 key={product?.id || Math.random()} 
                 className="px-6 py-4 hover:bg-enterprise-50 cursor-pointer"
-                onClick={() => product?.id ? navigate(`/app/products/${product.id}/edit`) : null}
               >
                 <div className="flex justify-between items-center mb-2">
-                  <h4 className="font-medium text-enterprise-800">{product?.name || "Unnamed product"}</h4>
+                  <a
+                    href={product?.id ? `/app/products/${product.id}/edit` : undefined}
+                    className="font-medium text-enterprise-800 hover:underline focus:underline outline-none"
+                    tabIndex={0}
+                    aria-label={`Edit product ${product?.name || ''}`}
+                    onClick={e => {
+                      e.stopPropagation()
+                      if (product?.id) navigate(`/app/products/${product.id}/edit`)
+                    }}
+                  >
+                    {product?.name || "Unnamed product"}
+                  </a>
                   <Badge variant="outline" className="bg-enterprise-50">
                     {product?.completeness || 0}% complete
                   </Badge>
@@ -73,13 +83,14 @@ export const IncompleteProductsList: React.FC<IncompleteProductsListProps> = ({
                 <div className="text-xs text-enterprise-500 mb-3">SKU: {product?.sku || "No SKU"}</div>
                 <div className="flex flex-wrap gap-2">
                   {product?.missing_fields && Array.isArray(product.missing_fields) ? (
-                    product.missing_fields.map((field) => (
+                    product.missing_fields.slice(0, 5).map((field) => (
                       <Badge 
                         key={field.field}
                         variant="outline"
-                        className="bg-danger-50 text-danger-700 border-danger-200"
+                        className="bg-danger-50 text-danger-700 border-danger-200 max-w-xs truncate"
+                        title={field.field}
                       >
-                        Missing: {field.field}
+                        Missing: {field.field.length > 24 ? `${field.field.slice(0, 21)}...` : field.field}
                       </Badge>
                     ))
                   ) : (

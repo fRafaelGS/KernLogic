@@ -530,6 +530,12 @@ class DashboardSummarySerializer(serializers.Serializer):
         default=list
     )
     
+    recent_products = serializers.ListField(
+        child=serializers.DictField(),
+        required=False,
+        default=list
+    )
+    
     def get_completeness_thresholds(self, obj):
         """Return thresholds for data completeness levels"""
         return {

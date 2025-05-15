@@ -1460,6 +1460,27 @@ class DashboardViewSet(viewsets.ViewSet):
             active_count = queryset.filter(is_active=True).count()
             inactive_count = queryset.filter(is_active=False).count()
             
+            # Get the 3 most recent products, with family relation
+            recent_products = []
+            recent_products_qs = queryset.select_related('family').order_by('-created_at')[:3]
+            for p in recent_products_qs:
+                try:
+                    family_label = ''
+                    if p.family:
+                        family_label = p.family.label or ''
+                    recent_products.append({
+                        'name': getattr(p, 'name', ''),
+                        'sku': getattr(p, 'sku', ''),
+                        'family': {'name': family_label}
+                    })
+                except Exception as e:
+                    print(f"Error serializing recent product {getattr(p, 'id', None)}: {e}")
+                    recent_products.append({
+                        'name': getattr(p, 'name', ''),
+                        'sku': getattr(p, 'sku', ''),
+                        'family': {'name': ''}
+                    })
+            
             # Prepare response data
             data = {
                 'total_products': total_products,
@@ -1469,7 +1490,8 @@ class DashboardViewSet(viewsets.ViewSet):
                 'data_completeness': round(avg_completeness, 1),
                 'most_missing_fields': most_missing,
                 'active_products': active_count,
-                'inactive_products': inactive_count
+                'inactive_products': inactive_count,
+                'recent_products': recent_products
             }
             
             # Get attribute-related completeness data

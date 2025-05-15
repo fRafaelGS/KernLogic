@@ -9,14 +9,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Activity } from '@/services/dashboardService';
-import { AreaChart, DonutChart } from '@tremor/react';
 import { AnimatedValue } from '@/components/ui/animated-value';
-import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
 import { IncompleteProductsList } from '@/components/dashboard/IncompleteProductsList';
 import { DataCompletenessCard } from '@/components/dashboard/DataCompletenessCard';
 import { ProductStatusChart } from '@/components/dashboard/ProductStatusChart';
-import { InventoryTrendChart } from '@/components/dashboard/InventoryTrendChart';
-import { QuickActions } from '@/components/dashboard/QuickActions';
+import { MostMissingAttributesCard } from '@/components/dashboard/MostMissingAttributesCard';
+import { RequiredAttributesCard } from '@/components/dashboard/RequiredAttributesCard';
+import { RecentActivityCard } from '@/components/dashboard/RecentActivityCard';
 import { 
   Plus, 
   Package, 
@@ -86,8 +85,13 @@ const getActivityIcon = (action: string) => {
   }
 };
 
-// Replace motion.div with a simple div since framer-motion might not be available
-const AnimatedDiv = ({ children, delay = 0, className = '' }) => {
+interface AnimatedDivProps {
+  delay?: number
+  className?: string
+  children: React.ReactNode
+}
+
+const AnimatedDiv = ({ children, delay = 0, className = '' }: AnimatedDivProps) => {
   return (
     <div 
       className={`animate-fadeIn ${className}`}
@@ -104,26 +108,16 @@ const AnimatedDiv = ({ children, delay = 0, className = '' }) => {
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { 
-    data: { summary, inventoryTrend, activity, incompleteProducts },
+    data: { summary, activity, incompleteProducts },
     loading,
     error,
-    fetchAll,
-    fetchInventoryTrend
+    fetchAll
   } = useDashboardData();
 
   // Fetch dashboard data on mount
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
-
-  // Fetch inventory trend with specific range
-  const fetchInventoryTrendHandler = useCallback((range: 30 | 60 | 90, forceRefresh = false) => {
-    if (typeof fetchInventoryTrend === 'function') {
-      fetchInventoryTrend(range, forceRefresh);
-    } else {
-      console.warn("fetchInventoryTrend is not available in useDashboardData");
-    }
-  }, [fetchInventoryTrend]);
 
   // Handle KPI card click (navigate to filtered products)
   const handleKpiClick = (filter: string) => {
@@ -139,9 +133,9 @@ export const DashboardPage: React.FC = () => {
   const [trendRange, setTrendRange] = React.useState<30 | 60 | 90>(30);
 
   return (
-    <div className="space-y-8">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pb-12">
       {/* Header with welcome message and actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="col-span-full flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
         <div>
           <h1 className="text-2xl font-bold text-enterprise-900">Welcome back, Admin</h1>
           <p className="text-enterprise-500 mt-1">Here's an overview of your inventory data</p>
@@ -151,7 +145,7 @@ export const DashboardPage: React.FC = () => {
             variant="outline" 
             className="border-enterprise-200 text-enterprise-700 hover:bg-enterprise-50"
             onClick={handleRefresh}
-            disabled={loading.summary || loading.inventoryTrend || loading.activity || loading.incompleteProducts}
+            disabled={loading.summary || loading.activity || loading.incompleteProducts}
           >
             <RefreshCcw className={`mr-2 h-4 w-4 ${Object.values(loading).some(Boolean) ? 'animate-spin' : ''}`} />
             Refresh Data
@@ -166,220 +160,152 @@ export const DashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div 
-        className="grid gap-5 md:grid-cols-2 lg:grid-cols-4"
-        aria-live="polite"
-      >
-        {/* Total Products */}
+      {/* Top KPIs Row */}
+      <div className="col-span-1">
         <AnimatedDiv delay={0}>
-          <Card 
-            className="bg-white border-enterprise-200 shadow-sm hover:shadow-md hover:translate-y-[-2px] transition-all cursor-pointer"
-            onClick={() => handleKpiClick('view=all')}
-          >
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium uppercase tracking-wider text-gray-700 dark:text-gray-200">Total Products</CardTitle>
-              <Package className="h-4 w-4 text-primary-600" />
-            </CardHeader>
-            <CardContent>
-              {loading.summary ? (
-                <Skeleton className="h-8 w-16" />
-              ) : (
-                <div className="text-2xl font-bold text-enterprise-900">
-                  <AnimatedValue value={summary?.total_products || 0} />
-                </div>
-              )}
-              <div className="flex items-center pt-1">
-                <span className="text-xs text-success-600 font-medium flex items-center mr-2">
-                  <ArrowUpRight className="h-3 w-3 mr-1" />
-                  12%
-                </span>
-                <span className="text-xs text-enterprise-500">from last month</span>
-              </div>
-            </CardContent>
-          </Card>
-        </AnimatedDiv>
-
-        {/* Inventory Value */}
-        <AnimatedDiv delay={50}>
-          <Card 
-            className="bg-white border-enterprise-200 shadow-sm hover:shadow-md hover:translate-y-[-2px] transition-all cursor-pointer"
-            onClick={() => handleKpiClick('view=all')}
-          >
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium uppercase tracking-wider text-gray-700 dark:text-gray-200">Inventory Value</CardTitle>
-              <DollarSign className="h-4 w-4 text-success-600" />
-            </CardHeader>
-            <CardContent>
-              {loading.summary ? (
-                <Skeleton className="h-8 w-24" />
-              ) : (
-                <div className="text-2xl font-bold text-enterprise-900">
-                  {formatCurrency(summary?.inventory_value || 0)}
-                </div>
-              )}
-              <div className="flex items-center pt-1">
-                <span className="text-xs text-success-600 font-medium flex items-center mr-2">
-                  <ArrowUpRight className="h-3 w-3 mr-1" />
-                  8.2%
-                </span>
-                <span className="text-xs text-enterprise-500">from last month</span>
-              </div>
-            </CardContent>
-          </Card>
-        </AnimatedDiv>
-
-        {/* Inactive Products */}
-        <AnimatedDiv delay={100}>
-          <Card 
-            className="bg-white border-enterprise-200 shadow-sm hover:shadow-md hover:translate-y-[-2px] transition-all cursor-pointer"
-            onClick={() => handleKpiClick('is_active=false')}
-            title="Click to view all inactive products"
-          >
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium uppercase tracking-wider text-gray-700 dark:text-gray-200">Inactive Products</CardTitle>
-              <X className="h-4 w-4 text-gray-500" />
-            </CardHeader>
-            <CardContent>
-              {loading.summary ? (
-                <Skeleton className="h-8 w-16" />
-              ) : (
-                <div className="text-2xl font-bold text-enterprise-900">
-                  <AnimatedValue value={summary?.inactive_product_count || 0} />
-                </div>
-              )}
-              <div className="flex items-center pt-1">
-                <span className="text-xs text-enterprise-500 font-medium flex items-center mr-2">
-                  {summary?.inactive_product_count ? (
-                    <span className="text-xs text-enterprise-600">
-                      {((summary?.inactive_product_count / (summary?.total_products || 1)) * 100).toFixed(1)}% of catalog
-                    </span>
-                  ) : (
-                    <span className="text-xs text-success-600">All products active</span>
-                  )}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-        </AnimatedDiv>
-
-        {/* Team Members */}
-        <AnimatedDiv delay={150}>
-          <Card 
-            className="bg-white border-enterprise-200 shadow-sm hover:shadow-md hover:translate-y-[-2px] transition-all cursor-pointer"
-            onClick={() => navigate('/app/team')}
-          >
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium uppercase tracking-wider text-gray-700 dark:text-gray-200">Team Members</CardTitle>
-              <Users className="h-4 w-4 text-indigo-500" />
-            </CardHeader>
-            <CardContent>
-              {loading.summary ? (
-                <Skeleton className="h-8 w-8" />
-              ) : (
-                <div className="text-2xl font-bold text-enterprise-900">
-                  <AnimatedValue value={summary?.team_members || 0} />
-                </div>
-              )}
-              <div className="flex items-center pt-1">
-                <span className="text-xs text-success-600 font-medium flex items-center mr-2">
-                  <ArrowUpRight className="h-3 w-3 mr-1" />
-                  1
-                </span>
-                <span className="text-xs text-enterprise-500">active user</span>
-              </div>
-            </CardContent>
-          </Card>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Card 
+                  className="bg-white border-enterprise-200 shadow-sm hover:shadow-md hover:translate-y-[-2px] transition-all cursor-pointer min-h-[220px]"
+                  tabIndex={0}
+                  aria-label="View all products"
+                  onClick={() => navigate('/app/products')}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') navigate('/app/products') }}
+                >
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium uppercase tracking-wider text-gray-700 dark:text-gray-200">Total Products</CardTitle>
+                    <Package className="h-4 w-4 text-primary-600" />
+                  </CardHeader>
+                  <CardContent>
+                    {loading.summary ? (
+                      <Skeleton className="h-8 w-16" />
+                    ) : (
+                      <>
+                        <div className="text-2xl font-bold text-enterprise-900">
+                          <AnimatedValue value={summary?.total_products || 0} />
+                        </div>
+                        <hr className="my-2 border-gray-200" />
+                        {summary?.recent_products?.length ? (
+                          <div className="space-y-2 mt-3 text-sm text-gray-700 max-h-[120px] overflow-auto">
+                            {summary.recent_products.map((p, i) => (
+                              <div
+                                key={i}
+                                className="flex justify-between gap-2 items-center px-2 py-1 rounded hover:bg-gray-50 transition cursor-pointer border-b last:border-b-0 border-gray-100 focus:outline-none"
+                                tabIndex={0}
+                                role="button"
+                                aria-label={`Product ${p.name || p.sku}`}
+                              >
+                                <div className="truncate font-medium w-[40%] flex items-center" title={p.name}>
+                                  {p.name || 'Unnamed'}
+                                </div>
+                                <div className="text-gray-500 truncate w-[30%] flex items-center" title={p.sku}>
+                                  <span className="mr-1 text-gray-400">#</span>{p.sku}
+                                </div>
+                                <div className="italic text-gray-400 text-xs w-[30%] truncate flex items-center" title={p.family?.name}>
+                                  <span className="mr-1">🏷</span>{p.family?.name || '–'}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-400 italic mt-2">No recent products found.</p>
+                        )}
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                The total number of products in your organization.
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </AnimatedDiv>
       </div>
-
-      {/* Charts and summary data */}
-      <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-        {/* Data Completeness */}
-        <AnimatedDiv delay={200} className="col-span-1">
-          <DataCompletenessCard 
-            completeness={summary?.data_completeness || 0}
-            mostMissingFields={summary?.most_missing_fields || []}
-            loading={loading.summary}
-            attributesMissingCount={summary?.attributes_missing_count || 0}
-            mandatoryAttributes={summary?.mandatory_attributes || []}
-          />
+      <div className="col-span-1">
+        <AnimatedDiv delay={100}>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div
+                  tabIndex={0}
+                  role="button"
+                  aria-label="Show incomplete products"
+                  onClick={() => navigate('/app/products?completeness_lt=100')}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') navigate('/app/products?completeness_lt=100') }}
+                  style={{ outline: 'none' }}
+                >
+                  <DataCompletenessCard 
+                    completeness={summary?.data_completeness || 0}
+                    mostMissingFields={summary?.most_missing_fields || []}
+                    loading={loading.summary}
+                    attributesMissingCount={summary?.attributes_missing_count || 0}
+                    mandatoryAttributes={summary?.mandatory_attributes || []}
+                  />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                % of products that have all required attribute fields filled.
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </AnimatedDiv>
-
-        {/* Product Status */}
-        <AnimatedDiv delay={250} className="col-span-1">
+      </div>
+      <div className="col-span-1">
+        <AnimatedDiv delay={200}>
           <ProductStatusChart
             activeProducts={summary?.active_products || 0}
             inactiveProducts={summary?.inactive_products || 0}
             loading={loading.summary}
           />
         </AnimatedDiv>
+      </div>
 
-        {/* Inventory Value Trend */}
-        <AnimatedDiv delay={300} className="md:col-span-2 lg:col-span-1">
-          <InventoryTrendChart
-            data={inventoryTrend}
-            loading={loading.inventoryTrend}
-            onRangeChange={(range) => fetchInventoryTrendHandler(range, true)}
+      {/* Row 2: Most Missing Attributes and Required Attributes */}
+      <div className="col-span-1 min-h-[280px]">
+        <AnimatedDiv delay={300}>
+          <MostMissingAttributesCard
+            mostMissingFields={summary?.most_missing_fields || []}
+            loading={loading.summary}
           />
         </AnimatedDiv>
       </div>
-
-      {/* Activity and Incomplete Products */}
-      <div className="grid gap-5 md:grid-cols-2">
-        {/* Recent Activity */}
+      <div className="col-span-1 min-h-[280px]">
         <AnimatedDiv delay={350}>
-          <ActivityFeed
-            activities={activity}
-            loading={loading.activity}
-            error={error.activity}
-            title="Recent Activity"
-            maxItems={10}
-          />
-        </AnimatedDiv>
-
-        {/* Incomplete Products */}
-        <AnimatedDiv delay={400}>
-          <IncompleteProductsList
-            products={incompleteProducts}
-            loading={loading.incompleteProducts}
-            title="Incomplete Products"
-            description="Products missing required information"
-            maxItems={5}
+          <RequiredAttributesCard
+            mandatoryAttributes={summary?.mandatory_attributes || []}
+            attributesMissingCount={summary?.attributes_missing_count || 0}
+            loading={loading.summary}
           />
         </AnimatedDiv>
       </div>
 
-      {/* Quick Actions */}
-      <AnimatedDiv delay={450}>
-        <QuickActions />
-      </AnimatedDiv>
-
-      {/* Help & Support */}
-      <AnimatedDiv delay={500}>
-        <Card className="bg-white border-enterprise-200 shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-sm font-medium uppercase tracking-wider text-gray-700 dark:text-gray-200">Help & Support</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col sm:flex-row gap-4">
-            <Button variant="outline" className="flex items-center" onClick={() => window.open('https://docs.kernlogic.com', '_blank', 'noopener noreferrer')}>
-              <FileText className="h-4 w-4 mr-2" />
-              Documentation
-              <ExternalLink className="h-3 w-3 ml-2" />
-            </Button>
-            <Button variant="outline" className="flex items-center" onClick={() => window.open('https://help.kernlogic.com', '_blank', 'noopener noreferrer')}>
-              <HelpCircle className="h-4 w-4 mr-2" />
-              Help Center
-              <ExternalLink className="h-3 w-3 ml-2" />
-            </Button>
-            <Button variant="outline" className="flex items-center" onClick={() => window.open('https://support.kernlogic.com', '_blank', 'noopener noreferrer')}>
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Contact Support
-              <ExternalLink className="h-3 w-3 ml-2" />
-            </Button>
-          </CardContent>
-        </Card>
-      </AnimatedDiv>
+      {/* Row 3: Incomplete Products and Recent Activity side by side */}
+      <div className="col-span-full">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="min-h-[300px]">
+            <AnimatedDiv delay={400}>
+              <IncompleteProductsList
+                products={incompleteProducts}
+                loading={loading.incompleteProducts}
+                title="Incomplete Products"
+                description="Products missing required information"
+                maxItems={5}
+              />
+            </AnimatedDiv>
+          </div>
+          <div className="min-h-[300px]">
+            <AnimatedDiv delay={450}>
+              <RecentActivityCard
+                activities={activity}
+                loading={loading.activity}
+                maxItems={10}
+              />
+            </AnimatedDiv>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }; 

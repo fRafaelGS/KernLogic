@@ -16,7 +16,7 @@ from products.permissions import (
     HasProductDeletePermission
 )
 
-from products.models import Family, FamilyAttributeGroup, AttributeGroup, Activity
+from products.models import Family, FamilyAttributeGroup, AttributeGroup, Activity, AttributeGroupItem
 from products.serializers import FamilySerializer, FamilyAttributeGroupSerializer
 
 
@@ -89,9 +89,43 @@ class FamilyViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             message=f"Deleted family: {instance.label}"
         )
 
-    @action(detail=True, methods=['post'], url_path='attribute-groups')
+    @action(detail=True, methods=['post', 'get'], url_path='attribute-groups')
     def manage_attribute_groups(self, request, pk=None):
         family = self.get_object()
+        
+        # Handle GET request
+        if request.method == 'GET':
+            # Get all attribute groups associated with the family
+            family_attr_groups = FamilyAttributeGroup.objects.filter(family=family).select_related('attribute_group')
+            
+            # Build response data
+            attribute_groups = []
+            for family_group in family_attr_groups:
+                # Get the underlying attribute group
+                group = family_group.attribute_group
+                
+                # Get the attribute items in this group
+                group_items = AttributeGroupItem.objects.filter(group=group).select_related('attribute')
+                
+                # Create a structured response with the items and metadata
+                attribute_groups.append({
+                    'id': group.id,
+                    'name': group.name,
+                    'description': group.description if hasattr(group, 'description') else '',
+                    'required': family_group.required,
+                    'order': family_group.order,
+                    'items': [
+                        {
+                            'id': item.id,
+                            'attribute': item.attribute_id,
+                            'order': item.order
+                        } for item in group_items
+                    ]
+                })
+            
+            return Response(attribute_groups)
+        
+        # Handle POST request (existing code)
         org = get_user_organization(request.user)
         serializer = FamilyAttributeGroupSerializer(data=request.data, context={'request': request})
         if not serializer.is_valid():

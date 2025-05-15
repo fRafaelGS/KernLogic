@@ -7,17 +7,16 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { PlusIcon, PencilIcon, Save, X, Trash2, Sparkles, Layers } from 'lucide-react'
 import { useAttributes, useUpdateAttribute, useDeleteAttribute, useCreateAttribute, useAllAttributes, useAllAttributeGroups, useAttributeGroups, GROUPS_QUERY_KEY } from './api'
 import type { Attribute, AttributeGroup } from './types'
-import { cn } from '@/lib/utils'
 import LocaleChannelSelector from '@/features/attributes/LocaleChannelSelector'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { RichTextEditor } from '@/components/ui/RichTextEditor'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Skeleton } from '@/components/ui/skeleton'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, useQuery } from '@tanstack/react-query'
 import { LOCALES, LocaleCode } from '@/config/locales'
 import { CHANNELS, ChannelCode } from '@/config/channels'
 import axiosInstance from '@/lib/axiosInstance'
+import { useFamilyAttributeGroups } from '@/hooks/useFamilyAttributeGroups'
 
 interface ProductAttributesPanelProps {
   productId: string
@@ -40,45 +39,41 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
   // Initialize query client
   const queryClient = useQueryClient()
   
-  // Add debug logs
-  console.log({
-    productId,
-    isCreateMode: !productId,
-    locale,
-    channel
-  });
-
   const [selectedLocale, setSelectedLocale] = useState<LocaleCode>(locale as LocaleCode ?? LOCALES[0].code)
   const [selectedChannel, setSelectedChannel] = useState<ChannelCode>(channel as ChannelCode ?? CHANNELS[0].code)
 
   // Add flag to track if we're in create mode
   const isCreateMode = !productId
 
-  const { data, isPending, isError } = useAttributes(productId, selectedLocale, selectedChannel)
-  const updateMutation = useUpdateAttribute(productId, selectedLocale, selectedChannel)
-  const deleteMutation = useDeleteAttribute(productId, selectedLocale, selectedChannel)
-  const deleteGlobalMutation = useDeleteAttribute(productId, undefined, undefined)
-  const createMutation = useCreateAttribute(productId, selectedLocale, selectedChannel)
-  const { data: allAttributes = [] } = useAllAttributes()
-  const { data: allGroups = [], isLoading: loadingAllGroups } = useAllAttributeGroups()
-  const { data: groupsData = [] } = useAttributeGroups(productId)
+  // Fetch product data to access family
+  const { data: productData } = useQuery({
+    queryKey: ['product', productId],
+    queryFn: () => axiosInstance.get(`/api/products/${productId}/`).then(r => r.data),
+    enabled: !!productId
+  })
 
-  // Add runtime logging for debugging data shapes
-  useEffect(() => {
-    console.log('👉 allGroups:', allGroups);
-    console.log('👉 groupsData:', groupsData);
-    console.log('👉 data.attributes:', data?.attributes);
-  }, [allGroups, groupsData, data]);
+  const familyId = productData?.family
+  const hasFamily = Boolean(familyId)
 
-  // Add more comprehensive debug logs
-  console.log({
-    productId,
-    isCreateMode: !productId,
-    'useAttributes data': data?.attributes,
-    'useAllAttributeGroups data': allGroups,
-    'allGroups.length': allGroups?.length,
-    'allAttributes.length': allAttributes?.length
-  });
+  // Fetch family attribute groups if family exists
+  const familyGroupsRaw = useFamilyAttributeGroups(familyId)
+  const familyGroups: AttributeGroup[] = familyGroupsRaw.data ?? []
+  const isLoadingFamilyGroups = familyGroupsRaw.isLoading
+  const familyError = familyGroupsRaw.error
+
+  // Fetch product attribute groups (overrides)
+  const attributeGroupsRaw = useAttributeGroups(productId)
+  const attributeGroups: AttributeGroup[] = attributeGroupsRaw.data ?? []
+
+  // Compute sourceGroups: prefer familyGroups if hasFamily, else attributeGroups
+  const sourceGroups = (hasFamily ? familyGroups : attributeGroups) as AttributeGroup[]
+
+  console.log('▶️ hasFamily:', hasFamily)
+  console.log('▶️ sourceGroups:', sourceGroups)
+  console.log('▶️ data.attributes:', productData?.attributes)
+
+  // Add additional fallback for empty groups
+  const hasNoGroups = !sourceGroups || sourceGroups.length === 0
 
   // local editing state
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -87,32 +82,68 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
   // Track draft values for create mode
   const [createModeDraftValues, setCreateModeDraftValues] = useState<Record<number, string>>({})
 
-  // Build grouped data from all groups, then add any data attributes
-  const grouped = useMemo(() => {
-    // 1) Build a bucket for every group name, plus 'Ungrouped'
-    const map: Record<string, Attribute[]> = {};
-    allGroups.forEach(g => { map[g.name] = []; });
-    map['Ungrouped'] = [];
+  // Call useAttributes with correct arguments for the local implementation
+  const attributesHook = useAttributes(productId, selectedLocale, selectedChannel)
+  const { data, isPending, isError } = attributesHook
+  const updateMutation = useUpdateAttribute(productId, selectedLocale, selectedChannel)
+  const deleteMutation = useDeleteAttribute(productId, selectedLocale, selectedChannel)
+  const deleteGlobalMutation = useDeleteAttribute(productId, undefined, undefined)
+  const createMutation = useCreateAttribute(productId, selectedLocale, selectedChannel)
+  const { data: allAttributes = [] } = useAllAttributes()
 
-    // 2) If we have existing values, slot each one into its group
-    if (data?.attributes?.length) {
-      data.attributes.forEach(attrVal => {
-        // Get the attribute ID, checking both possible fields for flexibility
-        const valId = Number((attrVal as any).attribute || attrVal.id);
-        // find the group containing that attribute
-        const grp = allGroups.find(g =>
-          g.items.some(item => Number(item.attribute) === valId)
-        );
-        if (grp) {
-          map[grp.name].push(attrVal);
-        } else {
-          map['Ungrouped'].push(attrVal);
+  // Build grouped data from sourceGroups, then add any data attributes
+  const grouped: Record<string, Attribute[]> = useMemo(() => {
+    console.log('▶️ Recomputing grouped with', sourceGroups?.length ?? 0, 'groups')
+    const map: Record<string, Attribute[]> = {}
+    
+    // Handle the case where sourceGroups is undefined or empty
+    if (sourceGroups && Array.isArray(sourceGroups) && sourceGroups.length > 0) {
+      sourceGroups.forEach((g: AttributeGroup) => { 
+        if (g && g.name) map[g.name] = [] 
+      })
+    }
+    
+    // Always ensure 'Ungrouped' exists
+    map['Ungrouped'] = []
+
+    const attributes = productData?.attributes
+    // Ensure attributes is an array before iterating
+    if (attributes && Array.isArray(attributes)) {
+      attributes.forEach((attrVal: Attribute) => {
+        const attrId = Number((attrVal as any).attribute ?? attrVal.id)
+        
+        // Only look for a group if we have sourceGroups
+        let foundGroup = false
+        if (sourceGroups && sourceGroups.length > 0) {
+          const grp = sourceGroups.find((g: AttributeGroup) =>
+            g.items && Array.isArray(g.items) && g.items.some((item: any) => Number(item.attribute) === attrId)
+          )
+          if (grp) {
+            map[grp.name].push(attrVal)
+            foundGroup = true
+          }
         }
-      });
+        
+        if (!foundGroup) map['Ungrouped'].push(attrVal)
+      })
     }
 
-    return map;
-  }, [allGroups, data?.attributes]);
+    console.log('▶️ grouped keys:', Object.keys(map))
+    
+    // Add debug information
+    if (productId) {
+      console.log('▶️ Debug attribute loading:', {
+        hasFamily,
+        familyId,
+        hasNoGroups,
+        sourceGroupsLength: sourceGroups?.length,
+        attributesLength: attributes?.length,
+        attributeValues: map
+      })
+    }
+    
+    return map
+  }, [sourceGroups, productData?.attributes, productId, hasFamily, familyId, hasNoGroups])
 
   // Add validation state for phone, email, url, date
   const [validationError, setValidationError] = useState<string | null>(null)
@@ -187,8 +218,8 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
   const [addingAllGroup, setAddingAllGroup] = useState<string | undefined>(undefined)
 
   // Compute missing groups (by id): show button if group is not in product's group list
-  const productGroupIds = new Set(Object.keys(grouped).filter(name => name !== 'Ungrouped'))
-  const missingGroups = (allGroups || []).filter(g => !productGroupIds.has(g.name))
+  const productGroupIds = new Set(Object.keys(grouped).filter((name: string) => name !== 'Ungrouped'))
+  const missingGroups = (sourceGroups as AttributeGroup[]).filter((g: AttributeGroup) => !productGroupIds.has(g.name))
   
   // State for Delete Group modal
   const [isDeleteGroupModalOpen, setIsDeleteGroupModalOpen] = useState(false)
@@ -215,7 +246,6 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
       setIsDeleteGroupModalOpen(false)
       setGroupToDelete(undefined)
     } catch (error) {
-      console.error('Error deleting group attributes:', error)
       toast.error('Failed to remove some attributes')
     }
   }
@@ -253,7 +283,6 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
       
       toast.success(`Added group '${group.name}' to product via family override`)
     } catch (err) {
-      console.error('Error adding group to product:', err)
       toast.error('Failed to add group to product. Groups can only be added via family inheritance.')
     } finally {
       setAddingAllGroup(undefined)
@@ -539,8 +568,12 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
     }
   };
 
+  // loading state includes family groups
+  const isLoading = isLoadingFamilyGroups || isPending
+  const hasError = !!familyError || isError
+
   // MODIFIED: Relax the bailout condition to allow rendering in create mode
-  if (isPending) {
+  if (isLoading) {
     return (
       <div className='space-y-2'>
         {Array.from({ length: 3 }).map((_, i) => (
@@ -550,7 +583,7 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
     )
   }
 
-  if (isError) {
+  if (hasError) {
     return (
       <p className='text-destructive'>Unable to load attributes</p>
     )
@@ -558,6 +591,31 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
 
   return (
     <div className='space-y-4'>
+      {hasFamily && hasNoGroups && (
+        <div className='bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-4'>
+          <h3 className='font-medium text-yellow-800 mb-1'>No attribute groups found</h3>
+          <p className='text-sm text-yellow-700'>
+            This product belongs to the family "{productData?.family_name || productData?.label || 'ID: ' + familyId}" (ID: {familyId}), 
+            but this family doesn't have any attribute groups configured yet.
+          </p>
+          <div className='mt-3'>
+            <Button 
+              size='sm'
+              variant='outline'
+              onClick={() => {
+                // Navigate to family management page (adjust the URL as needed)
+                window.open(`/families/${familyId}`, '_blank')
+              }}
+            >
+              Configure Family Attribute Groups
+            </Button>
+          </div>
+          <p className='text-xs text-yellow-600 mt-2'>
+            Tip: You need to add attribute groups to the family to manage product attributes effectively.
+          </p>
+        </div>
+      )}
+
       <LocaleChannelSelector
         selectedLocale={selectedLocale}
         selectedChannel={selectedChannel}
@@ -597,11 +655,9 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
       )}
 
       {/* Add missing groups UI */}
-      {loadingAllGroups ? (
-        <div className='flex items-center gap-2 text-muted-foreground'><span className='animate-spin h-4 w-4'><Layers className='h-4 w-4' /></span> Loading groups…</div>
-      ) : missingGroups.length > 0 ? (
+      {missingGroups.length > 0 ? (
         <div className='flex flex-wrap gap-2 mb-2'>
-          {missingGroups.map(group => (
+          {missingGroups.map((group: AttributeGroup) => (
             <Tooltip key={group.id}>
               <TooltipTrigger asChild>
                 <Button
@@ -625,203 +681,10 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
           ))}
         </div>
       ) : (
-        missingGroups.length === 0 && allGroups.length > 0 ? (
+        missingGroups.length === 0 && sourceGroups.length > 0 ? (
           <div className='text-xs text-muted-foreground mb-2'>All attribute groups are already added to this product.</div>
         ) : null
       )}
-
-      <Accordion type='single' collapsible value={openGroup} onValueChange={setOpenGroup} className='w-full'>
-        {visibleGroupNames.map(groupName => {
-          const attrs = grouped[groupName]
-          // Find all attribute IDs in this group
-          const groupMeta = allGroups.find(g => g.name === groupName)
-          const allGroupAttrIds = groupMeta ? groupMeta.items.map(item => item.attribute) : []
-          // Find which are not present in product
-          const presentIds = new Set(data?.attributes?.map(a => {
-            const attrId = (a as any).attribute ?? a.id
-            return typeof attrId === 'string' ? Number(attrId) : attrId
-          }) || [])
-          const unusedAttrIds = allGroupAttrIds.filter(id => !presentIds.has(id))
-          const canAddAll = unusedAttrIds.length > 0
-          return (
-            <AccordionItem value={groupName} key={groupName} className='border-b'>
-              <AccordionTrigger className='flex items-center justify-between px-4 py-3'>
-                <span className='font-medium'>{groupName} ({attrs.length})</span>
-                <div className='flex items-center gap-2'>
-                  {canAddAll && !isCreateMode && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span
-                          role='button'
-                          tabIndex={0}
-                          className='h-8 w-8 p-0 bg-gradient-to-tr from-primary to-blue-500 text-white shadow-md hover:from-blue-600 hover:to-primary focus:ring-2 focus:ring-primary/50 flex items-center justify-center rounded-md cursor-pointer outline-none'
-                          aria-label={`Add all attributes from ${groupName}`}
-                          onClick={async e => {
-                            e.stopPropagation()
-                            setAddingAllGroup(groupName)
-                            try {
-                              const promises = unusedAttrIds.map(attrId =>
-                                createMutation.mutateAsync({ attributeId: attrId, value: '', locale: selectedLocale, channel: selectedChannel })
-                              )
-                              await Promise.all(promises)
-                              
-                              // 🔄 REFRESH DATA
-                              await queryClient.invalidateQueries({ queryKey: ['attributes', productId, selectedLocale, selectedChannel] })
-                              
-                              toast.success(`Added ${unusedAttrIds.length} attributes from '${groupName}'`)
-                            } catch (err) {
-                              toast.error('Failed to add all attributes')
-                            } finally {
-                              setAddingAllGroup(undefined)
-                            }
-                          }}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault()
-                              e.currentTarget.click()
-                            }
-                          }}
-                        >
-                          {addingAllGroup === groupName ? (
-                            <span className='animate-spin h-4 w-4 mx-auto'><Sparkles className='h-4 w-4 mx-auto' /></span>
-                          ) : (
-                            <Sparkles className='h-4 w-4 mx-auto' />
-                          )}
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>Add all attributes from this group to product</TooltipContent>
-                    </Tooltip>
-                  )}
-                  {!isCreateMode && (
-                    <span
-                      role='button'
-                      tabIndex={0}
-                      className='h-8 w-8 p-0 flex items-center justify-center rounded-md cursor-pointer hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2'
-                      onClick={e => {
-                        e.stopPropagation()
-                        setAddDialogGroup(groupName)
-                      }}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          setAddDialogGroup(groupName)
-                        }
-                      }}
-                      aria-label={`Add attribute to ${groupName}`}
-                    >
-                      <PlusIcon className='h-4 w-4' />
-                    </span>
-                  )}
-                </div>
-              </AccordionTrigger>
-              <AccordionContent className='px-2 pb-4'>
-                {attrs.length === 0 ? (
-                  // Instead of trying to render individual attribute rows which causes linter errors, 
-                  // Just show an improved message explaining how to add attributes
-                  <div className="py-4 text-sm text-muted-foreground px-4 flex flex-col gap-2">
-                    <p>No attributes in this group yet.</p>
-                    {isCreateMode ? (
-                      <p>Attributes will be available after saving the product.</p>
-                    ) : (
-                      <p>Click the + button in the header to add attributes.</p>
-                    )}
-                  </div>
-                ) : (
-                  <div className='overflow-x-auto'>
-                    <Table className='min-w-full'>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className='w-1/4'>Name</TableHead>
-                          <TableHead className='w-1/12'>Type</TableHead>
-                          <TableHead className='w-1/12'>Locale</TableHead>
-                          <TableHead className='w-1/12'>Channel</TableHead>
-                          <TableHead>Value</TableHead>
-                          <TableHead className='w-20 text-right'>Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {attrs.map(attr => {
-                          const isEditing = editingId === attr.id
-                          return (
-                            <TableRow key={attr.id}>
-                              <TableCell className='py-4'>{attr.attribute_label || attr.name || attr.attribute_code}</TableCell>
-                              <TableCell className='py-4'>{attr.attribute_type || attr.type}</TableCell>
-                              <TableCell className='py-4'>{attr.locale || 'All locales'}</TableCell>
-                              <TableCell className='py-4'>{attr.channel || 'All channels'}</TableCell>
-                              <TableCell className='py-4'>
-                                {isEditing ? (
-                                  <>
-                                    {/* Type-aware editor for each attribute type */}
-                                    {renderAttributeEditor(
-                                      attr,
-                                      draftValue,
-                                      setDraftValue,
-                                      updateMutation.isPending,
-                                      validationError ?? undefined,
-                                      setMediaUploading,
-                                      setMediaUploadError
-                                    )}
-                                    <div className='flex items-center space-x-2'>
-                                      <Button size='icon' variant='ghost' onClick={() => handleSave(attr)} disabled={updateMutation.isPending || mediaUploading} aria-label='Save'>
-                                        <Save className='h-4 w-4' />
-                                      </Button>
-                                      <Button size='icon' variant='ghost' onClick={() => setEditingId(null)} disabled={updateMutation.isPending || mediaUploading} aria-label='Cancel'>
-                                        <X className='h-4 w-4' />
-                                      </Button>
-                                    </div>
-                                  </>
-                                ) : (
-                                  formatAttributeValue(attr)
-                                )}
-                              </TableCell>
-                              <TableCell className='py-4 text-right'>
-                                <div className='flex justify-end items-center space-x-2'>
-                                  <Button
-                                    size='icon'
-                                    variant='ghost'
-                                    onClick={() => {
-                                      setEditingId(attr.id)
-                                      setDraftValue(attr.value ?? '')
-                                    }}
-                                    aria-label='Edit'
-                                  >
-                                    <PencilIcon className='h-4 w-4' />
-                                  </Button>
-                                  <Button
-                                    size='icon'
-                                    variant='ghost'
-                                    aria-label='Delete'
-                                    disabled={deleteMutation.isPending || deleteGlobalMutation.isPending}
-                                    onClick={() => {
-                                      const isGlobal = (attr.locale == null || attr.locale === '') && (attr.channel == null || attr.channel === '')
-
-                                      // Warn the user if this is a global value (applies to all locales/channels)
-                                      if (isGlobal) {
-                                        const ok = window.confirm('This attribute value applies to ALL locales and channels for this product. Deleting it will remove the value everywhere. Continue?')
-                                        if (!ok) return
-                                        deleteGlobalMutation.mutate({ id: String(attr.id) })
-                                      } else {
-                                        deleteMutation.mutate({ id: String(attr.id) })
-                                      }
-                                    }}
-                                  >
-                                    <Trash2 className='h-4 w-4' />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          )
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </AccordionContent>
-            </AccordionItem>
-          )
-        })}
-      </Accordion>
 
       {/* Add Attribute Dialog */}
       {addDialogGroup && (
@@ -843,17 +706,17 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
                 >
                   <option value='' disabled>Select attribute…</option>
                   {(() => {
-                    const grp = allGroups.find(g => g.name === addDialogGroup)
+                    const grp = sourceGroups.find((g: AttributeGroup) => g.name === addDialogGroup)
                     if (!grp) return null
                     // Filter attributeIds already present in product
-                    const presentIds = new Set(data?.attributes?.map(a => {
+                    const presentIds = new Set((productData?.attributes as Attribute[] | undefined)?.map((a: Attribute) => {
                       const attrId = (a as any).attribute ?? a.id
                       return typeof attrId === 'string' ? Number(attrId) : attrId
                     }) || [])
                     return grp.items
-                      .filter(item => !presentIds.has(item.attribute))
-                      .map(item => {
-                        const attrMeta = allAttributes.find(a => a.id === String(item.attribute) || Number(a.id) === item.attribute)
+                      .filter((item: any) => !presentIds.has(item.attribute))
+                      .map((item: any) => {
+                        const attrMeta = allAttributes.find((a: Attribute) => a.id === String(item.attribute) || Number(a.id) === item.attribute)
                         const label = (attrMeta?.attribute_label as any) || (attrMeta as any)?.label || attrMeta?.name || (attrMeta as any)?.code || attrMeta?.attribute_code || `Attr ${item.attribute}`
                         return <option key={item.attribute} value={item.attribute}>{label}</option>
                       })
@@ -958,6 +821,198 @@ export function ProductAttributesPanel({ productId, locale, channel }: ProductAt
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Accordion-based group rendering */}
+      <Accordion type='single' collapsible value={openGroup} onValueChange={setOpenGroup} className='w-full'>
+        {visibleGroupNames.map((groupName: string) => {
+          const attrs = grouped[groupName]
+          // Find all attribute IDs in this group
+          const groupMeta = sourceGroups.find((g: AttributeGroup) => g.name === groupName)
+          const allGroupAttrIds = groupMeta ? groupMeta.items.map((item: any) => item.attribute) : []
+          // Find which are not present in product
+          const presentIds = new Set((productData?.attributes as Attribute[] | undefined)?.map((a: Attribute) => {
+            const attrId = (a as any).attribute ?? a.id
+            return typeof attrId === 'string' ? Number(attrId) : attrId
+          }) || [])
+          const unusedAttrIds = allGroupAttrIds.filter((attrId: number) => !presentIds.has(attrId))
+          const canAddAll = unusedAttrIds.length > 0
+          return (
+            <AccordionItem value={groupName} key={groupName} className='border-b'>
+              <AccordionTrigger className='flex items-center justify-between px-4 py-3'>
+                <span className='font-medium'>{groupName} ({attrs.length})</span>
+                <div className='flex items-center gap-2'>
+                  {canAddAll && !isCreateMode && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span
+                          role='button'
+                          tabIndex={0}
+                          className='h-8 w-8 p-0 bg-gradient-to-tr from-primary to-blue-500 text-white shadow-md hover:from-blue-600 hover:to-primary focus:ring-2 focus:ring-primary/50 flex items-center justify-center rounded-md cursor-pointer outline-none'
+                          aria-label={`Add all attributes from ${groupName}`}
+                          onClick={async e => {
+                            e.stopPropagation()
+                            setAddingAllGroup(groupName)
+                            try {
+                              const promises = unusedAttrIds.map((attrId: number) =>
+                                createMutation.mutateAsync({ attributeId: attrId, value: '', locale: selectedLocale, channel: selectedChannel })
+                              )
+                              await Promise.all(promises)
+                              // 🔄 REFRESH DATA
+                              await queryClient.invalidateQueries({ queryKey: ['attributes', productId, selectedLocale, selectedChannel] })
+                              toast.success(`Added ${unusedAttrIds.length} attributes from '${groupName}'`)
+                            } catch (err) {
+                              toast.error('Failed to add all attributes')
+                            } finally {
+                              setAddingAllGroup(undefined)
+                            }
+                          }}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              e.currentTarget.click()
+                            }
+                          }}
+                        >
+                          {addingAllGroup === groupName ? (
+                            <span className='animate-spin h-4 w-4 mx-auto'><Sparkles className='h-4 w-4 mx-auto' /></span>
+                          ) : (
+                            <Sparkles className='h-4 w-4 mx-auto' />
+                          )}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>Add all attributes from this group to product</TooltipContent>
+                    </Tooltip>
+                  )}
+                  {!isCreateMode && (
+                    <span
+                      role='button'
+                      tabIndex={0}
+                      className='h-8 w-8 p-0 flex items-center justify-center rounded-md cursor-pointer hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2'
+                      onClick={e => {
+                        e.stopPropagation()
+                        setAddDialogGroup(groupName)
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setAddDialogGroup(groupName)
+                        }
+                      }}
+                      aria-label={`Add attribute to ${groupName}`}
+                    >
+                      <PlusIcon className='h-4 w-4' />
+                    </span>
+                  )}
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className='px-2 pb-4'>
+                {attrs.length === 0 ? (
+                  // Instead of trying to render individual attribute rows which causes linter errors, 
+                  // Just show an improved message explaining how to add attributes
+                  <div className="py-4 text-sm text-muted-foreground px-4 flex flex-col gap-2">
+                    <p>No attributes in this group yet.</p>
+                    {isCreateMode ? (
+                      <p>Attributes will be available after saving the product.</p>
+                    ) : (
+                      <p>Click the + button in the header to add attributes.</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className='overflow-x-auto'>
+                    <Table className='min-w-full'>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className='w-1/4'>Name</TableHead>
+                          <TableHead className='w-1/12'>Type</TableHead>
+                          <TableHead className='w-1/12'>Locale</TableHead>
+                          <TableHead className='w-1/12'>Channel</TableHead>
+                          <TableHead>Value</TableHead>
+                          <TableHead className='w-20 text-right'>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {attrs.map((attr: Attribute) => {
+                          const isEditing = editingId === attr.id
+                          return (
+                            <TableRow key={attr.id}>
+                              <TableCell className='py-4'>{attr.attribute_label || attr.name || attr.attribute_code}</TableCell>
+                              <TableCell className='py-4'>{attr.attribute_type || attr.type}</TableCell>
+                              <TableCell className='py-4'>{attr.locale || 'All locales'}</TableCell>
+                              <TableCell className='py-4'>{attr.channel || 'All channels'}</TableCell>
+                              <TableCell className='py-4'>
+                                {isEditing ? (
+                                  <>
+                                    {/* Type-aware editor for each attribute type */}
+                                    {renderAttributeEditor(
+                                      attr,
+                                      draftValue,
+                                      setDraftValue,
+                                      updateMutation.isPending,
+                                      validationError ?? undefined,
+                                      setMediaUploading,
+                                      setMediaUploadError
+                                    )}
+                                    <div className='flex items-center space-x-2'>
+                                      <Button size='icon' variant='ghost' onClick={() => handleSave(attr)} disabled={updateMutation.isPending || mediaUploading} aria-label='Save'>
+                                        <Save className='h-4 w-4' />
+                                      </Button>
+                                      <Button size='icon' variant='ghost' onClick={() => setEditingId(null)} disabled={updateMutation.isPending || mediaUploading} aria-label='Cancel'>
+                                        <X className='h-4 w-4' />
+                                      </Button>
+                                    </div>
+                                  </>
+                                ) : (
+                                  formatAttributeValue(attr)
+                                )}
+                              </TableCell>
+                              <TableCell className='py-4 text-right'>
+                                <div className='flex justify-end items-center space-x-2'>
+                                  <Button
+                                    size='icon'
+                                    variant='ghost'
+                                    onClick={() => {
+                                      setEditingId(attr.id)
+                                      setDraftValue(attr.value ?? '')
+                                    }}
+                                    aria-label='Edit'
+                                  >
+                                    <PencilIcon className='h-4 w-4' />
+                                  </Button>
+                                  <Button
+                                    size='icon'
+                                    variant='ghost'
+                                    aria-label='Delete'
+                                    disabled={deleteMutation.isPending || deleteGlobalMutation.isPending}
+                                    onClick={() => {
+                                      const isGlobal = (attr.locale == null || attr.locale === '') && (attr.channel == null || attr.channel === '')
+
+                                      // Warn the user if this is a global value (applies to all locales/channels)
+                                      if (isGlobal) {
+                                        const ok = window.confirm('This attribute value applies to ALL locales and channels for this product. Deleting it will remove the value everywhere. Continue?')
+                                        if (!ok) return
+                                        deleteGlobalMutation.mutate({ id: String(attr.id) })
+                                      } else {
+                                        deleteMutation.mutate({ id: String(attr.id) })
+                                      }
+                                    }}
+                                  >
+                                    <Trash2 className='h-4 w-4' />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </AccordionContent>
+            </AccordionItem>
+          )
+        })}
+      </Accordion>
     </div>
   )
 } 

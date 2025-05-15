@@ -61,7 +61,7 @@ import {
   LucideIcon,
   Loader2
 } from "lucide-react";
-import { Product, productService, ProductImage, ProductAttribute, ProductAsset, PaginatedResponse } from "@/services/productService";
+import { Product, productService, ProductAttribute, ProductAsset, PaginatedResponse } from "@/services/productService";
 import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -231,7 +231,7 @@ export function ProductsTable({
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm, 300); // 300ms debounce
   
-  const [productRowMap, setProductRowMap] = useState<Record<number, number>>({});
+  const [productRowMap, setProductRowMap] = useState<Record<string, number>>({});
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   
   // Add expanded rows state
@@ -336,31 +336,29 @@ export function ProductsTable({
       try {
         // Use pagination instead of fetching all products
         const { pageIndex, pageSize } = pagination;
-        const response = await productService.getProducts(
-          { page: pageIndex + 1, page_size: pageSize },
-          /* fetchAll       */ false,
-          /* includeAssets  */ false     // 🚫 skip per-row /assets/ fetches here
-        );
-        
-        // Use any to bypass TypeScript issues, but safely check properties
-        const anyResponse = response as any;
-        
-        // Check if it's a paginated response with proper structure
-        if (anyResponse && 
-            typeof anyResponse === 'object' && 
-            'results' in anyResponse && 
-            Array.isArray(anyResponse.results)) {
+        const params: Record<string, any> = {
+          page: pageIndex + 1,
+          page_size: pageSize
+        }
+        if (debouncedSearchTerm) params.search = debouncedSearchTerm
+        if (filters.status !== 'all') params.is_active = filters.status === 'active'
+        if (filters.category && filters.category !== 'all') params.category = filters.category
+        if (filters.minPrice) params.min_price = filters.minPrice
+        if (filters.maxPrice) params.max_price = filters.maxPrice
+        if (filters.tags && filters.tags.length > 0) params.tags = filters.tags.join(',')
+        const response = await productService.getProducts(params, false, false)
+        if (response && typeof response === 'object' && 'results' in response) {
           // Update total count
-          if (typeof anyResponse.count === 'number') {
-            console.log(`Setting total count from server: ${anyResponse.count}`);
-            setTotalCountState(anyResponse.count);
+          if (typeof response.count === 'number') {
+            console.log(`Setting total count from server: ${response.count}`);
+            setTotalCountState(response.count);
           }
-          fetchedProducts = anyResponse.results;
-        } else if (Array.isArray(anyResponse)) {
+          fetchedProducts = response.results;
+        } else if (Array.isArray(response)) {
           // It's directly an array of products
-          fetchedProducts = anyResponse;
+          fetchedProducts = response;
           // If we get an array without count info, update totalCount to match array length
-          setTotalCountState(anyResponse.length);
+          setTotalCountState(response.length);
         } else {
           // Fallback to empty array
           fetchedProducts = [];
@@ -422,7 +420,7 @@ export function ProductsTable({
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated, pagination.pageIndex, pagination.pageSize, toast]);
+  }, [isAuthenticated, pagination.pageIndex, pagination.pageSize, debouncedSearchTerm, filters, toast]);
 
   /** call this when you need a *fresh* hit even after the first load */
   const forceReload = useCallback(() => {
@@ -457,131 +455,14 @@ export function ProductsTable({
   };
 
   // Update the filteredData tag filtering logic with proper type casting
-  const filteredData = useMemo(() => {
-    // Create a safe copy of products with normalized categories
-    let filtered = products.map(product => {
-      // Handle the new API format where category is an array
-      if (Array.isArray(product.category)) {
-        // Optionally, store the leaf separately if needed
-        const lastCategory = product.category.length > 0 ? product.category[product.category.length - 1] : null;
-        return {
-          ...product,
-          // Keep the full array for breadcrumb rendering
-          category: product.category,
-          // Optionally, add a leaf property if needed elsewhere
-          categoryLeaf: lastCategory || { id: 0, name: '', parent: null }
-        };
-      }
-      return product;
-    });
-    // Apply text search
-    if (debouncedSearchTerm) {
-      const lowerSearchTerm = debouncedSearchTerm.toLowerCase();
-      filtered = filtered.filter(product => {
-        // Check name, SKU, and description
-        if (
-          product.name?.toLowerCase().includes(lowerSearchTerm) ||
-          product.sku?.toLowerCase().includes(lowerSearchTerm) ||
-          product.description?.toLowerCase().includes(lowerSearchTerm)
-        ) {
-          return true;
-        }
-        
-        // Handle category search with full category path - safely using our utility
-        const categoryName = Array.isArray(product.category) 
-          ? product.category.map(c => c.name).join(' > ')
-          : getCategoryName(product.category);
-            
-        if (categoryName.toLowerCase().includes(lowerSearchTerm)) {
-          return true;
-        }
-        
-        return false;
-      });
-    }
-    // Apply numeric range filters
-    if (filters.minPrice) {
-      const min = parseFloat(filters.minPrice)
-      if (!isNaN(min)) {
-        filtered = filtered.filter(product => {
-          let price: number | undefined
-          if (Array.isArray(product.prices) && product.prices.length > 0) {
-            const amount = product.prices[0].amount
-            price = typeof amount === 'number' ? amount : parseFloat(amount)
-          }
-          return typeof price === 'number' && price >= min
-        })
-      }
-    }
-    if (filters.maxPrice) {
-      const max = parseFloat(filters.maxPrice)
-      if (!isNaN(max)) {
-        filtered = filtered.filter(product => {
-          let price: number | undefined
-          if (Array.isArray(product.prices) && product.prices.length > 0) {
-            const amount = product.prices[0].amount
-            price = typeof amount === 'number' ? amount : parseFloat(amount)
-          }
-          return typeof price === 'number' && price <= max
-        })
-      }
-    }
-    
-    // SIMPLIFIED TAG FILTERING LOGIC - using AND logic
-    if (filters.tags && filters.tags.length > 0) {
-      filtered = filtered.filter(product => {
-        // Handle missing tags case
-        if (!product.tags || !Array.isArray(product.tags) || product.tags.length === 0) {
-          return false;
-        }
-        
-        // Check if ALL filter tags match (AND logic instead of OR)
-        const hasAllTags = filters.tags.every(filterTag => {
-          const found = product.tags.some((productTag: any) => {
-            // Handle tag as string
-            if (typeof productTag === 'string') {
-              return productTag === filterTag;
-            }
-            
-            // Handle tag as object
-            if (productTag && typeof productTag === 'object') {
-              // Safe access with type assertion
-              const tagObj = productTag as any;
-              return (
-                (tagObj.id !== undefined && String(tagObj.id) === filterTag) || 
-                (tagObj.name !== undefined && String(tagObj.name) === filterTag) ||
-                (tagObj.value !== undefined && String(tagObj.value) === filterTag) ||
-                (tagObj.label !== undefined && String(tagObj.label) === filterTag)
-              );
-            }
-            
-            return false;
-          });
-          
-          return found;
-        });
-        
-        return hasAllTags;
-      });
-    }
-    
-    // Apply dropdown filters
-    // Category filtering is now handled by React Table
-    if (filters.status !== 'all') {
-      filtered = filtered.filter(product => 
-        filters.status === 'active' ? product.is_active : !product.is_active
-      );
-    }
-    
-    return filtered;
-  }, [products, debouncedSearchTerm, filters]);
+  const filteredData = products;
 
   // Update the productRowMap whenever the filtered products change
   useEffect(() => {
-    const newMap: Record<number, number> = {};
+    const newMap: Record<string, number> = {};
     filteredData.forEach((product, index) => {
       if (product.id) {
-        newMap[index] = product.id;
+        newMap[String(index)] = product.id;
       }
     });
     setProductRowMap(newMap);
@@ -657,7 +538,7 @@ export function ProductsTable({
   // --- ADD Bulk Action Handlers (Placeholder/Assumed API) ---
   const handleBulkDelete = async () => {
     const selectedIds = Object.keys(rowSelection)
-      .map(index => productRowMap[parseInt(index, 10)])
+      .map(index => productRowMap[String(index)])
       .filter((id): id is number => typeof id === 'number');
       
     if (selectedIds.length === 0) {
@@ -683,7 +564,7 @@ export function ProductsTable({
 
   const handleBulkSetStatus = async (isActive: boolean) => {
     const selectedIds = Object.keys(rowSelection)
-      .map(index => productRowMap[parseInt(index, 10)])
+      .map(index => productRowMap[String(index)])
       .filter((id): id is number => typeof id === 'number');
 
     if (selectedIds.length === 0) {
@@ -717,7 +598,7 @@ export function ProductsTable({
   
   // Update the updateData function to use the productRowMap instead of the table reference
   const updateData = useCallback(async (rowIndex: number, columnId: string, value: any) => {
-    const productId = productRowMap[rowIndex];
+    const productId = productRowMap[String(rowIndex)];
     
     if (!productId) {
       return;
@@ -1162,84 +1043,45 @@ export function ProductsTable({
   }, [columns]);
 
   // Update the handleExpandedChange function to load assets when a row is expanded
-  const handleExpandedChange = useCallback(
-    (updater: Updater<Record<string, boolean>>) => {
-      setExpanded(prev => {
-        // normalise to an object
-        const next =
-          typeof updater === 'function' ? updater(prev) : updater;
-
-        const openKeys = Object.keys(next).filter(k => next[k]);
-        if (openKeys.length === 0) return {};             // none open
-
-        const last = openKeys[openKeys.length - 1];       // keep newest
-        
-        // Get the product ID for the expanded row
-        const row = last ? table.getRow(last) : null;
-        const productId = row?.original?.id;
-        
-        // Lazy-load assets only if not cached or loading
-        if (productId &&
-            !productAssetsCache[productId] &&
-            !attrGroupsInFlight.current.has(productId)) {
-          // Trigger the asset fetch here – one product at a time
-          productService.getProductAssets(productId)
-            .then(assets => {
-              setProductAssetsCache(prev => ({ ...prev, [productId]: assets }));
-              
-              // If the product doesn't have images already, enrich it with the fetched assets
-              setProducts(prevProducts => 
-                prevProducts.map(prod => {
-                  if (prod.id === productId && (!prod.images || prod.images.length === 0)) {
-                    // Find primary image or first image
-                    const primaryAsset =
-                      assets.find(
-                        (a) =>
-                          (a.is_primary &&
-                            ((a.type || a.asset_type) || '').toLowerCase().includes('image'))
-                      ) ||
-                      assets.find((a) =>
-                        ((a.type || a.asset_type) || '').toLowerCase().includes('image')
-                      );
-                    
-                    if (primaryAsset?.url) {
-                      // Build images array for consistency
-                      const images = assets
-                        .filter((a) =>
-                          ((a.type || a.asset_type) || '')
-                            .toLowerCase()
-                            .includes('image')
-                        )
-                        .map((a, idx) => ({
-                          id: typeof a.id === 'string' ? parseInt(a.id, 10) : Number(a.id),
-                          url: a.url,
-                          order: idx,
-                          is_primary: a.id === primaryAsset.id,
-                        }));
-                      
-                      return {
-                        ...prod,
-                        assets,
-                        images,
-                        primary_image_thumb: primaryAsset.url,
-                        primary_image_large: primaryAsset.url,
-                      } as Product;
-                    }
+  type ExpandedState = Record<string, boolean>
+  const handleExpandedChange = useCallback((updater: Updater<ExpandedState>) => {
+    setExpanded(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater
+      const openKeys = Object.keys(next).filter(k => next[k])
+      if (openKeys.length === 0) return {}
+      const last = openKeys[openKeys.length - 1]
+      const row = last ? table.getRow(last) : null
+      const productId = row?.original?.id
+      if (productId && !productAssetsCache[productId] && !attrGroupsInFlight.current.has(productId)) {
+        productService.getProductAssets(productId)
+          .then(assets => {
+            setProductAssetsCache(prev => ({ ...prev, [productId]: assets }))
+            setProducts(prevProducts => 
+              prevProducts.map(prod => {
+                if (prod.id === productId) {
+                  const primaryAsset =
+                    assets.find(a => (a.is_primary && ((a.type || a.asset_type) || '').toLowerCase().includes('image')))
+                    || assets.find(a => ((a.type || a.asset_type) || '').toLowerCase().includes('image'))
+                  if (primaryAsset?.url) {
+                    return {
+                      ...prod,
+                      assets,
+                      primary_image_thumb: primaryAsset.url,
+                      primary_image_large: primaryAsset.url,
+                    } as Product
                   }
-                  return prod;
-                })
-              );
-            })
-            .catch(err => {
-              console.error(`Error loading assets for product ${productId}:`, err);
-            });
-        }
-        
-        return { [last]: true };
-      });
-    },
-    [productAssetsCache]
-  );
+                }
+                return prod
+              })
+            )
+          })
+          .catch(err => {
+            console.error(`Error loading assets for product ${productId}:`, err)
+          })
+      }
+      return { [last]: true }
+    })
+  }, [productAssetsCache])
 
   // Configure the table with useReactTable
   const table = useReactTable({
@@ -1332,7 +1174,7 @@ export function ProductsTable({
       }
     },
     onColumnOrderChange: setColumnOrder,
-    onExpandedChange: handleExpandedChange,
+    onExpandedChange: handleExpandedChange as Parameters<typeof useReactTable>[0]['onExpandedChange'],
     getExpandedRowModel: getExpandedRowModel(),
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -1348,8 +1190,8 @@ export function ProductsTable({
       const row = table.getRow(rowId);
       const pid = row?.original?.id;
       // Always log attempt to fetch or use cached attrGroups
-      console.log('Expander: pid', pid, 'productAttributes[pid]:', productAttributes[pid]);
-      if (!pid || productAttributes[pid] !== undefined) return; // already cached
+      console.log('Expander: pid', pid, 'productAttributes[pid]:', productAttributes[String(pid)]);
+      if (!pid || productAttributes[String(pid)] !== undefined) return; // already cached
       if (attrGroupsInFlight.current.has(pid)) return; // already fetching
 
       try {
@@ -1359,7 +1201,7 @@ export function ProductsTable({
         const attrGroups = await productService.getProductAttributeGroups(pid);
         console.log('attrGroups for pid', pid, '→', attrGroups);
 
-        let mergedAttributes = [];
+        let mergedAttributes: any[] = [];
         if (Array.isArray(attrGroups) && attrGroups.length > 0) {
           // Use all groups and all items, do not filter by value
           mergedAttributes = attrGroups.map(group => ({
@@ -1368,7 +1210,7 @@ export function ProductsTable({
           }));
         } else if (Array.isArray(attrs) && attrs.length > 0) {
           // Fallback: group all attributes by group name, do not filter by value
-          const groupMap = {};
+          const groupMap: Record<string, any> = {};
           attrs.forEach(attr => {
             const groupName = attr.group || 'General';
             if (!groupMap[groupName]) {
@@ -1387,13 +1229,11 @@ export function ProductsTable({
           mergedAttributes = Object.values(groupMap);
         }
 
-        setProductAttributes(prev => {
-          const newState = { ...prev, [pid]: mergedAttributes };
-          return newState;
-        });
+        setProductAttributes(prev => ({ ...prev, [String(pid)]: mergedAttributes }));
+        setProductAttributes(prev => ({ ...prev, [String(pid)]: [] })); // cache failure too
       } catch (e) {
         console.error(`[ProductsTable] Attribute loading failed for ${pid}`, e);
-        setProductAttributes(prev => ({ ...prev, [pid]: [] })); // cache failure too
+        setProductAttributes(prev => ({ ...prev, [String(pid)]: [] })); // cache failure too
       } finally {
         attrGroupsInFlight.current.delete(pid);           // ✅ done
       }
@@ -1480,7 +1320,7 @@ export function ProductsTable({
   // Get selected product IDs helper
   const getSelectedProductIds = useCallback(() => {
     return Object.keys(rowSelection)
-      .map(index => productRowMap[parseInt(index, 10)])
+      .map(index => productRowMap[String(index)])
       .filter((id): id is number => typeof id === 'number');
   }, [rowSelection, productRowMap]);
 
@@ -1547,13 +1387,13 @@ export function ProductsTable({
       try {
         const groups = await productService.getProductAttributeGroups(p.id);
         if (groups?.length) {
-          setProductAttributes(prev => ({ ...prev, [p.id]: groups }));
+          setProductAttributes(prev => ({ ...prev, [String(p.id)]: groups }));
         } else {
-          setProductAttributes(prev => ({ ...prev, [p.id]: [] }));
+          setProductAttributes(prev => ({ ...prev, [String(p.id)]: [] }));
         }
       } catch (err) {
         console.error(`prefetch groups failed for product ${p.id}`, err);
-        setProductAttributes(prev => ({ ...prev, [p.id]: [] }));
+        setProductAttributes(prev => ({ ...prev, [String(p.id)]: [] }));
       } finally {
         attrGroupsInFlight.current.delete(p.id);           // ✅ done
       }

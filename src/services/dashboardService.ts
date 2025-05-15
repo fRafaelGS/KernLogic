@@ -11,7 +11,7 @@ export interface DashboardSummary {
   inactive_products: number;
   attributes_missing_count: number;
   mandatory_attributes: string[];
-  recent_products: { name: string; sku: string; family: { name: string } }[];
+  recent_products: { id: number; name: string; sku: string; family: { name: string } }[];
 }
 
 export interface InventoryTrend {

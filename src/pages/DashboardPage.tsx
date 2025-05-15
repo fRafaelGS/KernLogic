@@ -187,14 +187,27 @@ export const DashboardPage: React.FC = () => {
                         </div>
                         <hr className="my-2 border-gray-200" />
                         {summary?.recent_products?.length ? (
+                          <div className="mt-2 mb-1 text-xs text-gray-400 font-medium">Last 3 products added</div>
+                        ) : null}
+                        {summary?.recent_products?.length ? (
                           <div className="space-y-2 mt-3 text-sm text-gray-700 max-h-[120px] overflow-auto">
                             {summary.recent_products.map((p, i) => (
                               <div
-                                key={i}
+                                key={p.id}
                                 className="flex justify-between gap-2 items-center px-2 py-1 rounded hover:bg-gray-50 transition cursor-pointer border-b last:border-b-0 border-gray-100 focus:outline-none"
                                 tabIndex={0}
                                 role="button"
                                 aria-label={`Product ${p.name || p.sku}`}
+                                onClick={e => {
+                                  e.stopPropagation()
+                                  navigate(`/app/products/${p.id}`)
+                                }}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.stopPropagation()
+                                    navigate(`/app/products/${p.id}`)
+                                  }
+                                }}
                               >
                                 <div className="truncate font-medium w-[40%] flex items-center" title={p.name}>
                                   {p.name || 'Unnamed'}

@@ -1369,11 +1369,11 @@ class DashboardViewSet(viewsets.ViewSet):
             return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
         
         try:
-            # Get queryset of products using only created_by filter
+            # Get queryset of products using only created_by filter and always exclude archived
             if request.user.is_staff:
-                queryset = Product.objects.all()
+                queryset = Product.objects.filter(is_archived=False)
             else:
-                queryset = Product.objects.filter(created_by=request.user)
+                queryset = Product.objects.filter(created_by=request.user, is_archived=False)
             
             # Calculate KPIs
             total_products = queryset.count()
@@ -1456,11 +1456,11 @@ class DashboardViewSet(viewsets.ViewSet):
                 )[:3]
             ]
             
-            # Get active/inactive counts
+            # Get active/inactive counts (always exclude archived)
             active_count = queryset.filter(is_active=True).count()
             inactive_count = queryset.filter(is_active=False).count()
             
-            # Get the 3 most recent products, with family relation
+            # Get the 3 most recent products, with family relation (exclude archived)
             recent_products = []
             recent_products_qs = queryset.select_related('family').order_by('-created_at')[:3]
             for p in recent_products_qs:
@@ -1469,6 +1469,7 @@ class DashboardViewSet(viewsets.ViewSet):
                     if p.family:
                         family_label = p.family.label or ''
                     recent_products.append({
+                        'id': getattr(p, 'id', None),
                         'name': getattr(p, 'name', ''),
                         'sku': getattr(p, 'sku', ''),
                         'family': {'name': family_label}
@@ -1476,6 +1477,7 @@ class DashboardViewSet(viewsets.ViewSet):
                 except Exception as e:
                     print(f"Error serializing recent product {getattr(p, 'id', None)}: {e}")
                     recent_products.append({
+                        'id': getattr(p, 'id', None),
                         'name': getattr(p, 'name', ''),
                         'sku': getattr(p, 'sku', ''),
                         'family': {'name': ''}

@@ -56,12 +56,7 @@
     // });
     // ... REMOVE INTERCEPTORS ...
 
-    export interface ProductImage {
-    id: number;
-    url: string;
-    order: number; // For reordering
-    is_primary: boolean; // To identify the main image
-    }
+    // ProductImage interface removed as part of legacy image code cleanup
 
     export interface Product {
         id?: number;
@@ -77,13 +72,7 @@
         created_by?: string;
         created_at?: string;
         updated_at?: string;
-        is_active: boolean;
-        images?: ProductImage[] | null; // Add images array (optional)
-        // NEW fields for thumbnail display
-        primary_image_thumb?: string;  // 64px webp/jpg 
-        primary_image_large?: string;  // 600-800px original
-        primary_image_url?: string | null; // URL for primary image
-        primary_image?: string | null; // Alternative primary image field
+            is_active: boolean;
         
         // Additional Product Information (Optional)
         brand?: string;
@@ -486,8 +475,8 @@
                             const assets = await productService.getProductAssets(product.id);
                             product.assets = assets;
                             
-                            // Find primary image or first image for thumbnails
-                            if (!product.primary_image_thumb && Array.isArray(assets) && assets.length > 0) {
+                            // Find primary asset or first image
+                            if (Array.isArray(assets) && assets.length > 0) {
                                 const primaryAsset = 
                                     assets.find(a => 
                                         a.is_primary && 
@@ -496,26 +485,6 @@
                                     assets.find(a => 
                                         ((a.type || a.asset_type) || '').toLowerCase().includes('image')
                                     );
-                                
-                                if (primaryAsset?.url) {
-                                    // Build images array for consistency
-                                    const images = assets
-                                        .filter(a => 
-                                            ((a.type || a.asset_type) || '')
-                                            .toLowerCase()
-                                            .includes('image')
-                                        )
-                                        .map((a, idx) => ({
-                                            id: typeof a.id === 'string' ? parseInt(a.id, 10) : Number(a.id),
-                                            url: a.url,
-                                            order: idx,
-                                            is_primary: a.id === primaryAsset.id,
-                                        }));
-                                    
-                                    product.images = images;
-                                    product.primary_image_thumb = primaryAsset.url;
-                                    product.primary_image_large = primaryAsset.url;
-                                }
                             }
                         } catch (assetErr) {
                             console.error(`[productService.getProducts] Error loading assets for product ${product.id}:`, assetErr);

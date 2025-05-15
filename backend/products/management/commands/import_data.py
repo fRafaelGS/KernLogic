@@ -364,18 +364,8 @@ class Command(BaseCommand):
                     elif field == 'organization':
                         # Skip - we'll use the organization from the command
                         continue
-                    elif field != 'primary_image':  # Handle image separately
-                        setattr(product, field, value)
                 
-                # Set the organization
                 product.organization = self.organization
-                
-                # Handle primary image field separately if it exists
-                if 'primary_image' in fields and fields['primary_image']:
-                    # Make sure the media file exists
-                    image_path = os.path.join(settings.MEDIA_ROOT, fields['primary_image'])
-                    if os.path.exists(image_path):
-                        product.primary_image = fields['primary_image']
                 
                 product.save()
                 model_counts['Product'] += 1
@@ -404,13 +394,6 @@ class Command(BaseCommand):
                         organization=self.organization,
                         **product_data
                     )
-                    
-                    # Handle primary image field separately if it exists
-                    if 'primary_image' in fields and fields['primary_image']:
-                        # Make sure the media file exists
-                        image_path = os.path.join(settings.MEDIA_ROOT, fields['primary_image'])
-                        if os.path.exists(image_path):
-                            product.primary_image = fields['primary_image']
                     
                     product.save()
                     model_counts['Product'] += 1

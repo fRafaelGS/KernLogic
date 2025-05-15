@@ -22,13 +22,9 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.renderers import JSONRenderer
 from rest_framework.generics import get_object_or_404
 
-from .models import (
-    Product, ProductImage, Activity, ProductRelation, 
-    ProductAsset, ProductEvent, Attribute, AttributeValue,
-    AttributeGroup, AttributeGroupItem, ProductPrice, SalesChannel, Category, AssetBundle
-)
+from .models import (    Product, Activity, ProductRelation,     ProductAsset, ProductEvent, Attribute, AttributeValue,    AttributeGroup, AttributeGroupItem, ProductPrice, SalesChannel, Category, AssetBundle)
 from .serializers import (
-    ProductSerializer, ProductImageSerializer, ActivitySerializer, 
+    ProductSerializer, ActivitySerializer, 
     ProductRelationSerializer, ProductStatsSerializer, IncompleteProductSerializer,
     ProductAssetSerializer, ProductEventSerializer, AttributeValueSerializer,
     AttributeValueDetailSerializer, AttributeGroupSerializer, AttributeGroupItemSerializer,
@@ -62,10 +58,10 @@ if 'makemigrations' in sys.argv or 'migrate' in sys.argv:
         objects = MockManager()
 else:
     # Normal imports for runtime
-    from .models import Product, ProductImage, ProductRelation, ProductAsset, ProductEvent
+    from .models import Product, ProductRelation, ProductAsset, ProductEvent
+
 from .serializers import (
     ProductSerializer, 
-    ProductImageSerializer, 
     ProductStatsSerializer,
     DashboardSummarySerializer, 
     InventoryTrendSerializer, 
@@ -142,7 +138,7 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             return [HasProductViewPermission()]
         elif self.action in ['create', 'bulk_create']:
             return [HasProductAddPermission()]
-        elif self.action in ['update', 'partial_update', 'upload_image', 'manage_image', 'reorder_images', 'bulk_update']:
+        elif self.action in ['update', 'partial_update', 'bulk_update']:
             return [HasProductChangePermission()]
         elif self.action in ['destroy', 'bulk_delete']:
             return [HasProductDeletePermission()]
@@ -207,8 +203,8 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             is_active_bool = is_active.lower() == 'true'
             qs = qs.filter(is_active=is_active_bool)
         
-        # Filter out archived products and prefetch related data
-        return qs.filter(is_archived=False).prefetch_related('images')
+        # Filter out archived products
+        return qs.filter(is_archived=False)
 
     def perform_create(self, serializer):
         """
@@ -763,123 +759,6 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         context['request'] = self.request
         return context
 
-    # --- NEW Image Upload Action ---
-    @csrf_exempt
-    @action(detail=True, methods=['post'], url_path='images',
-            parser_classes=[MultiPartParser, FormParser]) # Specify parsers for this action
-    def upload_image(self, request, pk=None):
-        product = self.get_object() # Checks user permission via get_queryset
-        if 'image' not in request.FILES:
-            return Response({'detail': 'No image file provided.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if product.images.count() >= 10: # Example limit
-            return Response({'detail': 'Maximum number of images reached (10).'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Determine order (append to end)
-        last_order = product.images.aggregate(models.Max('order')).get('order__max')
-        current_order = 0 if last_order is None else last_order + 1
-
-        # Set first image as primary if none exists
-        is_first_image = not product.images.exists()
-
-        # Use request.data and update order/is_primary
-        data = request.data.copy()
-        data['order'] = current_order
-        data['is_primary'] = is_first_image
-
-        serializer = ProductImageSerializer(data=data, context=self.get_serializer_context())
-        if serializer.is_valid():
-            serializer.save(product=product) # Explicitly pass product instance
-            # Return the full product data with updated images
-            product_serializer = self.get_serializer(product)
-            return Response(product_serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    # --- NEW Manage Specific Image Action ---
-    @csrf_exempt
-    @action(detail=True, methods=['patch', 'delete'], url_path='images/(?P<image_pk>[^/.]+)')
-    def manage_image(self, request, pk=None, image_pk=None):
-        product = self.get_object() # Checks permissions
-        try:
-            image_instance = ProductImage.objects.get(product=product, pk=image_pk)
-        except ProductImage.DoesNotExist:
-            return Response({'detail': 'Image not found.'}, status=status.HTTP_404_NOT_FOUND)
-
-        if request.method == 'DELETE':
-            # TODO: Optionally delete file from storage before deleting model instance
-            # image_instance.image.delete(save=False) # Example
-            image_instance.delete()
-            # If the deleted image was primary, try set another one as primary
-            if image_instance.is_primary:
-                 first_remaining = product.images.order_by('order').first()
-                 if first_remaining:
-                     first_remaining.is_primary = True
-                     first_remaining.save()
-            return Response(status=status.HTTP_204_NO_CONTENT)
-
-        if request.method == 'PATCH':
-            # Handle setting primary image via PATCH
-            if 'is_primary' in request.data and request.data['is_primary'] is True:
-                with transaction.atomic():
-                    # Unset primary flag on all other images
-                    product.images.update(is_primary=False)
-                    
-                    # Set this image as primary
-                    image_instance.is_primary = True
-                    image_instance.save(update_fields=['is_primary'])
-                    
-                    # Update the product's primary image fields
-                    product.primary_image_thumb = image_instance.url
-                    product.primary_image_large = image_instance.url
-                    
-                    # Save the product to persist changes
-                    product.save(update_fields=['primary_image_thumb', 'primary_image_large'])
-                    
-                # Return updated product data
-                product_serializer = self.get_serializer(product)
-                return Response(product_serializer.data)
-            else:
-                # If other fields need patching, use serializer:
-                # serializer = ProductImageSerializer(instance=image_instance, data=request.data, partial=True, context=self.get_serializer_context())
-                # if serializer.is_valid():
-                #     serializer.save()
-                #     return Response(serializer.data)
-                # return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-                 return Response({'detail': 'Only setting primary image is supported via PATCH here.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        return Response({'detail': 'Method not allowed for this action.'}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
-
-    # --- NEW Reorder Images Action ---
-    @csrf_exempt
-    @action(detail=True, methods=['patch'], url_path='images/reorder', url_name='reorder_images')
-    def reorder_images(self, request, pk=None):
-        product = self.get_object()
-        image_data = request.data.get('images', []) # Expecting [{id: 1, order: 0}, {id: 2, order: 1}]
-
-        if not isinstance(image_data, list):
-             return Response({'detail': 'Invalid data format. Expected a list of images.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Validate IDs received match existing images
-        current_image_ids = set(product.images.values_list('id', flat=True))
-        received_image_ids = set(item.get('id') for item in image_data if item.get('id') is not None)
-
-        if received_image_ids != current_image_ids:
-             return Response({'detail': 'Mismatch between provided image IDs and existing images.', 'provided': list(received_image_ids), 'existing': list(current_image_ids) }, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            with transaction.atomic(): # Ensure all updates succeed or fail together
-                for index, item in enumerate(image_data):
-                    image_id = item.get('id')
-                    # Update order based on the list index received from frontend
-                    ProductImage.objects.filter(product=product, id=image_id).update(order=index)
-            
-            product.refresh_from_db() # Refetch to get updated image order
-            serializer = self.get_serializer(product)
-            return Response(serializer.data)
-        except Exception as e:
-             print(f"Error during image reorder: {e}")
-             return Response({'detail': 'Failed to update image order.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
     @action(detail=False, methods=['post'])
     def cleanup_category_placeholders(self, request):
         """
@@ -1189,70 +1068,35 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def set_primary(self, request, pk=None, product_pk=None):
-        from django.db import transaction
-        
-        # Perform all updates in a single atomic transaction
-        with transaction.atomic():
-            # First update the is_primary status in all assets
-            ProductAsset.objects.filter(product_id=product_pk).update(is_primary=False)
-            
-            # Get the asset that's being set as primary
-            try:
-                asset = ProductAsset.objects.select_for_update().get(pk=pk, product_id=product_pk)
-                
-                # Update this asset as primary
+        try:
+            with transaction.atomic():
+                # Unset all current primary assets
+                ProductAsset.objects.filter(product_id=product_pk).update(is_primary=False)
+
+                # Set this asset as primary
+                asset = (
+                    ProductAsset.objects
+                    .select_for_update()
+                    .get(pk=pk, product_id=product_pk)
+                )
                 asset.is_primary = True
                 asset.save(update_fields=['is_primary'])
-                
-                # Now update the parent product's primary image field
-                product = Product.objects.select_for_update().get(pk=product_pk)
-                
-                # Get the asset URL - try multiple approaches to ensure we find a valid URL
-                asset_url = None
-                # Try as direct property first
-                if hasattr(asset, 'url') and asset.url:
-                    asset_url = asset.url
-                # If not available, try to get from file field
-                elif hasattr(asset, 'file') and asset.file:
-                    try:
-                        asset_url = asset.file.url if hasattr(asset.file, 'url') else str(asset.file)
-                    except ValueError:
-                        # This might happen if the file doesn't exist
-                        asset_url = str(asset.file)
-                
-                if not asset_url:
-                    return Response(
-                        {"detail": "Could not determine asset URL"},
-                        status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    )
-                
-                # Update product's primary image field - this is the only field that exists in the model
-                if hasattr(asset, 'file') and asset.file:
-                    product.primary_image = asset.file
-                
-                # Save only the primary_image field
-                product.save(update_fields=['primary_image'])
-                
-                # Get the updated product with all its assets for the response
-                from .serializers import ProductSerializer
-                serializer = ProductSerializer(product)
-                return Response(serializer.data)
-                
-            except ProductAsset.DoesNotExist:
-                return Response(
-                    {"detail": f"Asset {pk} not found for product {product_pk}"},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
-            except Product.DoesNotExist:
-                return Response(
-                    {"detail": f"Product {product_pk} not found"},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
-            except Exception as e:
-                return Response(
-                    {"detail": str(e)},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
+
+                # Return the full updated product with assets
+                product = Product.objects.get(pk=product_pk)
+                serializer = ProductSerializer(product, context={'request': request})
+                return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except ProductAsset.DoesNotExist:
+            return Response(
+                {"detail": f"Asset {pk} not found for product {product_pk}"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except Exception as e:
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     # New action for managing prices for a product
     @action(detail=True, methods=['get', 'post'], url_path='prices')
@@ -2025,70 +1869,35 @@ class AssetViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def set_primary(self, request, pk=None, product_pk=None):
-        from django.db import transaction
-        
-        # Perform all updates in a single atomic transaction
-        with transaction.atomic():
-            # First update the is_primary status in all assets
-            ProductAsset.objects.filter(product_id=product_pk).update(is_primary=False)
-            
-            # Get the asset that's being set as primary
-            try:
-                asset = ProductAsset.objects.select_for_update().get(pk=pk, product_id=product_pk)
-                
-                # Update this asset as primary
+        try:
+            with transaction.atomic():
+                # Unset all current primary assets
+                ProductAsset.objects.filter(product_id=product_pk).update(is_primary=False)
+
+                # Set this asset as primary
+                asset = (
+                    ProductAsset.objects
+                    .select_for_update()
+                    .get(pk=pk, product_id=product_pk)
+                )
                 asset.is_primary = True
                 asset.save(update_fields=['is_primary'])
-                
-                # Now update the parent product's primary image field
-                product = Product.objects.select_for_update().get(pk=product_pk)
-                
-                # Get the asset URL - try multiple approaches to ensure we find a valid URL
-                asset_url = None
-                # Try as direct property first
-                if hasattr(asset, 'url') and asset.url:
-                    asset_url = asset.url
-                # If not available, try to get from file field
-                elif hasattr(asset, 'file') and asset.file:
-                    try:
-                        asset_url = asset.file.url if hasattr(asset.file, 'url') else str(asset.file)
-                    except ValueError:
-                        # This might happen if the file doesn't exist
-                        asset_url = str(asset.file)
-                
-                if not asset_url:
-                    return Response(
-                        {"detail": "Could not determine asset URL"},
-                        status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    )
-                
-                # Update product's primary image field - this is the only field that exists in the model
-                if hasattr(asset, 'file') and asset.file:
-                    product.primary_image = asset.file
-                
-                # Save only the primary_image field
-                product.save(update_fields=['primary_image'])
-                
-                # Get the updated product with all its assets for the response
-                from .serializers import ProductSerializer
-                serializer = ProductSerializer(product)
-                return Response(serializer.data)
-                
-            except ProductAsset.DoesNotExist:
-                return Response(
-                    {"detail": f"Asset {pk} not found for product {product_pk}"},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
-            except Product.DoesNotExist:
-                return Response(
-                    {"detail": f"Product {product_pk} not found"},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
-            except Exception as e:
-                return Response(
-                    {"detail": str(e)},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
+
+                # Return the full updated product with assets
+                product = Product.objects.get(pk=product_pk)
+                serializer = ProductSerializer(product, context={'request': request})
+                return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except ProductAsset.DoesNotExist:
+            return Response(
+                {"detail": f"Asset {pk} not found for product {product_pk}"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except Exception as e:
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @action(detail=False, methods=['post'], url_path='bulk-update')
     def bulk_update(self, request, product_pk=None):

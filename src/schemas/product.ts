@@ -73,11 +73,7 @@ export const productEditSchema = z.object({
    */
   is_active: z.boolean().default(true),
   
-  /**
-   * Product image (optional)
-   * Can be a File object or undefined
-   */
-  primary_image: z.any().optional(),
+    // Legacy primary_image field removed
   
   /**
    * Product brand (optional)

@@ -8,7 +8,7 @@ import { assetTypeService } from '@/services/assetTypeService'
  * @returns The URL of the primary image, or undefined if no suitable image is found
  */
 export function pickPrimaryImage(product: Product): string | undefined {
-  // Priority 1: Check assets array for a primary image
+  // Check assets array for a primary image
   if (product.assets?.length) {
     // First look for an asset explicitly marked as primary
     const primaryAsset = product.assets.find(a => a.is_primary && assetTypeService.isImageAsset(a))
@@ -23,9 +23,5 @@ export function pickPrimaryImage(product: Product): string | undefined {
     }
   }
   
-  // Priority 2-4: Check direct image URL fields
-  return product.primary_image_url || 
-         product.primary_image_large || 
-         product.primary_image_thumb || 
-         undefined
+  return undefined
 } 

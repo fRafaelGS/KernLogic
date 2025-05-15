@@ -75,8 +75,8 @@ paths:
         '200':
           description: No response body
   /orgs/{org_id}/memberships/{id}/avatar/:
-    get:
-      operationId: orgs_memberships_avatar_retrieve
+    post:
+      operationId: orgs_memberships_avatar_create
       description: |-
         Handle membership avatar uploads, viewing, and deletion.
 
@@ -127,8 +127,8 @@ paths:
       responses:
         '204':
           description: No response body
-    post:
-      operationId: orgs_memberships_avatar_create
+    get:
+      operationId: orgs_memberships_avatar_retrieve
       description: |-
         Handle membership avatar uploads, viewing, and deletion.
 
@@ -1330,6 +1330,40 @@ paths:
               schema:
                 $ref: '#/components/schemas/Attribute'
           description: ''
+    put:
+      operationId: attributes_update
+      description: Update an existing attribute. Staff only.
+      summary: Update an attribute
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this attribute.
+        required: true
+      tags:
+      - attributes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttributeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AttributeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AttributeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Attribute'
+          description: ''
     patch:
       operationId: attributes_partial_update
       description: Partially update an existing attribute. Staff only.
@@ -1381,40 +1415,6 @@ paths:
       responses:
         '204':
           description: No response body
-    put:
-      operationId: attributes_update
-      description: Update an existing attribute. Staff only.
-      summary: Update an attribute
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this attribute.
-        required: true
-      tags:
-      - attributes
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AttributeRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/AttributeRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/AttributeRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Attribute'
-          description: ''
   /attribute-groups/:
     get:
       operationId: attribute_groups_list
@@ -1521,6 +1521,40 @@ paths:
               schema:
                 $ref: '#/components/schemas/AttributeGroup'
           description: ''
+    put:
+      operationId: attribute_groups_update
+      description: Update an existing attribute group. Staff only.
+      summary: Update an attribute group
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this attribute group.
+        required: true
+      tags:
+      - attribute-groups
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttributeGroupRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AttributeGroupRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AttributeGroupRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeGroup'
+          description: ''
     patch:
       operationId: attribute_groups_partial_update
       description: Partially update an existing attribute group. Staff only.
@@ -1572,40 +1606,6 @@ paths:
       responses:
         '204':
           description: No response body
-    put:
-      operationId: attribute_groups_update
-      description: Update an existing attribute group. Staff only.
-      summary: Update an attribute group
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this attribute group.
-        required: true
-      tags:
-      - attribute-groups
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AttributeGroupRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/AttributeGroupRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/AttributeGroupRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AttributeGroup'
-          description: ''
   /attribute-groups/{id}/add-item/:
     post:
       operationId: attribute_groups_add_item_create
@@ -1938,39 +1938,6 @@ paths:
                 $ref: '#/components/schemas/Family'
           description: ''
   /families/{id}/:
-    patch:
-      operationId: families_partial_update
-      description: Partially update an existing product family.
-      summary: Partially update a product family
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Product Family.
-        required: true
-      tags:
-      - families
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedFamilyRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedFamilyRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedFamilyRequest'
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Family'
-          description: ''
     delete:
       operationId: families_destroy
       description: Delete a product family.
@@ -1989,6 +1956,28 @@ paths:
       responses:
         '204':
           description: No response body
+    get:
+      operationId: families_retrieve
+      description: Returns details of a specific product family.
+      summary: Get a specific product family
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Product Family.
+        required: true
+      tags:
+      - families
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Family'
+          description: ''
     put:
       operationId: families_update
       description: Update an existing product family.
@@ -2023,10 +2012,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/Family'
           description: ''
-    get:
-      operationId: families_retrieve
-      description: Returns details of a specific product family.
-      summary: Get a specific product family
+    patch:
+      operationId: families_partial_update
+      description: Partially update an existing product family.
+      summary: Partially update a product family
       parameters:
       - in: path
         name: id
@@ -2036,6 +2025,17 @@ paths:
         required: true
       tags:
       - families
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedFamilyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedFamilyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedFamilyRequest'
       security:
       - jwtAuth: []
       responses:
@@ -2080,6 +2080,27 @@ paths:
                 $ref: '#/components/schemas/Family'
           description: ''
   /families/{id}/attribute-groups/:
+    get:
+      operationId: families_attribute_groups_retrieve
+      description: API endpoint for managing product families.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Product Family.
+        required: true
+      tags:
+      - families
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Family'
+          description: ''
     post:
       operationId: families_attribute_groups_create
       description: API endpoint for managing product families.
@@ -2334,6 +2355,46 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProductAsset'
           description: ''
+    put:
+      operationId: products_assets_update
+      description: |-
+        Nested under /products/<product_pk>/assets/.
+        Handles upload, delete, reorder and set-primary.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this product asset.
+        required: true
+      - in: path
+        name: product_pk
+        schema:
+          type: integer
+        required: true
+      tags:
+      - products
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProductAssetRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProductAssetRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductAssetRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductAsset'
+          description: ''
     patch:
       operationId: products_assets_partial_update
       description: |-
@@ -2397,46 +2458,6 @@ paths:
       responses:
         '204':
           description: No response body
-    put:
-      operationId: products_assets_update
-      description: |-
-        Nested under /products/<product_pk>/assets/.
-        Handles upload, delete, reorder and set-primary.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this product asset.
-        required: true
-      - in: path
-        name: product_pk
-        schema:
-          type: integer
-        required: true
-      tags:
-      - products
-      requestBody:
-        content:
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/ProductAssetRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/ProductAssetRequest'
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ProductAssetRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProductAsset'
-          description: ''
   /products/{product_pk}/assets/{id}/download/:
     get:
       operationId: products_assets_download_retrieve
@@ -2623,6 +2644,43 @@ paths:
               schema:
                 $ref: '#/components/schemas/AssetBundle'
           description: ''
+    put:
+      operationId: products_asset_bundles_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: product_pk
+        schema:
+          type: string
+        required: true
+      tags:
+      - products
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetBundleRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AssetBundleRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AssetBundleRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetBundle'
+          description: ''
     patch:
       operationId: products_asset_bundles_partial_update
       parameters:
@@ -2680,43 +2738,6 @@ paths:
       responses:
         '204':
           description: No response body
-    put:
-      operationId: products_asset_bundles_update
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      - in: path
-        name: product_pk
-        schema:
-          type: string
-        required: true
-      tags:
-      - products
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AssetBundleRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/AssetBundleRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/AssetBundleRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AssetBundle'
-          description: ''
   /products/{product_pk}/asset-bundles/{id}/download/:
     get:
       operationId: products_asset_bundles_download_retrieve
@@ -2868,6 +2889,45 @@ paths:
               schema:
                 $ref: '#/components/schemas/AttributeValueDetail'
           description: ''
+    put:
+      operationId: products_attributes_update
+      description: Update an existing attribute value. Staff only.
+      summary: Update an attribute value
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this attribute value.
+        required: true
+      - in: path
+        name: product_pk
+        schema:
+          type: integer
+        required: true
+      tags:
+      - products
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttributeValueRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AttributeValueRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AttributeValueRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeValue'
+          description: ''
     patch:
       operationId: products_attributes_partial_update
       description: Partially update an existing attribute value. Staff only.
@@ -2929,45 +2989,6 @@ paths:
       responses:
         '204':
           description: No response body
-    put:
-      operationId: products_attributes_update
-      description: Update an existing attribute value. Staff only.
-      summary: Update an attribute value
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this attribute value.
-        required: true
-      - in: path
-        name: product_pk
-        schema:
-          type: integer
-        required: true
-      tags:
-      - products
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AttributeValueRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/AttributeValueRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/AttributeValueRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AttributeValue'
-          description: ''
   /products/{product_pk}/attribute-groups/:
     get:
       operationId: products_attribute_groups_list
@@ -3003,7 +3024,11 @@ paths:
       operationId: products_attribute_groups_retrieve
       description: |-
         API endpoint for retrieving product attribute groups with values.
-        This is a read-only endpoint.
+        This is a read-only endpoint that only returns attribute groups
+        that are inherited from the product's family or modified via overrides.
+
+        Products can ONLY have attribute groups through family inheritance and overrides,
+        not through direct assignment.
       parameters:
       - in: path
         name: id
@@ -3134,7 +3159,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: A unique integer value identifying this Product Family Override.
+        description: A unique integer value identifying this product family override.
         required: true
       - in: path
         name: product_pk
@@ -3691,6 +3716,43 @@ paths:
               schema:
                 $ref: '#/components/schemas/Role'
           description: ''
+    put:
+      operationId: orgs_roles_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this role.
+        required: true
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RoleRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RoleRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+          description: ''
     patch:
       operationId: orgs_roles_partial_update
       parameters:
@@ -3748,43 +3810,6 @@ paths:
       responses:
         '204':
           description: No response body
-    put:
-      operationId: orgs_roles_update
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this role.
-        required: true
-      - in: path
-        name: org_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - orgs
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RoleRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/RoleRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/RoleRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Role'
-          description: ''
   /orgs/{org_id}/memberships/:
     get:
       operationId: orgs_memberships_list
@@ -3898,6 +3923,43 @@ paths:
               schema:
                 $ref: '#/components/schemas/Membership'
           description: ''
+    put:
+      operationId: orgs_memberships_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this membership.
+        required: true
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MembershipRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MembershipRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MembershipRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Membership'
+          description: ''
     patch:
       operationId: orgs_memberships_partial_update
       description: Update a membership (e.g., change role) and log the change
@@ -3957,43 +4019,6 @@ paths:
       responses:
         '204':
           description: No response body
-    put:
-      operationId: orgs_memberships_update
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this membership.
-        required: true
-      - in: path
-        name: org_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - orgs
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MembershipRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/MembershipRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/MembershipRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Membership'
-          description: ''
   /orgs/{org_id}/memberships/{id}/accept/:
     post:
       operationId: orgs_memberships_accept_create
@@ -4261,6 +4286,39 @@ paths:
               schema:
                 $ref: '#/components/schemas/Currency'
           description: ''
+    put:
+      operationId: currencies_update
+      description: API endpoint for Currency CRUD operations.
+      parameters:
+      - in: path
+        name: iso_code
+        schema:
+          type: string
+        description: A unique value identifying this Currency.
+        required: true
+      tags:
+      - currencies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CurrencyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CurrencyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CurrencyRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Currency'
+          description: ''
     patch:
       operationId: currencies_partial_update
       description: API endpoint for Currency CRUD operations.
@@ -4310,39 +4368,6 @@ paths:
       responses:
         '204':
           description: No response body
-    put:
-      operationId: currencies_update
-      description: API endpoint for Currency CRUD operations.
-      parameters:
-      - in: path
-        name: iso_code
-        schema:
-          type: string
-        description: A unique value identifying this Currency.
-        required: true
-      tags:
-      - currencies
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CurrencyRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/CurrencyRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/CurrencyRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Currency'
-          description: ''
   /price-types/:
     get:
       operationId: price_types_list
@@ -4415,6 +4440,39 @@ paths:
               schema:
                 $ref: '#/components/schemas/PriceType'
           description: ''
+    put:
+      operationId: price_types_update
+      description: API endpoint for PriceType CRUD operations.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Price Type.
+        required: true
+      tags:
+      - price-types
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PriceTypeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PriceTypeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PriceTypeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceType'
+          description: ''
     patch:
       operationId: price_types_partial_update
       description: API endpoint for PriceType CRUD operations.
@@ -4464,39 +4522,6 @@ paths:
       responses:
         '204':
           description: No response body
-    put:
-      operationId: price_types_update
-      description: API endpoint for PriceType CRUD operations.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Price Type.
-        required: true
-      tags:
-      - price-types
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PriceTypeRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PriceTypeRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PriceTypeRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PriceType'
-          description: ''
   /register/:
     post:
       operationId: register_create

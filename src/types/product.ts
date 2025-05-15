@@ -12,19 +12,13 @@ export interface Product {
   created_by?: number;
   created_at: string;
   updated_at: string;
-  primary_image?: string;
-  primary_image_url?: string;
-  primary_image_thumb?: string;
-  primary_image_large?: string;
   primary_asset?: number;
   completeness_percent?: number;
   missing_fields?: string[];
-  has_primary_image?: boolean;
   organization?: number;
   family?: Family | null;
   family_overrides?: FamilyOverride[];
   effective_attribute_groups?: AttributeGroup[];
-  images?: ProductImage[];
   category?: any;
   brand?: string;
   barcode?: string;
@@ -33,7 +27,6 @@ export interface Product {
   createdAt: string;
   updatedAt: string;
   dataCompleteness?: DataCompleteness;
-  primaryImage?: Image;
   attributeGroups?: AttributeGroup[];
 }
 
@@ -62,14 +55,4 @@ export interface Image {
 export interface DataCompleteness {
   score: number;
   missingFields?: string[];
-}
-
-export interface ProductImage {
-  id: number;
-  product: number;
-  image: string;
-  order?: number;
-  is_primary?: boolean;
-  created_at: string;
-  updated_at: string;
 } 

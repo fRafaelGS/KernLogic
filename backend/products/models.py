@@ -98,7 +98,6 @@ class Product(models.Model):
     # Additional Product Information (Optional)
     brand = models.CharField(max_length=100, blank=True, null=True)
     barcode = models.CharField(max_length=100, blank=True, null=True)
-    primary_image = models.ImageField(upload_to='products/', blank=True, null=True)
     
     # JSON fields (stored as text in SQLite)
     tags = models.TextField(blank=True, null=True)
@@ -174,12 +173,11 @@ class Product(models.Model):
             
             # Important fields (weight 1.5)
             'description': {'weight': 1.5, 'check': lambda: self.description is not None and self.description.strip() != ''},
-            'category': {'weight': 1.5, 'check': lambda: self.category is not None and self.category.strip() != ''},
+            'category': {'weight': 1.5, 'check': lambda: self.category is not None},
             
             # Optional fields (weight 1)
             'brand': {'weight': 1, 'check': lambda: self.brand is not None and self.brand.strip() != ''},
             'barcode': {'weight': 1, 'check': lambda: self.barcode is not None and self.barcode.strip() != ''},
-            'primary_image': {'weight': 1, 'check': lambda: bool(self.primary_image)},
             'tags': {'weight': 1, 'check': lambda: self._check_tags_not_empty()},
             'attributes': {'weight': 1, 'check': lambda: self._check_attribute_values_complete()},
         }
@@ -268,14 +266,12 @@ class Product(models.Model):
             missing.append({'field': 'SKU', 'weight': 2})
         if not self.description or self.description.strip() == '':
             missing.append({'field': 'Description', 'weight': 1.5})
-        if not self.category or self.category.strip() == '':
+        if not self.category:
             missing.append({'field': 'Category', 'weight': 1.5})
         if not self.brand or self.brand.strip() == '':
             missing.append({'field': 'Brand', 'weight': 1})
         if not self.barcode or self.barcode.strip() == '':
             missing.append({'field': 'GTIN/Barcode', 'weight': 1})
-        if not self.primary_image:
-            missing.append({'field': 'Product Image', 'weight': 1})
             
         # Check JSON fields safely
         try:
@@ -339,10 +335,9 @@ class Product(models.Model):
             {'field': 'Name', 'weight': 2, 'complete': bool(self.name and self.name.strip())},
             {'field': 'SKU', 'weight': 2, 'complete': bool(self.sku and self.sku.strip())},
             {'field': 'Description', 'weight': 1.5, 'complete': bool(self.description and self.description.strip())},
-            {'field': 'Category', 'weight': 1.5, 'complete': bool(self.category and self.category.strip())},
+            {'field': 'Category', 'weight': 1.5, 'complete': bool(self.category)},
             {'field': 'Brand', 'weight': 1, 'complete': bool(self.brand and self.brand.strip())},
             {'field': 'GTIN/Barcode', 'weight': 1, 'complete': bool(self.barcode and self.barcode.strip())},
-            {'field': 'Product Image', 'weight': 1, 'complete': bool(self.primary_image)},
             {'field': 'Tags', 'weight': 1, 'complete': safe_json_length(self.tags, '[]')},
             {'field': 'Attributes', 'weight': 1, 'complete': attributes_complete}
         ]

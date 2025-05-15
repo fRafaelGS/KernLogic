@@ -39,12 +39,9 @@ export function useSetPrimaryAsset(productId: number, options?: SetPrimaryAssetO
             throw new Error('Could not find the asset after marking it as primary')
           }
           
-          // 3. Update the product with the primary image URL
-          await productService.updateProduct(productId, {
-            primary_image_url: primaryAsset.url,
-            primary_image_large: primaryAsset.url,
-            primary_image_thumb: primaryAsset.url
-          })
+          // No need to update legacy image properties since they've been removed
+          // Just ensure the asset is marked as primary
+          await productService.updateProduct(productId, {})
           
           return true
         }

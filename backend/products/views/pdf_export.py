@@ -92,16 +92,12 @@ def generate_product_pdf(request, product_id):
         
         # Determine if there's a primary image
         primary_image_url = None
-        if hasattr(product, 'primary_image') and product.primary_image:
-            primary_image_url = request.build_absolute_uri(product.primary_image.url)
-        else:
-            # Try to find a primary image from ProductAsset
-            try:
-                primary_asset = product.assets.filter(is_primary=True, asset_type='image').first()
-                if primary_asset:
-                    primary_image_url = request.build_absolute_uri(primary_asset.file.url)
-            except:
-                primary_image_url = None
+        try:
+            primary_asset = product.assets.filter(is_primary=True).first()
+            if primary_asset:
+                primary_image_url = request.build_absolute_uri(primary_asset.file.url)
+        except:
+            primary_image_url = None
         
         # Prepare context for HTML template
         context = {

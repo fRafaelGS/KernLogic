@@ -1,6 +1,6 @@
 from rest_framework import serializers
 import json
-from .models import Product, ProductImage, Activity, ProductRelation, ProductAsset, ProductEvent, Attribute, AttributeValue, AttributeGroupItem, AttributeGroup, SalesChannel, ProductPrice, Category, AttributeOption, AssetBundle, Family, FamilyAttributeGroup, ProductFamilyOverride
+from .models import Product, Activity, ProductRelation, ProductAsset, ProductEvent, Attribute, AttributeValue, AttributeGroupItem, AttributeGroup, SalesChannel, ProductPrice, Category, AttributeOption, AssetBundle, Family, FamilyAttributeGroup, ProductFamilyOverride
 from django.db.models import Sum, F, Count, Case, When, Value, FloatField
 from decimal import Decimal
 from django.conf import settings
@@ -98,21 +98,7 @@ class ProductPriceSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'price_type_display', 'label']
 
-# --- NEW ProductImage Serializer ---
-class ProductImageSerializer(serializers.ModelSerializer):
-    """Serializer for product images"""
-    url = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = ProductImage
-        fields = ['id', 'url', 'order', 'is_primary']
-    
-    def get_url(self, obj):
-        """Get absolute URL for the image"""
-        if obj.image:
-            return obj.image.url
-        return None
-# --- End ProductImage Serializer ---
+# ProductImageSerializer has been removed as part of the legacy image code cleanup
 
 class ProductFamilyOverrideSerializer(serializers.ModelSerializer):
     """Serializer for Product Family Override model"""
@@ -152,17 +138,11 @@ class ProductSerializer(serializers.ModelSerializer):
     """
     created_by = serializers.ReadOnlyField(source='created_by.email')
     prices = ProductPriceSerializer(many=True, read_only=True)
-    images = ProductImageSerializer(many=True, read_only=True)
     tags = serializers.ListField(child=serializers.CharField(), required=False)
     attribute_values = serializers.SerializerMethodField(read_only=True)
-    primary_image = serializers.ImageField(required=False, allow_null=True)
-    primary_image_thumb = serializers.SerializerMethodField()
-    primary_image_large = serializers.SerializerMethodField()
     completeness_percent = serializers.SerializerMethodField(read_only=True)
     missing_fields = serializers.SerializerMethodField(read_only=True)
     assets = serializers.SerializerMethodField(read_only=True)
-    has_primary_image = serializers.SerializerMethodField(read_only=True)
-    primary_image_url = serializers.SerializerMethodField(read_only=True)
     primary_asset = serializers.SerializerMethodField(read_only=True)
     category = serializers.SerializerMethodField()
     category_id = serializers.PrimaryKeyRelatedField(
@@ -185,16 +165,15 @@ class ProductSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'sku', 'description', 'prices', 'category', 'category_id', 'brand',
             'barcode', 'tags', 'attribute_values', 'is_active', 'is_archived', 'created_at',
-            'updated_at', 'primary_image', 'completeness_percent', 'missing_fields',
-            'assets', 'has_primary_image', 'primary_image_url', 'primary_asset', 'organization',
-            'created_by', 'images', 'primary_image_thumb', 'primary_image_large', 'family',
+            'updated_at', 'completeness_percent', 'missing_fields',
+            'assets', 'primary_asset', 'organization',
+            'created_by', 'family',
             'family_overrides',
             'effective_attribute_groups',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'completeness_percent', 
-                           'missing_fields', 'assets', 'has_primary_image', 'primary_image_url',
-                           'primary_asset', 'organization', 'created_by', 'images',
-                           'primary_image_thumb', 'primary_image_large', 'attribute_values',
+                           'missing_fields', 'assets', 'primary_asset', 'organization', 
+                           'created_by', 'attribute_values',
                            'prices', 'category', 'family_overrides', 'effective_attribute_groups']
     
     def to_representation(self, instance):
@@ -221,27 +200,7 @@ class ProductSerializer(serializers.ModelSerializer):
             
         return representation
 
-    def get_primary_image_thumb(self, obj):
-        """
-        Return URL for the primary image thumbnail (or None).
-        Handles the case where no images exist or images are not prefetched.
-        """
-        # If 'images' was prefetched this is a cached RelatedManager;
-        # if not, the ORM will still handle .filter() safely.
-        primary_image = obj.images.filter(is_primary=True).first()
-        if primary_image and primary_image.image:
-            return primary_image.image.url
-
-        # Fallback: use standalone primary_image field if set
-        if obj.primary_image:
-            return obj.primary_image.url
-        return None
-
-    def get_primary_image_large(self, obj):
-        """Return URL for primary image large version"""
-        # For now, we'll return the same URL as thumbnail
-        # In production, you'd resize images or use different versions
-        return self.get_primary_image_thumb(obj)
+        # Legacy image methods removed as part of image handling code cleanup
 
     def to_internal_value(self, data):
         """
@@ -360,52 +319,6 @@ class ProductSerializer(serializers.ModelSerializer):
         except Exception as e:
             print(f"ERROR: Failed to get assets for product {obj.id}: {str(e)}")
             return []
-
-    def get_has_primary_image(self, obj):
-        """Return whether the product has a primary image"""
-        try:
-            # Check if there's a primary image in the images relation
-            has_primary = obj.images.filter(is_primary=True).exists()
-            
-            # If not, check if there's a primary asset
-            if not has_primary:
-                has_primary = obj.assets.filter(is_primary=True).exists()
-                
-            # If still not, check if there's a direct primary_image
-            if not has_primary:
-                has_primary = bool(obj.primary_image)
-                
-            return has_primary
-        except Exception as e:
-            print(f"ERROR: Failed to check primary image for product {obj.id}: {str(e)}")
-            return False
-
-    def get_primary_image_url(self, obj):
-        """Return the URL of the primary image"""
-        try:
-            # Import the asset type service
-            from .utils.asset_type_service import asset_type_service
-            
-            # First check for a primary image in the images relation
-            primary_image = obj.images.filter(is_primary=True).first()
-            if primary_image and primary_image.image:
-                return primary_image.image.url
-                
-            # Then check for a primary asset
-            primary_assets = obj.assets.filter(is_primary=True)
-            for asset in primary_assets:
-                # Use the centralized asset type service to check if it's an image
-                if asset_type_service.is_image_asset(asset) and asset.file:
-                    return asset.file.url
-                
-            # Finally, check for a direct primary_image
-            if obj.primary_image:
-                return obj.primary_image.url
-                
-            return None
-        except Exception as e:
-            print(f"ERROR: Failed to get primary image URL for product {obj.id}: {str(e)}")
-            return None
 
     def get_primary_asset(self, obj):
         """Return the primary asset associated with the product"""

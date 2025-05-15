@@ -130,6 +130,7 @@
         type: string;
         asset_type?: string; // Added for compatibility with backend responses
         url: string;
+        file_url?: string; // Add file_url for backend compatibility
         size: string;
         resolution?: string;
         uploaded_by: string;

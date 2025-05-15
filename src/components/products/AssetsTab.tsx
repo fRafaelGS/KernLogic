@@ -77,6 +77,7 @@ import { BundleCard } from './BundleCard'
 // Add import for our new hook
 import { useSetPrimaryAsset } from '@/hooks/useSetPrimaryAsset';
 import { pickPrimaryImage } from '@/utils/images';
+import { assetTypeService } from '@/services/assetTypeService';
 
 interface AssetTabProps {
   product: Product;
@@ -509,78 +510,83 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
       return 'unknown';
     }
     
-    console.log(`Detecting type for asset: ${asset.name || 'unnamed'}`);
-    
-    // Normalize inputs for more consistent matching
-    const url = (asset.url || '').toLowerCase();
-    const name = (asset.name || '').toLowerCase();
-    const type = (asset.type || asset.asset_type || '').toLowerCase();
-    
-    // Check for PDF first (most specific case)
-    if (
-      name.endsWith('.pdf') || 
-      url.endsWith('.pdf') || 
-      type.includes('pdf') ||
-      type === 'application/pdf'
-    ) {
-      console.log(`Detected PDF: ${asset.name || 'unnamed'}`);
-      return 'pdf';
-    }
-    
-    // Check for images
-    if (
-      type.includes('image/') || 
-      /\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i.test(name) ||
-      /\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i.test(url)
-    ) {
-      // Warning for TIFF images which might not display properly in browser
-      if (name.endsWith('.tiff') || name.endsWith('.tif') || type.includes('tiff')) {
-        console.warn(`TIFF image detected (${asset.name || 'unnamed'}), may not display in all browsers`);
+    // Local implementation of type detection to avoid dependency issues
+    const detectType = (asset: ProductAsset): string => {
+      // Check content_type or type
+      const type = asset.content_type || asset.type || '';
+      
+      // Check based on MIME type
+      if (type) {
+        if (type.startsWith('image/')) return 'image';
+        if (type.startsWith('video/')) return 'video';
+        if (type.startsWith('audio/')) return 'audio';
+        if (type === 'application/pdf' || type.includes('pdf')) return 'pdf';
+        if (type.includes('spreadsheet') || type.includes('excel') || type.includes('csv')) return 'spreadsheet';
+        if (type.includes('document') || type.includes('word') || type.includes('text/')) return 'document';
+        if (type.includes('3d') || type.includes('stl') || type.includes('obj')) return 'model';
       }
       
-      console.log(`Detected image: ${asset.name || 'unnamed'}`);
-      return 'image';
-    }
+      // Check URL extension
+      const url = asset.url || '';
+      if (url && typeof url === 'string') {
+        const extension = url.split('.').pop()?.toLowerCase() || '';
+        
+        // Image extensions
+        if (/^(jpe?g|png|gif|svg|webp|bmp|tiff?|ico|heic|avif)$/.test(extension)) {
+          return 'image';
+        }
+        
+        // Video extensions
+        if (/^(mp4|webm|mov|avi|wmv|flv|mkv|m4v|mpg|mpeg)$/.test(extension)) {
+          return 'video';
+        }
+        
+        // Document extensions
+        if (/^(docx?|rtf|txt|md|pages|odt|pptx?|odp|key)$/.test(extension)) {
+          return 'document';
+        }
+        
+        // Spreadsheet extensions
+        if (/^(xlsx?|csv|numbers|ods|gsheet)$/.test(extension)) {
+          return 'spreadsheet';
+        }
+        
+        // 3D model extensions
+        if (/^(obj|stl|glb|gltf|fbx|3ds|dae|blend)$/.test(extension)) {
+          return 'model';
+        }
+      }
+      
+      return 'unknown';
+    };
     
-    // Check for spreadsheets
-    if (
-      /\.(xlsx|xls|csv|ods)$/i.test(name) || 
-      type.includes('spreadsheet') ||
-      type.includes('excel') ||
-      type.includes('csv')
-    ) {
-      console.log(`Detected spreadsheet: ${asset.name || 'unnamed'}`);
-      return 'spreadsheet';
-    }
+    // Use our local implementation
+    const type = detectType(asset);
     
-    // Check for documents
-    if (
-      /\.(doc|docx|txt|rtf|odt)$/i.test(name) || 
-      type.includes('document') ||
-      type.includes('word') ||
-      type.includes('text/')
-    ) {
-      console.log(`Detected document: ${asset.name || 'unnamed'}`);
-      return 'document';
-    }
+    // Convert 'model' type to '3d' for backward compatibility
+    if (type === 'model') return '3d';
     
-    // Handle unknown file types
-    console.warn(`Unknown file type for asset: ${asset.name || 'unnamed'} (type: ${type})`);
-    return 'unknown';
+    return type;
   };
 
-  // Check if the asset can be displayed as an image
+  // Local implementation of image asset detection to avoid dependency issues
   const isImageAsset = (asset?: ProductAsset): boolean => {
     if (!asset) return false;
     
-    // Check both type fields to handle all cases
-    const assetType = asset.type || '';
+    // Check content_type or type
+    const type = asset.content_type || asset.type || '';
+    if (type && type.toLowerCase().startsWith('image/')) {
+      return true;
+    }
     
-    // Use getFileType for more robust detection
-    const fileType = getFileType(asset) || '';
+    // Check URL extension
+    const url = asset.url || '';
+    if (url && typeof url === 'string') {
+      const extension = url.split('.').pop()?.toLowerCase() || '';
+      return ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp', 'tiff', 'ico', 'heic', 'avif'].includes(extension);
+    }
     
-    // If either check confirms it's an image, return true
-    return assetType.toLowerCase() === 'image' || fileType === 'image';
+    return false;
   };
 
   // Make an asset primary (only for images)
@@ -986,7 +992,7 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
   const { download: downloadBulkAssets, isLoading: isBulkDownloading } = useBulkDownload()
 
   // Initialize our new hook for setting a primary asset
-  const { mutate: setPrimaryAsset } = useSetPrimaryAsset(product.id);
+  const { mutate: setPrimaryAsset } = useSetPrimaryAsset(product?.id || 0);
 
   return (
     <div className="p-6 space-y-8">
@@ -1276,10 +1282,14 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
             </div>
             <div className="flex items-center gap-1">
               <BulkDownloadToolbar
-                productId={product.id}
+                productId={product?.id || 0}
                 selectedIds={Array.from(selectedAssets)}
-                onDownload={() => downloadBulkAssets(product.id, Array.from(selectedAssets))}
-                disabled={selectedAssets.size === 0}
+                onDownload={() => {
+                  if (product?.id) {
+                    downloadBulkAssets(product.id, Array.from(selectedAssets));
+                  }
+                }}
+                disabled={selectedAssets.size === 0 || isBulkDownloading}
               />
               <Button 
                 variant="outline" 
@@ -1398,18 +1408,22 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
                     <AssetCard
                       key={asset.id}
                       asset={asset}
-                      productId={product.id!}
+                      productId={product?.id || 0}
                       onAssetUpdated={handleAssetUpdated}
                       onMakePrimary={makeAssetPrimary}
                       onDelete={deleteAsset}
                       onArchive={(assetId) => archiveAsset(assetId)}
-                      onDownload={asset => downloadAsset(product.id, asset.id)}
+                      onDownload={asset => {
+                        if (!isDownloadingAsset && product?.id) {
+                          downloadAsset(product.id, asset.id);
+                        }
+                      }}
                       isImageAsset={isImageAsset}
                       getAssetIcon={getAssetIcon}
                       getFileType={getFileType}
                       onRename={asset => {
-                        setAssetToRename(asset)
-                        setNewAssetName(asset.name || '')
+                        setAssetToRename(asset);
+                        setNewAssetName(asset.name || '');
                       }}
                       isSelected={selectedAssets.has(asset.id)}
                       onSelect={toggleAssetSelection}
@@ -1470,7 +1484,7 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
                   </Button>
                   <Button 
                     onClick={() => assetToRename && renameAsset(assetToRename, newAssetName)}
-                    disabled={!newAssetName.trim() || (assetToRename && newAssetName === assetToRename.name)}
+                    disabled={!newAssetName.trim() || !!(assetToRename && newAssetName === assetToRename.name)}
                   >
                     Save Changes
                   </Button>
@@ -1542,8 +1556,13 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
                       }
                       
                       try {
+                        if (!product?.id) {
+                          alert('Missing product ID');
+                          return;
+                        }
+                        
                         const newBundle = await productService.createAssetBundle(
-                          product.id,
+                          product.id as number, // Safe assertion since we checked it's not undefined above
                           bundleName.trim(),
                           Array.from(selectedAssets)
                         );
@@ -1590,20 +1609,22 @@ export const AssetsTab: React.FC<AssetTabProps> = ({ product, onAssetUpdate }) =
                   <BundleCard
                     key={bundle.id}
                     bundle={bundle}
-                    productId={product.id}
+                    productId={product?.id || 0}
                     assets={assets}
                     onDelete={bundleId => {
                       if (window.confirm('Are you sure you want to delete this bundle?')) {
-                        productService.deleteAssetBundle(product.id, bundleId)
-                          .then(() => fetchBundles())
-                          .catch(err => {
-                            console.error('Failed to delete bundle:', err)
-                            toast({
-                              variant: 'destructive',
-                              title: 'Error',
-                              description: 'Failed to delete asset bundle'
+                        if (product?.id) {
+                          productService.deleteAssetBundle(product.id, bundleId)
+                            .then(() => fetchBundles())
+                            .catch(err => {
+                              console.error('Failed to delete bundle:', err)
+                              toast({
+                                variant: 'destructive',
+                                title: 'Error',
+                                description: 'Failed to delete asset bundle'
+                              })
                             })
-                          })
+                        }
                       }
                     }}
                     isImageAsset={isImageAsset}

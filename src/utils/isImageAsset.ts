@@ -1,4 +1,6 @@
 // utils/isImageAsset.ts
+import { assetTypeService } from '../services/assetTypeService'
+
 export function getAssetUrl(asset: {
   url?: string;
   file_url?: string;
@@ -16,21 +18,6 @@ export function isImageAsset(asset: {
   content_type?: string;
   mime_type?: string;
 }): boolean {
-  const url = getAssetUrl(asset);
-  if (!url) return false;
-
-  // Try all MIME‐type fields
-  const mime = (
-    asset.type ||
-    asset.asset_type ||
-    asset.content_type ||
-    asset.mime_type ||
-    ''
-  ).toLowerCase();
-
-  // If any says "image", great
-  if (mime.includes('image')) return true;
-
-  // Otherwise fallback to extension sniffing
-  return /\.(jpe?g|png|gif|bmp|webp|svg)$/i.test(url);
+  // Use the centralized asset type service
+  return assetTypeService.isImageAsset(asset);
 } 

@@ -73,9 +73,10 @@ import { ProductAttributesPanel } from '@/components/ProductAttributesPanel'
 import { ENABLE_CUSTOM_ATTRIBUTES } from '@/config/featureFlags'
 import { FieldStatusModal } from './FieldStatusModal'
 import { normalizeCategory } from '@/types/categories'
-import { isImageAsset, getAssetUrl } from '@/utils/isImageAsset'
+import { getAssetUrl } from '@/utils/isImageAsset'
 import { PriceTab } from './PriceTab'
 import { LOCALES, LocaleCode } from '@/config/locales'
+// Import the required typeimport type { IncompleteProduct } from '@/services/dashboardService'
 
 // ====== ATTRIBUTES INTERFACES (EXACT MATCH TO SPEC) ======
 // (Following exactly the backend shape specified in the requirements)
@@ -1775,6 +1776,26 @@ export const ProductDetailTabs = ({
     }
   }, [selectedLocale, product.id]);
 
+  // Add local implementation to avoid dependency issues
+  const isImageAsset = (asset?: ProductAsset): boolean => {
+    if (!asset) return false;
+    
+    // Check content_type or type
+    const type = asset.content_type || asset.type || '';
+    if (type && type.toLowerCase().startsWith('image/')) {
+      return true;
+    }
+    
+    // Check URL extension
+    const url = asset.url || '';
+    if (url && typeof url === 'string') {
+      const extension = url.split('.').pop()?.toLowerCase() || '';
+      return ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp', 'tiff', 'ico', 'heic', 'avif'].includes(extension);
+    }
+    
+    return false;
+  };
+
   // Handle asset update from AssetsTab (set primary image)
   const handleAssetUpdate = async (updatedAssets: ProductAsset[]) => {
     console.log('ProductDetailTabs received updated assets:', updatedAssets);
@@ -1788,30 +1809,6 @@ export const ProductDetailTabs = ({
       // If both are primary or both are not, sort by upload date (newest first)
       return new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime();
     });
-    
-    // Helper function to check if asset is an image - using consistent detection logic
-    const isImageAsset = (asset: ProductAsset): boolean => {
-      if (!asset || !asset.url) return false;
-      
-      // Check file extensions
-      const name = (asset.name || '').toLowerCase();
-      const url = (asset.url || '').toLowerCase();
-      const type = (asset.type || asset.asset_type || '').toLowerCase();
-      
-      // Check for image file extensions
-      const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'];
-      const hasImageExt = imageExtensions.some(ext => 
-        name.endsWith(`.${ext}`) || url.endsWith(`.${ext}`)
-      );
-      
-      // Check MIME type
-      const isImageType = type.includes('image') || type === 'image';
-      
-      // Debug logging
-      console.log(`[handleAssetUpdate] Asset check: ${asset.name}, type: ${type}, hasImageExt: ${hasImageExt}, isImageType: ${isImageType}, url: ${asset.url}`);
-      
-      return hasImageExt || isImageType;
-    };
     
     // Find primary image to update product
     const primaryAsset = sortedAssets.find(asset => asset.is_primary && isImageAsset(asset));
@@ -2362,7 +2359,7 @@ export const ProductDetailTabs = ({
                 })()}
                 
                 {/* Show "View All" button if there are images */}
-                {assets.filter(isImageAsset).length > 0 && (
+                {assets.filter(asset => isImageAsset(asset)).length > 0 && (
                   <div className="mt-4 flex justify-end">
                     <Button 
                       variant="outline" 

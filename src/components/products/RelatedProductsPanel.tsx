@@ -112,7 +112,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQueryClient } from '@tanstack/react-query';
-import { pickPrimaryImage } from '@/lib/imageUtils';
+import { pickPrimaryImage } from '@/utils/images';
 
 // Helper function to format currency
 const formatCurrency = (price: number): string => {

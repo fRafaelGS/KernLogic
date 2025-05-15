@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { 
   Download, Edit2, Trash2, CheckCircle2, MoreHorizontal, Archive, Tag as TagIcon, X, Check, Pencil
 } from 'lucide-react'
@@ -17,6 +17,31 @@ import { TagInput } from '@/components/ui/tag-input'
 import { Input } from '@/components/ui/input'
 import { formatFileSize } from '@/utils/formatFileSize'
 
+// Import the type but create a local implementation
+import type { AssetType } from '@/services/assetTypeService'
+
+// Local implementation of asset type detection to avoid circular dependencies
+const localAssetTypeService = {
+  isImageAsset(asset: any): boolean {
+    if (!asset) return false;
+    
+    // Check for content_type or type
+    const type = asset.content_type || asset.type || '';
+    if (type && type.toLowerCase().startsWith('image/')) {
+      return true;
+    }
+    
+    // Check URL extension if available
+    const url = asset.url || '';
+    if (url && typeof url === 'string') {
+      const extension = url.split('.').pop()?.toLowerCase() || '';
+      return ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp', 'tiff', 'ico', 'heic', 'avif'].includes(extension);
+    }
+    
+    return false;
+  }
+};
+
 interface AssetCardProps {
   asset: ProductAsset
   productId: number
@@ -25,7 +50,7 @@ interface AssetCardProps {
   onDelete: (assetId: number) => void
   onArchive: (assetId: number) => void
   onDownload: (asset: ProductAsset) => void
-  isImageAsset: (asset?: ProductAsset) => boolean
+  isImageAsset?: (asset?: ProductAsset) => boolean
   getAssetIcon: (type: string) => React.ReactNode
   getFileType: (asset: ProductAsset) => string
   onRename?: (asset: ProductAsset) => void
@@ -53,6 +78,19 @@ export function AssetCard({
     Array.isArray(asset.tags) ? [...asset.tags] : []
   )
   const [inputValue, setInputValue] = useState('')
+
+  // Use the provided isImageAsset function or fall back to our local implementation
+  const checkIsImageAsset = (asset?: ProductAsset): boolean => {
+    if (!asset) return false;
+    
+    // If parent component provided this function, use it
+    if (isImageAsset) {
+      return isImageAsset(asset);
+    }
+    
+    // Otherwise use our local implementation
+    return localAssetTypeService.isImageAsset(asset);
+  }
 
   const handleUpdateTags = async () => {
     try {
@@ -104,7 +142,7 @@ export function AssetCard({
     <Card 
       className={cn(
         'overflow-hidden group rounded-md shadow-sm min-w-0 relative',
-        asset.is_primary && isImageAsset(asset) && 'ring-1 ring-primary',
+        asset.is_primary && checkIsImageAsset(asset) && 'ring-1 ring-primary',
         isSelected && 'ring-2 ring-primary bg-primary/5 border-primary border-2'
       )}
     >
@@ -123,7 +161,7 @@ export function AssetCard({
       <div className="relative p-1 pb-0">
         {/* Asset preview */}
         <div className="aspect-[4/3] bg-muted flex items-center justify-center rounded-md overflow-hidden p-0 m-0">
-          {isImageAsset(asset) ? (
+          {checkIsImageAsset(asset) ? (
             <img 
               src={asset.url} 
               alt={asset.name || 'Unnamed asset'}
@@ -257,12 +295,12 @@ export function AssetCard({
                 <span className="text-[10px]">{asset.uploaded_at ? formatDate(asset.uploaded_at) : 'Unknown date'}</span>
                 <div className="flex-1 flex justify-end items-center">
                   {/* Primary image badge or button */}
-                  {asset.is_primary && isImageAsset(asset) ? (
+                  {asset.is_primary && checkIsImageAsset(asset) ? (
                     <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 h-4 px-1 text-[10px]">
                       <CheckCircle2 className="h-2 w-2 mr-0.5" />
                       Primary
                     </Badge>
-                  ) : isImageAsset(asset) ? (
+                  ) : checkIsImageAsset(asset) ? (
                     <Button 
                       variant="ghost" 
                       size="sm" 
@@ -298,7 +336,7 @@ export function AssetCard({
                 </DropdownMenuItem>
               )}
               {/* Only show Set as Primary for images that aren't already primary */}
-              {!asset.is_primary && isImageAsset(asset) && (
+              {!asset.is_primary && checkIsImageAsset(asset) && (
                 <DropdownMenuItem onClick={() => onMakePrimary(asset)} className="text-xs">
                   <CheckCircle2 className="h-3 w-3 mr-2" />
                   Set as Primary

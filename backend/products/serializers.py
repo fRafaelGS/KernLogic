@@ -383,15 +383,20 @@ class ProductSerializer(serializers.ModelSerializer):
     def get_primary_image_url(self, obj):
         """Return the URL of the primary image"""
         try:
+            # Import the asset type service
+            from .utils.asset_type_service import asset_type_service
+            
             # First check for a primary image in the images relation
             primary_image = obj.images.filter(is_primary=True).first()
             if primary_image and primary_image.image:
                 return primary_image.image.url
                 
             # Then check for a primary asset
-            primary_asset = obj.assets.filter(is_primary=True, asset_type='image').first()
-            if primary_asset and primary_asset.file:
-                return primary_asset.file.url
+            primary_assets = obj.assets.filter(is_primary=True)
+            for asset in primary_assets:
+                # Use the centralized asset type service to check if it's an image
+                if asset_type_service.is_image_asset(asset) and asset.file:
+                    return asset.file.url
                 
             # Finally, check for a direct primary_image
             if obj.primary_image:

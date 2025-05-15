@@ -13,6 +13,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from products.models import Product, ProductAsset
 from kernlogic.utils import get_user_organization
+from products.utils.asset_type_service import asset_type_service
 
 # Path to car images directories
 CAR_IMAGES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 
@@ -114,6 +115,10 @@ def main():
                 
                 filename = os.path.basename(image_path)
                 
+                # Use the centralized asset type service
+                detected_type = asset_type_service.detect_type(filename)
+                content_type = f"image/{os.path.splitext(filename)[1][1:].lower() or 'jpeg'}" if detected_type == 'image' else 'application/octet-stream'
+                
                 # Create asset
                 asset = ProductAsset(
                     product=product,
@@ -121,7 +126,7 @@ def main():
                     name=f"{product.name} - Image {i+1}",
                     order=i,
                     is_primary=(i == 0),  # First image is primary
-                    content_type=f"image/{os.path.splitext(filename)[1][1:].lower() or 'jpeg'}",
+                    content_type=content_type,
                     file_size=len(image_content),
                     uploaded_by=admin,
                     organization=organization

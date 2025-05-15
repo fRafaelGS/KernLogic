@@ -6,7 +6,7 @@ import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import { Product } from '@/services/productService'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { getCategoryName } from '@/lib/utils'
-import { pickPrimaryImage } from '@/lib/imageUtils'
+import { pickPrimaryImage } from '@/utils/images'
 
 interface ProductCardProps {
   product: Product

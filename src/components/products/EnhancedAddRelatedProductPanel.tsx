@@ -50,7 +50,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { pickPrimaryImage } from '@/lib/imageUtils';
+import { pickPrimaryImage } from '@/utils/images';
 
 interface EnhancedAddRelatedProductPanelProps {
   productId: number;

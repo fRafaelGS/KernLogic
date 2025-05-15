@@ -1920,22 +1920,16 @@ class AssetViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     queryset = ProductAsset.objects.all()
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
-    
+
     def get_queryset(self):
-        qs = super().get_queryset()
-        # Only return non-archived assets by default
-        return qs.filter(product_id=self.kwargs.get('product_pk'), is_archived=False)
-        
+        # Always filter by product, auto-filtered for org by OrganizationQuerySetMixin
+        return super().get_queryset().filter(product_id=self.kwargs.get("product_pk"))
+
     def get_serializer_context(self):
-        """
-        Extra context provided to the serializer class.
-        """
         context = super().get_serializer_context()
-        context.update({
-            'product_id': self.kwargs.get('product_pk')
-        })
+        context["product_pk"] = self.kwargs.get("product_pk")
         return context
-        
+
     def perform_create(self, serializer):
         try:
             # Get the product
@@ -1946,23 +1940,17 @@ class AssetViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             if not file_data:
                 raise ValidationError({"file": "The submitted file is empty"})
             
-            # Check asset type (auto-detect from mime type if not provided)
+            # Use the centralized asset type service for detection
+            from .utils.asset_type_service import asset_type_service
+            
+            # Check asset type (auto-detect if not provided)
             asset_type = self.request.data.get('asset_type')
-            if not asset_type and hasattr(file_data, 'content_type'):
-                # Auto-detect asset type from mime type
-                content_type = file_data.content_type.lower()
-                if content_type.startswith('image/'):
-                    asset_type = 'image'
-                elif content_type == 'application/pdf':
-                    asset_type = 'pdf'
-                elif content_type.startswith('video/'):
-                    asset_type = 'video'
-                elif content_type.startswith('audio/'):
-                    asset_type = 'audio'
-                elif content_type.startswith('model/') or content_type.startswith('application/octet-stream'):
+            if not asset_type:
+                # Use the shared service to detect asset type
+                asset_type = asset_type_service.detect_type(file_data)
+                # Convert 'model' type to '3d' for backward compatibility
+                if asset_type == 'model':
                     asset_type = '3d'
-                else:
-                    asset_type = 'document'
             
             # Handle tags from the request
             tags = self.request.data.get('tags', [])
@@ -1979,7 +1967,7 @@ class AssetViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             return instance
         except Exception as e:
             raise ValidationError({"error": str(e)})
-            
+
     def perform_update(self, serializer):
         """Update an asset, handling tags if they're provided"""
         # Get the existing tags if not provided

@@ -793,6 +793,8 @@ export function ProductsTable({
           key={`expanded-${row.id}-product-undefined`}
           product={row.original as any} 
           zebra={index % 2 === 0}
+          locale={defaultLocale || ''}
+          channel={defaultChannel?.code || ''}
         />
       );
     }
@@ -808,6 +810,8 @@ export function ProductsTable({
         key={`expanded-${row.id}-product-${productId}`}
         product={productWithAttributes as any} 
         zebra={index % 2 === 0}
+        locale={defaultLocale || ''}
+        channel={defaultChannel?.code || ''}
       />
     );
   };
@@ -1136,8 +1140,8 @@ export function ProductsTable({
       const row = table.getRow(rowId);
       const pid = row?.original?.id;
       // Always log attempt to fetch or use cached attrGroups
-      console.log('Expander: pid', pid, 'productAttributes[pid]:', productAttributes[String(pid)]);
-      if (!pid || productAttributes[String(pid)] !== undefined) return; // already cached
+      console.log('Expander: pid', pid, 'productAttributes[pid]:', pid ? productAttributes[pid] : undefined);
+      if (!pid || productAttributes[pid] !== undefined) return; // already cached
       if (attrGroupsInFlight.current.has(pid)) return; // already fetching
 
       try {

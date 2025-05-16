@@ -45,6 +45,10 @@ export const paths = {
   attributeSets: {
     byId:    (id: number)          => join(API_BASE, 'attribute-sets', id) + '/',
   },
+  locales: {
+    root: () => join(API_BASE, 'locales') + '/',
+    byId: (id: number) => join(API_BASE, 'locales', id) + '/',
+  },
   reports: {
     themes: () => join(API_BASE, 'reports/themes') + '/',
   },

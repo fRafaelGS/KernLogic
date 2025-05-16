@@ -2,6 +2,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { usePriceMetadata } from '@/hooks/usePriceMetadata'
+import { useOrgSettings } from '@/hooks/useOrgSettings'
 import { useToast } from '@/components/ui/use-toast'
 import {
   Form,
@@ -27,7 +28,6 @@ import { useQueryClient } from '@tanstack/react-query'
 
 const priceFormSchema = z.object({
   priceType: z.string().min(1, { message: 'Price type is required' }),
-  channel: z.string().optional(),
   currencyCode: z.string().min(1, { message: 'Currency is required' }),
   value: z.coerce
     .number()
@@ -63,13 +63,13 @@ export function PricingForm({
 }: PricingFormProps) {
   const { toast } = useToast()
   const { priceTypes, channels, currencies, loading: metaLoading, error: metaError } = usePriceMetadata()
+  const { defaultChannelId } = useOrgSettings()
   const queryClient = useQueryClient()
   
   const form = useForm<PriceFormValues>({
     resolver: zodResolver(priceFormSchema),
     defaultValues: initialData || {
       priceType: '',
-      channel: '',
       currencyCode: '',
       value: 0,
       validFrom: new Date().toISOString().slice(0, 10),
@@ -80,7 +80,14 @@ export function PricingForm({
   // Reset form when initialData changes (e.g., when editing a new price)
   useEffect(() => {
     if (initialData) {
-      form.reset(initialData)
+      const formValues = {
+        priceType: initialData.priceType,
+        currencyCode: initialData.currencyCode,
+        value: initialData.value,
+        validFrom: initialData.validFrom || new Date().toISOString().slice(0, 10),
+        validTo: initialData.validTo || '',
+      }
+      form.reset(formValues)
     }
   }, [initialData])
 
@@ -95,7 +102,6 @@ export function PricingForm({
         // Only send changed fields (diff)
         const diff: Record<string, any> = {}
         if (values.priceType !== initialData.priceType) diff.price_type = values.priceType
-        if (values.channel !== initialData.channel) diff.channel_id = values.channel || null
         if (values.currencyCode !== initialData.currencyCode) diff.currency = values.currencyCode
         if (values.value !== initialData.value) diff.amount = values.value
         if (values.validFrom !== initialData.validFrom) diff.valid_from = values.validFrom
@@ -105,13 +111,18 @@ export function PricingForm({
           return
         }
         console.log('PATCH diff payload:', diff)
-        await onUpdate(initialData.id, diff)
+        await onUpdate(initialData.id, diff as any)
         await queryClient.invalidateQueries({ queryKey: ['product', productId] })
         await queryClient.refetchQueries({ queryKey: ['product', productId] })
         await queryClient.invalidateQueries({ queryKey: ['prices', productId] })
         toast({ title: 'Price updated successfully' })
       } else {
-        await onAdd(values)
+        // Use the organization's default channel ID
+        const priceData = {
+          ...values,
+          channel_id: defaultChannelId
+        }
+        await onAdd(priceData as any)
         await queryClient.invalidateQueries({ queryKey: ['product', productId] })
         await queryClient.refetchQueries({ queryKey: ['product', productId] })
         await queryClient.invalidateQueries({ queryKey: ['prices', productId] })
@@ -175,41 +186,6 @@ export function PricingForm({
               <FormMessage />
             </FormItem>
           )}
-        />
-        
-        <FormField
-          control={form.control}
-          name="channel"
-          render={({ field }) => {
-            function handleChange(val: string) {
-              if (!val) field.onChange(undefined)
-              else field.onChange(val)
-            }
-            return (
-              <FormItem>
-                <FormLabel>Channel (optional)</FormLabel>
-                <FormControl>
-                  <Select
-                    disabled={isSubmitting}
-                    value={field.value || undefined}
-                    onValueChange={handleChange}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select channel (optional)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Array.isArray(channels) && channels.map((c: SalesChannel) => (
-                        <SelectItem key={c.id} value={c.id.toString()}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )
-          }}
         />
         
         <FormField

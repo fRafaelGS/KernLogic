@@ -6,7 +6,8 @@ from rest_framework_nested.routers import NestedSimpleRouter
 # Import from the views package, where we've properly set up the imports
 from products.views import (
     ProductViewSet, DashboardViewSet, AssetViewSet, ProductEventViewSet, SkuCheckAPIView,
-    AttributeViewSet, AttributeValueViewSet, AttributeGroupViewSet, ProductAttributeGroupViewSet
+    AttributeViewSet, AttributeValueViewSet, AttributeGroupViewSet, ProductAttributeGroupViewSet,
+    LocaleViewSet
 )
 from products.views_readonly import (
     ActivityViewSet,
@@ -37,6 +38,8 @@ router.register(r"attribute-groups", AttributeGroupViewSet, basename="attribute-
 router.register(r"categories", CategoryViewSet, basename="category")
 # Register the new FamilyViewSet
 router.register(r"families", FamilyViewSet, basename="family")
+# Register the LocaleViewSet
+router.register(r"locales", LocaleViewSet, basename="locale")
 
 # /api/products/<product_pk>/assets/…
 assets_router = NestedSimpleRouter(router, r"products", lookup="product")

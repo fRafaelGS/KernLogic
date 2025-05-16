@@ -24,6 +24,7 @@ import axios from 'axios';
 import { API_URL } from '@/config';
 import { paths } from '@/lib/apiPaths';
 import { ENABLE_CUSTOM_ATTRIBUTES, ENABLE_ATTRIBUTE_GROUPS } from '@/config/featureFlags';
+import { OrganizationSettingsForm } from '@/features/settings/components/settings/OrganizationSettingsForm';
 
 // --- Zod Schemas ---
 const profileSchema = z.object({
@@ -175,10 +176,11 @@ const SettingsPage: React.FC = () => {
       </div>
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5 max-w-md">
+        <TabsList className="grid w-full grid-cols-6 max-w-lg">
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
+          <TabsTrigger value="organization">Organization</TabsTrigger>
           <TabsTrigger value="api">API Keys</TabsTrigger>
           <TabsTrigger value="attributes">Attributes</TabsTrigger>
         </TabsList>
@@ -319,6 +321,11 @@ const SettingsPage: React.FC = () => {
                 </Button>
             </CardFooter>
           </Card>
+        </TabsContent>
+
+        {/* Organization Tab */}
+        <TabsContent value="organization">
+          <OrganizationSettingsForm />
         </TabsContent>
 
         {/* API Keys Tab */}

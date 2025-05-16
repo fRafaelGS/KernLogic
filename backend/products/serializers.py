@@ -1,6 +1,6 @@
 from rest_framework import serializers
 import json
-from .models import Product, Activity, ProductRelation, ProductAsset, ProductEvent, Attribute, AttributeValue, AttributeGroupItem, AttributeGroup, SalesChannel, ProductPrice, Category, AttributeOption, AssetBundle, Family, FamilyAttributeGroup, ProductFamilyOverride
+from .models import Product, Activity, ProductRelation, ProductAsset, ProductEvent, Attribute, AttributeValue, AttributeGroupItem, AttributeGroup, SalesChannel, ProductPrice, Category, AttributeOption, AssetBundle, Family, FamilyAttributeGroup, ProductFamilyOverride, Locale
 from django.db.models import Sum, F, Count, Case, When, Value, FloatField
 from decimal import Decimal
 from django.conf import settings
@@ -1129,3 +1129,12 @@ class FamilySerializer(serializers.ModelSerializer):
                 )
                 
         return instance 
+
+class LocaleSerializer(serializers.ModelSerializer):
+    """
+    Serializer for the Locale model
+    """
+    class Meta:
+        model = Locale
+        fields = ['id', 'code', 'label', 'is_active']
+        read_only_fields = ['id'] 

@@ -7,6 +7,31 @@ from mptt.models import MPTTModel, TreeForeignKey
 
 User = get_user_model()
 
+# New Locale model for dynamic, per-organization locales
+class Locale(models.Model):
+    """
+    Represents a language/locale that can be used by an organization.
+    """
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.CASCADE)
+    code = models.CharField(max_length=10)
+    label = models.CharField(max_length=50)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Locale"
+        verbose_name_plural = "Locales"
+        ordering = ['code']
+        unique_together = [('organization', 'code')]
+        indexes = [
+            models.Index(fields=['organization']),
+            models.Index(fields=['code']),
+        ]
+
+    def __str__(self):
+        return f"{self.label} ({self.code})"
+
 # New SalesChannel model
 class SalesChannel(models.Model):
     """
@@ -601,7 +626,16 @@ class AttributeValue(models.Model):
     organization = models.ForeignKey("organizations.Organization", on_delete=models.CASCADE)
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='attribute_values')
     attribute = models.ForeignKey(Attribute, on_delete=models.CASCADE)
-    locale = models.CharField(max_length=10, null=True, blank=True)
+    locale = models.ForeignKey(
+        "products.Locale", 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='attribute_values',
+        help_text="The locale for this attribute value"
+    )
+    locale_code = models.CharField(max_length=10, null=True, blank=True, 
+                                  help_text="Legacy locale code field, use 'locale' instead")
     channel = models.CharField(max_length=32, null=True, blank=True)
     value = models.JSONField()
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, editable=False)
@@ -631,7 +665,8 @@ class AttributeValue(models.Model):
         
     def __str__(self):
         attr_code = self.attribute.code if self.attribute else 'unknown'
-        return f"{attr_code}: {self.value} (Product: {self.product_id})"
+        locale_info = f" ({self.locale.code})" if self.locale else ""
+        return f"{attr_code}{locale_info}: {self.value} (Product: {self.product_id})"
 
 class AttributeGroup(models.Model):
     """

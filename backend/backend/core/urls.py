@@ -43,6 +43,8 @@ urlpatterns = [
     path("api/", include("products.urls")),
     path("api/", include("users.urls")),
     path("api/", include("accounts.urls")),
+    # Include organizations URLs
+    path("api/orgs/", include("organizations.urls")),
     # Uncomment the include for products.urls
     # path("api/products/", include("products.urls")), 
     # Remove the previous router include

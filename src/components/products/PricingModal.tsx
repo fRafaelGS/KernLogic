@@ -11,7 +11,8 @@ import { formatCurrency } from '@/lib/utils';
 import { productService, ProductPrice, Product as ProductFromService } from '@/services/productService';
 import { toast } from 'sonner';
 import { usePriceMetadata } from '@/hooks/usePriceMetadata';
-import { Loader2 } from 'lucide-react';
+import { useOrgSettings } from '@/hooks/useOrgSettings';
+import { Loader2, PencilIcon, TrashIcon } from 'lucide-react';
 import { AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useQueryClient } from '@tanstack/react-query';
@@ -32,7 +33,6 @@ type Product = ProductFromService;
 // This should match the structure used in PricingModal
 interface NewPrice {
   price_type_id: number
-  channel_id: number | null
   currency: string
   amount: string
   valid_from: string
@@ -52,6 +52,7 @@ export function PricingModal({
   
   // Use the price metadata hook
   const { priceTypes, currencies, channels, loading: metaLoading, error: metaError } = usePriceMetadata();
+  const { defaultChannelId } = useOrgSettings();
   
   // Store product data
   const [product, setProduct] = useState<Product | null>(null);
@@ -81,7 +82,6 @@ export function PricingModal({
     const defaultType = priceTypes[0]?.id ?? 0;
     return {
       price_type_id: defaultType,
-      channel_id: null,
       currency: 'USD',
       amount: '',
       valid_from: new Date().toISOString().slice(0,10),
@@ -90,7 +90,7 @@ export function PricingModal({
   }, [priceTypes]);
 
   // Initialize state with the memoized default
-  const [newPrice, setNewPrice] = useState(defaultNewPrice);
+  const [newPrice, setNewPrice] = useState<NewPrice>(defaultNewPrice);
 
   // Effect to reset form state when modal opens or switching to edit mode
   useEffect(() => {
@@ -100,7 +100,6 @@ export function PricingModal({
       const typeId = priceTypes.find(pt => pt.code === editingPrice.price_type)?.id ?? defaultNewPrice.price_type_id;
       setNewPrice({
         price_type_id: typeId,
-        channel_id: editingPrice.channel_id ?? null,
         currency: editingPrice.currency,
         amount: editingPrice.amount.toString(),
         valid_from: editingPrice.valid_from?.slice(0,10) ?? defaultNewPrice.valid_from,
@@ -183,14 +182,6 @@ export function PricingModal({
     }));
   };
   
-  // Handle channel selection
-  const handleChannelChange = (value: string) => {
-    setNewPrice(prev => ({ 
-      ...prev, 
-      channel_id: value === 'all' ? null : parseInt(value) 
-    }));
-  };
-  
   // Handle currency selection
   const handleCurrencyChange = (value: string) => {
     setNewPrice(prev => ({ ...prev, currency: value }));
@@ -214,25 +205,18 @@ export function PricingModal({
     if (!productId) {
       const priceTypeCode = getPriceTypeCode(newPrice.price_type_id);
       const priceTypeLabel = priceTypes.find(pt => pt.id === newPrice.price_type_id)?.label || priceTypeCode;
-      const matchingChannel = channels.find(c => c.id === newPrice.channel_id);
-      
-      // Simplified channel object - only include the properties we know exist
-      const channelObject = matchingChannel ? {
-        id: matchingChannel.id,
-        name: matchingChannel.name || '',
-      } as any : null;
       
       // Create draft price object
       const draft: ProductPrice = {
         id: Date.now(), // temporary ID for draft
         price_type: priceTypeCode,
         price_type_display: priceTypeLabel,
-        channel: channelObject,
-        channel_id: newPrice.channel_id,
+        channel: null,
+        channel_id: defaultChannelId as number | undefined,
         currency: newPrice.currency,
         amount: parseFloat(newPrice.amount),
         valid_from: newPrice.valid_from,
-        valid_to: newPrice.valid_to || null,
+        valid_to: newPrice.valid_to,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -261,7 +245,7 @@ export function PricingModal({
       const created = await productService.addPrice(productId, {
         price_type: priceTypeCode,
         currency: newPrice.currency,
-        channel_id: newPrice.channel_id,
+        channel_id: defaultChannelId as number | undefined,
         amount: parseFloat(newPrice.amount),
         valid_from: validFromISO,
         valid_to: validToISO
@@ -303,25 +287,16 @@ export function PricingModal({
     if (isEditingDraft && editingPrice) {
       const priceTypeCode = getPriceTypeCode(newPrice.price_type_id);
       const priceTypeLabel = priceTypes.find(pt => pt.id === newPrice.price_type_id)?.label || priceTypeCode;
-      const matchingChannel = channels.find(c => c.id === newPrice.channel_id);
-      
-      // Simplified channel object - only include the properties we know exist
-      const channelObject = matchingChannel ? {
-        id: matchingChannel.id,
-        name: matchingChannel.name || '',
-      } as any : null;
       
       // Create updated draft price
       const updatedDraft: ProductPrice = {
         ...editingPrice,
         price_type: priceTypeCode,
         price_type_display: priceTypeLabel,
-        channel: channelObject,
-        channel_id: newPrice.channel_id,
         currency: newPrice.currency,
         amount: parseFloat(newPrice.amount),
         valid_from: newPrice.valid_from,
-        valid_to: newPrice.valid_to || null,
+        valid_to: newPrice.valid_to,
         updated_at: new Date().toISOString()
       };
       
@@ -355,7 +330,6 @@ export function PricingModal({
       const payload: any = {};
       if (editingPrice.price_type !== priceTypeCode) payload.price_type = priceTypeCode;
       if (editingPrice.currency !== newPrice.currency) payload.currency = newPrice.currency;
-      if ((editingPrice.channel_id || null) !== newPrice.channel_id) payload.channel_id = newPrice.channel_id;
       const newAmount = parseFloat(newPrice.amount);
       if (editingPrice.amount !== newAmount) payload.amount = newAmount;
       if (editingPrice.valid_from?.slice(0,10) !== newPrice.valid_from) payload.valid_from = validFromISO;
@@ -445,295 +419,138 @@ export function PricingModal({
     setIsEditingDraft(false);
     setActiveTab('table');
   };
-  
-  // Show loading indicator if metadata is still loading
-  if (metaLoading) {
-    return (
-      <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="sm:max-w-[650px]">
-          <div className="py-8 flex flex-col items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
-            <p className="text-muted-foreground">Loading price metadata...</p>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
-  
-  // Show error if there was a problem loading metadata
-  if (metaError) {
-    return (
-      <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="sm:max-w-[650px]">
-          <div className="py-8 flex flex-col items-center justify-center">
-            <p className="text-destructive mb-2">Error loading price data</p>
-            <p className="text-muted-foreground text-sm">Please try again later</p>
-            <Button variant="outline" onClick={() => onClose()} className="mt-4">
-              Close
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
-  
+
   // Component to display pricing details
   const PricingDetails = ({ prices }: { prices: ProductPrice[] }) => {
-    const priceCount = prices.length;
-    
-    // Get base price if available
-    const basePrice = prices.find(p => p.price_type === 'BASE');
-    
-    // Get list price if available
-    const listPrice = prices.find(p => p.price_type === 'LIST');
-    
-    // Choose which price to display as primary
-    const primaryPrice = basePrice || listPrice || (prices.length > 0 ? prices[0] : null);
-    
-    return (
-      <div className="w-full grid gap-2">
-        <div className="flex flex-col">
-          <div className="text-sm font-medium">
-            {productId ? 'Current Pricing' : 'Draft Pricing'}
-          </div>
-          
-          {primaryPrice ? (
-            <div className="text-2xl font-bold">
-              {primaryPrice.currency} {typeof primaryPrice.amount === 'string' ? parseFloat(primaryPrice.amount).toFixed(2) : primaryPrice.amount.toFixed(2)}
-              <span className="text-sm ml-2 font-normal text-muted-foreground">
-                ({primaryPrice.price_type_display || primaryPrice.price_type})
-              </span>
-            </div>
-          ) : (
-            <div className="text-2xl font-bold">
-              <span className="text-muted-foreground text-base">No price set</span>
-            </div>
-          )}
-          
-          {/* Add pricing summary information */}
-          <div className="mt-2 flex items-center">
-            {priceCount > 0 ? (
-              <Badge variant="outline" className="mr-2">
-                {priceCount} {priceCount === 1 ? 'price' : 'prices'} 
-                {productId ? '' : ' planned'}
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="bg-amber-50 text-amber-800">
-                {productId ? 'No prices defined' : 'No draft prices added'}
-              </Badge>
-            )}
-          </div>
-          
-          {/* Always show price type summary, regardless of count */}
-          {priceCount > 0 && (
-            <div className="mt-1 text-xs text-muted-foreground flex flex-wrap gap-1">
-              {prices.map((p, idx) => (
-                <Badge variant="secondary" key={idx} className="text-xs">
-                  {p.price_type_display || p.price_type}
-                </Badge>
-              ))}
-            </div>
-          )}
+    // Sort prices by creation date, newest first
+    const sortedPrices = useMemo(() => {
+      return [...prices].sort((a, b) => {
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+    }, [prices]);
+
+    if (prices.length === 0) {
+      return (
+        <div className="py-8 flex flex-col items-center justify-center">
+          <p className="text-muted-foreground">No prices have been added yet.</p>
         </div>
+      );
+    }
+
+    return (
+      <div className="overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Type</TableHead>
+              <TableHead>Amount</TableHead>
+              <TableHead>Valid Period</TableHead>
+              <TableHead className="w-20 text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sortedPrices.map(price => (
+              <TableRow key={price.id}>
+                <TableCell className="font-medium">{price.price_type_display}</TableCell>
+                <TableCell>
+                  {formatCurrency(price.amount, price.currency)}
+                </TableCell>
+                <TableCell>
+                  {price.valid_from ? (
+                    <span>
+                      {new Date(price.valid_from).toLocaleDateString()} 
+                      {price.valid_to && ` - ${new Date(price.valid_to).toLocaleDateString()}`}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">Not specified</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex justify-end space-x-1">
+                    <Button
+                      variant="ghost" 
+                      size="icon"
+                      onClick={() => handleEditPrice(price)}
+                      title="Edit price"
+                    >
+                      <PencilIcon className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost" 
+                      size="icon"
+                      onClick={() => handleDeletePrice(price.id)}
+                      title="Delete price"
+                    >
+                      <TrashIcon className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </div>
     );
   };
-  
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="lg:max-w-screen-md">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {productId && product ? (
-              <>
-                <span className="font-mono text-sm mr-1">{product.sku}</span> 
-                <span>{product.name}</span>
-              </>
-            ) : (
-              <>Manage Product Pricing</>
-            )}
+            {productId ? 'Manage Prices' : 'Add Draft Prices'}
+            {product && <span className="ml-1 font-normal text-muted-foreground">for {product.name}</span>}
           </DialogTitle>
           <DialogDescription>
-            {productId ? 'Manage pricing for this product' : 'Add draft prices to apply after product creation'}
+            Add or edit pricing information for this product.
           </DialogDescription>
         </DialogHeader>
         
-        {productId ? (
-          // ——— EDIT MODE ———
-          isLoading ? (
-            <div className="flex justify-center items-center h-60">
-              <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
-            </div>
-          ) : product ? (
-            <div className="space-y-4">
-              {/* Display current pricing */}
-              <Card className="p-4">
-                <CardHeader className="p-0 pb-2">
-                  <h3 className="text-md font-medium">Current Pricing</h3>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <PricingDetails prices={prices} />
-                </CardContent>
-              </Card>
-              {/* Tabs for price table and add new price */}
-              <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'table' | 'add')} defaultValue="table">
-                <TabsList className="grid grid-cols-2">
-                  <TabsTrigger value="table">Price Table</TabsTrigger>
-                  <TabsTrigger value="add">Add New Price</TabsTrigger>
-                </TabsList>
-                <TabsContent value="table" className="mt-4">
-                  {loading ? (
-                    <div className="py-6 text-center text-muted-foreground">Loading prices...</div>
-                  ) : prices.length > 0 ? (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Type</TableHead>
-                          <TableHead>Channel</TableHead>
-                          <TableHead>Amount</TableHead>
-                          <TableHead>Valid Period</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {prices.map((price) => (
-                          <TableRow key={price.id}>
-                            <TableCell className="font-medium">{price.price_type_display}</TableCell>
-                            <TableCell>{price.channel?.name || 'All Channels'}</TableCell>
-                            <TableCell>
-                              {formatCurrency(price.amount, price.currency)}
-                            </TableCell>
-                            <TableCell>
-                              <span className="whitespace-nowrap">
-                                {new Date(price.valid_from).toLocaleDateString()}
-                                {price.valid_to && ` - ${new Date(price.valid_to).toLocaleDateString()}`}
-                              </span>
-                            </TableCell>
-                            <TableCell className="text-right space-x-2">
-                              <Button 
-                                type="button"
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => handleEditPrice(price)}
-                              >
-                                Edit
-                              </Button>
-                              <Button 
-                                type="button"
-                                variant="destructive" 
-                                size="sm" 
-                                onClick={() => handleDeletePrice(price.id)}
-                              >
-                                Delete
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  ) : (
-                    <div className="py-6 text-center text-muted-foreground">
-                      No prices defined for this product yet.
-                    </div>
-                  )}
-                </TabsContent>
-                <TabsContent value="add" className="mt-4">
-                  <AddPriceForm
-                    newPrice={newPrice}
-                    onChange={setNewPrice}
-                    onAdd={handleAddPrice}
-                    onUpdate={handleUpdatePrice}
-                    editing={!!editingPrice}
-                    loading={loading}
-                    priceTypes={priceTypes}
-                    channels={channels}
-                    currencies={currencies}
-                    onCancel={handleCancelEdit}
-                  />
-                </TabsContent>
-              </Tabs>
-            </div>
-          ) : (
-            <div className="py-6 text-center text-muted-foreground">
-              Product not found or error loading product data.
-            </div>
-          )
+        {/* Show loading state if we're still fetching data */}
+        {isLoading ? (
+          <div className="py-8 flex flex-col items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
+            <p className="text-muted-foreground">Loading product data...</p>
+          </div>
+        ) : metaLoading ? (
+          <div className="py-8 flex flex-col items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
+            <p className="text-muted-foreground">Loading pricing metadata...</p>
+          </div>
         ) : (
-          // ——— CREATE MODE ———
-          <div className="space-y-4">
-            {/* Display draft prices summary */}
-            {actualDraftPrices.length > 0 && (
-              <Card className="p-4">
-                <CardHeader className="p-0 pb-2">
-                  <h3 className="text-md font-medium">Draft Pricing</h3>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <PricingDetails prices={actualDraftPrices} />
-                </CardContent>
-              </Card>
-            )}
-            {/* Tabs for draft price table and add new price */}
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'table' | 'add')} defaultValue={actualDraftPrices.length > 0 ? 'table' : 'add'}>
-              <TabsList className="grid grid-cols-2">
-                <TabsTrigger value="table">Draft Prices</TabsTrigger>
-                <TabsTrigger value="add">Add Price</TabsTrigger>
+          <>
+            <Tabs defaultValue="table" value={activeTab} onValueChange={(value) => setActiveTab(value as any)}>
+              <TabsList className="grid w-full grid-cols-2 mb-4">
+                <TabsTrigger value="table">Price List</TabsTrigger>
+                <TabsTrigger value="add">{editingPrice ? 'Edit Price' : 'Add Price'}</TabsTrigger>
               </TabsList>
-              <TabsContent value="table" className="mt-4">
-                {actualDraftPrices.length > 0 ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Channel</TableHead>
-                        <TableHead>Amount</TableHead>
-                        <TableHead>Valid Period</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {actualDraftPrices.map((price) => (
-                        <TableRow key={price.id}>
-                          <TableCell className="font-medium">{price.price_type_display}</TableCell>
-                          <TableCell>{price.channel?.name || 'All Channels'}</TableCell>
-                          <TableCell>
-                            {formatCurrency(price.amount, price.currency)}
-                          </TableCell>
-                          <TableCell>
-                            <span className="whitespace-nowrap">
-                              {new Date(price.valid_from).toLocaleDateString()}
-                              {price.valid_to && ` - ${new Date(price.valid_to).toLocaleDateString()}`}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-right space-x-2">
-                            <Button 
-                              type="button"
-                              variant="outline" 
-                              size="sm" 
-                              onClick={() => handleEditPrice(price, true)}
-                            >
-                              Edit
-                            </Button>
-                            <Button 
-                              type="button"
-                              variant="destructive" 
-                              size="sm" 
-                              onClick={() => handleDeletePrice(price.id, true)}
-                            >
-                              Delete
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                ) : (
-                  <div className="py-6 text-center text-muted-foreground">
-                    No draft prices added yet. Add prices to apply when the product is created.
+              
+              <TabsContent value="table" className="space-y-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-medium">
+                    {prices.length} {prices.length === 1 ? 'Price' : 'Prices'}
+                  </h3>
+                  <Button 
+                    onClick={() => setActiveTab('add')} 
+                    disabled={loading}
+                  >
+                    Add New Price
+                  </Button>
+                </div>
+                
+                {loading ? (
+                  <div className="py-8 flex flex-col items-center justify-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
+                    <p className="text-muted-foreground">Loading prices...</p>
                   </div>
+                ) : (
+                  <PricingDetails prices={productId ? prices : actualDraftPrices} />
                 )}
               </TabsContent>
-              <TabsContent value="add" className="mt-4">
-                <AddPriceForm
+              
+              <TabsContent value="add">
+                {/* Form for adding or editing prices */}
+                <AddPriceForm 
                   newPrice={newPrice}
                   onChange={setNewPrice}
                   onAdd={handleAddPrice}
@@ -745,28 +562,29 @@ export function PricingModal({
                   currencies={currencies}
                   onCancel={handleCancelEdit}
                 />
+                
+                {/* Show a note about channels using organization default */}
+                <div className="mt-4 p-4 border rounded-md bg-blue-50">
+                  <div className="flex items-center">
+                    <AlertTriangle className="h-5 w-5 text-blue-600 mr-2" />
+                    <p className="text-sm text-blue-700">
+                      Prices are now automatically assigned to your organization's default sales channel.
+                    </p>
+                  </div>
+                </div>
               </TabsContent>
             </Tabs>
-            {actualDraftPrices.length > 0 && (
-              <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-md">
-                <p className="text-sm text-blue-700 dark:text-blue-300">
-                  {actualDraftPrices.length} draft price{actualDraftPrices.length !== 1 ? 's' : ''} will be applied after product creation.
-                </p>
-              </div>
-            )}
-          </div>
+          </>
         )}
+        
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onClose()}>
-            Close
-          </Button>
+          <Button variant="outline" onClick={onClose}>Close</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
-// AddPriceFormProps interface and AddPriceForm component
 interface AddPriceFormProps {
   newPrice: NewPrice
   onChange: (np: NewPrice) => void
@@ -788,124 +606,126 @@ export function AddPriceForm({
   editing,
   loading,
   priceTypes,
-  channels,
   currencies,
   onCancel
 }: AddPriceFormProps) {
+
+  // Handle input change
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    onChange({ ...newPrice, [name]: value });
+  };
+
+  // Handle price type selection
+  const handlePriceTypeChange = (value: string) => {
+    onChange({ ...newPrice, price_type_id: parseInt(value, 10) });
+  };
+  
+  // Handle currency selection
+  const handleCurrencyChange = (value: string) => {
+    onChange({ ...newPrice, currency: value });
+  };
+
   return (
-    <Card className="p-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="price_type">Price Type</Label>
-          <Select 
-            value={newPrice.price_type_id.toString()} 
-            onValueChange={val => onChange({ ...newPrice, price_type_id: parseInt(val, 10) })}
-          >
-            <SelectTrigger id="price_type">
-              <SelectValue placeholder="Select price type" />
-            </SelectTrigger>
-            <SelectContent>
-              {priceTypes.map(pt => (
-                <SelectItem key={pt.id} value={pt.id.toString()}>
-                  {pt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label htmlFor="channel">Sales Channel (Optional)</Label>
-          <Select
-            value={newPrice.channel_id?.toString() ?? 'all'}
-            onValueChange={val => onChange({ ...newPrice, channel_id: val === 'all' ? null : +val })}
-          >
-            <SelectTrigger id="channel">
-              <SelectValue placeholder="All Channels" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Channels</SelectItem>
-              {channels.map(ch => (
-                <SelectItem key={ch.id} value={ch.id.toString()}>
-                  {ch.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label htmlFor="currency">Currency</Label>
-          <Select 
-            value={newPrice.currency} 
-            onValueChange={val => onChange({ ...newPrice, currency: val })}
-          >
-            <SelectTrigger id="currency">
-              <SelectValue placeholder="Select currency" />
-            </SelectTrigger>
-            <SelectContent>
-              {currencies.map(c => (
-                <SelectItem key={c.iso_code} value={c.iso_code}>
-                  {c.iso_code} ({c.symbol})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label htmlFor="amount">Amount</Label>
-          <Input
-            id="amount"
-            name="amount"
-            type="text"
-            inputMode="decimal"
-            pattern="[0-9]*[.]?[0-9]*"
-            value={newPrice.amount}
-            onChange={e => {
-              const raw = e.target.value.replace(/[^0-9.]/g, '')
-              const parts = raw.split('.')
-              const sanitized = parts.length > 1
-                ? `${parts[0]}.${parts.slice(1).join('')}`
-                : raw
-              onChange({ ...newPrice, amount: sanitized })
-            }}
-            placeholder="0.00"
-          />
-        </div>
-        <div>
-          <Label htmlFor="valid_from">Valid From</Label>
-          <Input
-            id="valid_from"
-            name="valid_from"
-            type="date"
-            value={newPrice.valid_from}
-            onChange={e => onChange({ ...newPrice, valid_from: e.target.value })}
-          />
-        </div>
-        <div>
-          <Label htmlFor="valid_to">Valid To (Optional)</Label>
-          <Input
-            id="valid_to"
-            name="valid_to"
-            type="date"
-            value={newPrice.valid_to || ''}
-            onChange={e => onChange({ ...newPrice, valid_to: e.target.value })}
-            placeholder="Never expires"
-          />
-        </div>
+    <div className="space-y-4 p-2">
+      {/* Price Type */}
+      <div className="space-y-2">
+        <Label htmlFor="priceType">Price Type *</Label>
+        <Select 
+          value={newPrice.price_type_id.toString()}
+          onValueChange={handlePriceTypeChange}
+          disabled={loading}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select a price type" />
+          </SelectTrigger>
+          <SelectContent>
+            {priceTypes.map(pt => (
+              <SelectItem key={pt.id} value={pt.id.toString()}>
+                {pt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
-      <div className="mt-6 flex justify-end space-x-2">
-        {editing ? (
-          <>
-            <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
-            <Button type="button" onClick={onUpdate} disabled={!newPrice.amount || loading}>
-              Update Price
-            </Button>
-          </>
-        ) : (
-          <Button type="button" onClick={onAdd} disabled={!newPrice.amount || loading}>
-            Add Price
-          </Button>
-        )}
+
+      {/* Currency */}
+      <div className="space-y-2">
+        <Label htmlFor="currency">Currency *</Label>
+        <Select 
+          value={newPrice.currency}
+          onValueChange={handleCurrencyChange}
+          disabled={loading}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select a currency" />
+          </SelectTrigger>
+          <SelectContent>
+            {currencies.map(c => (
+              <SelectItem key={c.iso_code} value={c.iso_code}>
+                {c.iso_code} ({c.symbol})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
-    </Card>
-  )
+
+      {/* Amount */}
+      <div className="space-y-2">
+        <Label htmlFor="amount">Price Amount *</Label>
+        <Input 
+          id="amount"
+          name="amount"
+          value={newPrice.amount}
+          onChange={handleChange}
+          placeholder="0.00"
+          disabled={loading}
+        />
+      </div>
+
+      {/* Valid From */}
+      <div className="space-y-2">
+        <Label htmlFor="valid_from">Valid From *</Label>
+        <Input 
+          id="valid_from"
+          name="valid_from"
+          type="date" 
+          value={newPrice.valid_from}
+          onChange={handleChange}
+          disabled={loading}
+        />
+      </div>
+
+      {/* Valid To */}
+      <div className="space-y-2">
+        <Label htmlFor="valid_to">Valid To (optional)</Label>
+        <Input 
+          id="valid_to"
+          name="valid_to"
+          type="date" 
+          value={newPrice.valid_to || ''}
+          onChange={handleChange}
+          disabled={loading}
+        />
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex justify-end space-x-2 pt-2">
+        <Button 
+          variant="outline"
+          onClick={onCancel}
+          disabled={loading}
+        >
+          Cancel
+        </Button>
+        <Button 
+          onClick={editing ? onUpdate : onAdd} 
+          disabled={loading}
+        >
+          {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {editing ? "Update Price" : "Add Price"}
+        </Button>
+      </div>
+    </div>
+  );
 } 

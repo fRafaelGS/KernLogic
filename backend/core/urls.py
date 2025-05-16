@@ -116,6 +116,9 @@ urlpatterns = [
     # Organization API
     path('api/orgs/<int:org_id>/', OrganizationDetailView.as_view(), name='organization-detail'),
     
+    # Organizations API - Include URLs from organizations app
+    path('api/organizations/', include('organizations.urls')),
+    
     # Add organizations/orgs API URLs
     path('api/', include('orgs.api.urls')),
     

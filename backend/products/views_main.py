@@ -340,6 +340,16 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 payload={"product_id": instance.id, "sku": instance.sku, "name": instance.name}
             )
             
+            # Create Activity record for deletion
+            Activity.objects.create(
+                organization=instance.organization,
+                user=request.user,
+                entity='product',
+                entity_id=str(instance.id),
+                action='delete',
+                message=f"Deleted product '{instance.sku}'"
+            )
+            
             # Actually delete the product from the database
             instance.delete()
         else:
@@ -350,6 +360,16 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 event_type="archived",
                 summary=f"Product '{instance.name}' was archived",
                 payload={"product_id": instance.id, "sku": instance.sku, "name": instance.name}
+            )
+            
+            # Create Activity record for archiving using 'archived' action
+            Activity.objects.create(
+                organization=instance.organization,
+                user=request.user,
+                entity='product',
+                entity_id=str(instance.id),
+                action='archived',
+                message=f"Archived product '{instance.sku}'"
             )
             
             # Soft delete by setting is_archived flag
@@ -1346,6 +1366,9 @@ class DashboardViewSet(viewsets.ViewSet):
     """
     API endpoints for dashboard data
     """
+    # Add authentication classes to ensure request.user is never None
+    authentication_classes = [JWTAuthentication]
+    
     def get_permissions(self):
         """
         Return dashboard.view permission for all dashboard actions
@@ -1690,21 +1713,21 @@ class DashboardViewSet(viewsets.ViewSet):
             try:
                 organization = get_user_organization(request.user)
                 if organization:
-                    queryset = Product.objects.filter(organization=organization)
+                    queryset = Product.objects.filter(organization=organization, is_archived=False)
                 else:
                     # Fallback to user filter if no organization
                     print(f"WARNING: No organization found for user {request.user}. Falling back to user filter.")
                     if request.user.is_staff:
-                        queryset = Product.objects.all()
+                        queryset = Product.objects.filter(is_archived=False)
                     else:
-                        queryset = Product.objects.filter(created_by=request.user)
+                        queryset = Product.objects.filter(created_by=request.user, is_archived=False)
             except Exception as e:
                 print(f"ERROR: Failed to get organization: {str(e)}. Falling back to user filter.")
                 if request.user.is_staff:
-                    queryset = Product.objects.all()
+                    queryset = Product.objects.filter(is_archived=False)
                 else:
-                    queryset = Product.objects.filter(created_by=request.user)
-            
+                    queryset = Product.objects.filter(created_by=request.user, is_archived=False)
+        
             # Get all attributes for this organization for detailed missing attribute information
             try:
                 from products.models import Attribute
@@ -1777,6 +1800,342 @@ class DashboardViewSet(viewsets.ViewSet):
             print(f"Exception in DashboardViewSet incomplete_products: {str(e)}")
             # Return empty array instead of error
             return Response([])
+
+    @action(detail=False, methods=['get'], url_path='family-completeness')
+    def family_completeness(self, request):
+        """
+        Return completeness percentage for each product family
+        """
+        if not request.user.is_authenticated:
+            return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        try:
+            # Get organization from utility function
+            organization = get_user_organization(request.user)
+            
+            # Get queryset of products filtered by organization or user and not archived
+            if organization:
+                queryset = Product.objects.filter(organization=organization, is_archived=False)
+            elif request.user.is_staff:
+                queryset = Product.objects.filter(is_archived=False)
+            else:
+                queryset = Product.objects.filter(created_by=request.user, is_archived=False)
+            
+            # Group products by family and calculate completeness
+            family_completeness = {}
+            
+            # Process all products
+            for product in queryset:
+                try:
+                    # Get family name (or "Uncategorized" if None)
+                    family_name = "Uncategorized"
+                    if product.family and product.family.label:
+                        family_name = product.family.label
+                    
+                    # Calculate product completeness
+                    completeness = product.get_completeness()
+                    
+                    # Add to family dictionary
+                    if family_name in family_completeness:
+                        family_completeness[family_name]["total"] += completeness
+                        family_completeness[family_name]["count"] += 1
+                    else:
+                        family_completeness[family_name] = {
+                            "total": completeness,
+                            "count": 1
+                        }
+                except json.JSONDecodeError:
+                    print(f"WARNING: JSON decode error for product {product.id} during family completeness calculation")
+                    continue
+                except Exception as e:
+                    print(f"ERROR: Failed to calculate completeness for product {product.id}: {str(e)}")
+                    continue
+            
+            # Calculate average completeness for each family
+            result = []
+            for family_name, data in family_completeness.items():
+                average = round(data["total"] / data["count"])
+                result.append({
+                    "familyName": family_name,
+                    "percentage": average
+                })
+            
+            # Sort by family name
+            result.sort(key=lambda x: x["familyName"])
+            
+            return Response(result)
+            
+        except Exception as e:
+            print(f"Exception in DashboardViewSet family_completeness: {str(e)}")
+            # Return empty list instead of error
+            return Response([])
+    
+    @action(detail=False, methods=['get'], url_path='required-attributes')
+    def required_attributes(self, request):
+        """
+        Return information about required attributes across all families
+        """
+        if not request.user.is_authenticated:
+            return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        try:
+            # Get organization from utility function
+            organization = get_user_organization(request.user)
+            
+            # Get all families for this organization
+            if organization:
+                families = Family.objects.filter(organization=organization)
+            elif request.user.is_staff:
+                families = Family.objects.all()
+            else:
+                # Get families for products created by this user
+                product_families = Product.objects.filter(
+                    created_by=request.user, 
+                    family__isnull=False
+                ).values_list('family', flat=True).distinct()
+                families = Family.objects.filter(id__in=product_families)
+            
+            # Dictionary to store attribute stats
+            required_attributes = {}
+            
+            # For each family, get required attribute groups and attributes
+            for family in families:
+                # Get required attribute groups for this family
+                family_groups = FamilyAttributeGroup.objects.filter(
+                    family=family,
+                    required=True
+                ).select_related('attribute_group')
+                
+                # Get attributes in these groups
+                for family_group in family_groups:
+                    group_items = AttributeGroupItem.objects.filter(
+                        group=family_group.attribute_group
+                    ).select_related('attribute')
+                    
+                    # Process each attribute
+                    for item in group_items:
+                        attribute = item.attribute
+                        attribute_key = f"{attribute.id}"
+                        
+                        if attribute_key not in required_attributes:
+                            # Calculate missing count for this attribute
+                            if organization:
+                                products_with_family = Product.objects.filter(
+                                    organization=organization,
+                                    family=family,
+                                    is_archived=False
+                                ).count()
+                                
+                                products_with_value = AttributeValue.objects.filter(
+                                    organization=organization,
+                                    attribute=attribute,
+                                    product__family=family,
+                                    product__is_archived=False
+                                ).values('product').distinct().count()
+                            else:
+                                # Filter by user if no organization
+                                products_with_family = Product.objects.filter(
+                                    created_by=request.user,
+                                    family=family,
+                                    is_archived=False
+                                ).count()
+                                
+                                products_with_value = AttributeValue.objects.filter(
+                                    attribute=attribute,
+                                    product__created_by=request.user,
+                                    product__family=family,
+                                    product__is_archived=False
+                                ).values('product').distinct().count()
+                            
+                            # Calculate missing count and completion percentage
+                            if products_with_family > 0:
+                                missing_count = products_with_family - products_with_value
+                                complete_percent = round((products_with_value / products_with_family) * 100)
+                            else:
+                                missing_count = 0
+                                complete_percent = 100
+                            
+                            # Get last updated date if any values exist
+                            last_updated = None
+                            last_value = AttributeValue.objects.filter(
+                                attribute=attribute
+                            ).order_by('-created_by__date').first()
+                            
+                            if last_value:
+                                last_updated = last_value.created_at
+                            
+                            # Determine priority based on completion and data type
+                            priority = "Medium"
+                            if complete_percent < 30:
+                                priority = "High"
+                            elif complete_percent > 80:
+                                priority = "Low"
+                            
+                            # Calculate impact score (0-10) based on missing count and attribute type
+                            impact_base = 5
+                            
+                            # Adjust for missing count
+                            if missing_count > 100:
+                                impact_base += 3
+                            elif missing_count > 50:
+                                impact_base += 2
+                            elif missing_count > 10:
+                                impact_base += 1
+                            
+                            # Adjust for data type (essential attributes have higher impact)
+                            if attribute.data_type in ["text", "select"]:
+                                impact_base += 1
+                            
+                            # Cap at 10
+                            impact_score = min(impact_base, 10)
+                            
+                            # Add to required attributes
+                            required_attributes[attribute_key] = {
+                                "name": attribute.label,
+                                "missingCount": missing_count,
+                                "completePercent": complete_percent,
+                                "lastUpdated": last_updated.isoformat() if last_updated else None,
+                                "priority": priority,
+                                "impactScore": impact_score
+                            }
+            
+            # Convert to list and sort by missing count (descending)
+            result = list(required_attributes.values())
+            result.sort(key=lambda x: x["missingCount"], reverse=True)
+            
+            return Response(result)
+            
+        except Exception as e:
+            print(f"Exception in DashboardViewSet required_attributes: {str(e)}")
+            # Return empty list instead of error
+            return Response([])
+    
+    @action(detail=False, methods=['post'], url_path='auto-enrich')
+    def auto_enrich(self, request):
+        """
+        Start a background process to auto-enrich required attributes
+        """
+        if not request.user.is_authenticated:
+            return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        try:
+            # In a real implementation, this would start an asynchronous task
+            # For now, return a success message
+            return Response({"message": "Auto-enrichment process started"})
+        except Exception as e:
+            print(f"Exception in DashboardViewSet auto_enrich: {str(e)}")
+            return Response(
+                {"error": "Failed to start auto-enrichment process"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['post'], url_path='enrich/(?P<attribute_name>[^/.]+)')
+    def enrich_attribute(self, request, attribute_name=None):
+        """
+        Auto-enrich a specific attribute
+        """
+        if not request.user.is_authenticated:
+            return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        try:
+            # In a real implementation, this would start an asynchronous task for the specific attribute
+            # For now, return a success message
+            return Response({"message": f"Auto-enrichment for {attribute_name} started"})
+        except Exception as e:
+            print(f"Exception in DashboardViewSet enrich_attribute: {str(e)}")
+            return Response(
+                {"error": f"Failed to start auto-enrichment for {attribute_name}"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+            
+    @action(detail=False, methods=['get'], url_path='inventory-trend')
+    def inventory_trend(self, request):
+        """
+        Return inventory value trend data for the specified time range
+        """
+        try:
+            # Get range from query param (default to 30 days)
+            try:
+                range_days = int(request.query_params.get('range', 30))
+            except ValueError:
+                range_days = 30
+            
+            # Calculate date range
+            end_date = timezone.now().date()
+            start_date = end_date - timedelta(days=range_days)
+            
+            # Get organization using utility function
+            try:
+                organization = get_user_organization(request.user)
+                if organization:
+                    queryset = Product.objects.filter(organization=organization)
+                else:
+                    # Fallback to user filter if no organization
+                    print(f"WARNING: No organization found for user {request.user}. Falling back to user filter.")
+                    queryset = Product.objects.filter(created_by=request.user)
+            except Exception as e:
+                print(f"ERROR: Failed to get organization: {str(e)}. Falling back to user filter.")
+                if request.user.is_staff:
+                    queryset = Product.objects.all()
+                else:
+                    queryset = Product.objects.filter(created_by=request.user)
+            
+            # In a real app, we would use historical data for accurate trends
+            # For now, we'll generate synthetic data based on current inventory value
+            from prices.models import ProductPrice
+            
+            # Calculate current inventory value using the base price from ProductPrice table
+            current_value = Decimal('0.00')
+            for product in queryset:
+                try:
+                    # Get the base price for this product
+                    base_price = product.prices.filter(price_type__code='base').first()
+                    if base_price:
+                        current_value += base_price.amount
+                except Exception as e:
+                    print(f"Error calculating inventory value for product {product.id}: {str(e)}")
+                    continue
+            
+            # Generate date range
+            dates = []
+            values = []
+            date = start_date
+            while date <= end_date:
+                dates.append(date)
+                
+                # Generate a value with slight variation (+/- 5%)
+                # In a real app, this would come from historical data
+                day_offset = (date - start_date).days
+                ratio = 0.8 + (day_offset / range_days * 0.4)  # Trend upward from 80% to 120%
+                
+                # Add some randomness
+                import random
+                ratio += random.uniform(-0.05, 0.05)
+                
+                value = current_value * Decimal(ratio)
+                # Convert decimal to float
+                values.append(float(value.quantize(Decimal('0.01'))))
+                
+                date += timedelta(days=1)
+            
+            data = {
+                'dates': dates,
+                'values': values
+            }
+            
+            serializer = InventoryTrendSerializer(data=data)
+            serializer.is_valid(raise_exception=True)
+            return Response(serializer.validated_data)
+        except Exception as e:
+            print(f"Exception in DashboardViewSet inventory_trend: {str(e)}")
+            # Return empty data instead of error
+            data = {
+                'dates': [timezone.now().date() - timedelta(days=i) for i in range(30, 0, -1)],
+                'values': [0.0] * 30
+            }
+            serializer = InventoryTrendSerializer(data=data)
+            serializer.is_valid(raise_exception=True)
+            return Response(serializer.validated_data)
 
 class AssetViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     """

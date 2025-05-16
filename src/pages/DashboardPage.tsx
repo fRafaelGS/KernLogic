@@ -10,7 +10,7 @@ import { IncompleteProductsList } from '@/components/dashboard/IncompleteProduct
 import { DataCompletenessCard } from '@/components/dashboard/DataCompletenessCard';
 import { ProductStatusChart } from '@/components/dashboard/ProductStatusChart';
 import { MostMissingAttributesCard } from '@/components/dashboard/MostMissingAttributesCard';
-import { RequiredAttributesCard } from '@/components/dashboard/RequiredAttributesCard';
+import { TopIncompleteProductsCard } from '@/components/dashboard/TopIncompleteProductsCard';
 import { RecentActivityCard } from '@/components/dashboard/RecentActivityCard';
 import { 
   Plus, 
@@ -141,12 +141,14 @@ export const DashboardPage: React.FC = () => {
 
       {/* Top KPIs Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-x-2 gap-y-1">
-        <AnimatedDiv delay={0}>
+        <AnimatedDiv delay={0} className="h-full">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Card 
-                  className="bg-white min-h-[363px] border-enterprise-200 shadow-sm hover:shadow-md hover:translate-y-[-2px] transition-all" tabIndex={0} aria-label="Product status donut chart"
+                  className="h-full bg-white border-enterprise-200 shadow-sm hover:shadow-md hover:translate-y-[-2px] transition-all" 
+                  tabIndex={0} 
+                  aria-label="Product status donut chart"
                   onClick={() => navigate('/app/products')}
                   onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') navigate('/app/products') }}
                 >
@@ -154,7 +156,7 @@ export const DashboardPage: React.FC = () => {
                     <CardTitle className="text-sm font-medium uppercase tracking-wider text-gray-700 dark:text-gray-200">Total Products</CardTitle>
                     <Package className="h-4 w-4 text-primary-600" />
                   </CardHeader>
-                  <CardContent className="min-h-[270px]">
+                  <CardContent className="h-[calc(100%-76px)] overflow-auto">
                     {loading.summary ? (
                       <Skeleton className="h-8 w-16" />
                     ) : (
@@ -217,7 +219,7 @@ export const DashboardPage: React.FC = () => {
             </Tooltip>
           </TooltipProvider>
         </AnimatedDiv>
-        <AnimatedDiv delay={100}>
+        <AnimatedDiv delay={100} className="h-full">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -244,7 +246,7 @@ export const DashboardPage: React.FC = () => {
             </Tooltip>
           </TooltipProvider>
         </AnimatedDiv>
-        <AnimatedDiv delay={200}>
+        <AnimatedDiv delay={200} className="h-full">
           <ProductStatusChart
             activeProducts={summary?.active_products || 0}
             inactiveProducts={summary?.inactive_products || 0}
@@ -254,19 +256,15 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       {/* Row 2: Most Missing Attributes and Required Attributes */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-2 gap-y-1 mt-2">
-        <AnimatedDiv delay={300}>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-2 gap-y-1 mt-2 auto-rows-fr items-stretch">
+        <AnimatedDiv delay={300} className="h-full">
           <MostMissingAttributesCard
             mostMissingFields={summary?.most_missing_fields || []}
             loading={loading.summary}
           />
         </AnimatedDiv>
-        <AnimatedDiv delay={350}>
-          <RequiredAttributesCard
-            mandatoryAttributes={summary?.mandatory_attributes || []}
-            attributesMissingCount={summary?.attributes_missing_count || 0}
-            loading={loading.summary}
-          />
+        <AnimatedDiv delay={350} className="h-full">
+          <TopIncompleteProductsCard />
         </AnimatedDiv>
       </div>
 

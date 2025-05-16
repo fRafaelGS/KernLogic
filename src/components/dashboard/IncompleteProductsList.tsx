@@ -1,10 +1,9 @@
 import React from 'react';
 import { IncompleteProduct } from '@/services/dashboardService';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { CheckCircle2, Eye } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface IncompleteProductsListProps {
@@ -22,9 +21,15 @@ export const IncompleteProductsList: React.FC<IncompleteProductsListProps> = ({
   maxItems = 5,
   title = "Incomplete Products",
   description = "Products with missing data",
-  showViewAll = true
+  showViewAll = false
 }) => {
   const navigate = useNavigate();
+  
+  const handleRowClick = (productId?: number) => {
+    if (productId) {
+      navigate(`/app/products/${productId}`);
+    }
+  };
   
   return (
     <Card className="bg-white border-enterprise-200 shadow-sm">
@@ -33,18 +38,6 @@ export const IncompleteProductsList: React.FC<IncompleteProductsListProps> = ({
           <CardTitle className="text-sm font-medium uppercase tracking-wider text-gray-700 dark:text-gray-200">{title}</CardTitle>
           <CardDescription className="text-enterprise-500">{description}</CardDescription>
         </div>
-        {showViewAll && (
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className="text-enterprise-600 hover:text-enterprise-900"
-            disabled={true}
-            title="Coming soon"
-          >
-            <Eye className="h-4 w-4 mr-1" />
-            View All
-          </Button>
-        )}
       </CardHeader>
       <CardContent className="p-0">
         {loading ? (
@@ -62,20 +55,12 @@ export const IncompleteProductsList: React.FC<IncompleteProductsListProps> = ({
               <div 
                 key={product?.id || Math.random()} 
                 className="px-6 py-4 hover:bg-enterprise-50 cursor-pointer"
+                onClick={() => handleRowClick(product?.id)}
               >
                 <div className="flex justify-between items-center mb-2">
-                  <a
-                    href={product?.id ? `/app/products/${product.id}/edit` : undefined}
-                    className="font-medium text-enterprise-800 hover:underline focus:underline outline-none"
-                    tabIndex={0}
-                    aria-label={`Edit product ${product?.name || ''}`}
-                    onClick={e => {
-                      e.stopPropagation()
-                      if (product?.id) navigate(`/app/products/${product.id}/edit`)
-                    }}
-                  >
+                  <span className="font-medium text-enterprise-800">
                     {product?.name || "Unnamed product"}
-                  </a>
+                  </span>
                   <Badge variant="outline" className="bg-enterprise-50">
                     {product?.completeness || 0}% complete
                   </Badge>

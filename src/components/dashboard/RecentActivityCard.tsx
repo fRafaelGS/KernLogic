@@ -3,7 +3,6 @@ import { Activity } from '@/services/dashboardService'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { CalendarClock } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
 
 interface RecentActivityCardProps {
   activities: Activity[] | null
@@ -15,11 +14,16 @@ interface RecentActivityCardProps {
 
 const getProductName = (activity: Activity): string => {
   const patterns = [
-    /product "([^"]+)",?/,          // product "Name"
-    /Product "([^"]+)",?/,          // Product "Name"
+    /Created product '([^']+)'/,  // Created product '44411'
+    /Updated product '([^']+)'/,  // Updated product '44411'
+    /Deleted product '([^']+)'/,  // Deleted product '44411'
+    /Archived product '([^']+)'/,  // Archived product '44411'
+    /product "([^"]+)",?/,        // product "Name"
+    /Product "([^"]+)",?/,        // Product "Name"
     /added product ([^"]+)/,      // added product Name
     /updated product ([^"]+)/,    // updated product Name
     /deleted product ([^"]+)/,    // deleted product Name
+    /archived product ([^"]+)/,   // archived product Name
     /product: ([^,]+)/,           // product: Name
     /Product: ([^,]+)/            // Product: Name
   ];
@@ -37,13 +41,13 @@ const formatActivityMessage = (activity: Activity): string => {
   const actionText = {
     'create': 'created',
     'update': 'updated',
-    'delete': 'deleted'
+    'delete': 'archived',
+    'archived': 'archived'
   }[activity.action] || 'modified';
   return `${userName} ${actionText} this product`;
 };
 
 export function RecentActivityCard({ activities, loading, maxItems = 10 }: RecentActivityCardProps) {
-  const navigate = useNavigate()
   const isValidActivities = Array.isArray(activities)
 
   // Helper for time ago
@@ -82,22 +86,15 @@ export function RecentActivityCard({ activities, loading, maxItems = 10 }: Recen
             {activities.slice(0, maxItems).map(item => (
               <div
                 key={item?.id || Math.random()}
-                className='flex items-center gap-3 px-6 py-3 hover:bg-enterprise-50 cursor-pointer transition-colors'
+                className='flex items-center gap-3 px-6 py-3'
               >
                 <div className='flex-1 min-w-0'>
-                  <a
-                    href={item?.entity_id ? `/app/products/${item.entity_id}/edit` : undefined}
-                    className='text-sm font-medium text-enterprise-800 hover:underline focus:underline outline-none truncate'
-                    tabIndex={0}
-                    aria-label={`Edit product ${getProductName(item)}`}
-                    onClick={e => {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      if (item?.entity_id) navigate(`/app/products/${item.entity_id}/edit`)
-                    }}
+                  <span
+                    className='text-sm font-medium text-enterprise-800 truncate block'
+                    aria-label={`Product ${getProductName(item)}`}
                   >
                     {getProductName(item)}
-                  </a>
+                  </span>
                   <div className='text-xs text-enterprise-500 truncate'>
                     {formatActivityMessage(item)}
                   </div>

@@ -63,6 +63,49 @@ class HasTeamRemovePermission(HasPermission):
     
 class HasDashboardViewPermission(HasPermission):
     required_permission = "dashboard.view"
+    
+    def has_permission(self, request, view):
+        # Handle potentially missing user or unauthenticated users
+        if not hasattr(request, 'user') or request.user is None:
+            return False
+            
+        if not request.user.is_authenticated:
+            return False
+            
+        # Staff always has permission
+        if request.user.is_staff:
+            return True
+            
+        # For dashboard views, we might not have an org_id in the URL
+        # Try to get organization from the query params instead
+        org_id = view.kwargs.get('org_id') or request.query_params.get('organization_id')
+        
+        # If we still don't have an org_id, check if the user is associated with any organization
+        if not org_id:
+            from kernlogic.utils import get_user_organization
+            organization = get_user_organization(request.user)
+            if organization:
+                # User has an organization, allow access
+                return True
+            
+            # If no organization found, check if user has any products
+            # Users should be able to see dashboard data for their own products
+            from products.models import Product
+            has_products = Product.objects.filter(created_by=request.user).exists()
+            return has_products
+            
+        # If we have an org_id, check membership permissions
+        membership = Membership.objects.filter(
+            user=request.user,
+            organization_id=org_id,
+            status='active'
+        ).select_related('role').first()
+        
+        if not membership:
+            return False
+            
+        # Check if user has required permission
+        return self.required_permission in membership.role.permissions
 
 class IsOrgAdmin(permissions.BasePermission):
     """

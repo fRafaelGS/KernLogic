@@ -455,6 +455,7 @@ class Activity(models.Model):
         ('create', 'Create'),
         ('update', 'Update'),
         ('delete', 'Delete'),
+        ('archived', 'Archived'),
     )
     
     # Remove integer company_id, rely only on organization UUID

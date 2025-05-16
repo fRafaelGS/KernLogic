@@ -508,7 +508,8 @@ class DashboardSummarySerializer(serializers.Serializer):
     inventory_value = serializers.FloatField()  # Changed from DecimalField to avoid precision issues
     inactive_product_count = serializers.IntegerField()  # New field to replace low_stock_count
     team_members = serializers.IntegerField()
-    data_completeness = serializers.FloatField()  # Percentage of complete product data
+    data_completeness = serializers.FloatField()  # Percentage of complete product data from FactProductAttribute
+    data_completeness_product_weighted = serializers.FloatField(required=False)  # Optional weighted completeness from product model
     
     # Adjust field definition for weighted missing fields
     most_missing_fields = serializers.ListField(

@@ -68,6 +68,8 @@ export const qkEnrichmentVelocity = (days: number = 30) =>
 
 /**
  * Query key for localization quality analytics
+ * Note: This key is used for the LocalizationCoverageReport component
+ * but the name remains unchanged for backend API compatibility
  * 
  * @returns Query key array
  */

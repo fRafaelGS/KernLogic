@@ -1381,9 +1381,13 @@ class DashboardViewSet(viewsets.ViewSet):
         """
         Return dashboard summary data:
         - KPI numbers (total products, inventory value, inactive products, team members)
-        - Data completeness percentage
-        - Most missing fields
+        - Data completeness percentage (calculated using FactProductAttribute, same as analytics endpoint)
+        - Most missing fields (calculated from fact table where possible)
         - Product status counts
+        
+        NOTE: This implementation now uses the FactProductAttribute.completed field for
+        completeness calculation, matching how the /api/analytics/completeness/ endpoint
+        calculates overall completeness. This ensures consistent metrics across the application.
         """
         print(f"DEBUG: DashboardViewSet.summary() called - User: {request.user}, Authenticated: {request.user.is_authenticated}")
         
@@ -1425,59 +1429,181 @@ class DashboardViewSet(viewsets.ViewSet):
             
             # Calculate completeness with error handling
             avg_completeness = 0
-            if total_products > 0:
-                # Get completeness for each product
-                completeness_values = []
+            
+            try:
+                # Use FactProductAttribute to calculate completeness, same as analytics endpoint
+                from analytics.models import FactProductAttribute
+                from django.db.models import Count, Case, When
+
+                # Get user's organization ID
+                organization_id = getattr(request.user, 'organization_id', None)
+                
+                if organization_id:
+                    # Filter fact table by organization
+                    fact_queryset = FactProductAttribute.objects.filter(organization_id=organization_id)
+                    
+                    # Get total count of facts
+                    total_count = fact_queryset.count()
+                    
+                    if total_count > 0:
+                        # Count completed facts
+                        completed_count = fact_queryset.filter(completed=True).count()
+                        # Calculate percentage
+                        avg_completeness = round((completed_count / total_count) * 100, 1)
+                    else:
+                        # No facts available, use 0
+                        avg_completeness = 0.0
+                        print("Warning: No fact records found for completeness calculation")
+                    
+                    # Optionally, you could also calculate the old way for comparison:
+                    product_weighted_completeness = 0
+                    if total_products > 0:
+                        # This calculates using the product.get_completeness() weighted method
+                        completeness_values = []
+                        for product in queryset:
+                            try:
+                                completeness_values.append(product.get_completeness())
+                            except Exception:
+                                completeness_values.append(0)
+                        
+                        if completeness_values:
+                            product_weighted_completeness = round(sum(completeness_values) / len(completeness_values), 1)
+                    
+                    print(f"Completeness values - Fact-based: {avg_completeness}%, Product-weighted: {product_weighted_completeness}%")
+                    
+                else:
+                    print("Warning: No organization_id available for FactProductAttribute filtering")
+            except ImportError:
+                print("Warning: analytics.models.FactProductAttribute not available")
+                avg_completeness = 0
+            except Exception as e:
+                print(f"Error calculating fact-based completeness: {str(e)}")
+                avg_completeness = 0
+            
+            # Get most missing fields using FactProductAttribute 
+            most_missing = []
+            try:
+                from analytics.models import FactProductAttribute, DimAttribute
+                from django.db.models import Count, F, Case, When
+                
+                # Helper method for fallback
+                def get_missing_fields_from_products(products_queryset):
+                    missing_fields_count = {}
+                    for product in products_queryset:
+                        try:
+                            for missing_field in product.get_missing_fields():
+                                field_name = missing_field['field'] 
+                                weight = missing_field['weight']
+                                if field_name in missing_fields_count:
+                                    missing_fields_count[field_name]['count'] += 1
+                                    # Keep track of total weight for prioritization
+                                    missing_fields_count[field_name]['weight'] = weight
+                                else:
+                                    missing_fields_count[field_name] = {
+                                        'count': 1,
+                                        'weight': weight
+                                    }
+                        except json.JSONDecodeError:
+                            print(f"WARNING: JSON decode error for product {product.id} during missing fields calculation")
+                            continue
+                        except Exception as e:
+                            print(f"ERROR: Failed to calculate missing fields for product {product.id}: {str(e)}")
+                            continue
+                    
+                    # Sort missing fields by count and weight
+                    return [
+                        {
+                            "field": field,
+                            "count": data['count'],
+                            "weight": data['weight']
+                        }
+                        for field, data in sorted(
+                            missing_fields_count.items(), 
+                            key=lambda x: (x[1]['count'], x[1]['weight']), 
+                            reverse=True
+                        )[:7]
+                    ]
+                
+                # Get organization ID from the user
+                organization_id = getattr(request.user, 'organization_id', None)
+                
+                if organization_id:
+                    # Get attribute-level missing data from fact table
+                    attribute_stats = FactProductAttribute.objects.filter(
+                        organization_id=organization_id
+                    ).values(
+                        'attribute'
+                    ).annotate(
+                        total=Count('id'),
+                        completed=Count(Case(When(completed=True, then=1))),
+                        missing=F('total') - F('completed')
+                    ).filter(
+                        missing__gt=0
+                    ).order_by('-missing')[:7]  # Get top 7 missing attributes
+                    
+                    # Fetch attribute names
+                    attribute_ids = [item['attribute'] for item in attribute_stats]
+                    attribute_map = {
+                        attr.attribute_id: attr.label 
+                        for attr in DimAttribute.objects.filter(
+                            attribute_id__in=attribute_ids
+                        ).select_related('attribute').only('attribute_id', 'label')
+                    }
+                    
+                    # Format results
+                    most_missing = [
+                        {
+                            "field": attribute_map.get(item['attribute'], f"Attribute {item['attribute']}"),
+                            "count": item['missing'],
+                            "weight": 1  # Use weight 1 for all attributes
+                        }
+                        for item in attribute_stats
+                    ]
+                    
+                    if not most_missing:
+                        # Fallback to the old calculation if we don't get any results
+                        most_missing = get_missing_fields_from_products(queryset)
+                else:
+                    most_missing = get_missing_fields_from_products(queryset)
+                    
+            except (ImportError, Exception) as e:
+                print(f"Error calculating missing fields from fact table: {str(e)}")
+                # Fallback to the old calculation - use existing code
+                missing_fields_count = {}
                 for product in queryset:
                     try:
-                        completeness_values.append(product.get_completeness())
+                        for missing_field in product.get_missing_fields():
+                            field_name = missing_field['field'] 
+                            weight = missing_field['weight']
+                            if field_name in missing_fields_count:
+                                missing_fields_count[field_name]['count'] += 1
+                                # Keep track of total weight for prioritization
+                                missing_fields_count[field_name]['weight'] = weight
+                            else:
+                                missing_fields_count[field_name] = {
+                                    'count': 1,
+                                    'weight': weight
+                                }
                     except json.JSONDecodeError:
-                        # Handle invalid JSON in product fields
-                        print(f"WARNING: JSON decode error for product {product.id} during completeness calculation")
-                        completeness_values.append(0)  # Default to 0% complete for products with invalid JSON
+                        print(f"WARNING: JSON decode error for product {product.id} during missing fields calculation")
+                        continue
                     except Exception as e:
-                        print(f"ERROR: Failed to calculate completeness for product {product.id}: {str(e)}")
-                        completeness_values.append(0)
+                        print(f"ERROR: Failed to calculate missing fields for product {product.id}: {str(e)}")
+                        continue
                 
-                if completeness_values:
-                    avg_completeness = sum(completeness_values) / len(completeness_values)
-            
-            # Get most missing fields with weights and error handling
-            missing_fields_count = {}
-            for product in queryset:
-                try:
-                    for missing_field in product.get_missing_fields():
-                        field_name = missing_field['field'] 
-                        weight = missing_field['weight']
-                        if field_name in missing_fields_count:
-                            missing_fields_count[field_name]['count'] += 1
-                            # Keep track of total weight for prioritization
-                            missing_fields_count[field_name]['weight'] = weight
-                        else:
-                            missing_fields_count[field_name] = {
-                                'count': 1,
-                                'weight': weight
-                            }
-                except json.JSONDecodeError:
-                    print(f"WARNING: JSON decode error for product {product.id} during missing fields calculation")
-                    continue
-                except Exception as e:
-                    print(f"ERROR: Failed to calculate missing fields for product {product.id}: {str(e)}")
-                    continue
-            
-            # Sort missing fields by count and weight and take top 3
-            most_missing = [
-                {
-                    "field": field,
-                    "count": data['count'],
-                    "weight": data['weight']
-                }
-                for field, data in sorted(
-                    missing_fields_count.items(), 
-                    key=lambda x: (x[1]['count'], x[1]['weight']), 
-                    reverse=True
-                )[:7]
-            ]
+                # Sort missing fields by count and weight and take top 7
+                most_missing = [
+                    {
+                        "field": field,
+                        "count": data['count'],
+                        "weight": data['weight']
+                    }
+                    for field, data in sorted(
+                        missing_fields_count.items(), 
+                        key=lambda x: (x[1]['count'], x[1]['weight']), 
+                        reverse=True
+                    )[:7]
+                ]
             
             # Get active/inactive counts (always exclude archived)
             active_count = queryset.filter(is_active=True).count()
@@ -1518,6 +1644,10 @@ class DashboardViewSet(viewsets.ViewSet):
                 'inactive_products': inactive_count,
                 'recent_products': recent_products
             }
+            
+            # Add product-weighted completeness if calculated
+            if 'product_weighted_completeness' in locals() and product_weighted_completeness > 0:
+                data['data_completeness_product_weighted'] = product_weighted_completeness
             
             # Get attribute-related completeness data
             try:

@@ -2,12 +2,13 @@ import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import axiosInstance from '@/lib/axiosInstance';
 import { paths } from '@/lib/apiPaths';
-import { qkReportThemes, qkCompleteness, qkReadiness } from '@/lib/queryKeys';
+import { qkReportThemes, qkCompleteness } from '@/lib/queryKeys';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 import { 
   BarChart, 
   Bar, 
@@ -18,13 +19,16 @@ import {
   ResponsiveContainer,
   PieChart,
   Pie,
-  Cell
+  Cell,
+  LabelList
 } from 'recharts';
+import { Tooltip as UITooltip } from '@/components/ui/tooltip';
+import { TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // Import report components
-import EnrichmentVelocityReport from '@/features/reports/EnrichmentVelocityReport';
-import LocalizationQualityReport from '@/features/reports/LocalizationQualityReport';
+import LocalizationCoverageReport from '@/features/reports/LocalizationCoverageReport';
 import ChangeHistoryReport from '@/features/reports/ChangeHistoryReport';
+import AttributeInsightsReport from '@/features/reports/AttributeInsightsReport';
 import ReportFilters from '@/features/reports/components/filters/ReportFilters';
 import ReportExportButton from '@/features/reports/components/ReportExportButton';
 
@@ -44,6 +48,18 @@ interface Theme {
   description: string;
 }
 
+// Define attribute and category data types
+interface AttributeData {
+  name?: string;
+  completed?: number;
+  total?: number;
+}
+
+interface CategoryData {
+  name?: string;
+  value?: number;
+}
+
 // Colors for charts
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#A4DE6C', '#8884D8'];
 
@@ -55,16 +71,9 @@ interface CompletenessReportProps {
   };
 }
 
-interface ReadinessReportProps {
-  data?: {
-    overall: number;
-    byChannel: Array<{ name: string; value: number }>;
-    byRequiredField: Array<{ name: string; completed: number; missing: number }>;
-  };
-}
-
 const CompletenessReport: React.FC = () => {
   const [filters, setFilters] = useState<ReportFiltersState>({});
+  const [showAllAttributes, setShowAllAttributes] = useState(false);
   
   /* --------------------------------------------------
    * Dashboard summary (overall completeness & missing)
@@ -96,6 +105,7 @@ const CompletenessReport: React.FC = () => {
       if (filters.locale) queryParams.append('locale', filters.locale);
       if (filters.category) queryParams.append('category', filters.category);
       if (filters.channel) queryParams.append('channel', filters.channel);
+      if (filters.family) queryParams.append('family', filters.family);
       if (filters.from) queryParams.append('date_from', filters.from);
       if (filters.to) queryParams.append('date_to', filters.to);
       
@@ -113,29 +123,94 @@ const CompletenessReport: React.FC = () => {
     // If no data, return the fallback
     if (!apiData) return fallbackData;
     
-    // Prefer the precise dashboard calculation if available
-    const overall = typeof dashboardSummary?.data_completeness === 'number'
-      ? dashboardSummary.data_completeness
-      : (typeof apiData.overall === 'number' ? apiData.overall : 0);
+    // Use the analytics endpoint's calculation directly, as it now matches the dashboard
+    const overall = typeof apiData.overall === 'number' ? apiData.overall : 0;
     
     // Ensure all expected properties exist with proper fallbacks
     return {
       overall,
       byAttribute: Array.isArray(apiData.byAttribute) && apiData.byAttribute.length > 0 
-        ? apiData.byAttribute.map(attr => ({
+        ? apiData.byAttribute.map((attr: AttributeData) => ({
             name: attr?.name || 'Unknown',
             completed: typeof attr?.completed === 'number' ? attr.completed : 0,
             total: typeof attr?.total === 'number' ? attr.total : 0
           }))
         : fallbackData.byAttribute,
       byCategory: Array.isArray(apiData.byCategory) && apiData.byCategory.length > 0
-        ? apiData.byCategory.map(cat => ({
+        ? apiData.byCategory.map((cat: CategoryData) => ({
             name: cat?.name || 'Unknown',
             value: typeof cat?.value === 'number' ? cat.value : 0
           }))
         : fallbackData.byCategory
     };
   }, [apiData, dashboardSummary]);
+
+  // Calculate completion counts for the stats
+  const completionStats = useMemo(() => {
+    // Get total counts from byAttribute data
+    const totalCount = data.byAttribute.reduce((sum: number, attr: AttributeData) => sum + (attr.total || 0), 0);
+    const completedCount = data.byAttribute.reduce((sum: number, attr: AttributeData) => sum + (attr.completed || 0), 0);
+    const missingCount = totalCount - completedCount;
+    const percent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+    
+    // Find top 3 most completed and most missing attributes
+    const attributesWithPercentage = data.byAttribute.map((attr: AttributeData) => {
+      const total = attr.total || 0;
+      const completed = attr.completed || 0;
+      const completionRate = total > 0 ? completed / total : 0;
+      return {
+        name: attr.name || 'Unknown',
+        completionRate,
+        missingRate: 1 - completionRate,
+        completed,
+        missing: total - completed,
+        total
+      };
+    });
+    
+    // Sort by completion rate (highest first) and missing rate (highest first)
+    const topCompleted = [...attributesWithPercentage]
+      .filter(attr => attr.total > 0)
+      .sort((a, b) => b.completionRate - a.completionRate)
+      .slice(0, 3);
+      
+    const topMissing = [...attributesWithPercentage]
+      .filter(attr => attr.total > 0)
+      .sort((a, b) => b.missingRate - a.missingRate)
+      .slice(0, 3);
+    
+    return {
+      totalCount,
+      completedCount,
+      missingCount,
+      percent,
+      topCompleted,
+      topMissing
+    };
+  }, [data]);
+
+  // Process the data for attribute chart
+  const attributeChartData = useMemo(() => {
+    if (!data || !data.byAttribute) return [];
+
+    // Sort attributes by completion percentage (lowest first)
+    const sorted = [...data.byAttribute].sort((a, b) => {
+      const aPct = a.total ? a.completed / a.total : 0;
+      const bPct = b.total ? b.completed / b.total : 0;
+      return aPct - bPct; // sort by lowest completeness
+    });
+
+    // Only show top 10 if not showing all
+    const filteredData = showAllAttributes ? sorted : sorted.slice(0, 10);
+
+    // Format data for the chart
+    return filteredData.map((attr) => ({
+      name: attr.name || 'Unknown',
+      pct: attr.total ? Math.round((attr.completed / attr.total) * 100) : 0,
+      completed: attr.completed || 0,
+      total: attr.total || 0,
+    }));
+  }, [data, showAllAttributes]);
 
   if (isLoading) {
     return (
@@ -168,81 +243,192 @@ const CompletenessReport: React.FC = () => {
       <ReportFilters 
         filters={filters} 
         onFiltersChange={setFilters}
-        availableFilters={['date', 'category', 'channel']} 
+        availableFilters={['date', 'category', 'channel', 'locale', 'family']} 
       />
       
-      {/* Overall Completeness */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Overall Completeness</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col items-center">
-            <div className="w-full max-w-md">
-              <div className="flex justify-between mb-2">
-                <span className="text-sm text-gray-700">Completeness</span>
-                <span className="text-sm font-medium">{data.overall}%</span>
-              </div>
-              <Progress value={data.overall} className="h-2 w-full" />
-              <div className="mt-4 text-sm text-gray-600">
-                {data.overall < 50 ? (
-                  <p>Your product data needs significant improvement to be complete.</p>
-                ) : data.overall < 80 ? (
-                  <p>Your product data is progressing well but has room for improvement.</p>
-                ) : (
-                  <p>Your product data is largely complete. Great job!</p>
-                )}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Top Missing Fields – from dashboard summary */}
-      {dashboardSummary?.most_missing_fields?.length ? (
-        <Card>
+      {/* Row with Overall Completeness and Top Missing Fields */}
+      <div className="flex flex-col md:flex-row gap-6">
+        {/* Overall Completeness */}
+        <Card className="flex-1">
           <CardHeader>
-            <CardTitle className="text-lg">Top Missing Fields</CardTitle>
-            <CardDescription>Fields most frequently incomplete across your catalogue</CardDescription>
+            <CardTitle className="text-lg">Overall Completeness</CardTitle>
           </CardHeader>
-          <CardContent>
-            <ul className="space-y-2">
-              {dashboardSummary.most_missing_fields.map((mf: any, idx: number) => (
-                <li key={idx} className="flex justify-between items-center">
-                  <span>{mf.field}</span>
-                  <Badge variant="destructive">{mf.count} missing</Badge>
-                </li>
-              ))}
-            </ul>
+          <CardContent className="flex flex-col items-center justify-center space-y-6">
+            {completionStats.totalCount === 0 ? (
+              <p className="text-muted-foreground">No data available for the selected filters.</p>
+            ) : (
+              <>
+                <div className="relative w-full max-w-md mt-8">
+                  {/* % label centered */}
+                  <div className="absolute top-[-2rem] left-1/2 transform -translate-x-1/2 text-2xl font-bold text-gray-900">
+                    {completionStats.percent}%
+                  </div>
+
+                  {/* Progress bar wrapper */}
+                  <TooltipProvider>
+                    <UITooltip>
+                      <TooltipTrigger asChild>
+                        <div className="w-full h-6 bg-red-200 rounded-full overflow-hidden shadow-inner">
+                          <div
+                            className="h-full bg-green-500 transition-all duration-700"
+                            style={{ width: `${completionStats.percent}%` }}
+                          />
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {completionStats.completedCount} of {completionStats.totalCount} fields complete
+                      </TooltipContent>
+                    </UITooltip>
+                  </TooltipProvider>
+                </div>
+
+                {/* Stats */}
+                <div className="flex justify-around w-full max-w-md text-base font-medium text-gray-700 mt-4">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-green-600 text-lg">✅</span>
+                    <span><strong className="text-lg">{completionStats.completedCount}</strong> complete</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-red-600 text-lg">❌</span>
+                    <span><strong className="text-lg">{completionStats.missingCount}</strong> missing</span>
+                  </div>
+                </div>
+                
+                {/* Top completed and missing attributes */}
+                <div className="w-full max-w-md grid grid-cols-2 gap-6 mt-2">
+                  {/* Top completed attributes */}
+                  <div className="space-y-3">
+                    <h4 className="font-medium text-green-700 border-b pb-1">Top Completed</h4>
+                    <ul className="space-y-2">
+                      {completionStats.topCompleted.map((attr, idx) => (
+                        <li key={`complete-${idx}`} className="flex justify-between items-center">
+                          <span className="text-sm truncate">{attr.name}</span>
+                          <span className="text-green-600 text-sm font-medium ml-2">
+                            {Math.round(attr.completionRate * 100)}%
+                          </span>
+                        </li>
+                      ))}
+                      {completionStats.topCompleted.length === 0 && (
+                        <li className="text-sm text-gray-500">No data available</li>
+                      )}
+                    </ul>
+                  </div>
+                  
+                  {/* Top missing attributes */}
+                  <div className="space-y-3">
+                    <h4 className="font-medium text-red-700 border-b pb-1">Top Missing</h4>
+                    <ul className="space-y-2">
+                      {completionStats.topMissing.map((attr, idx) => (
+                        <li key={`missing-${idx}`} className="flex justify-between items-center">
+                          <span className="text-sm truncate">{attr.name}</span>
+                          <span className="text-red-600 text-sm font-medium ml-2">
+                            {Math.round(attr.missingRate * 100)}%
+                          </span>
+                        </li>
+                      ))}
+                      {completionStats.topMissing.length === 0 && (
+                        <li className="text-sm text-gray-500">No data available</li>
+                      )}
+                    </ul>
+                  </div>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
-      ) : null}
+
+        {/* Top Missing Fields */}
+        {dashboardSummary?.most_missing_fields?.length ? (
+          <Card className="flex-1">
+            <CardHeader>
+              <CardTitle className="text-lg">Top Missing Fields</CardTitle>
+              <CardDescription>Fields most frequently incomplete across your catalogue</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2">
+                {dashboardSummary.most_missing_fields.map((mf: any, idx: number) => (
+                  <li key={idx} className="flex justify-between items-center">
+                    <span>{mf.field}</span>
+                    <Badge variant="destructive">{mf.count} missing</Badge>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        ) : null}
+      </div>
 
       {/* Completeness by Attribute */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Completeness by Attribute</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="text-lg">Completeness by Attribute</CardTitle>
+            <CardDescription>Attributes sorted by lowest completion rate</CardDescription>
+          </div>
+          <Button 
+            variant="ghost" 
+            onClick={() => setShowAllAttributes(!showAllAttributes)}
+            className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+          >
+            {showAllAttributes ? 'Show Top 10' : 'Show All'}
+          </Button>
         </CardHeader>
         <CardContent>
-          <div className="h-[300px]">
-            {data.byAttribute.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
+          <div className="h-auto" style={{ minHeight: '300px' }}>
+            {attributeChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={Math.max(300, attributeChartData.length * 40)}>
                 <BarChart
-                  data={data.byAttribute}
+                  data={attributeChartData}
                   layout="vertical"
-                  margin={{ top: 5, right: 30, left: 80, bottom: 5 }}
+                  margin={{ top: 5, right: 50, left: 80, bottom: 5 }}
                 >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" domain={[0, 100]} unit="%" />
-                  <YAxis dataKey="name" type="category" width={80} />
-                  <Tooltip formatter={(value) => [`${value}%`, 'Completed']} />
-                  <Bar dataKey="completed" fill="#0088FE" />
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                  <XAxis 
+                    type="number" 
+                    domain={[0, 100]} 
+                    unit="%" 
+                    tickCount={6} 
+                  />
+                  <YAxis 
+                    dataKey="name" 
+                    type="category" 
+                    width={120}
+                    tickFormatter={(value) => value.length > 25 ? `${value.substring(0, 22)}...` : value}
+                  />
+                  <Tooltip 
+                    formatter={(value) => {
+                      return [`${value}% complete`, ''];
+                    }}
+                    labelFormatter={(name) => {
+                      const item = attributeChartData.find(i => i.name === name);
+                      return `${name} (${item?.completed} of ${item?.total})`;
+                    }}
+                  />
+                  <Bar 
+                    dataKey="pct" 
+                    fill="#3b82f6" 
+                    radius={[0, 4, 4, 0]}
+                    barSize={20}
+                    name="Completion Rate"
+                  >
+                    <LabelList 
+                      dataKey="pct" 
+                      position="right" 
+                      formatter={(value: number) => `${value}%`} 
+                      style={{ fill: '#6b7280', fontWeight: 500 }}
+                    />
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             ) : (
               <div className="flex h-full items-center justify-center text-gray-500">
                 No attribute data available
               </div>
+            )}
+          </div>
+          <div className="text-sm text-gray-500 mt-3 text-center">
+            {attributeChartData.length > 0 && !showAllAttributes && data.byAttribute.length > 10 && (
+              <p>{data.byAttribute.length - 10} more attributes not shown</p>
             )}
           </div>
         </CardContent>
@@ -254,233 +440,23 @@ const CompletenessReport: React.FC = () => {
           <CardTitle className="text-lg">Completeness by Category</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap justify-around">
-            <div className="h-[300px] w-full max-w-xs">
-              {data.byCategory.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={data.byCategory}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={80}
-                      label={({name, value}) => `${name || 'Unknown'}: ${value || 0}%`}
-                    >
-                      {data.byCategory.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(value) => [`${value}%`, 'Completeness']} />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex h-full items-center justify-center text-gray-500">
-                  No category data available
-                </div>
-              )}
-            </div>
-            <div className="w-full max-w-xs mt-4 md:mt-0">
-              <h3 className="text-md font-medium mb-2">Category Breakdown</h3>
-              {data.byCategory.length > 0 ? (
-                <ul className="space-y-2">
-                  {data.byCategory.map((category, index) => (
-                    <li key={index} className="flex items-center space-x-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                      <span className="text-sm">{category.name || 'Unknown'}</span>
-                      <Badge variant={category.value >= 70 ? "success" : category.value >= 50 ? "outline" : "destructive"}>
-                        {category.value || 0}%
-                      </Badge>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-gray-500">No category data available</p>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-const ReadinessReport: React.FC = () => {
-  const [filters, setFilters] = useState<ReportFiltersState>({});
-  
-  // Define fallback data structure that fully matches the expected API response
-  const fallbackData = {
-    overall: 0,
-    byChannel: [
-      {name: 'Web', value: 0},
-      {name: 'Mobile', value: 0},
-    ],
-    byRequiredField: [
-      {name: 'Basic Info', completed: 0, missing: 0},
-      {name: 'Images', completed: 0, missing: 0},
-    ]
-  };
-  
-  const { data: apiData, isLoading, error } = useQuery({
-    queryKey: [...qkReadiness(), filters],
-    queryFn: () => {
-      // Build query string from filters
-      const queryParams = new URLSearchParams();
-      if (filters.locale) queryParams.append('locale', filters.locale);
-      if (filters.category) queryParams.append('category', filters.category);
-      if (filters.channel) queryParams.append('channel', filters.channel);
-      if (filters.from) queryParams.append('date_from', filters.from);
-      if (filters.to) queryParams.append('date_to', filters.to);
-      
-      const queryString = queryParams.toString();
-      const url = queryString 
-        ? `${paths.analytics.readiness()}?${queryString}`
-        : paths.analytics.readiness();
-        
-      return axiosInstance.get(url).then(res => res.data);
-    }
-  });
-
-  // Process the data to ensure it matches the expected structure
-  const data = useMemo(() => {
-    // If no data, return the fallback
-    if (!apiData) return fallbackData;
-    
-    // Ensure all expected properties exist with proper fallbacks
-    return {
-      overall: typeof apiData.overall === 'number' ? apiData.overall : 0,
-      byChannel: Array.isArray(apiData.byChannel) && apiData.byChannel.length > 0
-        ? apiData.byChannel.map(channel => ({
-            name: channel?.name || 'Unknown',
-            value: typeof channel?.value === 'number' ? channel.value : 0
-          }))
-        : fallbackData.byChannel,
-      byRequiredField: Array.isArray(apiData.byRequiredField) && apiData.byRequiredField.length > 0
-        ? apiData.byRequiredField.map(field => ({
-            name: field?.name || 'Unknown',
-            completed: typeof field?.completed === 'number' ? field.completed : 0,
-            missing: typeof field?.missing === 'number' ? field.missing : 0
-          }))
-        : fallbackData.byRequiredField
-    };
-  }, [apiData]);
-
-  if (isLoading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-[100px] w-full" />
-        <Skeleton className="h-[300px] w-full" />
-        <Skeleton className="h-[300px] w-full" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="text-red-500 p-4 border rounded">
-        <h3 className="font-semibold mb-2">Error loading readiness data</h3>
-        <p>The analytics data may not be available yet after the database migration.</p>
-        <p className="text-sm mt-2">Please run the analytics data population commands to fix this issue or try running them with the --reset flag.</p>
-        <p className="text-sm mt-2">Command: python manage.py populate_facts --reset</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-lg font-medium">Marketplace Readiness</h2>
-        <ReportExportButton reportType="readiness" filters={filters} />
-      </div>
-      
-      <ReportFilters 
-        filters={filters} 
-        onFiltersChange={setFilters}
-        availableFilters={['date', 'channel']} 
-      />
-      
-      {/* Overall Readiness */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Marketplace Readiness</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col items-center">
-            <div className="w-full max-w-md">
-              <div className="flex justify-between mb-2">
-                <span className="text-sm text-gray-700">Overall Readiness</span>
-                <span className="text-sm font-medium">{data.overall}%</span>
-              </div>
-              <Progress value={data.overall} className="h-2 w-full" />
-              <div className="mt-4 text-sm text-gray-600">
-                {data.overall < 50 ? (
-                  <p>Your products need significant improvement to be ready for marketplace selling.</p>
-                ) : data.overall < 80 ? (
-                  <p>Your products are getting closer to being marketplace-ready.</p>
-                ) : (
-                  <p>Your products are well-prepared for marketplace distribution.</p>
-                )}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Readiness by Channel */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Readiness by Channel</CardTitle>
-        </CardHeader>
-        <CardContent>
           <div className="h-[300px]">
-            {data.byChannel.length > 0 ? (
+            {data.byCategory.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
-                  data={data.byChannel}
+                  data={data.byCategory}
                   margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" />
                   <YAxis domain={[0, 100]} unit="%" />
-                  <Tooltip formatter={(value) => [`${value}%`, 'Readiness']} />
+                  <Tooltip formatter={(value) => [`${value}%`, 'Completeness']} />
                   <Bar dataKey="value" fill="#00C49F" />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
               <div className="flex h-full items-center justify-center text-gray-500">
-                No channel data available
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Readiness by Required Field */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Required Fields Completion</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="h-[300px]">
-            {data.byRequiredField.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={data.byRequiredField}
-                  margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                  stackOffset="sign"
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis domain={[0, 100]} unit="%" />
-                  <Tooltip formatter={(value) => [`${value}%`, 'Percentage']} />
-                  <Bar dataKey="completed" stackId="stack" fill="#0088FE" name="Completed" />
-                  <Bar dataKey="missing" stackId="stack" fill="#FF8042" name="Missing" />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex h-full items-center justify-center text-gray-500">
-                No required field data available
+                No category data available
               </div>
             )}
           </div>
@@ -495,32 +471,26 @@ const REPORTS = [
   {
     slug: 'completeness',
     name: 'Data Completeness',
-    description: 'Analyze the completeness of your product data across all fields.',
+    description: 'Analyze the completeness of your product data across all fields and categories.',
     component: CompletenessReport
   },
   {
-    slug: 'readiness',
-    name: 'Marketplace Readiness',
-    description: 'Check if your products meet the criteria for different sales channels.',
-    component: ReadinessReport
-  },
-  {
-    slug: 'velocity',
-    name: 'Enrichment Velocity',
-    description: 'Track how quickly products are being enriched over time.',
-    component: EnrichmentVelocityReport
-  },
-  {
     slug: 'localization', 
-    name: 'Localization Quality',
-    description: 'Monitor the quality and coverage of translations.',
-    component: LocalizationQualityReport
+    name: 'Localization Coverage',
+    description: 'Monitor the translation coverage and quality across different locales.',
+    component: LocalizationCoverageReport
   },
   {
     slug: 'history',
     name: 'Change History',
-    description: 'View the history of changes to products and attributes.',
+    description: 'View the history of changes to products and their attributes over time.',
     component: ChangeHistoryReport
+  },
+  {
+    slug: 'attributes',
+    name: 'Attribute Insights',
+    description: 'Analyze attribute usage patterns and distribution across your product catalog.',
+    component: AttributeInsightsReport
   }
 ];
 
@@ -533,18 +503,13 @@ const ReportsPage: React.FC = () => {
     queryKey: qkReportThemes(),
     queryFn: () =>
       axiosInstance.get<Theme[]>(paths.reports.themes()).then(res => res.data),
-    // Use our local reports definition instead of fetching from the API for now
-    placeholderData: REPORTS.map(report => ({
-      slug: report.slug,
-      name: report.name,
-      description: report.description
-    }))
+    // Use our local reports definition without relying on placeholderData
+    // as we'll explicitly use the static REPORTS array if API returns empty data
   });
 
-  // Determine which set of themes to display – if the backend returns an empty
-  // list (e.g. freshly-migrated database), fall back to the static REPORTS
-  // definition so the page is never empty.
-  const themes = fetchedThemes.length > 0 ? fetchedThemes : REPORTS.map(r => ({
+  // Always use the static REPORTS array since it's now the source of truth
+  // and we don't need to rely on the API for the report definitions
+  const themes = REPORTS.map(r => ({
     slug: r.slug,
     name: r.name,
     description: r.description,
@@ -566,7 +531,7 @@ const ReportsPage: React.FC = () => {
     <div className="space-y-6">
       <h1 className="text-3xl font-bold text-enterprise-900">Reports & Analytics</h1>
       <p className="text-enterprise-600 mb-6">
-        Gain insights into your product performance and inventory health.
+        Gain insights into your product data quality and enrichment progress.
       </p>
       
       <Card>

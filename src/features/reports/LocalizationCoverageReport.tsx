@@ -10,7 +10,7 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
-interface LocalizationQualityData {
+interface LocalizationCoverageData {
   locale_stats: {
     locale: string;
     translated_pct: number;
@@ -21,10 +21,10 @@ interface LocalizationQualityData {
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#A4DE6C', '#8884D8'];
 
-const LocalizationQualityReport: React.FC = () => {
+const LocalizationCoverageReport: React.FC = () => {
   const { data, isLoading, error } = useQuery({
     queryKey: qkLocalizationQuality(),
-    queryFn: () => axiosInstance.get<LocalizationQualityData>(paths.analytics.localizationQuality())
+    queryFn: () => axiosInstance.get<LocalizationCoverageData>(paths.analytics.localizationQuality())
       .then(res => res.data),
     // Fallback mock data for development
     placeholderData: {
@@ -67,7 +67,7 @@ const LocalizationQualityReport: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-medium">Localization Quality</h2>
+      <h2 className="text-lg font-medium">Localization Coverage</h2>
 
       {isLoading ? (
         <div className="space-y-2">
@@ -75,7 +75,7 @@ const LocalizationQualityReport: React.FC = () => {
         </div>
       ) : error ? (
         <div className="text-red-500 p-4 border rounded">
-          Error loading localization quality data. Please try again later.
+          Error loading localization coverage data. Please try again later.
         </div>
       ) : (
         <>
@@ -117,7 +117,7 @@ const LocalizationQualityReport: React.FC = () => {
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
-                    data={data.locale_stats}
+                    data={data?.locale_stats || []}
                     layout="vertical"
                     margin={{ top: 5, right: 30, left: 80, bottom: 5 }}
                   >
@@ -134,7 +134,7 @@ const LocalizationQualityReport: React.FC = () => {
                       labelFormatter={(value) => getLocaleName(value)}
                     />
                     <Bar dataKey="translated_pct" name="Translated">
-                      {data.locale_stats.map((entry, index) => (
+                      {data?.locale_stats.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Bar>
@@ -189,4 +189,4 @@ const LocalizationQualityReport: React.FC = () => {
   );
 };
 
-export default LocalizationQualityReport; 
+export default LocalizationCoverageReport; 

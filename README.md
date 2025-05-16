@@ -1,8 +1,8 @@
-# KernLogic: Inventory Management for Small Manufacturers
+# KernLogic: Enterprise PIM for Small Manufacturers
 
 ## 🌟 Project Overview
 
-KernLogic is a lightweight ERP-like inventory management system designed for small manufacturers. It provides the power of an enterprise product module without the cost or complexity of full-scale ERP solutions.
+KernLogic is a powerful Product Information Management (PIM) system designed for small to medium manufacturers. It centralizes product data and provides an intuitive interface for managing complex product attributes, categories, and digital assets without the complexity and cost of full enterprise solutions.
 
 **Vision:** "Give small manufacturers the power of an ERP's product module without the cost or complexity."
 
@@ -12,6 +12,9 @@ KernLogic is a lightweight ERP-like inventory management system designed for sma
 - Prevents stock-outs and over-stocking
 - Ensures consistent marketplace descriptions
 - Centralizes all inventory data in one secure, high-performance web application
+- Manages complex product attributes and specifications
+- Handles product families and inheritance
+- Supports multi-channel pricing and sales strategies
 
 ### 📊 Key Performance Indicators (KPIs)
 
@@ -28,9 +31,10 @@ KernLogic is a lightweight ERP-like inventory management system designed for sma
 ### Prerequisites
 
 - Python 3.8+
-- Node.js 14+
+- Node.js 16+
 - npm or yarn
-- PostgreSQL
+- PostgreSQL 12+
+- Redis (for Celery tasks)
 
 ### Installation
 
@@ -38,15 +42,14 @@ KernLogic is a lightweight ERP-like inventory management system designed for sma
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/data-alchemy-suite.git
-cd data-alchemy-suite
+git clone https://github.com/yourusername/kernlogic.git
+cd kernlogic
 
 # Create and activate virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install backend dependencies
-cd backend
 pip install -r requirements.txt
 
 # Run migrations
@@ -56,15 +59,12 @@ python manage.py migrate
 python manage.py createsuperuser
 
 # Start the Django development server
-python manage.py runserver 8080
+python manage.py runserver
 ```
 
 #### Frontend Setup
 
 ```bash
-# Navigate to the project root
-cd ..
-
 # Install frontend dependencies
 npm install
 
@@ -72,41 +72,45 @@ npm install
 npm run dev
 ```
 
-#### Test User
-
-For testing purposes, you can use:
-- Email: test123@example.com
-- Password: test123
-
 ## 🏗️ Architecture
 
 KernLogic follows a modern web application architecture:
 
 ### Backend
 
-- **Django**: Web framework
+- **Django 4.2**: Web framework
 - **Django REST Framework**: API layer
 - **SimpleJWT**: Authentication with JWT tokens
 - **PostgreSQL**: Database
+- **Celery**: Background task processing
+- **Redis**: Task queue and caching
+- **DRF Spectacular**: OpenAPI documentation
 
 ### Frontend
 
-- **React**: UI library
+- **React 18**: UI library
 - **TypeScript**: Type-safe JavaScript
 - **TailwindCSS**: Utility-first CSS framework
 - **React Query**: Data fetching and state management
-- **React Router**: Client-side routing
+- **React Router 6**: Client-side routing
 - **React Hook Form**: Form handling
 - **Zod**: Schema validation
+- **Shadcn UI**: Component library
+- **Tremor**: Data visualization
+- **Framer Motion**: Animations
+- **Tiptap**: Rich text editing
 
 ## 📁 Project Structure
 
 ```
-data-alchemy-suite/
+kernlogic/
 ├── backend/                   # Django backend
 │   ├── accounts/              # User authentication
+│   ├── analytics/             # Reporting and data analysis
 │   ├── core/                  # Project settings and configurations
 │   ├── products/              # Products CRUD operations
+│   ├── organizations/         # Multi-tenant organization support
+│   ├── teams/                 # Team management
 │   ├── manage.py              # Django management script
 │   └── requirements.txt       # Python dependencies
 │
@@ -115,6 +119,14 @@ data-alchemy-suite/
 │   │   ├── layout/            # Layout components
 │   │   ├── products/          # Product-specific components
 │   │   └── ui/                # Base UI components
+│   ├── features/              # Feature modules
+│   │   ├── products/          # Product management
+│   │   ├── dashboard/         # Dashboard and analytics
+│   │   ├── attributes/        # Attribute management
+│   │   ├── categories/        # Category management
+│   │   ├── families/          # Product family management
+│   │   ├── imports/           # CSV import functionality
+│   │   └── reports/           # Reports and exports
 │   ├── contexts/              # React contexts
 │   ├── pages/                 # Page components
 │   │   ├── marketing/         # Marketing pages
@@ -133,156 +145,74 @@ data-alchemy-suite/
 - Email/password authentication with JWT tokens
 - Access and refresh token mechanism
 - Password reset functionality
+- Multi-tenant organization support
 
 ### 2. Products Management
 - Create, read, update, delete product information
 - Fields: name, SKU, price, stock, category, description, active status
 - Soft delete functionality
+- Product history tracking
 
-### 3. Bulk CSV Upload
+### 3. Attribute Management
+- Flexible attribute definitions (text, number, boolean, select, etc.)
+- Attribute grouping for organized display
+- Attribute inheritance from product families
+- Multi-locale support for internationalization
+
+### 4. Category Management
+- Hierarchical category structure
+- Category-specific attribute sets
+- Category inheritance
+
+### 5. Product Families
+- Template-based product creation
+- Attribute inheritance
+- Override mechanisms for specific products
+
+### 6. Digital Asset Management
+- Image and document storage
+- Asset bundling
+- File type validation
+
+### 7. Bulk CSV Import/Export
 - Drag-and-drop CSV import
 - Validation of imported data
 - Duplicate SKU detection
+- Background processing for large imports
 
-### 4. Dashboard
+### 8. Dashboard
 - KPI cards (total products, inventory value, low-stock count)
 - Latest activity widget
+- Data completeness metrics
 
-### 5. Search and Filtering
+### 9. Search and Filtering
 - Full-text search on product properties
-- Filter by category, active status
+- Filter by category, attribute, family, status
+- Advanced filtering options
 
-## 🧩 Key Components
+### 10. Reporting
+- Data completeness reports
+- Export to Excel/CSV
+- Activity audit logs
+- Change history tracking
 
-### Backend
+### 11. PDF Export
+- Generate product specification sheets
+- Custom templates
+- High-quality print output
 
-#### Models
-
-```python
-# Product Model
-class Product(models.Model):
-    name = models.CharField(max_length=255)
-    description = models.TextField()
-    sku = models.CharField(max_length=50, unique=True)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
-    stock = models.IntegerField(default=0)
-    category = models.CharField(max_length=100)
-    created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name='products',
-        null=True,
-        blank=True
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    is_active = models.BooleanField(default=True)
-```
-
-#### Serializers
-
-```python
-# Product Serializer
-class ProductSerializer(serializers.ModelSerializer):
-    created_by = serializers.ReadOnlyField(source='created_by.email', required=False)
-    price = serializers.FloatField()  # Ensures numeric price values
-
-    class Meta:
-        model = Product
-        fields = ['id', 'name', 'description', 'sku', 'price', 'stock', 
-                 'category', 'created_by', 'created_at', 'updated_at', 'is_active']
-        read_only_fields = ['created_at', 'updated_at']
-```
-
-#### ViewSets
-
-```python
-# Product ViewSet
-class ProductViewSet(viewsets.ModelViewSet):
-    serializer_class = ProductSerializer
-    permission_classes = [permissions.AllowAny]  # For development
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['category', 'is_active']
-    search_fields = ['name', 'description', 'sku', 'category']
-    ordering_fields = ['name', 'price', 'stock', 'created_at']
-    ordering = ['-created_at']
-```
-
-### Frontend
-
-#### Authentication Context
-
-```typescript
-// AuthContext.tsx
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<AuthError | null>(null);
-  const navigate = useNavigate();
-
-  // Handles token validation and login
-  useEffect(() => {
-    // Check for existing token and validate
-    // Fall back to test login if needed
-  }, []);
-
-  // Login, logout, register functions
-  // ...
-}
-```
-
-#### Product Service
-
-```typescript
-// productService.ts
-export const productService = {
-  // Get all products
-  getProducts: async (): Promise<Product[]> => {
-    // API call with authentication
-  },
-
-  // Create a new product
-  createProduct: async (product: ProductFormData): Promise<Product> => {
-    // API call with validation
-  },
-
-  // Update a product
-  updateProduct: async (id: number, product: Partial<Product>): Promise<Product> => {
-    // API call
-  },
-
-  // Delete a product
-  deleteProduct: async (id: number): Promise<void> => {
-    // API call for soft delete
-  },
-};
-```
-
-## 🌐 API Endpoints
-
-### Authentication
-
-- `POST /api/auth/register/` - Register new user
-- `POST /api/auth/login/` - User login
-- `POST /api/auth/refresh/` - Refresh access token
-- `GET /api/auth/user/` - Get current user info
-
-### Products
-
-- `GET /api/products/` - List all products
-- `POST /api/products/` - Create new product
-- `GET /api/products/:id/` - Get product details
-- `PATCH /api/products/:id/` - Update product
-- `DELETE /api/products/:id/` - Soft delete product
-- `GET /api/products/stats/` - Get product statistics
-- `GET /api/products/categories/` - Get all categories
+### 12. Multi-Channel Pricing
+- Support for different price types (MSRP, wholesale, etc.)
+- Currency handling
+- Sales channel specific pricing
+- Temporal price validity
 
 ## 🔐 Authentication Flow
 
 1. **Login**:
-   - User submits credentials to `/api/auth/login/`
+   - User submits credentials to `/api/token/`
    - Backend validates and returns access and refresh tokens
-   - Frontend stores tokens in localStorage
+   - Frontend stores tokens securely
 
 2. **Token Usage**:
    - Access token included in Authorization header as `Bearer {token}`
@@ -290,94 +220,13 @@ export const productService = {
 
 3. **Token Refresh**:
    - When access token expires (401 response), refresh token is used
-   - Send refresh token to `/api/auth/refresh/`
+   - Send refresh token to `/api/token/refresh/`
    - New access token is received and stored
 
 4. **Logout**:
-   - Remove tokens from localStorage
+   - Send request to `/api/logout/` to invalidate the refresh token
+   - Remove tokens from storage
    - Redirect to login page
-
-## 🛠️ Development Guidelines
-
-### Backend
-
-- Follow Django and DRF best practices
-- Use descriptive variable names
-- Document functions and classes
-- Write tests for API endpoints
-- Use proper error handling
-
-### Frontend
-
-- Follow React hooks pattern
-- Use TypeScript for type safety
-- Prefer functional components
-- Keep components small and reusable
-- Use Tailwind CSS for styling
-- Implement proper error handling and loading states
-
-## ⚠️ Common Issues and Troubleshooting
-
-### Authentication Issues
-
-1. **"Cannot access protected routes"**
-   - Check that tokens are properly stored in localStorage
-   - Verify token expiration
-   - Check Authorization header in network requests
-
-2. **"Token refresh not working"**
-   - Ensure CORS settings are correct
-   - Check for duplicate URL paths in API calls
-   - Verify refresh token is being sent properly
-
-### Product Display Issues
-
-1. **"Products not loading"**
-   - Check network requests for proper authentication
-   - Verify API endpoint is correct
-   - Check browser console for errors
-
-2. **"Price display errors"**
-   - Ensure price is handled as a number (both client and server)
-   - Add fallback handling for string values
-
-3. **"Redirect loops"**
-   - Check that authentication state is properly managed
-   - Verify protected route component logic
-
-## 🚢 Deployment
-
-### Prerequisites
-
-- PostgreSQL database
-- Production server (e.g., Render, Heroku, AWS)
-- Environment variables for secrets
-
-### Environment Variables
-
-- `DEBUG`: Set to "False" in production
-- `SECRET_KEY`: Django secret key
-- `DATABASE_URL`: PostgreSQL connection string
-- `ALLOWED_HOSTS`: Comma-separated list of allowed hosts
-
-### Deployment Steps
-
-1. **Backend**:
-   - Collect static files: `python manage.py collectstatic`
-   - Run migrations: `python manage.py migrate`
-   - Configure WSGI server (e.g., Gunicorn)
-
-2. **Frontend**:
-   - Build production bundle: `npm run build`
-   - Configure static file serving
-
-3. **Database**:
-   - Ensure database migrations are applied
-   - Create backup procedures
-
-4. **Monitoring**:
-   - Set up logging (e.g., New Relic)
-   - Configure error tracking
 
 ## 👥 Personas
 
@@ -387,14 +236,17 @@ export const productService = {
 | Jorge (E-com Specialist) | Edits descriptions, categories, tags; exports feed | Copy-paste to multiple platforms |
 | Ana (Owner/GM) | Checks value of stock, low-stock KPI, audit log | No real-time visibility |
 
-## 📈 Planned Features (v2+)
+## 📈 Roadmap (v2+)
 
-- Tag management
-- Role-based permissions
-- Outbound e-commerce feeds (Shopify, Amazon)
+- Advanced role-based permissions
+- Outbound e-commerce feeds (Shopify, Amazon, etc.)
 - Enhanced reporting and analytics
 - Bulk operations on product subsets
 - API integrations with third-party services
+- Workflow automation
+- Approval processes
+- Advanced search with facets
+- Machine learning for data enrichment
 
 ## 🧪 Testing
 
@@ -402,7 +254,7 @@ export const productService = {
 
 ```bash
 cd backend
-python manage.py test
+pytest
 ```
 
 ### Frontend Tests
@@ -415,220 +267,7 @@ npm test
 
 [MIT License](LICENSE)
 
-## 👏 Contributors
-
-- Original Project by KernLogic Team
-- Documentation and fixes by Claude (Anthropic)
-
 ---
 
-**Documentation version:** 1.0.0  
-**Last updated:** April 24, 2023
-
-## PDF Export Feature
-
-KernLogic includes a robust PDF export feature for generating print-quality product specification sheets.
-
-### Usage
-
-The PDF export button is available on the Product Detail > Overview page. When clicked, it generates and downloads a PDF file containing the complete product information, including:
-
-- Core product details (SKU, name, category, brand, etc.)
-- Primary product image
-- Description
-- Data completeness score
-- All attribute groups and values
-
-### Technical Implementation
-
-#### Frontend
-
-The Export to PDF button sends a GET request to `/api/products/:id/pdf` and handles the file download upon successful response.
-
-```typescript
-// Example usage in a React component
-import ExportToPdfButton from '@/components/product/ExportToPdfButton';
-
-function ProductDetailPage({ product }) {
-  return (
-    <div>
-      <ExportToPdfButton productId={product.id} sku={product.sku} />
-    </div>
-  );
-}
-```
-
-#### Backend
-
-The PDF generation endpoint uses Puppeteer to render a headless print-optimized version of the product and convert it to a PDF.
-
-```bash
-# API Example with curl
-curl -H "Authorization: Bearer YOUR_TOKEN" \
-     -o product-ABC123.pdf \
-     https://kernlogic.com/api/products/123/pdf
-```
-
-### Setup Requirements
-
-The PDF export feature requires Puppeteer, which needs additional system dependencies when running in Docker:
-
-```dockerfile
-# In your Dockerfile
-RUN apt-get update && apt-get install -y \
-    wget \
-    ca-certificates \
-    fonts-liberation \
-    libasound2 \
-    libatk-bridge2.0-0 \
-    libatk1.0-0 \
-    libcups2 \
-    libdbus-1-3 \
-    libgdk-pixbuf2.0-0 \
-    libnspr4 \
-    libnss3 \
-    libx11-xcb1 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxrandr2 \
-    libxss1 \
-    libxtst6 \
-    xdg-utils \
-    --no-install-recommends
-```
-
-### Performance Considerations
-
-- The PDF generation is performed on the server to ensure consistent results
-- A 10-second timeout is implemented to prevent hanging requests
-- Error handling ensures a graceful degradation if PDF generation fails
-
-## Setup and Installation
-
-### Prerequisites
-
-- Node.js 16+
-- npm or yarn
-- PostgreSQL database
-
-### Installation Steps
-
-1. Clone the repository
-   ```bash
-   git clone https://github.com/yourusername/kernlogic-pim.git
-   cd kernlogic-pim
-   ```
-
-2. Install dependencies
-   ```bash
-   npm install
-   ```
-
-3. Configure environment variables
-   ```bash
-   cp .env.example .env
-   # Edit .env with your database and other configuration
-   ```
-
-4. Run database migrations
-   ```bash
-   npm run migrate
-   ```
-
-5. Start the development server
-   ```bash
-   npm run dev
-   ```
-
-## Testing
-
-```bash
-# Run unit tests
-npm test
-
-# Run integration tests
-npm run test:integration
-
-# Run end-to-end tests
-npm run test:e2e
-```
-
-## License
-
-[MIT](LICENSE)
-
-## Pricing Architecture
-
-KernLogic uses a comprehensive pricing system that allows for multiple price types per product,
-with support for different currencies, channels, and validity windows.
-
-### Price Endpoints
-
-```
-GET   /api/products/{product_id}/prices/  
-POST  /api/products/{product_id}/prices/  
-GET   /api/products/{product_id}/prices/{price_id}/  
-PATCH /api/products/{product_id}/prices/{price_id}/  
-DELETE /api/products/{product_id}/prices/{price_id}/  
-```
-
-### ProductPrice JSON Structure
-
-```json
-{
-  "id": 123,
-  "price_type": "wholesale",
-  "price_type_display": "Wholesale Price",
-  "currency": "EUR",
-  "channel": { "id": 2, "name": "E-Commerce" },
-  "amount": "15.50",
-  "valid_from": "2025-05-01T00:00:00Z",
-  "valid_to": "2025-06-01T00:00:00Z"
-}
-```
-
-### Price Types
-
-KernLogic supports multiple price types, including:
-
-- Base Price - The fundamental price
-- List Price - The standard retail price
-- Wholesale Price - For bulk orders
-- Custom price types can be defined in the system
-
-> **Note**: Legacy product.price and product.default_price fields have been deprecated.
-> All price data is now accessed through the product.prices array.
-
-### Serialization Handling
-
-When making changes to prices, the system needs to handle various Django model types that aren't JSON-serializable:
-
-1. **Currency objects**: Represented by their ISO code string in the API
-2. **Decimal values**: Used for precise price amounts, converted to strings for JSON
-3. **Date/Time objects**: Converted to ISO format strings
-
-The `record` function that tracks price changes uses a special serialization approach to convert model objects to JSON-compatible values:
-
-```python
-# Example of serialization handling in the manage_price endpoint
-def serialize_for_json(value):
-    if value is None:
-        return None
-    elif hasattr(value, 'iso_code'):  # Currency object
-        return value.iso_code
-    elif isinstance(value, Decimal):  # Decimal amount
-        return str(value)
-    elif hasattr(value, 'isoformat'):  # Datetime object
-        return value.isoformat()
-    elif hasattr(value, 'id'):  # Other model instance
-        return {'id': value.id, 'str': str(value)}
-    else:
-        # Try direct serialization or fall back to string
-        try:
-            json.dumps(value)
-            return value
-        except (TypeError, OverflowError):
-            return str(value)
-```
-
-This approach ensures that all price-related values can be properly recorded in the activity log and used throughout the system.
+**Documentation version:** 2.0.0  
+**Last updated:** May 2024

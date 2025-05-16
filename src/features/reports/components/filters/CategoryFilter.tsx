@@ -24,6 +24,23 @@ const CategoryFilter: React.FC<CategoryFilterProps> = ({ value, onChange }) => {
     ]
   });
 
+  // Map of category IDs to their names for display purposes
+  const categoryNameMap = React.useMemo(() => {
+    if (!categories) return {};
+    
+    return categories.reduce((acc, category) => {
+      const normalized = normalizeCategory(category);
+      acc[normalized.id] = normalized.name;
+      return acc;
+    }, {} as Record<number, string>);
+  }, [categories]);
+
+  // Find the category name for the selected value (for display purposes)
+  const selectedCategoryName = React.useMemo(() => {
+    if (value === 'all' || !value) return '';
+    return categoryNameMap[parseInt(value, 10)] || '';
+  }, [value, categoryNameMap]);
+
   if (isLoading) {
     return <Skeleton className="h-10 w-[200px]" />;
   }
@@ -33,17 +50,25 @@ const CategoryFilter: React.FC<CategoryFilterProps> = ({ value, onChange }) => {
       <label htmlFor="category-filter" className="text-sm font-medium">
         Category
       </label>
-      <Select value={value ?? 'all'} onValueChange={onChange}>
+      <Select 
+        value={value ?? 'all'} 
+        onValueChange={onChange}
+      >
         <SelectTrigger id="category-filter" className="w-[200px]">
-          <SelectValue placeholder="All Categories" />
+          <SelectValue placeholder="All Categories">
+            {value && value !== 'all' ? categoryNameMap[parseInt(value, 10)] || 'All Categories' : 'All Categories'}
+          </SelectValue>
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All Categories</SelectItem>
           {categories?.map((category) => {
-            // Normalize the category to ensure we get the name property consistently
+            // Normalize the category to ensure we get the name and id properties consistently
             const normalizedCategory = normalizeCategory(category);
             return (
-              <SelectItem key={normalizedCategory.id} value={normalizedCategory.name}>
+              <SelectItem 
+                key={normalizedCategory.id} 
+                value={normalizedCategory.id.toString()}
+              >
                 {normalizedCategory.name}
               </SelectItem>
             );

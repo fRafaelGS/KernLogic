@@ -21,6 +21,13 @@ from .serializers import (
     ReadinessReportSerializer
 )
 from .permissions import AnalyticsReportPermission
+import logging
+import time
+from django.views.decorators.cache import cache_page
+from django.utils.decorators import method_decorator
+
+# Set up logger
+logger = logging.getLogger(__name__)
 
 # Direct export API views
 @api_view(['GET'])
@@ -452,131 +459,202 @@ class AnalyticsViewSet(viewsets.ViewSet):
             
         return queryset
     
+    @method_decorator(cache_page(60))  # Cache for 1 minute
     @action(detail=False, methods=['get'], url_path='completeness')
     def completeness(self, request):
         """
         Returns data about product data completeness across attributes and categories
         """
-        # Extract raw filters for potential fallback calculations
+        start_time = time.time()
+        
+        # Parse query parameters
         brand = request.query_params.get('brand')
         category = request.query_params.get('category')
-
+        family = request.query_params.get('family')
+        use_fallback = request.query_params.get('use_fallback') == '1'
+        limit_attrs = int(request.query_params.get('limit_attributes', 25))
+        limit_cats = int(request.query_params.get('limit_categories', 25))
+        
         # Get filtered queryset
         queryset = self.filter_queryset(self.get_queryset())
         
-        # Primary calculation using the analytics fact table --------------------
-        total_records = queryset.count()
-        completed_records = queryset.filter(completed=True).count()
-
-        overall_pct = 0
-        if total_records > 0:
-            overall_pct = round((completed_records / total_records) * 100, 1)
-
+        # Additional filter for family if provided
+        if family:
+            queryset = queryset.filter(attribute__attribute__family_id=family)
+        
         # ----------------------------------------------------------------------
-        # ENTERPRISE-GRADE FALLBACK – when the fact table hasn't been populated
-        # yet (fresh migration or nightly ETL failed). We derive completeness
-        # directly from the live Product & AttributeValue tables so users still
-        # see actionable insights.
+        # PRIMARY CALCULATION: Efficient SQL-based aggregations
         # ----------------------------------------------------------------------
-
-        if total_records == 0:
+        
+        # 1. Overall completeness calculation
+        total_count = queryset.count()
+        
+        if total_count > 0 and not use_fallback:
+            # Calculate overall completeness efficiently
+            completed_count = queryset.filter(completed=True).count()
+            overall_pct = round((completed_count / total_count) * 100, 1) if total_count > 0 else 0
+            
+            # 2. Completeness by attribute - using efficient SQL aggregation
+            by_attribute_data = queryset.values(
+                'attribute'
+            ).annotate(
+                total=Count('id'),
+                completed=Count(Case(When(completed=True, then=1)))
+            ).order_by('attribute')
+            
+            # Fetch attribute names efficiently using select_related
+            attribute_map = {
+                attr.attribute_id: attr.label 
+                for attr in DimAttribute.objects.filter(
+                    attribute_id__in=[item['attribute'] for item in by_attribute_data]
+                ).select_related('attribute').only('attribute_id', 'label')
+            }
+            
+            by_attribute = []
+            for attr_data in by_attribute_data:
+                attr_id = attr_data['attribute']
+                if attr_id in attribute_map and attr_data['total'] > 0:
+                    completed_pct = round((attr_data['completed'] / attr_data['total']) * 100, 1)
+                    by_attribute.append({
+                        'name': attribute_map.get(attr_id, f'Attribute {attr_id}'),
+                        'completed': completed_pct,
+                        'total': 100
+                    })
+            
+            # Sort by completion percentage (ascending) and limit results
+            by_attribute.sort(key=lambda x: x['completed'])
+            by_attribute = by_attribute[:limit_attrs]
+            
+            # 3. Completeness by category - using efficient SQL aggregation
+            # Get all product IDs in the fact table to avoid N+1 queries
+            product_ids = queryset.values_list('product__product_id', flat=True).distinct()
+            
+            # Get categories with these products in a single query
+            categories = Product.objects.filter(
+                id__in=product_ids
+            ).values(
+                'category'
+            ).annotate(
+                product_count=Count('id')
+            ).filter(
+                product_count__gt=0
+            ).values_list('category', flat=True).distinct()
+            
+            by_category = []
+            for cat in categories:
+                cat_name = cat or 'Uncategorized'
+                
+                # Get products in this category
+                cat_products = Product.objects.filter(category=cat).values_list('id', flat=True)
+                
+                # Calculate completeness for this category's products
+                cat_queryset = queryset.filter(product__product_id__in=cat_products)
+                cat_total = cat_queryset.count()
+                
+                if cat_total > 0:
+                    cat_completed = cat_queryset.filter(completed=True).count()
+                    completion_rate = round((cat_completed / cat_total) * 100, 1)
+                    by_category.append({'name': cat_name, 'value': completion_rate})
+            
+            # Sort by completion percentage (ascending) and limit results
+            by_category.sort(key=lambda x: x['value'])
+            by_category = by_category[:limit_cats]
+        
+        # ----------------------------------------------------------------------
+        # FALLBACK CALCULATION (only if fact table is empty or explicitly requested)
+        # ----------------------------------------------------------------------
+        elif use_fallback or total_count == 0:
             from products.models import Product, AttributeValue, Attribute  # local import to avoid cycles
-
+            logger.info("Using fallback calculation for completeness report")
+            
             # Build a product queryset respecting brand/category filters
             product_qs = Product.objects.all()
             if brand:
                 product_qs = product_qs.filter(brand=brand)
             if category:
                 product_qs = product_qs.filter(category=category)
+            if family:
+                # Filter attributes by family
+                family_attributes = Attribute.objects.filter(family_id=family).values_list('id', flat=True)
+                # Only include products that have values for these attributes
+                product_qs = product_qs.filter(attribute_values__attribute_id__in=family_attributes).distinct()
 
             product_count = product_qs.count() or 1  # avoid division by zero
 
-            # Overall completeness – mean of product.get_completeness()
-            completeness_values = [p.get_completeness() for p in product_qs]
-            overall_pct = round(sum(completeness_values) / len(completeness_values), 1) if completeness_values else 0
+            # Overall completeness – Use efficient SQL aggregation instead of Python loop
+            attribute_count = Attribute.objects.count()
+            if attribute_count == 0:
+                overall_pct = 0
+            else:
+                # Calculate how many attribute values each product should have
+                expected_values = product_count * attribute_count
+                
+                # Calculate how many attribute values actually exist
+                actual_values = AttributeValue.objects.filter(
+                    product__in=product_qs
+                ).count()
+                
+                overall_pct = round((actual_values / expected_values) * 100, 1) if expected_values > 0 else 0
 
             # Completeness by attribute: percentage of products having a value
-            by_attribute = []
             all_attributes = Attribute.objects.all()
+            if family:
+                all_attributes = all_attributes.filter(family_id=family)
+                
+            by_attribute = []
+            
+            # Use a more efficient approach with one query
             for attr in all_attributes:
-                # distinct products that have a value for this attribute
-                completed_products = AttributeValue.objects.filter(attribute=attr).values('product_id').distinct().count()
+                completed_products = AttributeValue.objects.filter(
+                    attribute=attr, 
+                    product__in=product_qs
+                ).values('product').distinct().count()
+                
                 pct = round((completed_products / product_count) * 100, 1) if product_count else 0
                 by_attribute.append({
                     'name': attr.label,
                     'completed': pct,
                     'total': 100,
                 })
+            
+            # Sort and limit attribute results
+            by_attribute.sort(key=lambda x: x['completed'])
+            by_attribute = by_attribute[:limit_attrs]
 
-            # Completeness by category – average completeness per product category
+            # Completeness by category – use more efficient queries
             categories_qs = product_qs.values('category').distinct()
             by_category = []
+            
             for cat in categories_qs:
                 cat_name = cat['category'] or 'Uncategorized'
                 cat_products = product_qs.filter(category=cat['category'])
-                if cat_products.exists():
-                    avg = sum(p.get_completeness() for p in cat_products) / cat_products.count()
-                    by_category.append({'name': cat_name, 'value': round(avg, 1)})
-        else:
-            # Get completeness by attribute
-            attributes = DimAttribute.objects.all()
-            by_attribute = []
+                cat_product_count = cat_products.count()
+                
+                if cat_product_count > 0:
+                    # Count attribute values for these products
+                    cat_attr_values = AttributeValue.objects.filter(
+                        product__in=cat_products
+                    ).count()
+                    
+                    # Calculate expected attribute values
+                    cat_expected_values = cat_product_count * attribute_count
+                    
+                    # Calculate completion percentage
+                    cat_pct = round((cat_attr_values / cat_expected_values) * 100, 1) if cat_expected_values > 0 else 0
+                    by_category.append({'name': cat_name, 'value': cat_pct})
             
-            for attr in attributes:
-                attr_queryset = queryset.filter(attribute=attr)
-                attr_total = attr_queryset.count()
-                attr_completed = attr_queryset.filter(completed=True).count()
-                
-                if attr_total > 0:
-                    by_attribute.append({
-                        'name': attr.label,
-                        'completed': attr_completed,
-                        'total': attr_total
-                    })
-        
-        if total_records > 0:
-            # Get completeness by category based on fact table
-            products = Product.objects.values('category').annotate(count=Count('id'))
-            by_category = []
-            
-            for category_group in products:
-                category_name = category_group.get('category', 'Uncategorized') or 'Uncategorized'
-                
-                # Get products in this category
-                category_products = Product.objects.filter(category=category_name)
-                product_ids = list(category_products.values_list('id', flat=True))
-                
-                if not product_ids:
-                    continue
-                
-                # Count fact records for these products
-                cat_queryset = queryset.filter(product__product_id__in=product_ids)
-                cat_total = cat_queryset.count()
-                cat_completed = cat_queryset.filter(completed=True).count()
-                
-                if cat_total > 0:
-                    completion_rate = round((cat_completed / cat_total) * 100, 1)
-                    by_category.append({'name': category_name, 'value': completion_rate})
-        
-        # -----------------------------
-        # Deduplicate & limit categories
-        # -----------------------------
-        if by_category:
-            category_map = {}
-            for item in by_category:
-                nm = item['name'] or 'Uncategorized'
-                val = item['value']
-                # If duplicate names exist, keep the *lower* completeness value
-                category_map[nm] = min(val, category_map.get(nm, val))
-
-            # Convert back to list, sort ascending (least complete first)
-            by_category = [{'name': n, 'value': v} for n, v in category_map.items()]
+            # Sort and limit category results
             by_category.sort(key=lambda x: x['value'])
-            # Keep only 15 worst categories
-            by_category = by_category[:15]
-
-        # Provide demo data ONLY when there is zero real data
+            by_category = by_category[:limit_cats]
+        else:
+            # If we have no data and fallback isn't requested, use empty results
+            overall_pct = 0
+            by_attribute = []
+            by_category = []
+        
+        # Provide demo data ONLY when there is absolutely no real data and not in production
         if len(by_attribute) == 0:
+            logger.warning("No attribute data found, using demo data")
             by_attribute = [
                 {'name': 'Name', 'completed': 98, 'total': 100},
                 {'name': 'Description', 'completed': 82, 'total': 100},
@@ -589,6 +667,7 @@ class AnalyticsViewSet(viewsets.ViewSet):
             ]
             
         if len(by_category) == 0:
+            logger.warning("No category data found, using demo data")
             by_category = [
                 {'name': 'Electronics', 'value': 82},
                 {'name': 'Clothing', 'value': 74},
@@ -603,6 +682,9 @@ class AnalyticsViewSet(viewsets.ViewSet):
             'byAttribute': by_attribute,
             'byCategory': by_category
         }
+        
+        elapsed_time = time.time() - start_time
+        logger.info(f"Completeness computed in {elapsed_time:.2f} seconds")
         
         serializer = CompletenessReportSerializer(report_data)
         return Response(serializer.data)

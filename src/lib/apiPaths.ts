@@ -67,7 +67,7 @@ export const paths = {
     enrichmentVelocity: (days: number = 30) => 
       join(API_BASE, 'analytics/enrichment-velocity') + `/?days=${days}`,
     localizationQuality: () => 
-      join(API_BASE, 'analytics/localization-quality') + '/',
+      join(API_BASE, 'analytics/localization-quality') + '/', // Used for Localization Coverage report (frontend name updated, API path unchanged)
     changeHistory: (params?: { from?: string; to?: string; user?: number }) => {
       const url = join(API_BASE, 'analytics/change-history') + '/';
       if (!params) return url;

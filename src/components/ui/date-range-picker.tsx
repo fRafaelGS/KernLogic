@@ -1,16 +1,15 @@
 import * as React from "react";
-import { addDays, format } from "date-fns";
+import { format } from "date-fns";
 import { Calendar as CalendarIcon } from "lucide-react";
-import { DateRange } from "react-day-picker";
-
+import * as PopoverPrimitive from "@radix-ui/react-popover";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { DateRange } from "react-day-picker";
+
+// Import the styles for react-day-picker
+import "react-day-picker/dist/style.css";
+import { DayPicker } from "react-day-picker";
+import "./date-range-picker.css";
 
 interface DatePickerWithRangeProps {
   className?: string;
@@ -21,46 +20,89 @@ interface DatePickerWithRangeProps {
 export function DatePickerWithRange({
   className,
   date,
-  setDate,
+  setDate
 }: DatePickerWithRangeProps) {
+  const [open, setOpen] = React.useState(false);
+  
+  // Track if we're on mobile for responsive adjustments
+  const [isMobile, setIsMobile] = React.useState(false);
+  
+  // Handle screen resize for responsive display
+  React.useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    window.addEventListener("resize", handleResize);
+    handleResize(); // Set initial value
+    
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Format the date for display in the button
+  const formatDisplayDate = () => {
+    if (date?.from) {
+      if (date.to) {
+        return `${format(date.from, "LLL dd, y")} - ${format(date.to, "LLL dd, y")}`;
+      }
+      return format(date.from, "LLL dd, y");
+    }
+    return "Pick a date range";
+  };
+  
+  // Handle clearing the date selection
+  const handleClear = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDate({ from: undefined, to: undefined });
+  };
+
   return (
     <div className={cn("grid gap-2", className)}>
-      <Popover>
-        <PopoverTrigger asChild>
+      <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
+        <PopoverPrimitive.Trigger asChild>
           <Button
             id="date"
-            variant={"outline"}
+            variant="outline"
             className={cn(
-              "justify-start text-left font-normal",
-              !date && "text-muted-foreground"
+              "justify-start text-left font-normal w-full",
+              !date?.from && "text-muted-foreground"
             )}
           >
             <CalendarIcon className="mr-2 h-4 w-4" />
-            {date?.from ? (
-              date.to ? (
-                <>
-                  {format(date.from, "LLL dd, y")} -{" "}
-                  {format(date.to, "LLL dd, y")}
-                </>
-              ) : (
-                format(date.from, "LLL dd, y")
-              )
-            ) : (
-              <span>Pick a date range</span>
-            )}
+            {formatDisplayDate()}
           </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
-          <Calendar
-            initialFocus
-            mode="range"
-            defaultMonth={date?.from}
-            selected={date}
-            onSelect={setDate}
-            numberOfMonths={2}
-          />
-        </PopoverContent>
-      </Popover>
+        </PopoverPrimitive.Trigger>
+
+        <PopoverPrimitive.Content
+          side="bottom"
+          align="start"
+          sideOffset={4}
+          className="bg-white shadow-lg border rounded-md p-4 w-auto"
+        >
+          <div className="date-picker-container">
+            <DayPicker
+              mode="range"
+              selected={date}
+              onSelect={(selectedRange) => {
+                // Handle undefined or null by providing empty range
+                setDate(selectedRange || { from: undefined, to: undefined });
+              }}
+              numberOfMonths={isMobile ? 1 : 2}
+              className="date-picker"
+            />
+            <div className="flex justify-end border-t pt-3 mt-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleClear}
+              >
+                Clear
+              </Button>
+            </div>
+          </div>
+        </PopoverPrimitive.Content>
+      </PopoverPrimitive.Root>
     </div>
   );
 } 

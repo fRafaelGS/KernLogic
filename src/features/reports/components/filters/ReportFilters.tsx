@@ -8,6 +8,7 @@ import DateRangeFilter from './DateRangeFilter';
 import LocaleFilter from './LocaleFilter';
 import CategoryFilter from './CategoryFilter';
 import ChannelFilter from './ChannelFilter';
+import FamilyFilter from './FamilyFilter';
 
 export interface ReportFiltersState {
   from?: string;
@@ -16,12 +17,13 @@ export interface ReportFiltersState {
   category?: string;
   channel?: string;
   brand?: string;
+  family?: string;
 }
 
 interface ReportFiltersProps {
   filters: ReportFiltersState;
   onFiltersChange: (filters: ReportFiltersState) => void;
-  availableFilters?: ('date' | 'locale' | 'category' | 'channel')[];
+  availableFilters?: ('date' | 'locale' | 'category' | 'channel' | 'family')[];
 }
 
 const ReportFilters: React.FC<ReportFiltersProps> = ({ 
@@ -49,6 +51,10 @@ const ReportFilters: React.FC<ReportFiltersProps> = ({
     onFiltersChange({ ...filters, channel: channel === 'all' ? undefined : channel });
   };
 
+  const handleFamilyChange = (family: string) => {
+    onFiltersChange({ ...filters, family: family === 'all' ? undefined : family });
+  };
+
   const handleResetFilters = () => {
     onFiltersChange({});
   };
@@ -61,6 +67,43 @@ const ReportFilters: React.FC<ReportFiltersProps> = ({
 
   // Check if any filters are active
   const hasActiveFilters = Object.values(filters).some(value => value !== undefined);
+
+  // Create an ordered array of filter elements based on the requested order
+  const renderFilters = () => {
+    const filterComponents = [];
+    
+    if (availableFilters.includes('date')) {
+      filterComponents.push(
+        <DateRangeFilter key="date" value={dateRange} onChange={handleDateRangeChange} />
+      );
+    }
+    
+    if (availableFilters.includes('family')) {
+      filterComponents.push(
+        <FamilyFilter key="family" value={filters.family} onChange={handleFamilyChange} />
+      );
+    }
+    
+    if (availableFilters.includes('category')) {
+      filterComponents.push(
+        <CategoryFilter key="category" value={filters.category} onChange={handleCategoryChange} />
+      );
+    }
+    
+    if (availableFilters.includes('locale')) {
+      filterComponents.push(
+        <LocaleFilter key="locale" value={filters.locale} onChange={handleLocaleChange} />
+      );
+    }
+    
+    if (availableFilters.includes('channel')) {
+      filterComponents.push(
+        <ChannelFilter key="channel" value={filters.channel} onChange={handleChannelChange} />
+      );
+    }
+    
+    return filterComponents;
+  };
 
   return (
     <Card>
@@ -79,22 +122,8 @@ const ReportFilters: React.FC<ReportFiltersProps> = ({
             )}
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {availableFilters.includes('date') && (
-              <DateRangeFilter value={dateRange} onChange={handleDateRangeChange} />
-            )}
-            
-            {availableFilters.includes('locale') && (
-              <LocaleFilter value={filters.locale} onChange={handleLocaleChange} />
-            )}
-            
-            {availableFilters.includes('category') && (
-              <CategoryFilter value={filters.category} onChange={handleCategoryChange} />
-            )}
-            
-            {availableFilters.includes('channel') && (
-              <ChannelFilter value={filters.channel} onChange={handleChannelChange} />
-            )}
+          <div className="flex flex-wrap gap-4">
+            {renderFilters()}
           </div>
         </div>
       </CardContent>

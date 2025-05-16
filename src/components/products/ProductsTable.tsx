@@ -80,6 +80,7 @@ import { SubcategoryManager } from '@/components/categories/SubcategoryManager/S
 import { getCategoryName, matchesCategoryFilter } from '@/lib/utils';
 import { ViewToggle } from './ViewToggle'
 import { ProductGrid } from './ProductGrid'
+import { useOrgSettings } from '@/hooks/useOrgSettings'
 
 // Define constants for fixed widths
 const ACTION_W = 112; // Width of action column in pixels
@@ -170,6 +171,8 @@ export function ProductsTable({
 }: ProductsTableProps = {}) {
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
+  // Add organization settings hook
+  const { defaultLocale, defaultChannel } = useOrgSettings();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
@@ -1141,7 +1144,11 @@ export function ProductsTable({
         attrGroupsInFlight.current.add(pid); // mark as in-flight
 
         const attrs = await productService.getProductAttributes(pid);
-        const attrGroups = await productService.getProductAttributeGroups(pid);
+        const attrGroups = await productService.getProductAttributeGroups(
+          pid,
+          defaultLocale,
+          defaultChannel?.code
+        );
         console.log('attrGroups for pid', pid, '→', attrGroups);
 
         let mergedAttributes: any[] = [];
@@ -1181,7 +1188,7 @@ export function ProductsTable({
         attrGroupsInFlight.current.delete(pid);           // ✅ done
       }
     });
-  }, [expanded, productAttributes, table]);
+  }, [expanded, productAttributes, table, defaultLocale, defaultChannel?.code]);
 
   // Handle search input change
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1328,7 +1335,12 @@ export function ProductsTable({
 
       attrGroupsInFlight.current.add(p.id);
       try {
-        const groups = await productService.getProductAttributeGroups(p.id);
+        // Pass default locale and channel
+        const groups = await productService.getProductAttributeGroups(
+          p.id, 
+          defaultLocale, 
+          defaultChannel?.code
+        );
         if (groups?.length) {
           setProductAttributes(prev => ({ ...prev, [String(p.id)]: groups }));
         } else {
@@ -1341,8 +1353,8 @@ export function ProductsTable({
         attrGroupsInFlight.current.delete(p.id);           // ✅ done
       }
     });
-  /* deps: only when the *page* itself changes */
-  }, [pagination.pageIndex, pagination.pageSize, filteredData]);
+  // Add defaultLocale and defaultChannel to dependencies
+  }, [pagination.pageIndex, pagination.pageSize, filteredData, defaultLocale, defaultChannel?.code]);
 
   // Add a function to calculate pagination display info
   const renderPaginationInfo = useCallback(() => {

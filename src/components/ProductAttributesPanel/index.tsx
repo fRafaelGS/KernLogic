@@ -82,18 +82,20 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
   useEffect(() => {
     if (propFamilyId !== undefined) {
       console.log('▶️ propFamilyId changed, refetching family groups:', propFamilyId);
-      queryClient.invalidateQueries({ queryKey: ['familyAttributeGroups', propFamilyId] });
+      queryClient.invalidateQueries({ 
+        queryKey: ['familyAttributeGroups', propFamilyId, String(selectedLocale || 'all'), String(selectedChannel || 'all')] 
+      });
     }
-  }, [propFamilyId, queryClient]);
+  }, [propFamilyId, queryClient, selectedLocale, selectedChannel]);
 
   // Fetch family attribute groups if family exists
-  const familyGroupsRaw = useFamilyAttributeGroups(familyId)
+  const familyGroupsRaw = useFamilyAttributeGroups(familyId, selectedLocale, selectedChannel)
   const familyGroups: AttributeGroup[] = familyGroupsRaw.data ?? []
   const isLoadingFamilyGroups = familyGroupsRaw.isLoading
   const familyError = familyGroupsRaw.error
 
   // Fetch product attribute groups (overrides)
-  const attributeGroupsRaw = useAttributeGroups(productId)
+  const attributeGroupsRaw = useAttributeGroups(productId, selectedLocale, selectedChannel)
   const attributeGroups: AttributeGroup[] = attributeGroupsRaw.data ?? []
 
   // Compute sourceGroups: prefer familyGroups if hasFamily, else attributeGroups

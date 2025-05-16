@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import axiosInstance from '@/lib/axiosInstance'
 import { useEffect } from 'react'
 
-export function useFamilyAttributeGroups(familyId?: number) {
+export function useFamilyAttributeGroups(familyId?: number, locale?: string, channel?: string) {
   const queryClient = useQueryClient()
   
   // This effect ensures the hook refetches when familyId changes
@@ -10,17 +10,23 @@ export function useFamilyAttributeGroups(familyId?: number) {
     if (familyId) {
       // Refetch whenever the family ID changes
       queryClient.invalidateQueries({ 
-        queryKey: ['familyAttributeGroups', familyId]
+        queryKey: ['familyAttributeGroups', familyId, String(locale || 'all'), String(channel || 'all')]
       })
     }
-  }, [familyId, queryClient])
+  }, [familyId, queryClient, locale, channel])
   
   return useQuery({
-    queryKey: ['familyAttributeGroups', familyId],
+    queryKey: ['familyAttributeGroups', familyId, String(locale || 'all'), String(channel || 'all')],
     queryFn: async () => {
       // Use the attribute-groups endpoint which now supports GET
       try {
-        const response = await axiosInstance.get(`/api/families/${familyId}/attribute-groups/`)
+        const params: Record<string, string> = {}
+        if (locale) {
+          params.locale = locale.replace('-', '_')
+        }
+        if (channel) params.channel = channel
+        
+        const response = await axiosInstance.get(`/api/families/${familyId}/attribute-groups/`, { params })
         // The API now returns attribute groups directly
         return response.data || []
       } catch (error) {

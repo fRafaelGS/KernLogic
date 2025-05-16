@@ -90,14 +90,20 @@ export function useDeleteAttribute(productId: string, locale?: string, channel?:
   })
 }
 
-export function useAttributeGroups(productId: string) {
+export function useAttributeGroups(productId: string, locale?: string, channel?: string) {
   return useQuery<AttributeGroup[], Error>({
-    queryKey: GROUPS_QUERY_KEY(productId),
+    queryKey: [...GROUPS_QUERY_KEY(productId), String(locale || 'all'), String(channel || 'all')],
     queryFn: async () => {
-      const { data } = await axiosInstance.get(`/api/products/${productId}/attribute-groups/`)
+      const params: Record<string, string> = {}
+      if (locale) {
+        params.locale = locale.replace('-', '_')
+      }
+      if (channel) params.channel = channel
+      const { data } = await axiosInstance.get(`/api/products/${productId}/attribute-groups/`, { params })
       return Array.isArray(data) ? data : []
     },
-    enabled: Boolean(productId)
+    enabled: Boolean(productId),
+    staleTime: 5 * 60 * 1000
   })
 }
 

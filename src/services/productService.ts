@@ -6,6 +6,7 @@
     import { Category as ProductCategory } from '@/types/categories';
     import type { AttributeGroup } from '@/components/ProductAttributesPanel/types'
     import type { Family } from '@/types/family'
+    import { useOrgSettings } from '@/hooks/useOrgSettings';
 
     // PRODUCTS_PATH should be empty string to work with the backend URL structure
     // The backend routes 'api/' to products.urls which registers the viewset at ''
@@ -892,8 +893,8 @@
         // Get product attribute groups (NEW FUNCTION)
         getProductAttributeGroups: async (
             productId: number,
-            locale: string = 'en_US',
-            channel: string = 'ecommerce'
+            locale?: string,
+            channel?: string
           ): Promise<AttributeGroup[]> => {
             try {
               /* 1. build { id: { label, code } } map */
@@ -910,7 +911,11 @@
           
               /* 2. fetch groups for the product */
               const url = `${PRODUCTS_API_URL}/${productId}/attribute-groups/`;
-              const { data } = await axiosInstance.get(url, { params: { locale, channel } });
+              // Use the provided locale and channel or let the backend fall back to defaults
+              const params: Record<string, string> = {};
+              if (locale) params.locale = locale;
+              if (channel) params.channel = channel;
+              const { data } = await axiosInstance.get(url, { params });
           
               if (isHtmlResponse(data) || !Array.isArray(data)) return [];
           
@@ -935,7 +940,7 @@
               console.error('[getProductAttributeGroups] Error:', err);
               return [];
             }
-          },          
+          },
 
         // Get product assets
         getProductAssets: async (productId: number): Promise<ProductAsset[]> => {

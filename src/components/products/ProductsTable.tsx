@@ -28,7 +28,6 @@ import {
 } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -41,62 +40,44 @@ import {
   FilterIcon,
   TrashIcon,
   RefreshCw,
-  ArrowUpDown,
   ChevronLeft,
   ChevronRight,
   ColumnsIcon,
   ChevronDown,
-  ImageIcon,
-  CheckIcon,
-  XIcon,
   PlusIcon,
-  ArrowUp,
-  ArrowDown,
   CheckCircle,
   XCircle,
-  EyeIcon,
-  PencilIcon,
   TagIcon,
   FolderIcon,
-  LucideIcon,
-  Loader2
 } from "lucide-react";
 import { Product, productService, ProductAttribute, ProductAsset, PaginatedResponse } from "@/services/productService";
 import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/contexts/AuthContext";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { useToast } from '@/components/ui/use-toast';
 import { DndContext, useSensor, useSensors, PointerSensor, DragEndEvent } from '@dnd-kit/core';
-import { SortableContext, useSortable, arrayMove, horizontalListSortingStrategy } from '@dnd-kit/sortable';
+import { SortableContext, arrayMove, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { 
   Popover, 
   PopoverContent, 
   PopoverTrigger 
 } from "@/components/ui/popover";
-import { ActionMeta, OnChangeValue } from 'react-select';
 import { ProductsSearchBox } from './ProductsSearchBox';
 import { BulkTagModal } from './BulkTagModal';
 import { useDebounce } from "@/hooks/useDebounce";
 import { ProductsTableFallback } from "@/components/products/productstable/ProductsTableFallback";
 import { IconBtn } from "@/components/products/productstable/IconBtn";
 import { SortableTableHeader } from "@/components/products/productstable/SortableTableHeader";
-import { formatPrice } from "@/utils/formatPrice";
 import { useUniqueCategories, useUniqueTags } from "@/hooks/useProductDerived";
 import { useProductColumns } from "@/hooks/useProductColumns";    
 import ProductRowDetails from "./productstable/ProductRowDetails";
-import { motion, AnimatePresence } from 'framer-motion';
-import { normalizeCategory, getCategoryNamePath, Category as CategoryType, Category as ProductCategory } from '@/types/categories';
+import { AnimatePresence } from 'framer-motion';
+import { Category as CategoryType, Category as ProductCategory } from '@/types/categories';
 import { SubcategoryManager } from '@/components/categories/SubcategoryManager/SubcategoryManager';
 import { getCategoryName, matchesCategoryFilter } from '@/lib/utils';
-import { PriceSummaryBadge } from './PriceSummaryBadge';
-import { Breadcrumb } from "@/components/ui/breadcrumb";
-import { CategoryTreeSelect } from "@/components/categories/CategoryTreeSelect";
 import { ViewToggle } from './ViewToggle'
 import { ProductGrid } from './ProductGrid'
 
@@ -113,12 +94,6 @@ interface FilterState {
   tags: string[]; // Add tags array to FilterState
 }
 
-// SortableTableHeader component for handling sorting
-interface SortableTableHeaderProps {
-  id: string;
-  header: Header<Product, unknown>;
-}
-
 // Add type for category options
 interface CategoryOption {
   label: string;
@@ -131,16 +106,6 @@ interface Category {
   name: string;
   // Add other category fields if they exist
   parent?: number | null;
-}
-
-// Add a type for tag objects that might be in the product.tags array
-// Add this near the other interfaces at the top of the file (after line 310)
-interface TagObject {
-  id?: string | number;
-  name?: string;
-  value?: string | number;
-  label?: string;
-  [key: string]: any; // Allow other properties
 }
 
 // Add this type declaration for productAttributes to match the Product interface
@@ -241,9 +206,7 @@ export function ProductsTable({
   const [productAttributes, setProductAttributes] = useState<Record<number, ProductAttribute[]>>({});
   
   const navigate = useNavigate();
-  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { pathname } = location;
   
   // Table state
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -482,19 +445,6 @@ export function ProductsTable({
         toast({ title: 'Please log in to refresh data.', variant: 'default' });
     }
   };
-  
-  // Stabilize row action handlers with useCallback
-  const startEditing = useCallback((rowIndex: number, columnId: string) => {
-    setEditingCell({ rowIndex, columnId });
-  }, []);
-  
-  const stopEditing = useCallback(() => {
-    setEditingCell(null);
-  }, []);
-
-  const handleEdit = useCallback((productId: number) => {
-    navigate(`/app/products/${productId}/edit`);
-  }, [navigate]);
 
   const handleDelete = useCallback(async (productId: number) => {
     if (window.confirm('Are you sure you want to archive this product?')) {
@@ -907,7 +857,6 @@ export function ProductsTable({
 
   const {
     columns,
-    actionColumn,
     allColumns,
   } = useProductColumns({
     /* state & refs */
@@ -938,12 +887,6 @@ export function ProductsTable({
     fetchData,
     IconBtn,
   });
-
-  // Memoize derived column arrays to prevent re-creation on each render
-  const columnsWithExpander = useMemo(
-    () => [expanderColumn, ...columns],
-    [expanderColumn, columns]
-  );
 
   // Memoize allColumnsWithExpander to prevent re-creation on each render
   const allColumnsWithExpander = useMemo(() => {

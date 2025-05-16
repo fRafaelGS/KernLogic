@@ -44,14 +44,14 @@ const LocaleChannelSelector: React.FC<LocaleChannelSelectorProps> = ({
   // On component mount, check localStorage for saved preferences
   useEffect(() => {
     if (!disableLocalePersistence) {
-      const savedLocale = getLastLocale();
+      const savedLocale = getLastLocale(defaultLocale);
       if (savedLocale && savedLocale !== selectedLocale) {
         onLocaleChange(savedLocale);
       }
     }
     
     if (!disableChannelPersistence) {
-      const savedChannel = getLastChannel();
+      const savedChannel = getLastChannel(defaultChannel?.code || '');
       if (savedChannel && savedChannel !== selectedChannel) {
         onChannelChange(savedChannel);
       }
@@ -62,7 +62,9 @@ const LocaleChannelSelector: React.FC<LocaleChannelSelectorProps> = ({
     onLocaleChange, 
     onChannelChange, 
     disableLocalePersistence, 
-    disableChannelPersistence
+    disableChannelPersistence,
+    defaultLocale,
+    defaultChannel?.code
   ]);
   
   // Save preferences when they change

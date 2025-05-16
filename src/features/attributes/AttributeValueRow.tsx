@@ -11,8 +11,8 @@ import { useDebouncedCallback } from '@/hooks/useDebouncedCallback';
 import { Edit, Calendar as CalendarIcon, Globe, Monitor } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { LOCALES, LocaleCode } from '@/config/locales'
-import { CHANNELS, ChannelCode } from '@/config/channels'
+import { LocaleCode, ChannelCode } from '@/services/types';
+import { useOrgSettings } from '@/hooks/useOrgSettings';
 
 // Types
 export interface Attribute {
@@ -101,7 +101,7 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
 
   // Local editing state – initialise with the normalised value
   const [localValue, setLocalValue] = useState<AttrValue>(
-    isNew ? (needsJSON ? ({} as AttrValue) : ('' as AttrValue)) : (actualValue as AttrValue)
+    isNew ? (needsJSON ? ({} as AttrValue) : ('' as AttrValue)) : (actualValue || '' as AttrValue)
   );
   
   // Add state for locale and channel
@@ -231,7 +231,7 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
                       console.log("Selected date:", date, "Formatted:", formattedDate);
                       handleValueChange(formattedDate as AttrValue);
                     } else {
-                      handleValueChange(null as AttrValue);
+                      handleValueChange('' as AttrValue);
                     }
                   }}
                   initialFocus
@@ -432,8 +432,8 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
     }
     
     // Use the normalised value when displaying
-    function actualValueRef (): AttrValue {
-      return value.value
+    function actualValueRef(): AttrValue {
+      return (value && value.value) || '' as AttrValue;
     }
     const actualValue = actualValueRef();
     
@@ -500,28 +500,26 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
   
   // Render locale and channel selectors
   const renderLocaleChannelSelectors = () => {
-    const isDisabled = savingState === 'saving';
+    const { locales, channels } = useOrgSettings()
+    
+    if (!attribute.is_localisable && !attribute.is_scopable) return null;
     
     return (
-      <div className="grid grid-cols-2 gap-4 mb-4">
-        {/* Locale selector - only show if attribute is localisable */}
+      <div className="flex space-x-2">
         {attribute.is_localisable && (
-          <div className="space-y-2">
-            <label className="text-sm font-medium flex items-center gap-1">
-              <Globe className="h-3.5 w-3.5" />
-              Locale
-            </label>
+          <div className="flex items-center space-x-1">
+            <Globe className="w-3.5 h-3.5 text-slate-500" />
             <Select
-              value={localLocale || "default"}
+              value={localLocale}
               onValueChange={setLocalLocale}
-              disabled={isDisabled}
+              disabled={savingState === 'saving'}
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Select locale" />
+              <SelectTrigger className="h-7 w-[120px]">
+                <SelectValue placeholder="Locale" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="default">All locales</SelectItem>
-                {LOCALES.map(locale => (
+                {locales.map(locale => (
                   <SelectItem key={locale.code} value={locale.code}>
                     {locale.label}
                   </SelectItem>
@@ -531,7 +529,6 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
           </div>
         )}
         
-        {/* Channel selector - only show if attribute is scopable */}
         {attribute.is_scopable && (
           <div className="space-y-2">
             <label className="text-sm font-medium flex items-center gap-1">
@@ -541,14 +538,14 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
             <Select 
               value={localChannel || "default"}
               onValueChange={setLocalChannel}
-              disabled={isDisabled}
+              disabled={savingState === 'saving'}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select channel" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="default">All channels</SelectItem>
-                {CHANNELS.map(channel => (
+                {channels.map(channel => (
                   <SelectItem key={channel.code} value={channel.code}>
                     {channel.label}
                   </SelectItem>
@@ -558,6 +555,23 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
           </div>
         )}
       </div>
+    );
+  };
+  
+  const valueLocaleChannel = () => {
+    const { locales, channels } = useOrgSettings()
+    
+    if (!value) return null;
+    
+    if (!value.locale && !value.channel) return null;
+    
+    return (
+      <>
+        {value.locale
+          ? locales.find(l => l.code === value.locale)?.label || value.locale
+          : attribute.is_localisable ? 'All locales' : selectedLocale === 'default' ? 'Default locale' : locales.find(l => l.code === selectedLocale)?.label || selectedLocale}
+        {value.channel && attribute.is_scopable ? ` / ${channels.find(c => c.code === value.channel)?.label || value.channel}` : ''}
+      </>
     );
   };
   
@@ -652,15 +666,8 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
                 <div className="flex items-center">
                   <Globe className="w-3 h-3 mr-1 text-blue-500" />
                   <span>
-                    {value?.locale 
-                      ? LOCALES.find(l => l.code === value.locale)?.label || value.locale
-                      : attribute.is_localisable ? 'All locales' : selectedLocale === 'default' ? 'Default locale' : LOCALES.find(l => l.code === selectedLocale)?.label || selectedLocale}
+                    {valueLocaleChannel()}
                   </span>
-                  {attribute.is_localisable && (
-                    <Badge variant="outline" className="ml-1 h-4 px-1 bg-blue-50 border-blue-200">
-                      <span className="text-[9px]">Localisable</span>
-                    </Badge>
-                  )}
                 </div>
               </TooltipTrigger>
               <TooltipContent side="bottom" className="text-xs">
@@ -681,15 +688,14 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
                 <div className="flex items-center">
                   <Monitor className="w-3 h-3 mr-1 text-purple-500" />
                   <span>
-                    {value?.channel 
-                      ? CHANNELS.find(c => c.code === value.channel)?.label || value.channel
-                      : attribute.is_scopable ? 'All channels' : selectedChannel === 'default' ? 'Default channel' : CHANNELS.find(c => c.code === selectedChannel)?.label || selectedChannel}
+                    {(() => {
+                      const { channels } = useOrgSettings();
+                      if (!value?.channel) return attribute.is_scopable ? 'All channels' : selectedChannel === 'default' ? 'Default channel' : channels.find(ch => ch.code === selectedChannel)?.name || selectedChannel;
+                      
+                      const channelLabel = channels.find(ch => ch.code === value.channel)?.name;
+                      return channelLabel || value.channel;
+                    })()}
                   </span>
-                  {attribute.is_scopable && (
-                    <Badge variant="outline" className="ml-1 h-4 px-1 bg-purple-50 border-purple-200">
-                      <span className="text-[9px]">Scopable</span>
-                    </Badge>
-                  )}
                 </div>
               </TooltipTrigger>
               <TooltipContent side="bottom" className="text-xs">

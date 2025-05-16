@@ -3,13 +3,9 @@ import { useQuery } from '@tanstack/react-query'
 import api from '@/services/api'
 import { Locale } from '@/services/localeService'
 import localeService from '@/services/localeService'
+import { Channel } from '@/services/channelService'
+import channelService from '@/services/channelService'
 import { paths } from '@/lib/apiPaths'
-
-interface Channel {
-  id: number
-  code: string
-  name: string
-}
 
 interface OrgSettings {
   id: number
@@ -53,21 +49,47 @@ export function useOrgSettings() {
     enabled: !!orgId
   })
 
+  // Query available channels
+  const {
+    data: channelsRaw = [],
+    isLoading: isChannelsLoading,
+    error: channelsError,
+    refetch: refetchChannels
+  } = useQuery<Channel[]>({
+    queryKey: ['channels'],
+    queryFn: channelService.getChannels,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    enabled: !!orgId
+  })
+
+  // Ensure channels have consistent properties
+  const channels = channelsRaw.map(channel => ({
+    ...channel,
+    // Use name as label if label is missing, or code as label if both are missing
+    label: channel.label || channel.name || channel.code
+  }))
+
   // Find default locale object from the locales list
   const defaultLocaleObj = locales.find(locale => locale.code === orgSettings?.default_locale) || null
+
+  // Find default channel object
+  const defaultChannelObj = channels.find(channel => channel.id === orgSettings?.default_channel?.id) || null
 
   return {
     orgSettings,
     defaultLocale: orgSettings?.default_locale || 'en_US',
     defaultLocaleObj,
     locales,
-    defaultChannel: orgSettings?.default_channel || null,
+    channels,
+    defaultChannel: orgSettings?.default_channel || defaultChannelObj || null,
     defaultChannelId: orgSettings?.default_channel?.id || null,
-    isLoading: isOrgLoading || isLocalesLoading,
-    error: orgError || localesError,
+    isLoading: isOrgLoading || isLocalesLoading || isChannelsLoading,
+    isChannelsLoading,
+    error: orgError || localesError || channelsError,
     refetch: () => {
       refetchOrgSettings()
       refetchLocales()
+      refetchChannels()
     }
   }
 } 

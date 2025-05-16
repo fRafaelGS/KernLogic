@@ -45,8 +45,8 @@ import {
   TooltipProvider, 
   TooltipTrigger 
 } from "@/components/ui/tooltip";
-import { LOCALES, LocaleCode } from '@/config/locales'
-import { CHANNELS, ChannelCode } from '@/config/channels'
+import { LocaleCode, ChannelCode } from '@/services/types';
+import { useOrgSettings } from '@/hooks/useOrgSettings';
 
 interface AddAttributeModalProps {
   isOpen: boolean;
@@ -81,6 +81,7 @@ const AddAttributeModal: React.FC<AddAttributeModalProps> = ({
   const [attributeChannel, setAttributeChannel] = useState(selectedChannel);
   const [filteredAttributes, setFilteredAttributes] = useState<Attribute[]>(availableAttributes);
   const [filterType, setFilterType] = useState<string>('all');
+  const { locales, channels } = useOrgSettings()
   
   // Reset selected attribute and search query when modal opens/closes
   useEffect(() => {
@@ -355,7 +356,7 @@ const AddAttributeModal: React.FC<AddAttributeModalProps> = ({
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="default">All locales</SelectItem>
-                            {LOCALES.map((locale) => (
+                            {locales.map((locale) => (
                               <SelectItem key={locale.code} value={locale.code}>
                                 {locale.label}
                               </SelectItem>
@@ -379,7 +380,7 @@ const AddAttributeModal: React.FC<AddAttributeModalProps> = ({
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="default">All channels</SelectItem>
-                            {CHANNELS.map((channel) => (
+                            {channels.map((channel) => (
                               <SelectItem key={channel.code} value={channel.code}>
                                 {channel.label}
                               </SelectItem>

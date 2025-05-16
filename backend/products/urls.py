@@ -23,6 +23,8 @@ from .views_main import AssetBundleViewSet
 # Import family views
 from products.views.family import FamilyViewSet
 from products.views.attribute_group_override import override_attribute_group, ProductFamilyOverrideViewSet
+# Import the SalesChannelViewSet
+from products.views.channel import SalesChannelViewSet
 
 # /api/products/…
 router = DefaultRouter()
@@ -40,6 +42,8 @@ router.register(r"categories", CategoryViewSet, basename="category")
 router.register(r"families", FamilyViewSet, basename="family")
 # Register the LocaleViewSet
 router.register(r"locales", LocaleViewSet, basename="locale")
+# Register the SalesChannelViewSet
+router.register(r"channels", SalesChannelViewSet, basename="channel")
 
 # /api/products/<product_pk>/assets/…
 assets_router = NestedSimpleRouter(router, r"products", lookup="product")

@@ -49,6 +49,10 @@ export const paths = {
     root: () => join(API_BASE, 'locales') + '/',
     byId: (id: number) => join(API_BASE, 'locales', id) + '/',
   },
+  channels: {
+    root: () => join(API_BASE, 'channels') + '/',
+    byId: (id: number) => join(API_BASE, 'channels', id) + '/',
+  },
   reports: {
     themes: () => join(API_BASE, 'reports/themes') + '/',
   },

@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.db.models import Q
 
-from products.models import AttributeValue, Product, Attribute
+from products.models import AttributeValue, Product, Attribute, Locale
 from products.serializers import AttributeValueSerializer, AttributeValueDetailSerializer
 from products.permissions import IsStaffOrReadOnly
 from kernlogic.org_queryset import OrganizationQuerySetMixin
@@ -64,11 +64,19 @@ class AttributeValueViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         # for all contexts.  By honouring the query-string here we ensure that
         # any action is strictly scoped to the requested locale/channel.
 
-        locale  = self.request.query_params.get('locale')
+        locale_code = self.request.query_params.get('locale')
         channel = self.request.query_params.get('channel')
 
-        if locale is not None and locale != '':
-            qs = qs.filter(Q(locale=locale) | Q(locale__isnull=True))
+        if locale_code is not None and locale_code != '':
+            # Fix: Don't try to filter by locale code string directly
+            # Instead, look up the locale by code or use NULL values
+            locale_qs = Locale.objects.filter(organization=org, code=locale_code)
+            if locale_qs.exists():
+                locale_obj = locale_qs.first()
+                qs = qs.filter(Q(locale=locale_obj) | Q(locale__isnull=True))
+            else:
+                # If no matching locale found, only return values with null locale
+                qs = qs.filter(locale__isnull=True)
 
         if channel is not None and channel != '':
             qs = qs.filter(Q(channel=channel) | Q(channel__isnull=True))
@@ -101,11 +109,20 @@ class AttributeValueViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 Product.objects.filter(organization=organization),
                 pk=product_pk,
             )
+            
+        # Get the locale object from the locale code
+        locale_code = self.request.query_params.get('locale')
+        locale_obj = None
+        if locale_code:
+            try:
+                locale_obj = Locale.objects.get(organization=organization, code=locale_code)
+            except Locale.DoesNotExist:
+                pass  # Will be saved as None
 
         serializer.save(
             organization=organization,
             product=product_obj or serializer.validated_data.get('product'),
-            locale=self.request.query_params.get('locale') or serializer.validated_data.get('locale'),
+            locale=locale_obj or serializer.validated_data.get('locale'),
             channel=self.request.query_params.get('channel') or serializer.validated_data.get('channel'),
             created_by=self.request.user,
         )
@@ -134,8 +151,17 @@ class AttributeValueViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         # If the caller specified a locale/channel, ensure the instance
         # matches exactly; otherwise abort to prevent unintended cross-scope
         # deletions.
-        if locale_param and (instance.locale or '') != locale_param:
-            raise ValidationError({'detail': 'Attribute value does not match the requested locale – deletion aborted.'})
+        if locale_param:
+            # Get the locale object from the code
+            organization = get_user_organization(self.request.user)
+            try:
+                locale_obj = Locale.objects.get(organization=organization, code=locale_param)
+                if instance.locale != locale_obj:
+                    raise ValidationError({'detail': 'Attribute value does not match the requested locale – deletion aborted.'})
+            except Locale.DoesNotExist:
+                # Only allow deletion if the instance has no locale
+                if instance.locale is not None:
+                    raise ValidationError({'detail': 'Attribute value does not match the requested locale – deletion aborted.'})
 
         if channel_param and (instance.channel or '') != channel_param:
             raise ValidationError({'detail': 'Attribute value does not match the requested channel – deletion aborted.'})

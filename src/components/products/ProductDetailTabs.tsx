@@ -1,17 +1,14 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Product, productService, ProductAttribute, ProductAsset, ProductActivity, ProductVersion, PriceHistory, PRODUCTS_API_URL as PRODUCTS_PATH, ProductImage, ProductPrice } from '@/services/productService';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Product, productService, ProductAttribute, ProductAsset, ProductActivity, PRODUCTS_API_URL as PRODUCTS_PATH, ProductPrice } from '@/services/productService';
 import { IncompleteProduct, dashboardService } from '@/services/dashboardService';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { 
-  ImageIcon, FileIcon, FileTypeIcon, FileTextIcon, Clipboard, CalendarIcon, 
-  History, AlertTriangle, PlusIcon, PencilIcon, AlertCircle, RefreshCcw,
-  Check, ChevronDown, ChevronUp, ChevronRight, Save, X, Edit2, Calendar, Flag, Pin, InfoIcon,
-  List, Settings, Layers, Search
+  ImageIcon, FileIcon, FileTypeIcon, FileTextIcon, 
+  History, AlertTriangle, PlusIcon, AlertCircle, RefreshCcw,
+  Check, ChevronDown, ChevronUp, ChevronRight, Save, X, Edit2, Calendar,
+  List, Layers
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -19,7 +16,6 @@ import { toast } from 'sonner';
 import { RichTextEditor } from '@/components/ui/RichTextEditor';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/contexts/AuthContext';
-import ReactMarkdown from 'react-markdown';
 import {
   Dialog,
   DialogContent,
@@ -37,13 +33,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Command,
   CommandEmpty,
@@ -54,12 +48,9 @@ import {
 } from "@/components/ui/command";
 import axios from 'axios';
 import axiosInstance from '@/lib/axiosInstance';
-import { Slot } from '@radix-ui/react-slot';
 import { cn } from '@/lib/utils';
 // Import the CompletenessDrilldown component
 import { CompletenessDrilldown } from './CompletenessDrilldown';
-import { Carousel, CarouselContent, CarouselItem, CarouselPrevious, CarouselNext } from '@/components/ui/carousel';
-import { Link } from 'react-router-dom';
 // Add lodash type declaration at the top
 // @ts-ignore
 import { debounce } from 'lodash';
@@ -71,15 +62,15 @@ import ProductHistoryTab from './ProductHistoryTab';
 import { Suspense } from 'react';
 import { ProductAttributesPanel } from '@/components/ProductAttributesPanel'
 import { ENABLE_CUSTOM_ATTRIBUTES } from '@/config/featureFlags'
+import { Badge } from '@/components/ui/badge'
 import { FieldStatusModal } from './FieldStatusModal'
 import { normalizeCategory } from '@/types/categories'
 import { getAssetUrl } from '@/utils/isImageAsset'
 import { PriceTab } from './PriceTab'
-import { LOCALES, LocaleCode } from '@/config/locales'
-// Import the required typeimport type { IncompleteProduct } from '@/services/dashboardService'
+import { LocaleCode } from '@/services/types'
+import { useOrgSettings } from '@/hooks/useOrgSettings'
 
 // ====== ATTRIBUTES INTERFACES (EXACT MATCH TO SPEC) ======
-// (Following exactly the backend shape specified in the requirements)
 
 // Attribute option for select/multiselect types
 interface AttributeOption {
@@ -157,8 +148,9 @@ export const ProductDetailTabs = ({
   const [currentEditValue, setCurrentEditValue] = useState<any>(null);
   const [isAddAttributeOpen, setIsAddAttributeOpen] = useState(false);
   const [attributeSearchTerm, setAttributeSearchTerm] = useState('');
-  const [selectedLocale, setSelectedLocale] = useState<LocaleCode>(LOCALES[0].code);
-  const [availableLocales, setAvailableLocales] = useState(LOCALES.map(locale => locale.code));
+  const { locales, defaultLocale } = useOrgSettings()
+  const [selectedLocale, setSelectedLocale] = useState<LocaleCode>(defaultLocale)
+  const [availableLocales, setAvailableLocales] = useState(locales.map(locale => locale.code))
   const [savingAttributeId, setSavingAttributeId] = useState<number | null>(null);
   const [attributeSaveError, setAttributeSaveError] = useState<{id: number, message: string} | null>(null);
   const [attributeSetId, setAttributeSetId] = useState<number | null>(null);

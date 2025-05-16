@@ -57,18 +57,19 @@ import { RichTextEditor } from '@/components/ui/RichTextEditor';
 import { PriceSummaryBadge } from '@/components/products/PriceSummaryBadge';
 import { PricingModal } from '@/components/products/PricingModal';
 
-import { LOCALES, LocaleCode } from '@/config/locales'
-import { CHANNELS, ChannelCode } from '@/config/channels'
 import { useFamilies, useOverrideAttributeGroup } from '@/api/familyApi';
 import { Family } from '@/types/family';
 import { ProductAttributeGroups } from '@/components/product/ProductAttributeGroups'
 import { ProductAttributesPanel } from '@/components/ProductAttributesPanel'
 import { useProductAssets } from '@/hooks/useProductAssets'
+import { LocaleCode, ChannelCode } from '@/services/types'
+import { useOrgSettings } from '@/hooks/useOrgSettings'
 
 // Update the ProductWithFamily interface
 interface ProductWithFamily extends Omit<Product, 'family'> {
   family?: Family | null;
   attributes?: any;
+  primary_image_large?: string;
 }
 
 // Add type for category options used by react-select
@@ -121,8 +122,11 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
   const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]);
   const [tagOptions, setTagOptions] = useState<{ label: string; value: string }[]>([]);
   const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
-  const [selectedLocale, setSelectedLocale] = useState<LocaleCode>(LOCALES[0].code)
-  const [selectedChannel, setSelectedChannel] = useState<ChannelCode>(CHANNELS[0].code)
+  const { locales, channels, defaultLocale, defaultChannel } = useOrgSettings()
+  const [selectedLocale, setSelectedLocale] = useState<LocaleCode>(defaultLocale)
+  const [selectedChannel, setSelectedChannel] = useState<ChannelCode>(
+    defaultChannel?.code || (channels.length > 0 ? channels[0].code : 'ecommerce')
+  )
   const [product, setProduct] = useState<ProductWithFamily | null>(initialProduct || null);
   
   // State for draft prices (used in create mode)

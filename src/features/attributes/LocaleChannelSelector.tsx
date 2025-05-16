@@ -16,8 +16,8 @@ import {
   saveLastChannel, 
   getLastChannel 
 } from '@/lib/attributePreferences';
-import { LOCALES, LocaleCode } from '@/config/locales'
-import { CHANNELS, ChannelCode } from '@/config/channels'
+import { LocaleCode, ChannelCode } from '@/services/types';
+import { useOrgSettings } from '@/hooks/useOrgSettings';
 
 interface LocaleChannelSelectorProps {
   selectedLocale: string;
@@ -39,6 +39,8 @@ const LocaleChannelSelector: React.FC<LocaleChannelSelectorProps> = ({
   disableLocalePersistence = false,
   disableChannelPersistence = false
 }) => {
+  const { locales, channels, defaultLocale, defaultChannel } = useOrgSettings();
+  
   // On component mount, check localStorage for saved preferences
   useEffect(() => {
     if (!disableLocalePersistence) {
@@ -79,8 +81,8 @@ const LocaleChannelSelector: React.FC<LocaleChannelSelectorProps> = ({
   };
   
   // Find the current locale and channel labels
-  const localeLabel = LOCALES.find(l => l.code === selectedLocale)?.label || selectedLocale;
-  const channelLabel = CHANNELS.find(c => c.code === selectedChannel)?.label || selectedChannel;
+  const localeLabel = locales.find(l => l.code === selectedLocale)?.label || selectedLocale;
+  const channelLabel = channels.find(c => c.code === selectedChannel)?.label || selectedChannel;
   
   return (
     <div className="flex items-center space-x-4 border p-3 rounded-md bg-slate-50">
@@ -96,7 +98,7 @@ const LocaleChannelSelector: React.FC<LocaleChannelSelectorProps> = ({
           <SelectContent>
             <SelectGroup>
               <SelectLabel>Locales</SelectLabel>
-              {LOCALES.map((locale) => (
+              {locales.map((locale) => (
                 <SelectItem key={locale.code} value={locale.code}>
                   {locale.label}
                 </SelectItem>
@@ -118,7 +120,7 @@ const LocaleChannelSelector: React.FC<LocaleChannelSelectorProps> = ({
           <SelectContent>
             <SelectGroup>
               <SelectLabel>Channels</SelectLabel>
-              {CHANNELS.map((channel) => (
+              {channels.map((channel) => (
                 <SelectItem key={channel.code} value={channel.code}>
                   {channel.label}
                 </SelectItem>

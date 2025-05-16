@@ -13,9 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useOrgSettings } from '@/hooks/useOrgSettings'
-import { usePriceMetadata } from '@/hooks/usePriceMetadata'
 import api from '@/services/api'
-import { LOCALES } from '@/config/locales'
 
 const orgSettingsSchema = z.object({
   name: z.string().min(1, { message: 'Organization name is required' }),
@@ -28,8 +26,7 @@ type OrgSettingsFormValues = z.infer<typeof orgSettingsSchema>
 export function OrganizationSettingsForm() {
   const { user } = useAuth()
   const orgId = user?.organization_id
-  const { orgSettings, isLoading, error, refetch } = useOrgSettings()
-  const { channels, loading: channelsLoading } = usePriceMetadata()
+  const { orgSettings, isLoading, error, refetch, locales, channels, isChannelsLoading } = useOrgSettings()
   const queryClient = useQueryClient()
 
   const form = useForm<OrgSettingsFormValues>({
@@ -80,7 +77,7 @@ export function OrganizationSettingsForm() {
     updateOrgSettings(data)
   }
 
-  if (isLoading || channelsLoading) {
+  if (isLoading || isChannelsLoading) {
     return (
       <Card>
         <CardContent className="pt-6">
@@ -145,7 +142,7 @@ export function OrganizationSettingsForm() {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {LOCALES.map((locale) => (
+                      {locales.map((locale) => (
                         <SelectItem key={locale.code} value={locale.code}>
                           {locale.label}
                         </SelectItem>
@@ -177,9 +174,9 @@ export function OrganizationSettingsForm() {
                     </FormControl>
                     <SelectContent>
                       <SelectItem value="none">None</SelectItem>
-                      {channels?.map((channel) => (
+                      {channels && channels.length > 0 && channels.map((channel) => (
                         <SelectItem key={channel.id} value={channel.id.toString()}>
-                          {channel.name}
+                          {channel.name || channel.label}
                         </SelectItem>
                       ))}
                     </SelectContent>

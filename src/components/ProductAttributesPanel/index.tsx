@@ -13,10 +13,10 @@ import { toast } from 'sonner'
 import { RichTextEditor } from '@/components/ui/RichTextEditor'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useQueryClient, useQuery } from '@tanstack/react-query'
-import { LOCALES, LocaleCode } from '@/config/locales'
-import { CHANNELS, ChannelCode } from '@/config/channels'
+import { ChannelCode, LocaleCode } from '@/services/types'
 import axiosInstance from '@/lib/axiosInstance'
 import { useFamilyAttributeGroups } from '@/hooks/useFamilyAttributeGroups'
+import { useOrgSettings } from '@/hooks/useOrgSettings'
 
 interface ProductAttributesPanelProps {
   productId: string
@@ -48,8 +48,12 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
   //
   // Otherwise, this component will continue using the old familyId until page reload.
   
-  const [selectedLocale, setSelectedLocale] = useState<LocaleCode>(locale as LocaleCode ?? LOCALES[0].code)
-  const [selectedChannel, setSelectedChannel] = useState<ChannelCode>(channel as ChannelCode ?? CHANNELS[0].code)
+  const { locales, channels, defaultLocale, defaultChannel } = useOrgSettings()
+  
+  const [selectedLocale, setSelectedLocale] = useState<LocaleCode>(locale as LocaleCode ?? defaultLocale)
+  const [selectedChannel, setSelectedChannel] = useState<ChannelCode>(
+    channel as ChannelCode ?? (defaultChannel?.code || (channels.length > 0 ? channels[0].code : 'default'))
+  )
 
   // Add flag to track if we're in create mode
   const isCreateMode = !productId
@@ -577,13 +581,13 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
 
   // Add function wrappers to handle type issues
   const handleLocaleChange = (locale: string) => {
-    if (LOCALES.some(l => l.code === locale)) {
+    if (locales.some(l => l.code === locale)) {
       setSelectedLocale(locale as LocaleCode);
     }
   };
 
   const handleChannelChange = (channel: string) => {
-    if (CHANNELS.some(c => c.code === channel)) {
+    if (channels.some(c => c.code === channel)) {
       setSelectedChannel(channel as ChannelCode);
     }
   };

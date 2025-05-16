@@ -58,6 +58,16 @@ export const paths = {
     root: () => join(API_BASE, 'channels') + '/',
     byId: (id: number) => join(API_BASE, 'channels', id) + '/',
   },
+  categories: {
+    root: () => join(API_BASE, 'categories') + '/',
+    byId: (id: number) => join(API_BASE, 'categories', id) + '/',
+    products: (id: number) => join(API_BASE, 'categories', id, 'products') + '/',
+  },
+  families: {
+    root: () => join(API_BASE, 'families') + '/',
+    byId: (id: number) => join(API_BASE, 'families', id) + '/',
+    attributeGroups: (id: number) => join(API_BASE, 'families', id, 'attribute-groups') + '/',
+  },
   reports: {
     themes: () => join(API_BASE, 'reports/themes') + '/',
   },
@@ -79,7 +89,11 @@ export const paths = {
       
       const queryString = queryParams.toString();
       return queryString ? `${url}?${queryString}` : url;
-    }
+    },
+    locales: () => join(API_BASE, 'analytics/locales') + '/',
+    channels: () => join(API_BASE, 'analytics/channels') + '/',
+    categories: () => join(API_BASE, 'analytics/categories') + '/',
+    families: () => join(API_BASE, 'analytics/families') + '/',
   },
   dashboard: () => join(API_BASE, 'dashboard') + '/',
 } as const; 

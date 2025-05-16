@@ -1,35 +1,36 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import axiosInstance from '@/lib/axiosInstance';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import channelService, { Channel } from '@/services/channelService';
 
 interface ChannelFilterProps {
   value: string | undefined;
   onChange: (value: string) => void;
 }
 
-interface Channel {
-  code: string;
-  description: string;
-}
-
 const ChannelFilter: React.FC<ChannelFilterProps> = ({ value, onChange }) => {
-  const { data: channels, isLoading } = useQuery({
-    queryKey: ['channels'],
-    queryFn: () => axiosInstance.get<Channel[]>('/api/analytics/channels/').then(res => res.data),
-    // Fallback mock data when the API is not available yet
-    placeholderData: [
-      { code: 'website', description: 'Website' },
-      { code: 'amazon', description: 'Amazon' },
-      { code: 'shopify', description: 'Shopify' },
-      { code: 'ebay', description: 'eBay' },
-      { code: 'walmart', description: 'Walmart' },
-    ]
+  const { data: channels, isLoading, error } = useQuery<Channel[]>({
+    queryKey: ['channels', 'analytics'],
+    queryFn: channelService.getChannels,
   });
+
+  // Map of channel codes to their descriptions for display purposes
+  const channelNameMap = React.useMemo(() => {
+    if (!channels) return {};
+    
+    return channels.reduce((acc: Record<string, string>, channel: Channel) => {
+      acc[channel.code] = channel.name || channel.label || channel.description || channel.code;
+      return acc;
+    }, {} as Record<string, string>);
+  }, [channels]);
 
   if (isLoading) {
     return <Skeleton className="h-10 w-[200px]" />;
+  }
+
+  if (error) {
+    console.error('Error loading channels:', error);
   }
 
   return (
@@ -39,15 +40,23 @@ const ChannelFilter: React.FC<ChannelFilterProps> = ({ value, onChange }) => {
       </label>
       <Select value={value ?? 'all'} onValueChange={onChange}>
         <SelectTrigger id="channel-filter" className="w-[200px]">
-          <SelectValue placeholder="All Channels" />
+          <SelectValue placeholder="All Channels">
+            {value && value !== 'all' ? channelNameMap[value] || 'All Channels' : 'All Channels'}
+          </SelectValue>
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All Channels</SelectItem>
-          {channels?.map((channel) => (
-            <SelectItem key={channel.code} value={channel.code}>
-              {channel.description}
+          {channels && channels.length > 0 ? (
+            channels.map((channel: Channel) => (
+              <SelectItem key={channel.code} value={channel.code}>
+                {channel.name || channel.label || channel.description || channel.code}
+              </SelectItem>
+            ))
+          ) : (
+            <SelectItem value="no-channels" disabled>
+              No channels available
             </SelectItem>
-          ))}
+          )}
         </SelectContent>
       </Select>
     </div>

@@ -1,24 +1,19 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import axiosInstance from '@/lib/axiosInstance';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getFamilies } from '@/services/familyService';
+import { Family, normalizeFamily } from '@/types/families';
 
 interface FamilyFilterProps {
   value: string | undefined;
   onChange: (value: string) => void;
 }
 
-interface Family {
-  id: number;
-  name: string;
-}
-
 const FamilyFilter: React.FC<FamilyFilterProps> = ({ value, onChange }) => {
-  const { data, isLoading, error } = useQuery({
+  const { data: families, isLoading, error } = useQuery({
     queryKey: ['families'],
-    queryFn: () => axiosInstance.get<Family[]>('/api/attribute-families/').then(res => res.data),
-    // Provide fallback mock data in case the API fails or is not implemented
+    queryFn: getFamilies,
     placeholderData: [
       { id: 1, name: 'Electronics' },
       { id: 2, name: 'Clothing' },
@@ -27,8 +22,22 @@ const FamilyFilter: React.FC<FamilyFilterProps> = ({ value, onChange }) => {
     ]
   });
 
-  // Ensure families is always an array
-  const families = Array.isArray(data) ? data : [];
+  // Map of family IDs to their names for display purposes
+  const familyNameMap = React.useMemo(() => {
+    if (!families) return {};
+    
+    return families.reduce((acc, family) => {
+      const normalized = normalizeFamily(family);
+      acc[normalized.id] = normalized.name;
+      return acc;
+    }, {} as Record<number, string>);
+  }, [families]);
+
+  // Find the family name for the selected value (for display purposes)
+  const selectedFamilyName = React.useMemo(() => {
+    if (value === 'all' || !value) return '';
+    return familyNameMap[parseInt(value, 10)] || '';
+  }, [value, familyNameMap]);
 
   if (isLoading) {
     return <Skeleton className="h-10 w-[200px]" />;
@@ -44,17 +53,29 @@ const FamilyFilter: React.FC<FamilyFilterProps> = ({ value, onChange }) => {
       <label htmlFor="family-filter" className="text-sm font-medium">
         Family
       </label>
-      <Select value={value ?? 'all'} onValueChange={onChange}>
+      <Select 
+        value={value ?? 'all'} 
+        onValueChange={onChange}
+        defaultValue="all"
+      >
         <SelectTrigger id="family-filter" className="w-[200px]">
-          <SelectValue placeholder="All Families" />
+          <SelectValue placeholder="All Families">
+            {value && value !== 'all' ? familyNameMap[parseInt(value, 10)] || 'All Families' : 'All Families'}
+          </SelectValue>
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All Families</SelectItem>
-          {families.map((family) => (
-            <SelectItem key={family.id} value={family.id.toString()}>
-              {family.name}
+          {(families && families.length > 0) ? (
+            families.map((family) => (
+              <SelectItem key={family.id} value={family.id.toString()}>
+                {family.name}
+              </SelectItem>
+            ))
+          ) : (
+            <SelectItem value="no-families" disabled>
+              No families available
             </SelectItem>
-          ))}
+          )}
         </SelectContent>
       </Select>
     </div>

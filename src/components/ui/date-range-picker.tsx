@@ -23,6 +23,7 @@ export function DatePickerWithRange({
   setDate
 }: DatePickerWithRangeProps) {
   const [open, setOpen] = React.useState(false);
+  const calendarRef = React.useRef<HTMLDivElement>(null);
   
   // Track if we're on mobile for responsive adjustments
   const [isMobile, setIsMobile] = React.useState(false);
@@ -59,7 +60,7 @@ export function DatePickerWithRange({
 
   return (
     <div className={cn("grid gap-2", className)}>
-      <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
+      <PopoverPrimitive.Root open={open} onOpenChange={setOpen} modal>
         <PopoverPrimitive.Trigger asChild>
           <Button
             id="date"
@@ -74,34 +75,56 @@ export function DatePickerWithRange({
           </Button>
         </PopoverPrimitive.Trigger>
 
-        <PopoverPrimitive.Content
-          side="bottom"
-          align="start"
-          sideOffset={4}
-          className="bg-white shadow-lg border rounded-md p-4 w-auto"
-        >
-          <div className="date-picker-container">
-            <DayPicker
-              mode="range"
-              selected={date}
-              onSelect={(selectedRange) => {
-                // Handle undefined or null by providing empty range
-                setDate(selectedRange || { from: undefined, to: undefined });
-              }}
-              numberOfMonths={isMobile ? 1 : 2}
-              className="date-picker"
-            />
-            <div className="flex justify-end border-t pt-3 mt-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleClear}
-              >
-                Clear
-              </Button>
+        <PopoverPrimitive.Portal>
+          <PopoverPrimitive.Content
+            side="bottom"
+            align="start"
+            sideOffset={4}
+            className="z-50 bg-white shadow-lg border rounded-md p-4 w-auto"
+            onPointerDownOutside={(event) => {
+              if (
+                calendarRef.current &&
+                calendarRef.current.contains(event.target as Node)
+              ) {
+                event.preventDefault();
+              }
+            }}
+            onFocusOutside={(event) => {
+              if (
+                calendarRef.current &&
+                calendarRef.current.contains(event.target as Node)
+              ) {
+                event.preventDefault();
+              }
+            }}
+          >
+            <div
+              ref={calendarRef}
+              id="calendar-wrapper"
+              className="date-picker-container"
+            >
+              <DayPicker
+                mode="range"
+                selected={date}
+                onSelect={(selectedRange) => {
+                  // Handle undefined or null by providing empty range
+                  setDate(selectedRange || { from: undefined, to: undefined });
+                }}
+                numberOfMonths={isMobile ? 1 : 2}
+                className="date-picker"
+              />
+              <div className="flex justify-end border-t pt-3 mt-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleClear}
+                >
+                  Clear
+                </Button>
+              </div>
             </div>
-          </div>
-        </PopoverPrimitive.Content>
+          </PopoverPrimitive.Content>
+        </PopoverPrimitive.Portal>
       </PopoverPrimitive.Root>
     </div>
   );

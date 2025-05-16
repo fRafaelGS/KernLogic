@@ -15,6 +15,30 @@ export interface Channel {
 }
 
 /**
+ * Helper function to normalize channel data
+ * @param raw The raw channel data
+ * @returns Normalized channel data
+ */
+const normalizeChannel = (raw: Channel | null | undefined): Channel => {
+  if (!raw) {
+    return { 
+      id: 0,
+      code: '',
+      name: '',
+      is_active: false,
+      description: ''
+    };
+  }
+  
+  // Ensure the description is always set
+  return {
+    ...raw,
+    code: raw.code || raw.name,
+    description: raw.description || raw.name || raw.code || 'Unknown Channel'
+  };
+};
+
+/**
  * Service for managing sales channels
  */
 const channelService = {
@@ -24,19 +48,50 @@ const channelService = {
    */
   getChannels: async (): Promise<Channel[]> => {
     try {
-      const { data } = await axiosInstance.get(paths.channels.root())
-      // Map any variations in API response to consistent interface
-      const mappedData = Array.isArray(data) ? data.map(channel => ({
-        ...channel,
-        // Ensure both code and label are available for compatibility
-        code: channel.code || channel.name,
-        label: channel.label || channel.name
-      })) : []
-      return mappedData
+      const channelsUrl = paths.channels.root();
+      console.log('DEBUG Channels - Using URL:', channelsUrl);
+      
+      const response = await axiosInstance.get(channelsUrl);
+      console.log('DEBUG Channels - Raw response:', response);
+      const data = response.data;
+      
+      // Log raw response for debugging
+      console.log('DEBUG Channels - Response data:', data);
+      
+      // Normalize the data to ensure consistent format
+      let channels: Channel[] = [];
+      
+      if (Array.isArray(data)) {
+        console.log('DEBUG Channels - Data is array with length:', data.length);
+        channels = data.map(channel => ({
+          ...channel,
+          // Ensure both code and label are available for compatibility
+          code: channel.code || channel.name,
+          label: channel.label || channel.name
+        }));
+      } else if (data && typeof data === 'object') {
+        // In case the API returns an object with results property
+        console.log('DEBUG Channels - Data is object with keys:', Object.keys(data));
+        const results = data.results || data.items || [];
+        console.log('DEBUG Channels - Results array length:', results.length);
+        channels = Array.isArray(results) 
+          ? results.map(channel => ({
+            ...channel,
+            // Ensure both code and label are available for compatibility
+            code: channel.code || channel.name,
+            label: channel.label || channel.name
+          }))
+          : [];
+      } else {
+        console.error('Unexpected channels data format:', data);
+      }
+      
+      console.log('DEBUG Channels - Final normalized channels:', channels);
+      return channels;
     } catch (error) {
-      console.error('Error fetching channels:', error)
-      toast.error('Failed to load channels')
-      return []
+      console.error('Error fetching channels:', error);
+      toast.error('Failed to load channels');
+      return [];
     }
   },
 
@@ -96,6 +151,22 @@ const channelService = {
       console.error('Error deleting channel:', error)
       toast.error('Failed to delete channel')
       throw error
+    }
+  },
+
+  /**
+   * Get a specific channel by code
+   * @param code The channel code
+   * @returns Promise with the channel or null if not found
+   */
+  getChannel: async (code: string): Promise<Channel | null> => {
+    try {
+      const channels = await channelService.getChannels()
+      const channel = channels.find(c => c.code === code)
+      return channel ? normalizeChannel(channel) : null
+    } catch (error) {
+      console.error(`Error fetching channel with code ${code}:`, error)
+      return null
     }
   }
 }

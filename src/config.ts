@@ -41,5 +41,22 @@ export const API_ENDPOINTS = {
         move: '/api/categories/move/',
         products: (id: number) => `/api/categories/${id}/products/`
     },
+    families: {
+        list: '/api/families/',
+        create: '/api/families/',
+        update: (id: number) => `/api/families/${id}/`,
+        delete: (id: number) => `/api/families/${id}/`,
+        attributeGroups: (id: number) => `/api/families/${id}/attribute-groups/`
+    },
+    analytics: {
+        locales: '/api/analytics/locales/',
+        channels: '/api/analytics/channels/',
+        completeness: '/api/analytics/completeness/',
+        readiness: '/api/analytics/readiness/',
+        enrichmentVelocity: '/api/analytics/enrichment-velocity/',
+        localizationQuality: '/api/analytics/localization-quality/',
+        changeHistory: '/api/analytics/change-history/',
+        families: '/api/analytics/families/'
+    },
     dashboard: '/api/dashboard'
 }; 

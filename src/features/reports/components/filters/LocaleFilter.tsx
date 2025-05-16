@@ -1,36 +1,36 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import axiosInstance from '@/lib/axiosInstance';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import localeService, { Locale } from '@/services/localeService';
 
 interface LocaleFilterProps {
   value: string | undefined;
   onChange: (value: string) => void;
 }
 
-interface Locale {
-  code: string;
-  description: string;
-}
-
 const LocaleFilter: React.FC<LocaleFilterProps> = ({ value, onChange }) => {
-  const { data: locales, isLoading } = useQuery({
-    queryKey: ['locales'],
-    queryFn: () => axiosInstance.get<Locale[]>('/api/analytics/locales/').then(res => res.data),
-    // Fallback mock data when the API is not available yet
-    placeholderData: [
-      { code: 'en_US', description: 'English (US)' },
-      { code: 'fr_FR', description: 'French' },
-      { code: 'es_ES', description: 'Spanish' },
-      { code: 'de_DE', description: 'German' },
-      { code: 'it_IT', description: 'Italian' },
-      { code: 'ja_JP', description: 'Japanese' },
-    ]
+  const { data: locales, isLoading, error } = useQuery<Locale[]>({
+    queryKey: ['locales', 'analytics'],
+    queryFn: localeService.getLocales,
   });
+
+  // Create a lookup map for locale display names
+  const localeNameMap = React.useMemo(() => {
+    if (!locales) return {};
+    
+    return locales.reduce((acc: Record<string, string>, locale: Locale) => {
+      acc[locale.code] = locale.label || locale.description || locale.code;
+      return acc;
+    }, {} as Record<string, string>);
+  }, [locales]);
 
   if (isLoading) {
     return <Skeleton className="h-10 w-[200px]" />;
+  }
+
+  if (error) {
+    console.error('Error loading locales:', error);
   }
 
   return (
@@ -40,15 +40,23 @@ const LocaleFilter: React.FC<LocaleFilterProps> = ({ value, onChange }) => {
       </label>
       <Select value={value ?? 'all'} onValueChange={onChange}>
         <SelectTrigger id="locale-filter" className="w-[200px]">
-          <SelectValue placeholder="All Locales" />
+          <SelectValue placeholder="All Locales">
+            {value && value !== 'all' ? localeNameMap[value] || 'All Locales' : 'All Locales'}
+          </SelectValue>
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All Locales</SelectItem>
-          {locales?.map((locale) => (
-            <SelectItem key={locale.code} value={locale.code}>
-              {locale.description}
+          {locales && locales.length > 0 ? (
+            locales.map((locale: Locale) => (
+              <SelectItem key={locale.code} value={locale.code}>
+                {locale.label || locale.description || locale.code}
+              </SelectItem>
+            ))
+          ) : (
+            <SelectItem value="no-locales" disabled>
+              No locales available
             </SelectItem>
-          ))}
+          )}
         </SelectContent>
       </Select>
     </div>

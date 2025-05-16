@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import axiosInstance from '@/lib/axiosInstance';
 import { paths } from '@/lib/apiPaths';
@@ -50,14 +50,27 @@ interface Theme {
 
 // Define attribute and category data types
 interface AttributeData {
-  name?: string;
-  completed?: number;
-  total?: number;
+  name: string;
+  completed: number;
+  total: number;
 }
 
 interface CategoryData {
-  name?: string;
-  value?: number;
+  name: string;
+  value: number;
+}
+
+interface CompletenessAPIResponse {
+  overall: number;
+  byAttribute: AttributeData[];
+  byCategory: CategoryData[];
+}
+
+interface Category {
+  id: number;
+  name: string;
+  parent: number | null;
+  children?: Category[];
 }
 
 // Colors for charts
@@ -84,8 +97,14 @@ const CompletenessReport: React.FC = () => {
     staleTime: 5 * 60 * 1000, // 5 min – dashboard KPIs don't change that fast
   });
 
+  // Fetch categories to resolve IDs to names
+  const { data: categories } = useQuery({
+    queryKey: ['categories'],
+    queryFn: () => axiosInstance.get<Category[]>(paths.categories.root() + '?as_tree=false').then(res => res.data),
+  });
+
   // Define fallback data structure that fully matches the expected API response
-  const fallbackData = {
+  const fallbackData: CompletenessAPIResponse = {
     overall: 0,
     byAttribute: [
       {name: 'Name', completed: 0, total: 0},
@@ -97,7 +116,7 @@ const CompletenessReport: React.FC = () => {
     ]
   };
 
-  const { data: apiData, isLoading, error } = useQuery({
+  const { data: apiData, isLoading, error } = useQuery<CompletenessAPIResponse>({
     queryKey: [...qkCompleteness(), filters],
     queryFn: () => {
       // Build query string from filters
@@ -105,7 +124,7 @@ const CompletenessReport: React.FC = () => {
       if (filters.locale) queryParams.append('locale', filters.locale);
       if (filters.category) queryParams.append('category', filters.category);
       if (filters.channel) queryParams.append('channel', filters.channel);
-      if (filters.family) queryParams.append('family', filters.family);
+      if (filters.family) queryParams.append('family_id', filters.family);
       if (filters.from) queryParams.append('date_from', filters.from);
       if (filters.to) queryParams.append('date_to', filters.to);
       
@@ -113,8 +132,9 @@ const CompletenessReport: React.FC = () => {
       const url = queryString 
         ? `${paths.analytics.completeness()}?${queryString}`
         : paths.analytics.completeness();
-        
-      return axiosInstance.get(url).then(res => res.data);
+      
+      console.log('Fetching completeness data with URL:', url);  
+      return axiosInstance.get<CompletenessAPIResponse>(url).then(res => res.data);
     }
   });
 
@@ -131,19 +151,56 @@ const CompletenessReport: React.FC = () => {
       overall,
       byAttribute: Array.isArray(apiData.byAttribute) && apiData.byAttribute.length > 0 
         ? apiData.byAttribute.map((attr: AttributeData) => ({
-            name: attr?.name || 'Unknown',
-            completed: typeof attr?.completed === 'number' ? attr.completed : 0,
-            total: typeof attr?.total === 'number' ? attr.total : 0
+            name: attr.name || 'Unknown',
+            completed: typeof attr.completed === 'number' ? attr.completed : 0,
+            total: typeof attr.total === 'number' ? attr.total : 0
           }))
         : fallbackData.byAttribute,
       byCategory: Array.isArray(apiData.byCategory) && apiData.byCategory.length > 0
         ? apiData.byCategory.map((cat: CategoryData) => ({
-            name: cat?.name || 'Unknown',
-            value: typeof cat?.value === 'number' ? cat.value : 0
+            name: cat.name || 'Unknown',
+            value: typeof cat.value === 'number' ? cat.value : 0
           }))
         : fallbackData.byCategory
     };
-  }, [apiData, dashboardSummary]);
+  }, [apiData]);
+
+  // Create a lookup map for category IDs to names
+  const categoryMap = useMemo(() => {
+    const map = new Map<string, string>();
+    
+    if (categories) {
+      categories.forEach(category => {
+        map.set(category.id.toString(), category.name);
+      });
+    }
+    
+    return map;
+  }, [categories]);
+
+  // Process the data for displaying categories with proper names
+  const categoryData = useMemo(() => {
+    if (!data?.byCategory || data.byCategory.length === 0) return [];
+    
+    return data.byCategory.map((cat: CategoryData) => {
+      // If the name is a number (likely a category ID), try to replace it with the actual name
+      const name = cat.name;
+      let displayName = name;
+      
+      // Check if it's a numeric string (likely a category ID)
+      if (/^\d+$/.test(name) && categoryMap.has(name)) {
+        displayName = categoryMap.get(name) || 'Unknown Category';
+      } else if (name === 'Uncategorized') {
+        displayName = 'Uncategorized';
+      }
+      
+      return {
+        ...cat,
+        name: displayName,
+        originalId: name
+      };
+    });
+  }, [data, categoryMap]);
 
   // Calculate completion counts for the stats
   const completionStats = useMemo(() => {
@@ -441,10 +498,10 @@ const CompletenessReport: React.FC = () => {
         </CardHeader>
         <CardContent>
           <div className="h-[300px]">
-            {data.byCategory.length > 0 ? (
+            {categoryData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
-                  data={data.byCategory}
+                  data={categoryData}
                   margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" />

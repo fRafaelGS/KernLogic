@@ -1439,7 +1439,7 @@ export function ProductsTable({
   // Render the component
   return (
     <React.Fragment>
-      <div className="flex flex-col flex-1 w-full h-full mx-auto max-w-screen-2xl px-2 lg:px-4 min-h-0">
+      <div className="flex flex-col flex-1 w-full h-full mx-auto max-w-full px-2 lg:px-4 min-h-0 overflow-hidden">
         {/* Table Toolbar */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-1 px-1 border-b gap-1 sm:gap-1">
           <div className="flex items-center space-x-2 w-full sm:w-auto">
@@ -1667,8 +1667,8 @@ export function ProductsTable({
               ref={scrollRef}
               className={cn(
                 "flex-1 overflow-auto min-h-0",
-                columnVisibility.actions !== false && `pr-[${ACTION_W}px]`,
-                `pb-[${FOOTER_H}px]`          // space for the sticky footer
+                "h-[calc(100%-3rem)]",
+                columnVisibility.actions !== false && `pr-[112px]`,
               )}
               id="products-scroll-area"
             >
@@ -2207,13 +2207,9 @@ export function ProductsTable({
           )}
         </section>
 
-        {/* PAGINATION - Fixed to viewport bottom */}
+        {/* Pagination, now sticky to bottom */}
         {viewMode === 'list' ? (
-          <div 
-            className="fixed left-0 right-0 bottom-0 z-50 
-                      h-12 bg-slate-100 border-t border-slate-300/40
-                      flex items-center justify-between px-4"
-          >
+          <div className='sticky bottom-0 z-50 h-12 bg-slate-100 border-t border-slate-300/40 flex items-center justify-between px-4'>
             <div className="flex space-x-2">
               <Button 
                 size="sm" 

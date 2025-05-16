@@ -280,13 +280,20 @@ export const ProductDetailTabs = ({
     }
   }, [product.id]); // Only depend on product.id, not activeTab
 
-  // This effect is not needed anymore since we always load assets on mount
-  // Alternatively, you could keep it to refresh assets when switching to the assets tab
+  // This effect refreshes assets data when switching to the assets tab
   useEffect(() => {
     // Refresh assets when switching to assets tab
     if (activeTab === 'assets' && product.id) {
       console.log('Refreshing assets because user navigated to assets tab');
       fetchAssets();
+      
+      // Set up a polling interval to check for asset changes while on this tab
+      const refreshInterval = setInterval(() => {
+        fetchAssets();
+      }, 10000); // Check every 10 seconds
+      
+      // Clean up the interval when changing tabs
+      return () => clearInterval(refreshInterval);
     }
   }, [activeTab, product.id]);
 
@@ -376,65 +383,9 @@ export const ProductDetailTabs = ({
       console.error('Error reading cached assets:', err);
     }
     
-    // If we got here, both API and cache failed - use fallback from product images
-    console.warn('No assets from API or cache, creating fallback assets from product data');
-    
-    // Create fallback assets from product images if available
-    if (product.images && Array.isArray(product.images) && product.images.length > 0) {
-      console.log('Creating fallback assets from product.images array:', product.images.length);
-      const mockAssets: ProductAsset[] = product.images
-        .filter(image => !!image.url) // Ensure URL exists
-        .map((image, index) => ({
-          id: 1000 + index, // Use number IDs for mock assets
-          name: `Product Image ${index + 1}`, // Generate a name since ProductImage doesn't have one
-          url: image.url,
-          type: 'image',
-          asset_type: 'image',
-          size: "0",
-          is_primary: !!image.is_primary || index === 0,
-          uploaded_at: new Date().toISOString(),
-          uploaded_by: 'system',
-          tags: []
-        }));
-      
-      if (mockAssets.length > 0) {
-        console.log('Created fallback assets from product images:', mockAssets);
-        setAssets(mockAssets);
-        
-        // Cache these fallback assets
-        localStorage.setItem(`product_assets_${product.id}`, JSON.stringify(mockAssets));
-        setLoadingAssets(false);
-        return;
-      }
-    } 
-    
-    // Last resort: if we have a primary image but no images array
-    if (product.primary_image_large) {
-      console.log('Creating single fallback asset from primary_image_large');
-      const mockAsset: ProductAsset = {
-        id: 1000, // Use number ID for mock asset
-        name: 'Primary Product Image',
-        url: product.primary_image_large,
-        type: 'image',
-        asset_type: 'image',
-        size: "0",
-        is_primary: true,
-        uploaded_at: new Date().toISOString(),
-        uploaded_by: 'system',
-        tags: []
-      };
-      
-      console.log('Created single mock asset from primary image:', mockAsset);
-      setAssets([mockAsset]);
-      
-      // Cache this fallback asset
-      localStorage.setItem(`product_assets_${product.id}`, JSON.stringify([mockAsset]));
-    } else {
-      // Truly no images available
-      console.log('No image data available for this product');
-      setAssets([]);
-    }
-    
+    // If we got here, both API and cache failed - set empty assets array
+    console.log('No assets from API or cache, setting empty assets array');
+    setAssets([]);
     setLoadingAssets(false);
   };
 
@@ -1788,96 +1739,32 @@ export const ProductDetailTabs = ({
     return false;
   };
 
+  // Add an effect to handle assets changes and notify the parent component
+  useEffect(() => {
+    // Only proceed if we have at least one asset and a product ID
+    if (assets.length > 0 && product.id) {
+      // Find the primary asset
+      const primaryAsset = assets.find(asset => asset.is_primary);
+      
+      // If we have a primary asset and it's an image, update the parent component
+      if (primaryAsset && isImageAsset(primaryAsset)) {
+        console.log('Primary asset found in assets list:', primaryAsset.id);
+        
+        // Notify parent component about updated product with type casting to avoid TS errors
+        onProductUpdate({
+          ...product,
+          // Use type assertion to handle the primary_asset property
+          primary_asset: primaryAsset.id
+        } as unknown as Product);
+      }
+    }
+  }, [assets, product.id, isImageAsset, onProductUpdate]);
+  
   // Handle asset update from AssetsTab (set primary image)
   const handleAssetUpdate = async (updatedAssets: ProductAsset[]) => {
-    console.log('ProductDetailTabs received updated assets:', updatedAssets);
-    
-    // Sort assets to display primary first
-    const sortedAssets = [...updatedAssets].sort((a, b) => {
-      // Primary images always come first
-      if (a.is_primary && !b.is_primary) return -1;
-      if (!a.is_primary && b.is_primary) return 1;
-      
-      // If both are primary or both are not, sort by upload date (newest first)
-      return new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime();
-    });
-    
-    // Find primary image to update product
-    const primaryAsset = sortedAssets.find(asset => asset.is_primary && isImageAsset(asset));
-    
-    if (primaryAsset) {
-      console.log('Setting primary image:', primaryAsset.url);
-      
-      // Create product images array with proper typing for ProductImage
-      const updatedImages = sortedAssets
-        .filter(asset => isImageAsset(asset))
-        .map((asset, index) => ({
-          id: typeof asset.id === 'string' ? parseInt(asset.id, 10) : Number(asset.id), // Convert to number
-          url: asset.url,
-          is_primary: asset.is_primary || false,
-          order: index // Use index as order
-        }));
-      
-      // Update product with sorted assets and primary image URL
-      const updatedProduct = {
-        ...product,
-        primary_image_thumb: primaryAsset.url,
-        primary_image_large: primaryAsset.url,
-        images: updatedImages,
-        assets: sortedAssets // Add the full assets array to the product
-      };
-      
-      // Log what we're passing to the parent
-      console.log('Updating product with primary image:', updatedProduct.primary_image_thumb);
-      
-      // Update localStorage if needed
-      if (product.id) {
-        try {
-          const storedProduct = localStorage.getItem(`product_${product.id}`);
-          if (storedProduct) {
-            const parsedProduct = JSON.parse(storedProduct);
-            localStorage.setItem(`product_${product.id}`, JSON.stringify({
-              ...parsedProduct,
-              primary_image_thumb: primaryAsset.url,
-              primary_image_large: primaryAsset.url,
-              images: updatedImages
-            }));
-            console.log('Updated product in localStorage with new primary image');
-          }
-        } catch (err) {
-          console.error('Error updating product in localStorage:', err);
-        }
-        
-        // Persist the changes to the backend
-        try {
-          // Send the updated product to the server
-          await productService.updateProduct(product.id, {
-            primary_image_thumb: primaryAsset.url,
-            primary_image_large: primaryAsset.url,
-            images: updatedImages
-          });
-          console.log('Successfully persisted primary image update to server');
-          
-          // Force a refresh of assets to ensure we have the latest data
-          await fetchAssets();
-        } catch (err) {
-          console.error('Error persisting primary image update to server:', err);
-          toast.error('Failed to save primary image change');
-        }
-      }
-      
-      // Ensure we pass the updated product to the parent
-      // Do NOT call onProductUpdate after asset upload to avoid unnecessary reloads
-      // if (onProductUpdate) {
-      //   console.log('Calling onProductUpdate with updated product');
-      //   onProductUpdate(updatedProduct);
-      // }
-    } else {
-      console.warn('No primary image found among assets');
-    }
-    
-    // Always update assets even if no primary image found
-    setAssets(sortedAssets);
+    // Simply update our local assets state
+    // The useEffect above will handle notifying the parent
+    setAssets(updatedAssets);
   };
 
   // Add a useEffect to fetch completeness data (after the existing useEffect hooks)
@@ -1983,6 +1870,20 @@ export const ProductDetailTabs = ({
     unusedAttrs.forEach(attr => handleAddAttribute(attr.id))
     toast.success(`Added ${unusedAttrs.length} attributes from group '${groupName}'`)
   }
+
+  // Add a fallback implementation if the imported function doesn't exist
+  const getAssetUrlSafe = (asset: ProductAsset): string | null => {
+    // If the imported function exists, use it
+    if (typeof getAssetUrl === 'function') {
+      return getAssetUrl(asset);
+    }
+    
+    // Otherwise, provide a fallback implementation
+    if (!asset) return null;
+    
+    // Try to get URL from various properties
+    return asset.url || asset.file_url || null;
+  };
 
   return (
     <Tabs 
@@ -2297,7 +2198,7 @@ export const ProductDetailTabs = ({
                           .sort((a, b) => (a.is_primary && !b.is_primary) ? -1 : (!a.is_primary && b.is_primary) ? 1 : 0)
                           .slice(0, 4)
                           .map((asset, index) => {
-                            const src = getAssetUrl(asset)!; // non-null because we filtered already
+                            const src = getAssetUrlSafe(asset)!; // non-null because we filtered already
                             return (
                               <div 
                                 key={`media-card-image-${asset.id}-${index}`}
@@ -2389,7 +2290,6 @@ export const ProductDetailTabs = ({
       <TabsContent value="assets">
         <AssetsTab 
           product={product} 
-          onAssetUpdate={handleAssetUpdate}
         />
       </TabsContent>
       

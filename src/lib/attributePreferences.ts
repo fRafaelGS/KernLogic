@@ -28,10 +28,10 @@ export const saveLastLocale = (locale: string): void => {
 
 /**
  * Get the user's last selected locale or return default
- * @param defaultLocale The default locale to return if none is stored
- * @returns The stored locale or default
+ * @param defaultLocale The default locale to use if none is stored
+ * @returns The stored locale or provided default
  */
-export const getLastLocale = (defaultLocale: string = 'en_US'): string => {
+export const getLastLocale = (defaultLocale: string): string => {
   try {
     const stored = localStorage.getItem(STORAGE_KEYS.LAST_LOCALE);
     return stored || defaultLocale;
@@ -55,10 +55,10 @@ export const saveLastChannel = (channel: string): void => {
 
 /**
  * Get the user's last selected channel or return default
- * @param defaultChannel The default channel to return if none is stored
- * @returns The stored channel or default
+ * @param defaultChannel The default channel to use if none is stored
+ * @returns The stored channel or provided default
  */
-export const getLastChannel = (defaultChannel: string = 'ecommerce'): string => {
+export const getLastChannel = (defaultChannel: string): string => {
   try {
     const stored = localStorage.getItem(STORAGE_KEYS.LAST_CHANNEL);
     return stored || defaultChannel;

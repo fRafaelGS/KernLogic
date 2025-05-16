@@ -83,10 +83,17 @@ class AttributeValueViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
 
         return qs
     
-    def get_serializer_class(self):
-        if self.action in ['retrieve', 'list']:
-            return AttributeValueDetailSerializer
-        return AttributeValueSerializer
+    def get_serializer(self, *args, **kwargs):
+        data = kwargs.get('data')
+        if data:
+            organization = get_user_organization(self.request.user)
+            locale_code = data.get('locale')
+            if locale_code and not str(locale_code).isdigit():
+                locale_obj = Locale.objects.filter(organization=organization, code=locale_code).first()
+                data = data.copy()
+                data['locale'] = locale_obj.pk if locale_obj else None
+                kwargs['data'] = data
+        return super().get_serializer(*args, **kwargs)
     
     def perform_create(self, serializer):
         """Assign implicit product from nested URL and save.
@@ -99,31 +106,26 @@ class AttributeValueViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         """
 
         organization = get_user_organization(self.request.user)
-
-        # Retrieve product pk from nested router kwargs.
         product_pk = self.kwargs.get('product_pk') or self.kwargs.get('product_id')
-
         product_obj = None
         if product_pk is not None:
             product_obj = get_object_or_404(
                 Product.objects.filter(organization=organization),
                 pk=product_pk,
             )
-            
-        # Get the locale object from the locale code
-        locale_code = self.request.query_params.get('locale')
+        # Get the locale code from query or data, and resolve to Locale instance
+        locale_code = self.request.query_params.get('locale') or self.request.data.get('locale')
         locale_obj = None
         if locale_code:
             try:
                 locale_obj = Locale.objects.get(organization=organization, code=locale_code)
             except Locale.DoesNotExist:
-                pass  # Will be saved as None
-
+                locale_obj = None
         serializer.save(
             organization=organization,
             product=product_obj or serializer.validated_data.get('product'),
-            locale=locale_obj or serializer.validated_data.get('locale'),
-            channel=self.request.query_params.get('channel') or serializer.validated_data.get('channel'),
+            locale=locale_obj,
+            channel=self.request.query_params.get('channel') or self.request.data.get('channel') or serializer.validated_data.get('channel'),
             created_by=self.request.user,
         )
 
@@ -144,56 +146,40 @@ class AttributeValueViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     # ------------------------------------------------------------------
     def perform_destroy(self, instance):
         from rest_framework.exceptions import ValidationError
-
         locale_param  = self.request.query_params.get('locale')
         channel_param = self.request.query_params.get('channel')
-
-        # If the caller specified a locale/channel, ensure the instance
-        # matches exactly; otherwise abort to prevent unintended cross-scope
-        # deletions.
         if locale_param:
-            # Get the locale object from the code
             organization = get_user_organization(self.request.user)
             try:
                 locale_obj = Locale.objects.get(organization=organization, code=locale_param)
-                if instance.locale != locale_obj:
+                if instance.locale_id != locale_obj.pk:
                     raise ValidationError({'detail': 'Attribute value does not match the requested locale – deletion aborted.'})
             except Locale.DoesNotExist:
-                # Only allow deletion if the instance has no locale
-                if instance.locale is not None:
+                if instance.locale_id is not None:
                     raise ValidationError({'detail': 'Attribute value does not match the requested locale – deletion aborted.'})
-
         if channel_param and (instance.channel or '') != channel_param:
             raise ValidationError({'detail': 'Attribute value does not match the requested channel – deletion aborted.'})
-
-        # All good – delete the instance.
         instance.delete()
 
     def perform_update(self, serializer):
-        from products.events import record
-        # capture the old value
-        instance = serializer.instance
-        old_value = instance.value
-
-        # save the new one
-        new_instance = serializer.save()
-
-        # record the change on the product
-        record(
-            product=new_instance.product,
-            user=self.request.user,
-            event_type="attribute_updated",
-            summary=f"Updated attribute '{getattr(new_instance.attribute, 'label', str(new_instance.attribute))}'",
-            payload={
-                "attribute": new_instance.attribute.code if hasattr(new_instance.attribute, 'code') else str(new_instance.attribute),
-                "changes": {
-                    "value": {
-                        "old": old_value,
-                        "new": new_instance.value
-                    }
-                }
-            }
+        organization = get_user_organization(self.request.user)
+        # Get the locale code from query or data, and resolve to Locale instance
+        locale_code = self.request.query_params.get('locale') or self.request.data.get('locale')
+        locale_obj = None
+        if locale_code:
+            try:
+                locale_obj = Locale.objects.get(organization=organization, code=locale_code)
+            except Locale.DoesNotExist:
+                locale_obj = None
+        serializer.save(
+            locale=locale_obj,
+            channel=self.request.query_params.get('channel') or self.request.data.get('channel') or serializer.validated_data.get('channel'),
         )
+
+    def get_serializer_class(self):
+        if self.action in ['list', 'retrieve']:
+            return AttributeValueDetailSerializer
+        return AttributeValueSerializer
 
 class ProductAttributeValueList(generics.ListAPIView):
     """

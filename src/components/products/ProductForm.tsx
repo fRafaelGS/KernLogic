@@ -125,7 +125,7 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
   const { locales, channels, defaultLocale, defaultChannel } = useOrgSettings()
   const [selectedLocale, setSelectedLocale] = useState<LocaleCode>(defaultLocale)
   const [selectedChannel, setSelectedChannel] = useState<ChannelCode>(
-    defaultChannel?.code || (channels.length > 0 ? channels[0].code : 'ecommerce')
+    defaultChannel?.code || (channels.length > 0 ? channels[0].code : '')
   )
   const [product, setProduct] = useState<ProductWithFamily | null>(initialProduct || null);
   

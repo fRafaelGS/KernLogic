@@ -50,10 +50,19 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
   
   const { locales, channels, defaultLocale, defaultChannel } = useOrgSettings()
   
-  const [selectedLocale, setSelectedLocale] = useState<LocaleCode>(locale as LocaleCode ?? defaultLocale)
-  const [selectedChannel, setSelectedChannel] = useState<ChannelCode>(
-    channel as ChannelCode ?? (defaultChannel?.code || (channels.length > 0 ? channels[0].code : 'default'))
-  )
+  // Use org defaults if props are not provided
+  const [selectedLocale, setSelectedLocale] = useState<LocaleCode>(locale ?? defaultLocale)
+  const [selectedChannel, setSelectedChannel] = useState<ChannelCode>(channel ?? defaultChannel?.code ?? (channels.length > 0 ? channels[0].code : ''))
+
+  // Keep selectedLocale/Channel in sync with org defaults if props are not provided
+  useEffect(() => {
+    if (!locale && defaultLocale && selectedLocale !== defaultLocale) {
+      setSelectedLocale(defaultLocale)
+    }
+    if (!channel && defaultChannel?.code && selectedChannel !== defaultChannel.code) {
+      setSelectedChannel(defaultChannel.code)
+    }
+  }, [locale, channel, defaultLocale, defaultChannel, selectedLocale, selectedChannel])
 
   // Add flag to track if we're in create mode
   const isCreateMode = !productId

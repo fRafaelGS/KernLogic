@@ -10,6 +10,8 @@ import { format } from 'date-fns'
 interface ProductRowDetailsProps {
   product: Product & { attributes?: ProductAttribute[] };
   zebra: boolean;
+  locale: string;
+  channel: string;
 }
 
 interface Attribute {
@@ -70,7 +72,7 @@ function formatAttributeValue(value: any): React.ReactNode {
   return String(value)
 }
 
-const ProductRowDetails: React.FC<ProductRowDetailsProps> = ({ product, zebra }) => {
+const ProductRowDetails: React.FC<ProductRowDetailsProps> = ({ product, zebra, locale, channel }) => {
   // Debug: log the raw attributes prop for this product
   console.log('[ProductRowDetails] attributes for product', product.id, product.attributes)
 

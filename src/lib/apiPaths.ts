@@ -16,6 +16,11 @@ export const paths = {
     token:   () => join(API_BASE, 'token')   + '/',   //   /api/token/
     refresh: () => join(API_BASE, 'token/refresh') + '/',   // /api/token/refresh/
   },
+  organizations: {
+    root: () => join(API_BASE, 'organizations') + '/',
+    byId: (id: number) => join(API_BASE, 'organizations', id) + '/',
+    current: () => join(API_BASE, 'organizations', 'current') + '/',
+  },
   products: {
     root:    () => join(API_BASE, 'products') + '/',
     byId:    (id: number)          => join(API_BASE, 'products', id) + '/',

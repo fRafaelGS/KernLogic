@@ -6,6 +6,7 @@ import localeService from '@/services/localeService'
 import { Channel } from '@/services/channelService'
 import channelService from '@/services/channelService'
 import { paths } from '@/lib/apiPaths'
+import useOrganization from './useOrganization'
 
 interface OrgSettings {
   id: number
@@ -18,6 +19,7 @@ interface OrgSettings {
 export function useOrgSettings() {
   const { user } = useAuth()
   const orgId = user?.organization_id
+  const { organization: orgFromHook, defaultLocale: orgDefaultLocale, defaultChannel: orgDefaultChannelCode } = useOrganization()
 
   // Query organization settings
   const {
@@ -32,7 +34,7 @@ export function useOrgSettings() {
       const response = await api.get(`/organizations/${orgId}/`)
       return response.data
     },
-    enabled: !!orgId,
+    enabled: !!orgId && !orgFromHook, // Only fetch if not already loaded by useOrganization
     staleTime: 1000 * 60 * 5, // 5 minutes
   })
 
@@ -69,20 +71,26 @@ export function useOrgSettings() {
     label: channel.label || channel.name || channel.code
   }))
 
+  // Use organization from either source (prefer the one from useOrganization hook)
+  const consolidatedOrgSettings = orgFromHook || orgSettings
+
   // Find default locale object from the locales list
-  const defaultLocaleObj = locales.find(locale => locale.code === orgSettings?.default_locale) || null
+  const defaultLocaleObj = locales.find(locale => locale.code === consolidatedOrgSettings?.default_locale) || null
 
-  // Find default channel object
-  const defaultChannelObj = channels.find(channel => channel.id === orgSettings?.default_channel?.id) || null
-
+  // Find default channel object (either from org.default_channel or by code)
+  const defaultChannelObj = channels.find(channel => 
+    (consolidatedOrgSettings?.default_channel?.id && channel.id === consolidatedOrgSettings.default_channel.id) || 
+    (!consolidatedOrgSettings?.default_channel?.id && orgDefaultChannelCode && channel.code === orgDefaultChannelCode)
+  ) || null
+  
   return {
-    orgSettings,
-    defaultLocale: orgSettings?.default_locale || 'en_US',
+    orgSettings: consolidatedOrgSettings,
+    defaultLocale: consolidatedOrgSettings?.default_locale || orgDefaultLocale || 'en_US',
     defaultLocaleObj,
     locales,
     channels,
-    defaultChannel: orgSettings?.default_channel || defaultChannelObj || null,
-    defaultChannelId: orgSettings?.default_channel?.id || null,
+    defaultChannel: consolidatedOrgSettings?.default_channel || defaultChannelObj || null,
+    defaultChannelId: consolidatedOrgSettings?.default_channel?.id || defaultChannelObj?.id || null,
     isLoading: isOrgLoading || isLocalesLoading || isChannelsLoading,
     isChannelsLoading,
     error: orgError || localesError || channelsError,

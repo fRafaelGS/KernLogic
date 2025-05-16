@@ -148,7 +148,7 @@ export const ProductDetailTabs = ({
   const [currentEditValue, setCurrentEditValue] = useState<any>(null);
   const [isAddAttributeOpen, setIsAddAttributeOpen] = useState(false);
   const [attributeSearchTerm, setAttributeSearchTerm] = useState('');
-  const { locales, defaultLocale } = useOrgSettings()
+  const { locales, defaultLocale, defaultChannel } = useOrgSettings()
   const [selectedLocale, setSelectedLocale] = useState<LocaleCode>(defaultLocale)
   const [availableLocales, setAvailableLocales] = useState(locales.map(locale => locale.code))
   const [savingAttributeId, setSavingAttributeId] = useState<number | null>(null);
@@ -2379,7 +2379,8 @@ export const ProductDetailTabs = ({
           <ProductAttributesPanel 
             key={`attribute-panel-${product.id}-${product.family || 'no-family'}-${selectedLocale}`}
             productId={product.id ? String(product.id) : ''} 
-            locale={selectedLocale}
+            locale={selectedLocale || defaultLocale}
+            channel={defaultChannel?.code || ''}
             familyId={typeof product.family === 'object' && product.family !== null ? product.family.id : undefined}
           />
         )}

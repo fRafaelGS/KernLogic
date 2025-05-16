@@ -6,6 +6,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import { makeAttributeKey, normalizeLocaleOrChannel } from '@/lib/attributeUtils';
 import isEqual from 'lodash/isEqual';
+import useOrganization from './useOrganization';
 
 /**
  * Custom hook for managing product attributes
@@ -31,14 +32,25 @@ export const useAttributes = (
   } = options || {};
   
   const queryClient = useQueryClient();
+  const { defaultLocale, defaultChannel } = useOrganization();
 
-  // State
-  const [selectedLocale, setSelectedLocale] = useState('en_US');
-  const [selectedChannel, setSelectedChannel] = useState('ecommerce');
+  // State - initialize with org defaults
+  const [selectedLocale, setSelectedLocale] = useState(defaultLocale);
+  const [selectedChannel, setSelectedChannel] = useState(defaultChannel);
   const [editableAttributeIds, setEditableAttributeIds] = useState<Record<number, boolean>>({});
   const [attributeValues, setAttributeValues] = useState<Record<string, AttributeValue>>({});
   const [savingStates, setSavingStates] = useState<Record<number, SavingState>>({});
   const [currentGroupId, setCurrentGroupId] = useState<number | null>(null);
+  
+  // Update locale/channel when org defaults change
+  useEffect(() => {
+    if (defaultLocale && !selectedLocale) {
+      setSelectedLocale(defaultLocale);
+    }
+    if (defaultChannel && !selectedChannel) {
+      setSelectedChannel(defaultChannel);
+    }
+  }, [defaultLocale, defaultChannel, selectedLocale, selectedChannel]);
   
   // Confirmation dialog for removing attributes
   const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);

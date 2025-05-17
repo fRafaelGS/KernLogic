@@ -42,6 +42,16 @@ const serializeDateRange = (dateRange: DateRange | undefined) => ({
   to: dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined,
 });
 
+// Format entity type for display - moved up to avoid reference error
+const formatEntityType = (type: string, action: string, id: number) => {
+  let entityType = type;
+  if (type === 'attribute_value') entityType = 'Attribute';
+  else entityType = type.charAt(0).toUpperCase() + type.slice(1);
+  
+  // Return the action and ID without hashtag
+  return `${action.charAt(0).toUpperCase() + action.slice(1)} ${id}`;
+};
+
 const ChangeHistoryReport: React.FC = () => {
   const queryClient = useQueryClient();
   const [dateRange, setDateRange] = useState<DateRange>({
@@ -110,16 +120,6 @@ const ChangeHistoryReport: React.FC = () => {
   const formatDateTime = (dateStr: string) => {
     const date = new Date(dateStr);
     return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-  };
-
-  // Format entity type for display
-  const formatEntityType = (type: string, action: string, id: number) => {
-    let entityType = type;
-    if (type === 'attribute_value') entityType = 'Attribute';
-    else entityType = type.charAt(0).toUpperCase() + type.slice(1);
-    
-    // Return the action and ID without hashtag
-    return `${action.charAt(0).toUpperCase() + action.slice(1)} ${id}`;
   };
 
   // Get action badge color

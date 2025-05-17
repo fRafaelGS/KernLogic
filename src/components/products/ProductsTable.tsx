@@ -96,6 +96,10 @@ interface FilterState {
   minPrice: string;
   maxPrice: string;
   tags: string[]; // Add tags array to FilterState
+  brand?: string;
+  barcode?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 // Add type for category options
@@ -260,6 +264,10 @@ export function ProductsTable({
     minPrice: searchParams.get('minPrice') || '',
     maxPrice: searchParams.get('maxPrice') || '',
     tags: [], // Initialize empty tags array
+    brand: searchParams.get('brand') || undefined,
+    barcode: searchParams.get('barcode') || undefined,
+    created_at: searchParams.get('created_at') || undefined,
+    updated_at: searchParams.get('updated_at') || undefined,
   });
 
   const [columnOrder, setColumnOrder] = useState<string[]>([]);
@@ -314,12 +322,16 @@ export function ProductsTable({
           page_size: pageSize
         }
         if (debouncedSearchTerm) params.search = debouncedSearchTerm
-        if (filters.status !== 'all') params.is_active = filters.status === 'active'
+        if (filters.status && filters.status !== 'all') params.is_active = filters.status === 'active'
         if (filters.category && filters.category !== 'all') params.category = filters.category
         if (filters.family && filters.family !== 'all') params.family = filters.family
         if (filters.minPrice) params.min_price = filters.minPrice
         if (filters.maxPrice) params.max_price = filters.maxPrice
         if (filters.tags && filters.tags.length > 0) params.tags = filters.tags.join(',')
+        if (filters.brand) params.brand = filters.brand
+        if (filters.barcode) params.barcode = filters.barcode
+        if (filters.created_at) params.created_at = filters.created_at
+        if (filters.updated_at) params.updated_at = filters.updated_at
         const response = await productService.getProducts(params, false, false)
         if (response && typeof response === 'object' && 'results' in response) {
           // Update total count
@@ -485,6 +497,10 @@ export function ProductsTable({
       minPrice: '',
       maxPrice: '',
       tags: [], // Clear tags array
+      brand: undefined,
+      barcode: undefined,
+      created_at: undefined,
+      updated_at: undefined,
     });
     
     // Update URL params without the cleared filters
@@ -495,6 +511,10 @@ export function ProductsTable({
     params.delete('minPrice');
     params.delete('maxPrice');
     params.delete('tags'); // Remove tags parameter if it exists
+    params.delete('brand');
+    params.delete('barcode');
+    params.delete('created_at');
+    params.delete('updated_at'); // Remove any other filter parameters
     setSearchParams(params);
   }, [searchParams, setSearchParams]);
 

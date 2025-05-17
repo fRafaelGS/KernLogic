@@ -122,7 +122,7 @@ export default function ProductsPage() {
   }
   
   return (
-    <div className="flex flex-col flex-1 w-full h-full mx-auto max-w-full px-2 lg:px-4 min-h-0 overflow-hidden">
+    <div className="flex flex-col flex-1 px-2 lg:px-4 min-h-0">
       {/* Table Toolbar */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-1 px-1 border-b gap-1 sm:gap-1">
         <div className="flex items-center space-x-2 w-full sm:w-auto">
@@ -248,7 +248,7 @@ export default function ProductsPage() {
       {/* Main Content */}
       <section className="flex flex-col flex-1 min-h-0">
         {viewMode === 'list' ? (
-          <div className="flex-1 overflow-auto min-h-0">
+          <div className="flex-1 min-h-0">
             <ProductsTableAdapter 
               products={products}
               filteredData={products}
@@ -260,7 +260,7 @@ export default function ProductsPage() {
             />
           </div>
         ) : (
-          <div className="flex-1 overflow-auto min-h-0">
+          <div className="flex-1 min-h-0">
             <ProductGrid 
               products={products}
               loading={loading}

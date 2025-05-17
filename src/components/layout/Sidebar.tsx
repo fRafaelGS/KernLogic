@@ -23,6 +23,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { productService } from '@/services/productService'
 
 // Define CSS variables for sidebar widths
 const SIDEBAR_CSS = {
@@ -43,6 +44,7 @@ interface NavItemProps {
   requiredPermission?: string;
   collapsed?: boolean;
   isProducts?: boolean;
+  end?: boolean;
 }
 
 // Cookie utility functions
@@ -57,7 +59,7 @@ const getCookie = (name: string) => {
   return cookieValue ? decodeURIComponent(cookieValue.pop() || '') : '';
 };
 
-const NavItem = ({ icon: Icon, label, href, badge, requiredPermission, collapsed }: NavItemProps) => {
+const NavItem = ({ icon: Icon, label, href, badge, requiredPermission, collapsed, end }: NavItemProps & { end?: boolean }) => {
   const { checkPermission } = useAuth();
   
   // If a permission is required but user doesn't have it, don't show the item
@@ -68,6 +70,7 @@ const NavItem = ({ icon: Icon, label, href, badge, requiredPermission, collapsed
   const navLink = (
     <NavLink 
       to={href} 
+      {...(end ? { end: true } : {})}
       className={({ isActive }) =>
         cn(
           "flex items-center rounded-md transition-colors",
@@ -143,7 +146,21 @@ export function Sidebar({ className, isMobile = false }: SidebarProps) {
   });
   const [hovering, setHovering] = useState(false);
   const [productsOpen, setProductsOpen] = useState(false);
+  const [productCount, setProductCount] = useState<number | null>(null)
   
+  // Fetch product count for sidebar badge
+  useEffect(() => {
+    let isMounted = true
+    productService.getProducts({ page: 1, page_size: 1 }, false, false).then(res => {
+      if (isMounted && res && typeof res === 'object' && 'count' in res) {
+        setProductCount(res.count)
+      }
+    }).catch(() => {
+      if (isMounted) setProductCount(null)
+    })
+    return () => { isMounted = false }
+  }, [])
+
   // Cycle through pin states (only on desktop)
   const cyclePinState = () => {
     if (isMobile) return; // No cycling on mobile
@@ -190,13 +207,14 @@ export function Sidebar({ className, isMobile = false }: SidebarProps) {
       icon: LayoutDashboard,
       label: "Dashboard",
       href: "/app",
-      requiredPermission: "dashboard.view"
+      requiredPermission: "dashboard.view",
+      end: true
     },
     {
       icon: Package,
       label: "Products",
       href: "/app/products",
-      badge: location.pathname.includes('/app/products') ? '' : '24',
+      badge: !location.pathname.startsWith('/app/products') && productCount !== null ? productCount : '',
       requiredPermission: "product.view"
     },
     {
@@ -320,6 +338,7 @@ export function Sidebar({ className, isMobile = false }: SidebarProps) {
               badge={item.badge}
               requiredPermission={item.requiredPermission}
               collapsed={effectiveCollapsed}
+              end={item.end}
             />
           ))}
         </div>

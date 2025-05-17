@@ -54,18 +54,20 @@ const formatEntityType = (type: string, action: string, id: number) => {
 
 // Helper: map action to color class
 function getActionColor(action: string) {
-  switch (action) {
-    case 'create':
-      return 'bg-green-500 text-white'
-    case 'update':
-      return 'bg-blue-500 text-white'
-    case 'delete':
-      return 'bg-red-500 text-white'
-    case 'archive':
-      return 'bg-gray-500 text-white'
-    default:
-      return 'bg-purple-500 text-white'
-  }
+  const normalized = action.toLowerCase()
+  if ([
+    'create', 'created'
+  ].includes(normalized)) return 'bg-green-500 text-white'
+  if ([
+    'update', 'updated'
+  ].includes(normalized)) return 'bg-blue-500 text-white'
+  if ([
+    'delete', 'deleted'
+  ].includes(normalized)) return 'bg-red-500 text-white'
+  if ([
+    'archive', 'archived'
+  ].includes(normalized)) return 'bg-gray-500 text-white'
+  return 'bg-purple-500 text-white'
 }
 
 // Memoized FiltersPanel
@@ -313,7 +315,7 @@ export function ChangeHistoryReport() {
   }, [dateRange, selectedUsers, entityQuery, selectedActions]);
 
   // Pagination settings
-  const itemsPerPage = 10;
+  const itemsPerPage = 15;
   // Local filtering for action/entity
   let filteredData = data || [];
   if (selectedActions.length > 0) {
@@ -440,10 +442,12 @@ export function ChangeHistoryReport() {
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-6">
+      {/* Move ActionSummaryBadges above the flex row so chips span full width */}
+      <ActionSummaryBadges />
+
+      <div className="flex flex-col md:flex-row gap-6 items-start">
         {/* Main area */}
-        <div className="flex-1 space-y-6">
-          <ActionSummaryBadges />
+        <div className="flex-1">
           <FilterChips />
 
           {isLoading ? (
@@ -456,15 +460,6 @@ export function ChangeHistoryReport() {
             </div>
           ) : (
             <Card>
-              <CardHeader>
-                <CardTitle>Audit Trail</CardTitle>
-                <CardDescription>
-                  {dateRange.from && dateRange.to 
-                    ? `Changes from ${format(dateRange.from, 'PP')} to ${format(dateRange.to, 'PP')}`
-                    : 'Recent changes to products and attributes'
-                  }
-                </CardDescription>
-              </CardHeader>
               <CardContent>
                 <Table>
                   <TableHeader>
@@ -547,7 +542,7 @@ export function ChangeHistoryReport() {
         </div>
 
         {/* Filters panel - desktop only */}
-        <aside className="hidden md:block w-64 sticky top-6 h-fit space-y-4 p-4 bg-white border rounded shadow">
+        <aside className="hidden md:block w-64 p-4 bg-white border rounded shadow">
           <FiltersPanel
             showTitle={true}
             dateRange={dateRange}

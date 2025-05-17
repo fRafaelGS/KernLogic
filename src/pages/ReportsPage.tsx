@@ -590,12 +590,7 @@ const ReportsPage: React.FC = () => {
       <p className="text-enterprise-600 mb-6">
         Gain insights into your product data quality and enrichment progress.
       </p>
-      
       <Card>
-        <CardHeader>
-          <CardTitle>Reports Dashboard</CardTitle>
-          <CardDescription>Select a report type to view detailed analytics</CardDescription>
-        </CardHeader>
         <CardContent>
           {themes.length > 0 ? (
             <Tabs 
@@ -603,14 +598,13 @@ const ReportsPage: React.FC = () => {
               onValueChange={setActiveReport}
               className="w-full"
             >
-              <TabsList className="mb-4">
+              <TabsList className="mb-4 mt-4">
                 {themes.map(theme => (
                   <TabsTrigger key={theme.slug} value={theme.slug}>
                     {theme.name}
                   </TabsTrigger>
                 ))}
               </TabsList>
-              
               {themes.map(theme => (
                 <TabsContent key={theme.slug} value={theme.slug} className="space-y-4">
                   <div>

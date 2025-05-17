@@ -1445,7 +1445,7 @@ export function ProductsTable({
   // Render the component
   return (
     <React.Fragment>
-      <div className="flex flex-col flex-1 w-full h-full mx-auto max-w-full px-2 lg:px-4 min-h-0 overflow-hidden">
+      <div className="flex flex-col flex-1 w-full h-full mx-auto max-w-full px-2 lg:px-4 min-h-0">
         {/* Table Toolbar */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-1 px-1 border-b gap-1 sm:gap-1">
           <div className="flex items-center space-x-2 w-full sm:w-auto">
@@ -1712,12 +1712,12 @@ export function ProductsTable({
         )}
 
         {/* Section containing scroll area and footer */}
-        <section className="flex flex-col flex-1 min-h-0">
+        <section className="overflow-x-auto w-full">
           {viewMode === 'list' ? (
             <div
               ref={scrollRef}
               className={cn(
-                "flex-1 overflow-auto min-h-0",
+                "flex-1 min-h-0",
                 "h-[calc(100%-3rem)]",
                 columnVisibility.actions !== false && `pr-[112px]`,
               )}
@@ -1731,7 +1731,7 @@ export function ProductsTable({
                   items={columnOrder.filter(Boolean)}
                   strategy={horizontalListSortingStrategy}
                 >
-                  <Table className="min-w-fit">
+                  <Table className="w-full table-auto">
                     <TableHeader className="relative">
                         {table.getHeaderGroups().map(headerGroup => (
                           <React.Fragment key={headerGroup.id}>

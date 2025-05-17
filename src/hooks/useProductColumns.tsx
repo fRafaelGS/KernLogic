@@ -265,10 +265,10 @@ export function useProductColumns({
         <Button
           variant="ghost"
           onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          className="p-0 hover:bg-transparent"
+          className="p-0 hover:bg-transparent w-full text-center"
         >
-          <span>SKU</span>
-          <ArrowUpDown className="ml-1 h-4 w-4 opacity-70" />
+          <span className="w-full text-center block">SKU</span>
+          <ArrowUpDown className="ml-1 h-4 w-4" />
         </Button>
       ),
       cell: ({ row }) => {
@@ -328,10 +328,10 @@ export function useProductColumns({
         <Button
           variant="ghost"
           onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          className="p-0 hover:bg-transparent"
+          className="p-0 hover:bg-transparent w-full text-center"
         >
-          <span>Name</span>
-          <ArrowUpDown className="ml-1 h-4 w-4 opacity-70" />
+          <span className="w-full text-center block">Name</span>
+          <ArrowUpDown className="ml-1 h-4 w-4" />
         </Button>
       ),
       cell: ({ row }) => {
@@ -392,9 +392,9 @@ export function useProductColumns({
           <Button
             variant="ghost"
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-            className="p-0 hover:bg-transparent"
+            className="p-0 hover:bg-transparent w-full text-center"
           >
-            <span>Family</span>
+            <span className="w-full text-center block">Family</span>
             <ArrowUpDown className="ml-1 h-4 w-4" />
           </Button>
         );
@@ -470,9 +470,9 @@ export function useProductColumns({
           <Button
             variant="ghost"
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-            className="p-0 hover:bg-transparent"
+            className="p-0 hover:bg-transparent w-full text-center"
           >
-            <span>Category</span>
+            <span className="w-full text-center block">Category</span>
             <ArrowUpDown className="ml-1 h-4 w-4" />
           </Button>
         );
@@ -576,9 +576,9 @@ export function useProductColumns({
           <Button
             variant="ghost"
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-            className="p-0 hover:bg-transparent"
+            className="p-0 hover:bg-transparent w-full text-center"
           >
-            <span>Brand</span>
+            <span className="w-full text-center block">Brand</span>
             {column.getIsSorted() === "asc" ? (
               <ArrowUpDown className="ml-1 h-4 w-4" />
             ) : column.getIsSorted() === "desc" ? (
@@ -644,9 +644,9 @@ export function useProductColumns({
           <Button
             variant="ghost"
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-            className="p-0 hover:bg-transparent"
+            className="p-0 hover:bg-transparent w-full text-center"
           >
-            <span>Tags</span>
+            <span className="w-full text-center block">Tags</span>
             {column.getIsSorted() === "asc" ? (
               <ArrowUpDown className="ml-1 h-4 w-4" />
             ) : column.getIsSorted() === "desc" ? (
@@ -710,7 +710,7 @@ export function useProductColumns({
                 menuPosition="fixed"
                 styles={{ menuPortal: base => ({ ...base, zIndex: 9999 }), control: base => ({ ...base, minHeight: 38 }) }}
                 noOptionsMessage={() => 'No tags found'}
-                formatCreateLabel={(inputValue: string) => `Create tag \"${inputValue}\"`}
+                formatCreateLabel={(inputValue: string) => `Create tag "${inputValue}"`}
               />
               <div className="flex gap-2 mt-3 justify-end">
                 <Button size="sm" variant="outline" onClick={handleCancelEdit}>
@@ -784,9 +784,9 @@ export function useProductColumns({
           <Button
             variant="ghost"
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-            className="p-0 hover:bg-transparent"
+            className="p-0 hover:bg-transparent w-full text-center"
           >
-            <span>GTIN</span>
+            <span className="w-full text-center block">GTIN</span>
             {column.getIsSorted() === "asc" ? (
               <ArrowUpDown className="ml-1 h-4 w-4" />
             ) : column.getIsSorted() === "desc" ? (
@@ -850,9 +850,9 @@ export function useProductColumns({
         <Button
           variant="ghost"
           onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          className="p-0 hover:bg-transparent"
+          className="p-0 hover:bg-transparent w-full text-center"
         >
-          <span>Price</span>
+          <span className="w-full text-center block">Price</span>
           <ArrowUpDown className="ml-1 h-4 w-4 opacity-70" />
         </Button>
       ),
@@ -933,9 +933,9 @@ export function useProductColumns({
           <Button
             variant="ghost"
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-            className="p-0 hover:bg-transparent"
+            className="p-0 hover:bg-transparent w-full text-center"
           >
-            <span>Status</span>
+            <span className="w-full text-center block">Status</span>
             {column.getIsSorted() === "asc" ? (
               <ArrowUpDown className="ml-1 h-4 w-4" />
             ) : column.getIsSorted() === "desc" ? (
@@ -999,9 +999,9 @@ export function useProductColumns({
           <Button
             variant="ghost"
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-            className="p-0 hover:bg-transparent"
+            className="p-0 hover:bg-transparent w-full text-center"
           >
-            <span>Created</span>
+            <span className="w-full text-center block">Created</span>
             {column.getIsSorted() === "asc" ? (
               <ArrowUpDown className="ml-1 h-4 w-4" />
             ) : column.getIsSorted() === "desc" ? (
@@ -1034,9 +1034,9 @@ export function useProductColumns({
           <Button
             variant="ghost"
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-            className="p-0 hover:bg-transparent"
+            className="p-0 hover:bg-transparent w-full text-center"
           >
-            <span>Last Modify</span>
+            <span className="w-full text-center block">Last Modify</span>
             {column.getIsSorted() === "asc" ? (
               <ArrowUpDown className="ml-1 h-4 w-4" />
             ) : column.getIsSorted() === "desc" ? (

@@ -2,14 +2,16 @@ import React from 'react'
 // @ts-ignore - Importing ProductsTable as-is despite potential type conflicts
 import { ProductsTable } from './ProductsTable'
 import { Product } from '@/services/productService'
+import { ProductGrid } from './ProductGrid'
 
 interface ProductsTableAdapterProps {
-  products: Product[];
-  loading: boolean;
-  error: string | null;
-  pagination: { pageIndex: number; pageSize: number };
-  setPagination: (pagination: { pageIndex: number; pageSize: number }) => void;
-  totalCount: number;
+  products?: Product[];
+  loading?: boolean;
+  error?: string | null;
+  pagination?: { pageIndex: number; pageSize: number };
+  setPagination?: (pagination: { pageIndex: number; pageSize: number }) => void;
+  totalCount?: number;
+  viewMode?: 'list' | 'grid';
 }
 
 /**
@@ -22,12 +24,18 @@ interface ProductsTableAdapterProps {
  * - In a future refactor, we need to update ProductsTable to use data from props
  */
 export function ProductsTableAdapter(props: ProductsTableAdapterProps) {
-  // Currently, ProductsTable only accepts hideTopControls and hideTopSearch props
-  // It handles its own data fetching internally - we'll need to refactor it later
-  
+  // Switch between ProductsTable and ProductGrid based on viewMode
+  if (props.viewMode === 'grid') {
+    return <ProductGrid 
+      products={props.products || []}
+      loading={props.loading}
+      error={props.error}
+    />
+  }
+  // Default to list view
   // @ts-ignore - This is a temporary solution until we properly update ProductsTable
   return <ProductsTable 
     hideTopSearch={true} 
-    hideTopControls={true}
-  />;
+    hideTopControls={false}
+  />
 } 

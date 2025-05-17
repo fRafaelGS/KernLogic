@@ -87,6 +87,7 @@ import { useFamilies } from "@/api/familyApi";
 const ACTION_W = 112; // Width of action column in pixels
 const FOOTER_H = 48; // Height of footer in pixels
 
+
 // Define filter state type
 interface FilterState {
   category: string;
@@ -182,6 +183,9 @@ export function ProductsTable({
   const [editingCell, setEditingCell] = useState<{ rowIndex: number; columnId: string } | null>(null);
   const [editValue, setEditValue] = useState<string>('');
   const [originalEditValue, setOriginalEditValue] = useState<string>('');
+
+  const { data: families = [], isLoading: isFamiliesLoading } = useFamilies();
+
   
   // Add viewMode state
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
@@ -1459,15 +1463,7 @@ export function ProductsTable({
                 />
               </div>
             )}
-            <Button 
-              variant={filtersVisible ? "primary" : "outline"} 
-              size="sm" 
-              onClick={handleFilterToggle}
-              className={filtersVisible ? "text-white" : ""}
-            >
-              <FilterIcon className="mr-2 h-4 w-4" />
-              Filter {filtersVisible ? "(on)" : ""}
-            </Button>
+            {/* Filter button removed as per instructions */}
           </div>
           
           <div className="flex items-center space-x-2">
@@ -1585,131 +1581,7 @@ export function ProductsTable({
         </div>
 
         {/* Additional Filter Panel that toggles based on filtersVisible state */}
-        {filtersVisible && (
-          <div className="border-b bg-slate-50 p-2">
-            <div className="space-y-2">
-              <Label htmlFor="category-filter">Category</Label>
-              <Select
-                value={filters.category || "all"}
-                onValueChange={(value) => {
-                  // Debug logging
-                  console.log("Top filter - Selected category value:", value);
-                  
-                  // Update our local filter state and column filter in one call
-                  handleFilterChange('category', value);
-                }}
-              >
-                <SelectTrigger id="category-filter">
-                  <SelectValue placeholder="All Categories" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  <SelectItem value="uncategorized">Uncategorized</SelectItem>
-                  {uniqueCategories.map((category) => (
-                    <SelectItem key={category} value={category}>
-                      {category}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="family-filter">Family</Label>
-              <Select
-                value={filters.family || "all"}
-                onValueChange={(value) => {
-                  // Update our local filter state
-                  handleFilterChange('family', value);
-                  
-                  // Also update the table's column filter
-                  const familyColumn = table.getColumn('family');
-                  if (familyColumn) {
-                    if (value === 'all') {
-                      familyColumn.setFilterValue(null);
-                    } else {
-                      familyColumn.setFilterValue(value);
-                    }
-                  }
-                }}
-              >
-                <SelectTrigger id="family-filter">
-                  <SelectValue placeholder="All Families" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Families</SelectItem>
-                  {(() => {
-                    const { data: families, isLoading } = useFamilies();
-                    
-                    if (isLoading) {
-                      return <SelectItem value="loading" disabled>Loading...</SelectItem>;
-                    }
-                    
-                    if (!families || families.length === 0) {
-                      return <SelectItem value="none" disabled>No families available</SelectItem>;
-                    }
-                    
-                    return families.map(family => (
-                      <SelectItem key={family.id} value={String(family.id)}>
-                        {family.label || family.code || `Family ${family.id}`}
-                      </SelectItem>
-                    ));
-                  })()}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="status-filter">Status</Label>
-              <Select
-                value={filters.status}
-                onValueChange={(value) => handleFilterChange('status', value as any)}
-              >
-                <SelectTrigger id="status-filter">
-                  <SelectValue placeholder="All Statuses" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="min-price">Min Price</Label>
-              <Input
-                id="min-price"
-                type="number"
-                min={0}
-                placeholder="Min Price"
-                value={filters.minPrice}
-                onChange={(e) => handleFilterChange('minPrice', e.target.value)}
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="max-price">Max Price</Label>
-              <Input
-                id="max-price"
-                type="number"
-                min={0}
-                placeholder="Max Price"
-                value={filters.maxPrice}
-                onChange={(e) => handleFilterChange('maxPrice', e.target.value)}
-              />
-            </div>
-            
-            <div className="col-span-full flex justify-end space-x-2">
-              <Button variant="outline" size="sm" onClick={handleClearFilters}>
-                Clear Filters
-              </Button>
-              <Button size="sm" onClick={handleFilterToggle}>
-                Apply Filters
-              </Button>
-            </div>
-          </div>
-        )}
+        {/* Removed the extra filter panel and all logic related to filtersVisible */}
 
         {/* Section containing scroll area and footer */}
         <section className="flex-1 overflow-auto min-h-0 min-w-0">
@@ -1779,7 +1651,7 @@ export function ProductsTable({
                                           transition-colors
                                         "
                                       >
-                                        Clear&nbsp;filters
+                                        Reset
                                       </Button>
                                     </TableHead>
                                   );
@@ -2096,6 +1968,43 @@ export function ProductsTable({
                                         );
                                       }
 
+                                      // In the filter row rendering, add this case:
+                                      if (columnId === 'family') {
+                                        return (
+                                          <Select
+                                            value={(table.getColumn('family')?.getFilterValue() as string) ?? 'all'}
+                                            onValueChange={value => {
+                                              handleFilterChange('family', value)
+                                              // Also update the table's column filter
+                                              const familyColumn = table.getColumn('family')
+                                              if (familyColumn) {
+                                                if (value === 'all') {
+                                                  familyColumn.setFilterValue(null)
+                                                } else {
+                                                  familyColumn.setFilterValue(value)
+                                                }
+                                              }
+                                            }}
+                                          >
+                                            <SelectTrigger className='h-7 text-xs'>
+                                              <SelectValue placeholder='All Families' />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value='all'>All Families</SelectItem>
+                                              {isFamiliesLoading && <SelectItem value='loading' disabled>Loading...</SelectItem>}
+                                              {!isFamiliesLoading && families.length === 0 && (
+                                                <SelectItem value='none' disabled>No families available</SelectItem>
+                                              )}
+                                              {!isFamiliesLoading && families.map((family: any) => (
+                                                <SelectItem key={family.id} value={String(family.id)}>
+                                                  {family.label || family.code || `Family ${family.id}`}
+                                                </SelectItem>
+                                              ))}
+                                            </SelectContent>
+                                          </Select>
+                                        )
+                                      }
+
                                       // Default: no filter
                                       return null;
                                     })()}
@@ -2112,7 +2021,6 @@ export function ProductsTable({
                         columns={columns}
                         loading={loading}
                         filteredData={filteredData}
-                        debouncedSearchTerm={debouncedSearchTerm}
                         filters={filters}
                         handleClearFilters={handleClearFilters}
                         handleRefresh={handleRefresh}

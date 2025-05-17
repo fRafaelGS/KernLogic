@@ -25,6 +25,7 @@ export interface FilterState {
   minPrice: string;
   maxPrice: string;
   tags: string[];
+  searchTerm?: string;
 }
 
 /* ------------------------------------------------------------------ */
@@ -34,7 +35,6 @@ export interface ProductsTableFallbackProps {
   columns: ColumnDef<Product>[];
   loading: boolean;
   filteredData: Product[];
-  debouncedSearchTerm: string;
   filters: FilterState;
   handleClearFilters: () => void;
   handleRefresh: () => void;
@@ -44,7 +44,6 @@ export function ProductsTableFallback({
   columns,
   loading,
   filteredData,
-  debouncedSearchTerm,
   filters,
   handleClearFilters,
   handleRefresh,
@@ -64,7 +63,7 @@ export function ProductsTableFallback({
             {columns.map((column, colIdx) => {
               const columnId =
                 column.id ||
-                // @ts-ignore because accessorKey isn’t on every ColumnDef
+                // @ts-ignore because accessorKey isn't on every ColumnDef
                 (column as any).accessorKey?.toString() ||
                 "";
               const hideMobile = ["brand", "barcode", "created_at", "tags"].includes(
@@ -97,7 +96,7 @@ export function ProductsTableFallback({
   /* -------- 2. No-data / no-match UI ----------------------------- */
   if (filteredData.length === 0) {
     const hasFilters =
-      debouncedSearchTerm ||
+      filters.searchTerm ||
       filters.category ||
       filters.status !== "all" ||
       filters.minPrice ||
@@ -117,7 +116,7 @@ export function ProductsTableFallback({
                 </h3>
                 <p className="text-gray-500 mb-4 max-w-md">
                   Try adjusting your search or filter criteria to find what
-                  you’re looking for.
+                  you're looking for.
                 </p>
                 <div className="flex gap-3">
                   <Button

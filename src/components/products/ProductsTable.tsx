@@ -1569,7 +1569,7 @@ export function ProductsTable({
   // Render the component
   return (
     <React.Fragment>
-      <div className="flex flex-col flex-1 px-2 lg:px-4 min-h-0">
+      <div className="flex flex-col flex-1 px-2 lg:px-4 min-h-0 overflow-x-hidden">
         {/* Table Toolbar */}
         <div className="flex items-center justify-between py-2 border-b bg-white z-10">
           <div className="flex items-center space-x-2 w-full sm:w-auto">
@@ -1700,11 +1700,8 @@ export function ProductsTable({
           </div>
         </div>
 
-        {/* Additional Filter Panel that toggles based on filtersVisible state */}
-        {/* Removed the extra filter panel and all logic related to filtersVisible */}
-
-                        {/* Section containing scroll area and footer */}
-        <section className="flex-1 overflow-hidden min-h-0 min-w-0">
+        {/* Section containing scroll area and footer */}
+        <section className="flex-1 overflow-hidden min-h-0 min-w-0 relative">
           {viewMode === 'list' ? (
             <div
               ref={scrollRef}
@@ -2314,68 +2311,72 @@ export function ProductsTable({
               </DndContext>
             </div>
           ) : (
-            <div className="flex-1 overflow-hidden">
-              <ProductGrid 
-                products={filteredData}
-                loading={loading}
-                error={error}
-              />
-            </div>
-          )}
-          
-          {/* Load more button for grid view - positioned at bottom, not sticky */}
-          {viewMode === 'grid' && !loading && hasNextPage && (
-            <div className="flex justify-center py-4 bg-white">
-              <Button 
-                variant="outline" 
-                onClick={() => fetchNextPage()} 
-                disabled={isFetchingNextPage}
-              >
-                {isFetchingNextPage ? 'Loading more...' : 'Load more products'}
-              </Button>
+            <div className="flex flex-col flex-1 overflow-hidden hide-x-scrollbar">
+              <div className="w-full overflow-hidden">
+                <ProductGrid 
+                  products={filteredData}
+                  loading={loading}
+                  error={error}
+                />
+              </div>
+              
+              {/* Grid view pagination - built into the main view */}
+              {!loading && hasNextPage && (
+                <div className="mt-4 mb-4 flex justify-center static border-t pt-3">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => fetchNextPage()} 
+                    disabled={isFetchingNextPage}
+                    className="static"
+                  >
+                    {isFetchingNextPage ? 'Loading more...' : 'Load more products'}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </section>
-        {/* Pagination, now sticky to bottom - only show for list view */}
+        
+        {/* Pagination, only show for list view */}
         {viewMode === 'list' && (
-            <div className='sticky bottom-0 z-50 h-12 bg-slate-100 border-t border-slate-300/40 flex items-center justify-between px-4'>
-              <div className="flex space-x-2">
-                <Button 
-                  size="sm" 
-                  onClick={() => table.previousPage()} 
-                  disabled={!table.getCanPreviousPage()}
-                >
-                  <ChevronLeft />
-                </Button>
-                <Button 
-                  size="sm" 
-                  onClick={() => table.nextPage()} 
-                  disabled={!table.getCanNextPage()}
-                >
-                  <ChevronRight />
-                </Button>
-              </div>
-
-              <span className="text-sm text-slate-600">
-                {renderPaginationInfo()}
-              </span>
-
-              <div className="flex items-center space-x-2">
-                <span className="text-sm">Show</span>
-                <Select
-                  value={String(table.getState().pagination.pageSize)}
-                  onValueChange={v => table.setPageSize(Number(v))}
-                >
-                  <SelectTrigger className="h-8 w-[70px]"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {[10, 25, 50, 100].map((n) => (
-                      <SelectItem key={n} value={String(n)}>{n}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+          <div className='sticky bottom-0 z-50 h-12 bg-slate-100 border-t border-slate-300/40 flex items-center justify-between px-4'>
+            <div className="flex space-x-2">
+              <Button 
+                size="sm" 
+                onClick={() => table.previousPage()} 
+                disabled={!table.getCanPreviousPage()}
+              >
+                <ChevronLeft />
+              </Button>
+              <Button 
+                size="sm" 
+                onClick={() => table.nextPage()} 
+                disabled={!table.getCanNextPage()}
+              >
+                <ChevronRight />
+              </Button>
             </div>
-          )}
+
+            <span className="text-sm text-slate-600">
+              {renderPaginationInfo()}
+            </span>
+
+            <div className="flex items-center space-x-2">
+              <span className="text-sm">Show</span>
+              <Select
+                value={String(table.getState().pagination.pageSize)}
+                onValueChange={v => table.setPageSize(Number(v))}
+              >
+                <SelectTrigger className="h-8 w-[70px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[10, 25, 50, 100].map((n) => (
+                    <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        )}
       </div>
     
 
@@ -2401,6 +2402,17 @@ thead tr:first-child {
 }
 /* still keep the left-hand divider shadow */
 [data-column-id="actions"] { background: transparent !important; }
+
+/* Fix horizontal scrollbar issues */
+html, body {
+  overflow-x: hidden;
+}
+.overflow-x-hidden {
+  overflow-x: hidden !important;
+}
+.static {
+  position: static !important;
+}
 `;
 
 // Inject the CSS style into the document head if it doesn't already exist

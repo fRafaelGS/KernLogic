@@ -108,7 +108,7 @@ export default function ProductsPage() {
   }
   
   return (
-    <div className="flex flex-col flex-1 px-2 lg:px-4 min-h-0 min-w-0">
+    <div className="flex flex-col flex-1 px-2 lg:px-4 min-h-0 min-w-0 hide-x-scrollbar">
       {/* Table Toolbar */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-1 px-1 border-b gap-1 sm:gap-1">
         <div className="flex items-center space-x-2 w-full sm:w-auto">
@@ -124,9 +124,9 @@ export default function ProductsPage() {
       </div>
 
       {/* Main Content */}
-      <section className="flex flex-col overflow-auto flex-1 min-h-0 min-w-0">
+      <section className="flex flex-col overflow-hidden flex-1 min-h-0 min-w-0">
         {/* ONE self-contained scroll region */}
-        <div className="flex-1 min-h-0 min-w-0">
+        <div className="flex-1 min-h-0 min-w-0 overflow-hidden">
           {viewMode === 'grid' ? (
             <ProductGrid filters={filters} />
           ) : (
@@ -142,11 +142,12 @@ export default function ProductsPage() {
 
       {/* Shared Pagination Controls - Only show in grid view for React Query's fetchNextPage */}
       {viewMode === 'grid' && hasNextPage && (
-        <div className="flex justify-center py-4">
+        <div className="load-more-container border-t">
           <Button 
             variant="outline" 
             onClick={() => fetchNextPage()} 
             disabled={isFetchingNextPage}
+            className="static"
           >
             {isFetchingNextPage ? 'Loading more...' : 'Load more products'}
           </Button>

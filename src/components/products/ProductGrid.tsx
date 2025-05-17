@@ -24,7 +24,7 @@ const MemoizedProductCard = memo(({
   // Adjust style to add padding for spacing between items
   const adjustedStyle = {
     ...style,
-    padding: '0.5rem',
+    padding: '0.75rem',
     boxSizing: 'border-box' as 'border-box',
   }
   
@@ -74,11 +74,12 @@ export function ProductGrid({
     const updateDimensions = () => {
       if (containerRef.current) {
         const width = containerRef.current.offsetWidth
-        // Calculate a reasonable height - matching content exactly to avoid scrollbars
-        const height = Math.min(
-          window.innerHeight - 140, // Leave less room to avoid scrollbar
-          Math.ceil(productsToRender.length / getColumnCount(width)) * rowHeight
-        )
+        // Calculate height based on visible rows needed (avoid partial rows)
+        const columnCount = getColumnCount(width)
+        const rowCount = Math.ceil(productsToRender.length / columnCount)
+        // Height calculation - 2 rows visible initially, more as needed
+        const visibleRows = Math.min(rowCount, 2)
+        const height = visibleRows * rowHeight
         
         setContainerWidth(width)
         setContainerHeight(height)
@@ -93,25 +94,26 @@ export function ProductGrid({
     
     // Cleanup
     return () => window.removeEventListener('resize', updateDimensions)
-  }, [productsToRender.length, rowHeight])
+  }, [productsToRender.length])
 
-  // Calculate columns based on container width
+  // Calculate columns based on container width - more conservative to prevent overflow
   const getColumnCount = (width: number) => {
-    if (width < 640) return 2 // sm
-    if (width < 768) return 3 // md
-    if (width < 1024) return 4 // lg
-    if (width < 1280) return 5 // xl
-    return 6 // 2xl and above
+    if (width < 640) return 1 // xs - single column on very small screens
+    if (width < 768) return 2 // sm 
+    if (width < 1024) return 3 // md
+    if (width < 1280) return 4 // lg
+    return 5 // xl and above
   }
 
   const columnCount = getColumnCount(containerWidth)
-  const columnWidth = containerWidth / columnCount
+  // Calculate column width with safety margin
+  const columnWidth = Math.floor((containerWidth - 16) / columnCount)
   const rowCount = Math.ceil(productsToRender.length / columnCount)
 
   if (isLoadingData) {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 p-4">
-        {Array.from({ length: 20 }).map((_, index) => (
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 p-4">
+        {Array.from({ length: 10 }).map((_, index) => (
           <div key={index} className="flex flex-col h-full">
             <Skeleton className="aspect-square w-full mb-2" />
             <Skeleton className="h-4 w-2/3 mb-1" />
@@ -150,7 +152,7 @@ export function ProductGrid({
   }
 
   return (
-    <div className="w-full h-full px-4 py-2" ref={containerRef}>
+    <div className="w-full h-full px-2 py-1 overflow-hidden" ref={containerRef}>
       <Grid
         columnCount={columnCount}
         columnWidth={columnWidth}
@@ -158,12 +160,12 @@ export function ProductGrid({
         rowCount={rowCount}
         rowHeight={rowHeight}
         width={containerWidth}
-        overscanRowCount={2}
-        className="scrollbar-thin react-window-grid"
+        overscanRowCount={1}
+        className="scrollbar-hide react-window-grid"
         style={{ 
-          overflow: 'hidden',
-          overflowY: 'auto',
-          overflowX: 'hidden'
+          overflow: 'auto',
+          overflowX: 'hidden',
+          maxWidth: '100%'
         }}
       >
         {({ columnIndex, rowIndex, style }) => {
@@ -183,16 +185,20 @@ if (typeof document !== 'undefined') {
     const style = document.createElement('style');
     style.id = styleId;
     style.textContent = `
+      /* Hide all horizontal scrollbars */
       .react-window-grid::-webkit-scrollbar {
-        display: none;
+        display: none !important;
       }
       .react-window-grid {
-        -ms-overflow-style: none;
-        scrollbar-width: none;
+        -ms-overflow-style: none !important;
+        scrollbar-width: none !important;
+        overflow-x: hidden !important;
       }
-      /* Explicitly hide horizontal scrollbars */
-      .react-window-grid::-webkit-scrollbar-horizontal {
-        display: none;
+      
+      /* Ensure no horizontal scrolling anywhere in the products area */
+      #root, html, body, .app-main, .products-page, .products-container {
+        overflow-x: hidden !important;
+        max-width: 100vw !important;
       }
     `;
     document.head.appendChild(style);

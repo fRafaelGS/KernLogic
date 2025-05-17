@@ -85,9 +85,7 @@
     --sidebar-border: 217.2 32.6% 17.5%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
-}
 
-@layer base {
   * {
     @apply border-border;
   }
@@ -99,6 +97,21 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Ensure all containers properly contain content */
+  div {
+    max-width: 100%;
+  }
+
+  /* Target container elements to eliminate horizontal scroll */
+  #root, .app-container, .products-container {
+    overflow-x: hidden !important;
+  }
+
+  /* Fix sticky positioning behavior */
+  .static {
+    position: static !important;
   }
 }
 
@@ -132,6 +145,21 @@
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;
+  }
+
+  /* Hide horizontal scrollbars specifically */
+  .hide-x-scrollbar {
+    overflow-x: hidden !important;
+  }
+
+  /* For ensuring load more buttons behave correctly */
+  .load-more-container {
+    position: relative !important;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    padding: 1rem 0;
+    margin-top: 0.5rem;
   }
 }
 

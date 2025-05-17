@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, memo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axiosInstance from '@/lib/axiosInstance';
 import { paths } from '@/lib/apiPaths';
@@ -52,7 +52,134 @@ const formatEntityType = (type: string, action: string, id: number) => {
   return `${action.charAt(0).toUpperCase() + action.slice(1)} ${id}`;
 };
 
-const ChangeHistoryReport: React.FC = () => {
+// Helper: map action to color class
+function getActionColor(action: string) {
+  switch (action) {
+    case 'create':
+      return 'bg-green-500 text-white'
+    case 'update':
+      return 'bg-blue-500 text-white'
+    case 'delete':
+      return 'bg-red-500 text-white'
+    case 'archive':
+      return 'bg-gray-500 text-white'
+    default:
+      return 'bg-purple-500 text-white'
+  }
+}
+
+// Memoized FiltersPanel
+const FiltersPanel = memo(function FiltersPanel({
+  showTitle = true,
+  dateRange,
+  setDateRange,
+  userOptions,
+  selectedUsers,
+  handleUserToggle,
+  entityInput,
+  handleEntityInputChange,
+  entityOptions,
+  setEntityQuery,
+  setEntityInput,
+  actionTypeOptions,
+  selectedActions,
+  handleActionToggle,
+  resetFilters
+}: {
+  showTitle?: boolean
+  dateRange: any
+  setDateRange: any
+  userOptions: string[]
+  selectedUsers: string[]
+  handleUserToggle: (username: string) => void
+  entityInput: string
+  handleEntityInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  entityOptions: string[]
+  setEntityQuery: (v: string) => void
+  setEntityInput: (v: string) => void
+  actionTypeOptions: { label: string, value: string }[]
+  selectedActions: string[]
+  handleActionToggle: (action: string) => void
+  resetFilters: () => void
+}) {
+  return (
+    <div className='space-y-6'>
+      {showTitle && <h3 className='text-md font-medium mb-4'>Filters</h3>}
+      <div className='space-y-1'>
+        <Label className='block text-sm font-semibold uppercase'>Date Range</Label>
+        <DatePickerWithRange date={dateRange} setDate={setDateRange} />
+      </div>
+      <div className='space-y-1'>
+        <Label className='block text-sm font-semibold uppercase'>User</Label>
+        <div className='space-y-2 border p-3 rounded-md max-h-40 overflow-y-auto'>
+          {userOptions.length > 0 ? (
+            userOptions.map(username => (
+              <div key={username} className='flex items-center space-x-2 py-1'>
+                <Checkbox
+                  id={`user-${username}`}
+                  checked={selectedUsers.includes(username)}
+                  onCheckedChange={() => handleUserToggle(username)}
+                />
+                <Label htmlFor={`user-${username}`} className='text-sm font-normal cursor-pointer'>
+                  {username}
+                </Label>
+              </div>
+            ))
+          ) : (
+            <div className='text-sm text-gray-500 py-2'>No users available</div>
+          )}
+        </div>
+      </div>
+      <div className='space-y-1'>
+        <Label className='block text-sm font-semibold uppercase'>Entity</Label>
+        <Input
+          placeholder='Search entity...'
+          onChange={handleEntityInputChange}
+          value={entityInput}
+          className='w-full'
+        />
+        {entityInput && entityOptions.length > 0 && (
+          <div className='text-sm mt-1 border p-2 rounded-md max-h-32 overflow-y-auto'>
+            {entityOptions
+              .filter(option => option.toLowerCase().includes(entityInput.toLowerCase()))
+              .slice(0, 5)
+              .map((option, index) => (
+                <div
+                  key={index}
+                  className='cursor-pointer hover:bg-gray-100 p-1 rounded'
+                  onClick={() => { setEntityQuery(option); setEntityInput(option) }}
+                >
+                  {option}
+                </div>
+              ))}
+          </div>
+        )}
+      </div>
+      <div className='space-y-1'>
+        <Label className='block text-sm font-semibold uppercase'>Action</Label>
+        <div className='space-y-2 border p-3 rounded-md'>
+          {actionTypeOptions.map(action => (
+            <div key={action.value} className='flex items-center space-x-2 py-1'>
+              <Checkbox
+                id={`action-${action.value}`}
+                checked={selectedActions.includes(action.value)}
+                onCheckedChange={() => handleActionToggle(action.value)}
+              />
+              <Label htmlFor={`action-${action.value}`} className='text-sm font-normal cursor-pointer'>
+                {action.label}
+              </Label>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className='flex space-x-2 pt-2'>
+        <Button variant='outline' onClick={resetFilters}>Reset</Button>
+      </div>
+    </div>
+  )
+})
+
+export function ChangeHistoryReport() {
   const queryClient = useQueryClient();
   const [dateRange, setDateRange] = useState<DateRange>({
     from: undefined,
@@ -64,51 +191,45 @@ const ChangeHistoryReport: React.FC = () => {
   const [entityQuery, setEntityQuery] = useState<string>('');
   const [selectedActions, setSelectedActions] = useState<string[]>([]);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [entityInput, setEntityInput] = useState('')
 
-  // Create query key based on filters
-  const queryKey = [
-    'changeHistory', 
-    serializeDateRange(dateRange), 
-    selectedUsers, 
-    entityQuery, 
-    selectedActions
-  ];
+  // Query key includes only backend-supported filters
+  const queryKey = ['changeHistory', dateRange, selectedUsers];
 
-  // Query with auto-refetch on filter changes
   const { data, isLoading, error } = useQuery({
     queryKey,
     queryFn: () => axiosInstance.get<ChangeHistoryItem[]>(
       paths.analytics.changeHistory({
         ...serializeDateRange(dateRange),
         users: selectedUsers,
-        entity: entityQuery,
-        actions: selectedActions,
       })
     ).then(res => res.data),
   });
 
-  // Extract unique users from data
+  // User options from data
   const userOptions = data ? Array.from(new Set(data.map(item => item.username))).sort() : [];
 
-  // Extract unique entity options from data
+  // Entity options from data
   const entityOptions = data ? Array.from(
     new Set(data.map(item => formatEntityType(item.entity_type, item.action, item.entity_id)))
   ).sort() : [];
 
-  // Get unique action types from data
-  const getActionTypes = () => {
-    if (!data || data.length === 0) return [];
+  // Action counts for summary and checkboxes
+  const getActionCounts = () => {
+    if (!data || data.length === 0) return {};
     
-    // Extract unique action types
-    const actionTypes = Array.from(new Set(data.map(item => item.action))).sort();
-    return actionTypes.map(action => ({
-      label: action.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
-      value: action
-    }));
+    const actionCounts: Record<string, number> = {};
+    data.forEach(item => {
+      actionCounts[item.action] = (actionCounts[item.action] || 0) + 1;
+    });
+    return actionCounts;
   };
-
-  const actionTypeOptions = getActionTypes().length > 0 
-    ? getActionTypes() 
+  const actionCounts = getActionCounts();
+  const actionTypeOptions = Object.keys(actionCounts).length > 0
+    ? Object.keys(actionCounts).map(action => ({
+        label: action.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+        value: action
+      }))
     : [
         { label: 'Create', value: 'create' },
         { label: 'Update', value: 'update' },
@@ -122,23 +243,18 @@ const ChangeHistoryReport: React.FC = () => {
     return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
   };
 
-  // Get action badge color
+  // Color-coded action badge
   const getActionBadge = (action: string) => {
-    switch (action) {
-      case 'create':
-        return <Badge className="bg-green-500">Created</Badge>;
-      case 'update':
-        return <Badge className="bg-blue-500">Updated</Badge>;
-      case 'delete':
-        return <Badge className="bg-red-500">Deleted</Badge>;
-      case 'archive':
-        return <Badge className="bg-gray-500">Archived</Badge>;
-      default:
-        // All other actions: attribute_update, price_created, etc.
-        return <Badge className="bg-purple-500">
-          {action.replace('_',' ').replace(/\b\w/g, l => l.toUpperCase())}
-        </Badge>;
-    }
+    return (
+      <Badge className={getActionColor(action)}>
+        {action === 'create' && 'Created'}
+        {action === 'update' && 'Updated'}
+        {action === 'delete' && 'Deleted'}
+        {action === 'archive' && 'Archived'}
+        {!(action === 'create' || action === 'update' || action === 'delete' || action === 'archive') &&
+          action.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+      </Badge>
+    )
   };
 
   // Handle user selection
@@ -163,7 +279,7 @@ const ChangeHistoryReport: React.FC = () => {
     });
   };
 
-  // Reset filters
+  // Reset all filters and invalidate query
   const resetFilters = () => {
     setDateRange({ from: undefined, to: undefined });
     setSelectedUsers([]);
@@ -175,18 +291,21 @@ const ChangeHistoryReport: React.FC = () => {
     queryClient.invalidateQueries({ queryKey: ['changeHistory'] });
   };
 
-  // Debounced entity search
-  const debouncedEntitySearch = useCallback(
+  // Debounced update for entityQuery (used in query key)
+  const debouncedSetEntityQuery = useCallback(
     debounce((value: string) => {
-      setEntityQuery(value);
-    }, 500),
+      setEntityQuery(value)
+    }, 400),
     []
-  );
-
-  // Handle entity search input change
-  const handleEntitySearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    debouncedEntitySearch(e.target.value);
-  };
+  )
+  function handleEntityInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setEntityInput(e.target.value)
+    debouncedSetEntityQuery(e.target.value)
+  }
+  // Keep entityInput in sync with entityQuery on clear
+  useEffect(() => {
+    if (!entityQuery) setEntityInput('')
+  }, [entityQuery])
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -195,99 +314,82 @@ const ChangeHistoryReport: React.FC = () => {
 
   // Pagination settings
   const itemsPerPage = 10;
-  const totalPages = data ? Math.ceil(data.length / itemsPerPage) : 0;
-  
-  // Get current page of data
-  const currentItems = data 
-    ? data.slice((page - 1) * itemsPerPage, page * itemsPerPage)
+  // Local filtering for action/entity
+  let filteredData = data || [];
+  if (selectedActions.length > 0) {
+    filteredData = filteredData.filter(item => selectedActions.includes(item.action));
+  }
+  if (entityQuery) {
+    filteredData = filteredData.filter(item =>
+      formatEntityType(item.entity_type, item.action, item.entity_id).toLowerCase().includes(entityQuery.toLowerCase())
+    );
+  }
+  const totalPages = filteredData.length ? Math.ceil(filteredData.length / itemsPerPage) : 0;
+  const currentItems = filteredData
+    ? filteredData.slice((page - 1) * itemsPerPage, page * itemsPerPage)
     : [];
 
-  // Count actions for summary
-  const getActionCounts = () => {
-    if (!data || data.length === 0) return {};
-    
-    const actionCounts: Record<string, number> = {};
-    data.forEach(item => {
-      actionCounts[item.action] = (actionCounts[item.action] || 0) + 1;
-    });
-    return actionCounts;
-  };
-
-  // Filter chip components
-  const FilterChips = () => {
+  // Filter chips
+  function FilterChips() {
     if (!dateRange.from && !dateRange.to && selectedUsers.length === 0 && !entityQuery && selectedActions.length === 0) {
-      return null;
+      return null
     }
-
+    // Debug: log selectedActions and color
+    console.log('selectedActions:', selectedActions)
+    selectedActions.forEach(a => console.log('chip color for', a, getActionColor(a)))
     return (
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div className='flex flex-wrap gap-2 mb-4'>
         {dateRange.from && (
-          <Badge variant="outline" className="flex items-center gap-1">
+          <Badge variant='outline' className='flex items-center gap-1 border-blue-500 text-blue-700'>
             From: {format(dateRange.from, 'PP')}
-            <button 
-              onClick={() => setDateRange({ ...dateRange, from: undefined })}
-              className="hover:bg-gray-200 rounded-full ml-1 p-0.5"
-            >
-              <X className="h-3 w-3" />
+            <button onClick={() => setDateRange({ ...dateRange, from: undefined })} className='hover:bg-gray-200 rounded-full ml-1 p-0.5'>
+              <X className='h-3 w-3' />
             </button>
           </Badge>
         )}
         {dateRange.to && (
-          <Badge variant="outline" className="flex items-center gap-1">
+          <Badge variant='outline' className='flex items-center gap-1 border-blue-500 text-blue-700'>
             To: {format(dateRange.to, 'PP')}
-            <button 
-              onClick={() => setDateRange({ ...dateRange, to: undefined })}
-              className="hover:bg-gray-200 rounded-full ml-1 p-0.5"
-            >
-              <X className="h-3 w-3" />
+            <button onClick={() => setDateRange({ ...dateRange, to: undefined })} className='hover:bg-gray-200 rounded-full ml-1 p-0.5'>
+              <X className='h-3 w-3' />
             </button>
           </Badge>
         )}
         {selectedUsers.map(user => (
-          <Badge key={user} variant="outline" className="flex items-center gap-1">
+          <Badge key={user} variant='outline' className='flex items-center gap-1 border-gray-500 text-gray-700'>
             User: {user}
-            <button 
-              onClick={() => handleUserToggle(user)}
-              className="hover:bg-gray-200 rounded-full ml-1 p-0.5"
-            >
-              <X className="h-3 w-3" />
+            <button onClick={() => handleUserToggle(user)} className='hover:bg-gray-200 rounded-full ml-1 p-0.5'>
+              <X className='h-3 w-3' />
             </button>
           </Badge>
         ))}
         {entityQuery && (
-          <Badge variant="outline" className="flex items-center gap-1">
+          <Badge variant='outline' className='flex items-center gap-1 border-purple-500 text-purple-700'>
             Entity: {entityQuery}
-            <button 
-              onClick={() => setEntityQuery('')}
-              className="hover:bg-gray-200 rounded-full ml-1 p-0.5"
-            >
-              <X className="h-3 w-3" />
+            <button onClick={() => { setEntityQuery(''); setEntityInput('') }} className='hover:bg-gray-200 rounded-full ml-1 p-0.5'>
+              <X className='h-3 w-3' />
             </button>
           </Badge>
         )}
         {selectedActions.map(action => (
-          <Badge key={action} variant="outline" className="flex items-center gap-1">
+          <Badge key={action} className={`flex items-center gap-1 ${getActionColor(action)}`}>
             Action: {action.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-            <button 
-              onClick={() => handleActionToggle(action)}
-              className="hover:bg-gray-200 rounded-full ml-1 p-0.5"
-            >
-              <X className="h-3 w-3" />
+            <button onClick={() => handleActionToggle(action)} className='hover:bg-gray-200 rounded-full ml-1 p-0.5 text-inherit'>
+              <X className='h-3 w-3' />
             </button>
           </Badge>
         ))}
         {(dateRange.from || dateRange.to || selectedUsers.length > 0 || entityQuery || selectedActions.length > 0) && (
-          <Button variant="ghost" size="sm" onClick={resetFilters} className="text-gray-500">
+          <Button variant='ghost' size='sm' onClick={resetFilters} className='text-gray-500'>
             Clear All
           </Button>
         )}
       </div>
-    );
-  };
+    )
+  }
 
-  // Action Summary Badges
+  // Action summary badges
   const ActionSummaryBadges = () => {
-    const actionCounts = getActionCounts();
     if (Object.keys(actionCounts).length === 0) return null;
     
     return (
@@ -300,97 +402,6 @@ const ChangeHistoryReport: React.FC = () => {
       </div>
     );
   };
-
-  // Filters panel component
-  const FiltersPanel = ({ showTitle = true }: { showTitle?: boolean }) => (
-    <div className="space-y-6">
-      {showTitle && <h3 className="text-md font-medium">Filters</h3>}
-      
-      <div className="space-y-1">
-        <Label className="block text-sm font-semibold uppercase">Date Range</Label>
-        <DatePickerWithRange 
-          date={dateRange} 
-          setDate={setDateRange} 
-        />
-      </div>
-
-      <div className="space-y-1">
-        <Label className="block text-sm font-semibold uppercase">User</Label>
-        <div className="space-y-2 border p-3 rounded-md max-h-40 overflow-y-auto">
-          {userOptions.length > 0 ? (
-            userOptions.map(username => (
-              <div key={username} className="flex items-center space-x-2 py-1">
-                <Checkbox
-                  id={`user-${username}`}
-                  checked={selectedUsers.includes(username)}
-                  onCheckedChange={() => handleUserToggle(username)}
-                />
-                <Label
-                  htmlFor={`user-${username}`}
-                  className="text-sm font-normal cursor-pointer"
-                >
-                  {username}
-                </Label>
-              </div>
-            ))
-          ) : (
-            <div className="text-sm text-gray-500 py-2">No users available</div>
-          )}
-        </div>
-      </div>
-
-      <div className="space-y-1">
-        <Label className="block text-sm font-semibold uppercase">Entity</Label>
-        <Input 
-          placeholder="Search entity..." 
-          onChange={handleEntitySearchChange}
-          value={entityQuery}
-          className="w-full"
-        />
-        {entityQuery && entityOptions.length > 0 && (
-          <div className="text-sm mt-1 border p-2 rounded-md max-h-32 overflow-y-auto">
-            {entityOptions
-              .filter(option => option.toLowerCase().includes(entityQuery.toLowerCase()))
-              .slice(0, 5)
-              .map((option, index) => (
-                <div 
-                  key={index} 
-                  className="cursor-pointer hover:bg-gray-100 p-1 rounded"
-                  onClick={() => setEntityQuery(option)}
-                >
-                  {option}
-                </div>
-              ))}
-          </div>
-        )}
-      </div>
-
-      <div className="space-y-1">
-        <Label className="block text-sm font-semibold uppercase">Action</Label>
-        <div className="space-y-2 border p-3 rounded-md">
-          {actionTypeOptions.map(action => (
-            <div key={action.value} className="flex items-center space-x-2 py-1">
-              <Checkbox
-                id={`action-${action.value}`}
-                checked={selectedActions.includes(action.value)}
-                onCheckedChange={() => handleActionToggle(action.value)}
-              />
-              <Label
-                htmlFor={`action-${action.value}`}
-                className="text-sm font-normal cursor-pointer"
-              >
-                {action.label}
-              </Label>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex space-x-2 pt-2">
-        <Button variant="outline" onClick={resetFilters}>Reset</Button>
-      </div>
-    </div>
-  );
 
   return (
     <div className="space-y-6">
@@ -406,7 +417,23 @@ const ChangeHistoryReport: React.FC = () => {
             <SheetOverlay />
             <SheetContent side="right" className="w-[300px] sm:w-[400px]">
               <div className="pt-6">
-                <FiltersPanel showTitle={true} />
+                <FiltersPanel
+                  showTitle={true}
+                  dateRange={dateRange}
+                  setDateRange={setDateRange}
+                  userOptions={userOptions}
+                  selectedUsers={selectedUsers}
+                  handleUserToggle={handleUserToggle}
+                  entityInput={entityInput}
+                  handleEntityInputChange={handleEntityInputChange}
+                  entityOptions={entityOptions}
+                  setEntityQuery={setEntityQuery}
+                  setEntityInput={setEntityInput}
+                  actionTypeOptions={actionTypeOptions}
+                  selectedActions={selectedActions}
+                  handleActionToggle={handleActionToggle}
+                  resetFilters={resetFilters}
+                />
               </div>
             </SheetContent>
           </Sheet>
@@ -521,12 +548,27 @@ const ChangeHistoryReport: React.FC = () => {
 
         {/* Filters panel - desktop only */}
         <aside className="hidden md:block w-64 sticky top-6 h-fit space-y-4 p-4 bg-white border rounded shadow">
-          <h3 className="text-md font-medium mb-4">Filters</h3>
-          <FiltersPanel showTitle={false} />
+          <FiltersPanel
+            showTitle={true}
+            dateRange={dateRange}
+            setDateRange={setDateRange}
+            userOptions={userOptions}
+            selectedUsers={selectedUsers}
+            handleUserToggle={handleUserToggle}
+            entityInput={entityInput}
+            handleEntityInputChange={handleEntityInputChange}
+            entityOptions={entityOptions}
+            setEntityQuery={setEntityQuery}
+            setEntityInput={setEntityInput}
+            actionTypeOptions={actionTypeOptions}
+            selectedActions={selectedActions}
+            handleActionToggle={handleActionToggle}
+            resetFilters={resetFilters}
+          />
         </aside>
       </div>
     </div>
   );
-};
+}
 
 export default ChangeHistoryReport; 

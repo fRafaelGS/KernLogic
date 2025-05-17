@@ -81,6 +81,7 @@ import { getCategoryName, matchesCategoryFilter } from '@/lib/utils';
 import { ViewToggle } from './ViewToggle'
 import { ProductGrid } from './ProductGrid'
 import { useOrgSettings } from '@/hooks/useOrgSettings'
+import { useFamilies } from "@/api/familyApi";
 
 // Define constants for fixed widths
 const ACTION_W = 112; // Width of action column in pixels
@@ -89,6 +90,7 @@ const FOOTER_H = 48; // Height of footer in pixels
 // Define filter state type
 interface FilterState {
   category: string;
+  family: string;
   status: 'all' | 'active' | 'inactive';
   minPrice: string;
   maxPrice: string;
@@ -249,6 +251,7 @@ export function ProductsTable({
   // Filters
   const [filters, setFilters] = useState<FilterState>({
     category: searchParams.get('category') || 'all',
+    family: searchParams.get('family') || 'all',
     status: (searchParams.get('status') as 'all' | 'active' | 'inactive') || 'all',
     minPrice: searchParams.get('minPrice') || '',
     maxPrice: searchParams.get('maxPrice') || '',
@@ -309,6 +312,7 @@ export function ProductsTable({
         if (debouncedSearchTerm) params.search = debouncedSearchTerm
         if (filters.status !== 'all') params.is_active = filters.status === 'active'
         if (filters.category && filters.category !== 'all') params.category = filters.category
+        if (filters.family && filters.family !== 'all') params.family = filters.family
         if (filters.minPrice) params.min_price = filters.minPrice
         if (filters.maxPrice) params.max_price = filters.maxPrice
         if (filters.tags && filters.tags.length > 0) params.tags = filters.tags.join(',')
@@ -472,6 +476,7 @@ export function ProductsTable({
   const handleClearFilters = useCallback(() => {
     setFilters({
       category: 'all',
+      family: 'all',
       status: 'all',
       minPrice: '',
       maxPrice: '',
@@ -481,6 +486,7 @@ export function ProductsTable({
     // Update URL params without the cleared filters
     const params = new URLSearchParams(searchParams);
     params.delete('category');
+    params.delete('family');
     params.delete('status');
     params.delete('minPrice');
     params.delete('maxPrice');
@@ -1609,6 +1615,51 @@ export function ProductsTable({
             </div>
             
             <div className="space-y-2">
+              <Label htmlFor="family-filter">Family</Label>
+              <Select
+                value={filters.family || "all"}
+                onValueChange={(value) => {
+                  // Update our local filter state
+                  handleFilterChange('family', value);
+                  
+                  // Also update the table's column filter
+                  const familyColumn = table.getColumn('family');
+                  if (familyColumn) {
+                    if (value === 'all') {
+                      familyColumn.setFilterValue(null);
+                    } else {
+                      familyColumn.setFilterValue(value);
+                    }
+                  }
+                }}
+              >
+                <SelectTrigger id="family-filter">
+                  <SelectValue placeholder="All Families" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Families</SelectItem>
+                  {(() => {
+                    const { data: families, isLoading } = useFamilies();
+                    
+                    if (isLoading) {
+                      return <SelectItem value="loading" disabled>Loading...</SelectItem>;
+                    }
+                    
+                    if (!families || families.length === 0) {
+                      return <SelectItem value="none" disabled>No families available</SelectItem>;
+                    }
+                    
+                    return families.map(family => (
+                      <SelectItem key={family.id} value={String(family.id)}>
+                        {family.label || family.code || `Family ${family.id}`}
+                      </SelectItem>
+                    ));
+                  })()}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
               <Label htmlFor="status-filter">Status</Label>
               <Select
                 value={filters.status}
@@ -2135,6 +2186,19 @@ export function ProductsTable({
                                           <span className="text-gray-500"><TagIcon className="h-3.5 w-3.5" /></span>
                                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                         </div>
+                                      </TableCell>
+                                    );
+                                  }
+                                  
+                                  // Add special treatment for family column
+                                  if (columnId === 'family') {
+                                    return (
+                                      <TableCell 
+                                        key={cell.id} 
+                                        className={`px-2 py-1 min-w-[180px] ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
+                                        data-column-id={columnId}
+                                      >
+                                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                       </TableCell>
                                     );
                                   }

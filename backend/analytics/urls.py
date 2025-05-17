@@ -7,6 +7,7 @@ from .views import (
     export_enrichment_velocity_report,
     export_localization_quality_report,
     export_change_history_report,
+    LocalizationQualityView,
 )
 from django.http import HttpResponse
 
@@ -32,4 +33,7 @@ urlpatterns = [
     
     # Test endpoint
     path('test-export/', test_export_view, name='test-export'),
+    
+    # New localization quality endpoint
+    path('localization-quality/', LocalizationQualityView.as_view(), name='localization_quality'),
 ] 

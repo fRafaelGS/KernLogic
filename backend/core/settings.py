@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 
 import os
 import logging
+import sys
 from pathlib import Path
 from datetime import timedelta
 
@@ -349,3 +350,45 @@ EMAIL_DEBUG = False
 
 # Frontend URL for email links
 FRONTEND_URL = 'http://localhost:3004'  # Update this in production to your actual domain
+
+# Products API Integration
+PRODUCTS_API_BASE_URL = os.environ.get('PRODUCTS_API_BASE_URL', '/api')
+SERVICE_JWT_TOKEN = os.environ.get('SERVICE_JWT_TOKEN', None)
+
+# If we're not in a management command, enforce required environment variables
+def validate_env_variables():
+    """
+    Validate that required environment variables are set.
+    This is called at startup to ensure the application can function correctly.
+    """
+    # Skip validation during manage.py commands to not block migrations, tests, etc.
+    if any(cmd in sys.argv for cmd in ['makemigrations', 'migrate', 'test', 'shell', 'runserver', 'check']):
+        return
+        
+    # Allow skipping validation with an environment variable (useful for tests)
+    if os.environ.get('SKIP_ENV_VALIDATION', '').lower() in ('true', '1', 'yes'):
+        return
+        
+    missing_vars = []
+    
+    # Check for Products API configuration
+    if not PRODUCTS_API_BASE_URL:
+        missing_vars.append('PRODUCTS_API_BASE_URL')
+    
+    if not SERVICE_JWT_TOKEN:
+        missing_vars.append('SERVICE_JWT_TOKEN')
+    
+    # Exit with error if any required variables are missing
+    if missing_vars:
+        error_message = (
+            f"ERROR: Missing required environment variables: {', '.join(missing_vars)}.\n"
+            f"Please set these variables in your environment or .env file.\n"
+            f"You can run with SKIP_ENV_VALIDATION=true to bypass this check."
+        )
+        logging.error(error_message)
+        print(error_message, file=sys.stderr)
+        sys.exit(1)
+
+# Call the validation function at startup
+if not DEBUG:
+    validate_env_variables()

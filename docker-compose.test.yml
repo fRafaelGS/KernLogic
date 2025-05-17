@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  # Prism mock server for the Products API
+  products-mock:
+    image: stoplight/prism:4
+    command: mock -h 0.0.0.0 /usr/src/api.yaml
+    volumes:
+      - ./backend/KernLogic API.yaml:/usr/src/api.yaml
+    ports:
+      - "4010:4010"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://localhost:4010/api/products/"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    environment:
+      - PORT=4010
+    networks:
+      - test-network
+
+  # PostgreSQL database for testing
+  db:
+    image: postgres:14
+    environment:
+      - POSTGRES_USER=kernlogic_test
+      - POSTGRES_PASSWORD=kernlogic_test
+      - POSTGRES_DB=kernlogic_test
+    ports:
+      - "5433:5432"
+    volumes:
+      - kernlogic-db-test:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kernlogic_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - test-network
+
+  # Analytics app (Django)
+  analytics:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    depends_on:
+      products-mock:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      - DEBUG=true
+      - DATABASE_URL=postgres://kernlogic_test:kernlogic_test@db:5432/kernlogic_test
+      - PRODUCTS_API_BASE_URL=http://products-mock:4010/api
+      - SERVICE_JWT_TOKEN=test-service-jwt-token
+      - SKIP_COLLECT_STATIC=1
+      - TESTING=1
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py runserver 0.0.0.0:8000"
+    networks:
+      - test-network
+
+volumes:
+  kernlogic-db-test:
+
+networks:
+  test-network:
+    driver: bridge 

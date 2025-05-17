@@ -2,6 +2,7 @@ from django.shortcuts import render
 from django.db.models import Count, F, Q, Sum, Case, When, Value, IntegerField, FloatField
 from django.utils import timezone
 from rest_framework import viewsets, status
+from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -18,13 +19,18 @@ from .serializers import (
     LocaleStatSerializer, 
     ChangeHistorySerializer,
     CompletenessReportSerializer,
-    ReadinessReportSerializer
+    ReadinessReportSerializer,
+    LocalizationQualitySerializer
 )
-from .permissions import AnalyticsReportPermission
+from .permissions import AnalyticsReportPermission, HasAnalyticsPermission
 import logging
 import time
 from django.views.decorators.cache import cache_page
 from django.utils.decorators import method_decorator
+from django.core.cache import cache
+from django.core.paginator import Paginator
+from django.conf import settings
+from .services import get_localization_quality_stats
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -1299,3 +1305,80 @@ class AnalyticsViewSet(viewsets.ViewSet):
                 })
                 
         return Response(result)
+
+class LocalizationQualityView(APIView):
+    """
+    API endpoint for localization quality analytics.
+    
+    GET: Retrieve analytics on attribute translation quality by locale.
+    """
+    permission_classes = [IsAuthenticated, HasAnalyticsPermission]
+    
+    def get(self, request):
+        # Extract query parameters
+        from_date = request.query_params.get('from_date')
+        to_date = request.query_params.get('to_date')
+        locale = request.query_params.get('locale')
+        category = request.query_params.get('category')
+        channel = request.query_params.get('channel')
+        family = request.query_params.get('family')
+        
+        # Generate a cache key based on user and filters
+        cache_key = f"localization_quality_{request.user.id}_{from_date}_{to_date}_{locale}_{category}_{channel}_{family}"
+        
+        # Try to get data from cache
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            return Response(cached_data)
+        
+        # If not in cache, generate the data
+        stats = get_localization_quality_stats(
+            user=request.user,
+            from_date=from_date,
+            to_date=to_date,
+            locale=locale,
+            category=category,
+            channel=channel,
+            family=family
+        )
+        
+        # Paginate locale_stats if there are many locales
+        page_size = getattr(settings, 'ANALYTICS_PAGE_SIZE', 100)
+        page = request.query_params.get('page', 1)
+        try:
+            page = int(page)
+        except (ValueError, TypeError):
+            page = 1
+        
+        # Only paginate if we have more than the page size
+        if len(stats['locale_stats']) > page_size:
+            paginator = Paginator(stats['locale_stats'], page_size)
+            try:
+                paginated_stats = paginator.page(page)
+            except Exception:
+                # If page is out of range, deliver last page
+                paginated_stats = paginator.page(paginator.num_pages)
+                
+            stats['locale_stats'] = list(paginated_stats.object_list)
+            
+            # Add pagination info to response
+            stats['pagination'] = {
+                'total_pages': paginator.num_pages,
+                'current_page': page,
+                'total_items': paginator.count,
+                'page_size': page_size,
+                'has_next': paginated_stats.has_next(),
+                'has_previous': paginated_stats.has_previous(),
+            }
+        
+        # Validate with serializer
+        serializer = LocalizationQualitySerializer(data=stats)
+        if serializer.is_valid():
+            result = serializer.data
+            
+            # Cache the result for 5 minutes (300 seconds)
+            cache.set(cache_key, result, 300)
+            
+            return Response(result)
+        
+        return Response(serializer.errors, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

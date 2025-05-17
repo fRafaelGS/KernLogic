@@ -3,6 +3,9 @@
  * Using 'as const' to make the arrays readonly and improve type inference
  */
 
+// Import needed for the ReportFiltersState type
+import type { ReportFiltersState } from '@/features/reports/components/filters/ReportFilters';
+
 /**
  * Query key for attribute values
  * 
@@ -68,13 +71,31 @@ export const qkEnrichmentVelocity = (days: number = 30) =>
 
 /**
  * Query key for localization quality analytics
- * Note: This key is used for the LocalizationCoverageReport component
- * but the name remains unchanged for backend API compatibility
+ * This key includes the filters state for cache invalidation when filters change
  * 
+ * @param filters Report filters state object
  * @returns Query key array
  */
-export const qkLocalizationQuality = () =>
-  ['analytics', 'localizationQuality'] as const;
+export const qkLocalizationQuality = (filters: ReportFiltersState) =>
+  ['analytics', 'localizationQuality', filters] as const;
+
+/**
+ * Query key for localization coverage with filters
+ * 
+ * @param filters Report filters state object
+ * @returns Query key array
+ */
+export const qkLocalizationCoverage = (filters: ReportFiltersState) =>
+  ['analytics', 'localizationCoverage', filters] as const;
+
+/**
+ * Query key for missing attributes heatmap
+ * 
+ * @param filters Report filters state object
+ * @returns Query key array
+ */
+export const qkMissingAttributesHeatmap = (filters: ReportFiltersState) =>
+  ['analytics', 'missingHeatmap', filters] as const;
 
 /**
  * Query key for change history analytics

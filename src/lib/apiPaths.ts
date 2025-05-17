@@ -97,3 +97,15 @@ export const paths = {
   },
   dashboard: () => join(API_BASE, 'dashboard') + '/',
 } as const; 
+
+/**
+ * Path to the localization quality analytics endpoint
+ * @returns The full path to the localization quality endpoint
+ */
+export const analyticsLocalizationQuality = (): string => join(API_BASE, 'analytics/localization-quality') + '/'; 
+
+/**
+ * Path to the localization missing attributes analytics endpoint
+ * @returns The full path to the localization missing attributes endpoint
+ */
+export const analyticsLocalizationMissing = (): string => join(API_BASE, 'analytics/localization-missing') + '/'; 

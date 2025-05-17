@@ -63,4 +63,22 @@ class ChangeHistorySerializer(serializers.ModelSerializer):
         return obj.event_type
 
     def get_details(self, obj):
-        return obj.summary 
+        return obj.summary
+
+class LocaleStatsSerializer(serializers.Serializer):
+    """Serializer for per-locale statistics"""
+    locale = serializers.CharField()
+    total_attributes = serializers.IntegerField()
+    translated_attributes = serializers.IntegerField()
+    translated_pct = serializers.FloatField()
+
+class OverallStatsSerializer(serializers.Serializer):
+    """Serializer for overall statistics across all locales"""
+    total_attributes = serializers.IntegerField()
+    translated_attributes = serializers.IntegerField()
+    translated_pct = serializers.FloatField()
+
+class LocalizationQualitySerializer(serializers.Serializer):
+    """Serializer for the localization quality endpoint response"""
+    overall = OverallStatsSerializer()
+    locale_stats = LocaleStatsSerializer(many=True) 

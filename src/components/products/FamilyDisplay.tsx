@@ -66,9 +66,9 @@ export function FamilyDisplay({
   const badgeContent = (
     <Badge 
       variant={badgeVariant} 
-      className={`font-medium py-1.5 ${className}`}
+      className={`font-medium py-1.5 w-full overflow-hidden whitespace-nowrap text-ellipsis flex items-center justify-center ${className}`}
     >
-      {displayLabel}
+      <span className="truncate text-center w-full">{displayLabel}</span>
       {showCode && normalizedFamily.code && String(displayLabel).indexOf(normalizedFamily.code) === -1 && (
         <span className="ml-1 text-xs opacity-70">({normalizedFamily.code})</span>
       )}

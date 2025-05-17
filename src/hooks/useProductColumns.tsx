@@ -422,7 +422,7 @@ export function useProductColumns({
     /**********  FAMILY **************************************************/
     {
       accessorKey: "family",
-      size: 160,
+      size: 200,
       header: ({column}) => {
         return (
           <Button
@@ -461,19 +461,40 @@ export function useProductColumns({
         }
         
         return (
-          <div className="flex justify-center p-1">
+          <div className="flex justify-center p-1 w-full">
             <FamilyDisplay 
               family={normalizedFamily} 
               badgeVariant="secondary"
               showEmpty={true}
               showCode={false}
               hideTooltip={true}
-              className="bg-emerald-100 text-emerald-800 hover:bg-emerald-200 transition-colors"
+              className="bg-emerald-100 text-emerald-800 hover:bg-emerald-200 transition-colors w-full text-center px-2"
             />
           </div>
         );
       },
       enableSorting: true,
+      enableColumnFilter: true,
+      filterFn: (row, columnId, filterValue) => {
+        if (!filterValue) return true;
+        
+        const family = row.getValue(columnId);
+        if (!family) return false;
+        
+        // Handle different possible family data formats
+        let familyId: number | null = null;
+        
+        if (typeof family === 'object' && family !== null) {
+          // Family might be a complex object with an ID property
+          familyId = (family as any).id;
+        } else if (typeof family === 'number') {
+          // Family might be just the ID
+          familyId = family;
+        }
+        
+        // Compare family ID with filter value
+        return String(familyId) === String(filterValue);
+      },
     },
 
     /**********  CATEGORY **************************************************/

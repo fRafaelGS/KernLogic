@@ -1,0 +1,97 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'src/**'
+      - 'backend/**'
+      - '.github/workflows/integration-tests.yml'
+      - 'docker-compose.test.yml'
+      - 'Dockerfile.test'
+
+jobs:
+  integration-tests:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install Node.js dependencies
+        run: npm ci
+        
+      - name: Install OpenAPI Generator
+        run: npm install -g @openapitools/openapi-generator-cli@2.7.0
+        
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-django pytest-cov
+          
+      - name: Regenerate TypeScript client from OpenAPI spec
+        run: |
+          mkdir -p tmp/generated
+          openapi-generator-cli generate -i backend/KernLogic\ API.yaml -g typescript-axios -o tmp/generated
+          
+      - name: Verify client is up to date
+        run: |
+          # Extract the model definitions from the generated code
+          grep -E '^export interface' tmp/generated/api.ts > tmp/generated-models.txt
+          
+          # Extract model definitions from the current client
+          grep -E '^export interface' src/services/productsClient/models.ts > tmp/current-models.txt
+          
+          # Compare the files and fail if there are differences
+          if ! diff -q tmp/generated-models.txt tmp/current-models.txt; then
+            echo "CRITICAL ERROR: The TypeScript client doesn't match the OpenAPI spec."
+            echo "Please regenerate the client using the OpenAPI Generator CLI."
+            exit 1
+          fi
+          
+          echo "TypeScript client is up to date with the OpenAPI spec."
+          
+      - name: Create .env file for testing
+        run: |
+          echo "PRODUCTS_API_BASE_URL=http://products-mock:4010/api" > .env
+          echo "SERVICE_JWT_TOKEN=test-service-jwt-token" >> .env
+          echo "SKIP_ENV_VALIDATION=true" >> .env
+          
+      - name: Build and start services with Docker Compose
+        run: |
+          docker-compose -f docker-compose.test.yml build
+          docker-compose -f docker-compose.test.yml up -d
+          
+      - name: Wait for services to be ready
+        run: |
+          echo "Waiting for services to be ready..."
+          sleep 30
+          
+      - name: Run integration tests
+        run: |
+          docker-compose -f docker-compose.test.yml exec -T analytics pytest backend/analytics/tests/test_localization_quality_integration.py -v
+          
+      - name: Output container logs on failure
+        if: failure()
+        run: |
+          docker-compose -f docker-compose.test.yml logs
+          
+      - name: Clean up
+        run: |
+          docker-compose -f docker-compose.test.yml down -v
+        if: always() 

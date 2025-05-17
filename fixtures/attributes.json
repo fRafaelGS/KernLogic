@@ -1,0 +1,16 @@
+[
+  {
+    "id": 1,
+    "code": "color",
+    "label": "Color",
+    "data_type": "string",
+    "values": []
+  },
+  {
+    "id": 2,
+    "code": "size",
+    "label": "Size",
+    "data_type": "string",
+    "values": []
+  }
+]

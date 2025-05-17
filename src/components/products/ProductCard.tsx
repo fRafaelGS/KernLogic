@@ -22,7 +22,7 @@ export function ProductCard({ product }: ProductCardProps) {
     : getCategoryName(product.category)
 
   return (
-    <Card className="h-full flex flex-col overflow-hidden hover:shadow-md transition-shadow border-slate-200">
+    <Card className="h-full flex flex-col overflow-hidden hover:shadow-md transition-shadow border border-slate-200">
       <Link 
         to={`/app/products/${product.id}`}
         className="flex flex-col flex-1"
@@ -34,6 +34,9 @@ export function ProductCard({ product }: ProductCardProps) {
                 src={imageUrl || ''} 
                 alt={product.name}
                 className="object-cover"
+                loading="lazy" 
+                width={150}
+                height={150}
               />
               <AvatarFallback className="text-base rounded-none bg-slate-100">
                 {product.name?.substring(0, 2).toUpperCase() || 'P'}

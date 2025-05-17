@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef, memo } from "react";
+import { FixedSizeList as List } from "react-window";
 import {
   Table,
   TableBody,
@@ -1702,14 +1703,15 @@ export function ProductsTable({
         {/* Additional Filter Panel that toggles based on filtersVisible state */}
         {/* Removed the extra filter panel and all logic related to filtersVisible */}
 
-        {/* Section containing scroll area and footer */}
-        <section className="flex-1 overflow-auto min-h-0 min-w-0">
+                        {/* Section containing scroll area and footer */}
+        <section className="flex-1 overflow-hidden min-h-0 min-w-0">
           {viewMode === 'list' ? (
             <div
               ref={scrollRef}
               className={cn(
                 "flex-1 min-h-0",
                 "h-[calc(100%-3rem)]",
+                "overflow-auto",
                 columnVisibility.actions !== false && `pr-[112px]`,
               )}
               id="products-scroll-area"
@@ -2312,7 +2314,7 @@ export function ProductsTable({
               </DndContext>
             </div>
           ) : (
-            <div className="flex-1 min-h-0">
+            <div className="flex-1 overflow-hidden">
               <ProductGrid 
                 products={filteredData}
                 loading={loading}
@@ -2320,9 +2322,22 @@ export function ProductsTable({
               />
             </div>
           )}
+          
+          {/* Load more button for grid view - positioned at bottom, not sticky */}
+          {viewMode === 'grid' && !loading && hasNextPage && (
+            <div className="flex justify-center py-4 bg-white">
+              <Button 
+                variant="outline" 
+                onClick={() => fetchNextPage()} 
+                disabled={isFetchingNextPage}
+              >
+                {isFetchingNextPage ? 'Loading more...' : 'Load more products'}
+              </Button>
+            </div>
+          )}
         </section>
-        {/* Pagination, now sticky to bottom */}
-        {viewMode === 'list' ? (
+        {/* Pagination, now sticky to bottom - only show for list view */}
+        {viewMode === 'list' && (
             <div className='sticky bottom-0 z-50 h-12 bg-slate-100 border-t border-slate-300/40 flex items-center justify-between px-4'>
               <div className="flex space-x-2">
                 <Button 
@@ -2360,7 +2375,7 @@ export function ProductsTable({
                 </Select>
               </div>
             </div>
-          ) : null}
+          )}
       </div>
     
 

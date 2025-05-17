@@ -1445,9 +1445,9 @@ export function ProductsTable({
   // Render the component
   return (
     <React.Fragment>
-      <div className="flex flex-col flex-1 w-full h-full mx-auto max-w-full px-2 lg:px-4 min-h-0">
+      <div className="flex flex-col flex-1 px-2 lg:px-4 min-h-0">
         {/* Table Toolbar */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-1 px-1 border-b gap-1 sm:gap-1">
+        <div className="flex items-center justify-between py-2 border-b bg-white z-10">
           <div className="flex items-center space-x-2 w-full sm:w-auto">
             {/* Only show search box if hideTopSearch is false */}
             {!hideTopSearch && (
@@ -1586,7 +1586,7 @@ export function ProductsTable({
 
         {/* Additional Filter Panel that toggles based on filtersVisible state */}
         {filtersVisible && (
-          <div className="border-b border-slate-200 bg-slate-50 p-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
+          <div className="border-b bg-slate-50 p-2">
             <div className="space-y-2">
               <Label htmlFor="category-filter">Category</Label>
               <Select
@@ -1712,7 +1712,7 @@ export function ProductsTable({
         )}
 
         {/* Section containing scroll area and footer */}
-        <section className="overflow-x-auto w-full">
+        <section className="flex-1 overflow-auto min-h-0 min-w-0">
           {viewMode === 'list' ? (
             <div
               ref={scrollRef}
@@ -1731,8 +1731,8 @@ export function ProductsTable({
                   items={columnOrder.filter(Boolean)}
                   strategy={horizontalListSortingStrategy}
                 >
-                  <Table className="w-full table-auto">
-                    <TableHeader className="relative">
+                  <Table className="w-full table-fixed border-collapse">
+                    <TableHeader className="sticky top-0 bg-white z-20">
                         {table.getHeaderGroups().map(headerGroup => (
                           <React.Fragment key={headerGroup.id}>
                             {/* 1) Column titles */}
@@ -2011,7 +2011,7 @@ export function ProductsTable({
                                             </PopoverTrigger>
                                             <PopoverContent className="w-64 p-3" align="start">
                                               <div className="space-y-2">
-                                                <div className="max-h-60 overflow-y-auto pr-2">
+                                                <div className="max-h-60 pr-2">
                                                   {uniqueTags.length > 0 ? (
                                                     <div className="space-y-1">
                                                       {uniqueTags.map((tag) => (
@@ -2261,7 +2261,7 @@ export function ProductsTable({
               </DndContext>
             </div>
           ) : (
-            <div className="flex-1 overflow-auto min-h-0">
+            <div className="flex-1 min-h-0">
               <ProductGrid 
                 products={filteredData}
                 loading={loading}
@@ -2270,49 +2270,49 @@ export function ProductsTable({
             </div>
           )}
         </section>
-
         {/* Pagination, now sticky to bottom */}
         {viewMode === 'list' ? (
-          <div className='sticky bottom-0 z-50 h-12 bg-slate-100 border-t border-slate-300/40 flex items-center justify-between px-4'>
-            <div className="flex space-x-2">
-              <Button 
-                size="sm" 
-                onClick={() => table.previousPage()} 
-                disabled={!table.getCanPreviousPage()}
-              >
-                <ChevronLeft />
-              </Button>
-              <Button 
-                size="sm" 
-                onClick={() => table.nextPage()} 
-                disabled={!table.getCanNextPage()}
-              >
-                <ChevronRight />
-              </Button>
-            </div>
+            <div className='sticky bottom-0 z-50 h-12 bg-slate-100 border-t border-slate-300/40 flex items-center justify-between px-4'>
+              <div className="flex space-x-2">
+                <Button 
+                  size="sm" 
+                  onClick={() => table.previousPage()} 
+                  disabled={!table.getCanPreviousPage()}
+                >
+                  <ChevronLeft />
+                </Button>
+                <Button 
+                  size="sm" 
+                  onClick={() => table.nextPage()} 
+                  disabled={!table.getCanNextPage()}
+                >
+                  <ChevronRight />
+                </Button>
+              </div>
 
-            <span className="text-sm text-slate-600">
-              {renderPaginationInfo()}
-            </span>
+              <span className="text-sm text-slate-600">
+                {renderPaginationInfo()}
+              </span>
 
-            <div className="flex items-center space-x-2">
-              <span className="text-sm">Show</span>
-              <Select
-                value={String(table.getState().pagination.pageSize)}
-                onValueChange={v => table.setPageSize(Number(v))}
-              >
-                <SelectTrigger className="h-8 w-[70px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {[10, 25, 50, 100].map((n) => (
-                    <SelectItem key={n} value={String(n)}>{n}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center space-x-2">
+                <span className="text-sm">Show</span>
+                <Select
+                  value={String(table.getState().pagination.pageSize)}
+                  onValueChange={v => table.setPageSize(Number(v))}
+                >
+                  <SelectTrigger className="h-8 w-[70px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {[10, 25, 50, 100].map((n) => (
+                      <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-          </div>
-        ) : null}
+          ) : null}
       </div>
-      
+    
+
       {/* Add modals at the end */}
       <BulkTagModal
         open={showTagModal}

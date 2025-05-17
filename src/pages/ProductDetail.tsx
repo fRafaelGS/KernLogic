@@ -195,7 +195,7 @@ export const ProductDetail = () => {
   if (loading) {
     return (
       <DashboardLayout>
-        <div className="container py-6">
+        <div className="w-full mx-auto py-8 px-6">
           <div className="flex items-center gap-2 mb-6">
             <Skeleton className="h-5 w-24" />
             <Skeleton className="h-5 w-5" />
@@ -234,7 +234,7 @@ export const ProductDetail = () => {
     
     return (
       <DashboardLayout>
-        <div className="container py-6">
+        <div className="w-full mx-auto py-8 px-6">
           <div className="flex items-center mb-6">
             <Button 
               variant="outline" 
@@ -278,7 +278,7 @@ export const ProductDetail = () => {
 
   return (
     <DashboardLayout>
-      <div className="container py-6">
+      <div className="w-full mx-auto py-8 px-6">
         {/* Breadcrumb & Header */}
         <div className="mb-6">
           <Breadcrumb className="mb-2">

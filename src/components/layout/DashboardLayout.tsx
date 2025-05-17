@@ -10,10 +10,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <div className="flex h-screen overflow-x-hidden bg-enterprise-50">
       <Sidebar />
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col min-h-0 min-w-0">
         <Header />
-        <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-          <div className="flex flex-1 flex-col min-h-0">
+        <main className="app-main-scroll flex-1 overflow-y-auto overflow-x-hidden min-h-0 min-w-0">
+          <div className="flex flex-1 flex-col min-h-0 px-2 sm:px-3 min-w-0">
             {children}
           </div>
         </main>

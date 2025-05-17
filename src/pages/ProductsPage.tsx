@@ -122,7 +122,7 @@ export default function ProductsPage() {
   }
   
   return (
-    <div className="flex flex-col flex-1 px-2 lg:px-4 min-h-0">
+    <div className="flex flex-col flex-1 px-2 lg:px-4 min-h-0 min-w-0">
       {/* Table Toolbar */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-1 px-1 border-b gap-1 sm:gap-1">
         <div className="flex items-center space-x-2 w-full sm:w-auto">
@@ -246,10 +246,11 @@ export default function ProductsPage() {
       )}
 
       {/* Main Content */}
-      <section className="flex flex-col flex-1 min-h-0">
+      <section className="flex flex-col overflow-auto flex-1 min-h-0 min-w-0">
+        {/* ONE self-contained scroll region */}
+        <div className="flex-1 min-h-0 min-w-0">
         {viewMode === 'list' ? (
-          <div className="flex-1 min-h-0">
-            <ProductsTableAdapter 
+            <ProductsTableAdapter
               products={products}
               filteredData={products}
               loading={loading}
@@ -258,16 +259,14 @@ export default function ProductsPage() {
               setPagination={setListPagination}
               totalCount={totalCount}
             />
-          </div>
         ) : (
-          <div className="flex-1 min-h-0">
             <ProductGrid 
               products={products}
               loading={loading}
               error={error}
             />
-          </div>
         )}
+        </div>
       </section>
 
       {/* Shared Pagination Controls - Only show in grid view, table has its own */}

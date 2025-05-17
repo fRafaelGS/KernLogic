@@ -2,32 +2,20 @@
 /*  src/hooks/useProductColumns.tsx                           */
 /* ---------------------------------------------------------- */
 import React, { useMemo } from "react";
-import type { ColumnDef, Row, FilterFn } from "@tanstack/react-table";
+import type { ColumnDef, Row } from "@tanstack/react-table";
 import {
   ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
   ImageIcon,
   PlusIcon,
   CheckIcon,
   XIcon,
-  CheckCircle,
-  XCircle,
-  FolderIcon,
-  TagIcon,
   EyeIcon,
   PencilIcon,
   TrashIcon,
   type LucideIcon,
-  InfoIcon,
   Loader2,
 } from "lucide-react";
 
-import {
-  TableHead,
-  TableRow,
-  TableCell, 
-} from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -39,50 +27,26 @@ import {
 } from "@/components/ui/hover-card";
 import type { OnChangeValue } from "react-select";
 
-import {
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-} from "@/components/ui/popover";
-
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
-
 import { useFamilies } from '@/api/familyApi';
-import type { Family } from '@/types/family';
-import { normalizeFamily, NormalizedFamily } from '@/utils/familyNormalizer';
+import { normalizeFamily } from '@/utils/familyNormalizer';
 import { FamilyDisplay } from '@/components/products/FamilyDisplay';
 
 import {
   Product,
-  ProductImage,
   productService,
 } from "@/services/productService";
-import { productService as ps } from "@/services/productService"; // alias
-import { updateProductCategory, getCategories } from "@/services/categoryService"; // Import specific functions
-import { normalizeCategory, Category } from '@/types/categories';
+import { Category } from '@/types/categories';
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { CategoryTreeSelect } from '@/components/categories/CategoryTreeSelect';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { formatPrice, getProductPriceDisplay } from "@/utils/formatPrice";
-import { PriceSummaryBadge } from "@/components/products/PriceSummaryBadge";
 import CreatableSelect from 'react-select/creatable'
 import '@/styles/editable-cell.scss'
 import { pickPrimaryImage } from '@/utils/images';
-import { useUpdateProduct } from '@/hooks/useUpdateProduct'
-import { useNavigate } from "react-router-dom";
-import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from '@tanstack/react-query';
+
 
 // Helper function to safely format price amounts
 const formatAmount = (amount: number | string | null | undefined): string => {

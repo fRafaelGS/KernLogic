@@ -28,6 +28,6 @@ export function ProductsTableAdapter(props: ProductsTableAdapterProps) {
   // @ts-ignore - This is a temporary solution until we properly update ProductsTable
   return <ProductsTable 
     hideTopSearch={true} 
-    hideTopControls={true} 
+    hideTopControls={true}
   />;
 } 

@@ -1139,3 +1139,115 @@ class LocaleSerializer(serializers.ModelSerializer):
         model = Locale
         fields = ['id', 'code', 'label', 'is_active']
         read_only_fields = ['id'] 
+
+class ProductListSerializer(serializers.ModelSerializer):
+    """
+    Enhanced serializer for Product model list view.
+    Includes all essential fields needed for enterprise-ready implementation.
+    """
+    primary_asset_url = serializers.SerializerMethodField()
+    category_name = serializers.SerializerMethodField()
+    price = serializers.SerializerMethodField()
+    stock = serializers.SerializerMethodField()
+    completeness_percent = serializers.SerializerMethodField()
+    tags = serializers.SerializerMethodField()
+    family_name = serializers.SerializerMethodField()
+    updated_at = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Product
+        fields = [
+            'id', 'name', 'sku', 'price', 'is_active', 
+            'primary_asset_url', 'category_name', 'created_at',
+            'description', 'brand', 'barcode', 'tags',
+            'stock', 'completeness_percent', 'is_archived',
+            'updated_at', 'family_name'
+        ]
+    
+    def get_primary_asset_url(self, obj):
+        """Return the URL of the primary asset if it exists"""
+        try:
+            primary_asset = obj.assets.filter(is_primary=True).first()
+            if primary_asset:
+                return primary_asset.file.url if primary_asset.file else None
+            # Fallback to first image asset if no primary is set
+            first_image = obj.assets.filter(asset_type__icontains='image').first()
+            if first_image:
+                return first_image.file.url if first_image.file else None
+            return None
+        except Exception:
+            return None
+    
+    def get_category_name(self, obj):
+        """Return the full category path for the product's category if it exists"""
+        if not obj.category:
+            return None
+        
+        # Get all ancestors including self, ordered from root to leaf
+        ancestors = obj.category.get_ancestors(include_self=True)
+        
+        # Create a breadcrumb path from all category names
+        return ' > '.join([ancestor.name for ancestor in ancestors])
+    
+    def get_price(self, obj):
+        """Return the product's primary price"""
+        try:
+            # First try to get the default price from the relationship
+            first_price = obj.prices.first()
+            if first_price:
+                return first_price.amount
+            return None
+        except Exception:
+            return None
+            
+    def get_stock(self, obj):
+        """Return the product's stock level"""
+        # This would ideally come from an inventory model 
+        # For now, returning a placeholder or from a related inventory model if available
+        try:
+            if hasattr(obj, 'inventory'):
+                return obj.inventory.quantity
+            return 0  # Default to 0 if no inventory data available
+        except Exception:
+            return 0
+            
+    def get_completeness_percent(self, obj):
+        """Return the product's data completeness percentage"""
+        try:
+            # This could be computed on-the-fly or from a cached value
+            # Simple implementation for now
+            required_fields = ['name', 'sku', 'description', 'price', 'category']
+            filled_fields = sum(1 for field in required_fields if getattr(obj, field, None))
+            return int((filled_fields / len(required_fields)) * 100)
+        except Exception:
+            return 0
+            
+    def get_tags(self, obj):
+        """Return the product's tags"""
+        try:
+            # Ensure tags are returned as a list by parsing JSON if needed
+            if obj.tags:
+                if isinstance(obj.tags, str):
+                    try:
+                        return json.loads(obj.tags)
+                    except json.JSONDecodeError:
+                        # If invalid JSON, return as a single item list
+                        return [obj.tags]
+                elif isinstance(obj.tags, list):
+                    return obj.tags
+            return []
+        except Exception:
+            return []
+            
+    def get_family_name(self, obj):
+        """Return the name of the product's family if it exists"""
+        try:
+            if obj.family:
+                return obj.family.label
+            return None
+        except Exception:
+            return None
+            
+    def get_updated_at(self, obj):
+        """Return the product's updated_at timestamp"""
+        return obj.updated_at 

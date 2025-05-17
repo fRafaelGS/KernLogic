@@ -1,17 +1,13 @@
 import React from 'react'
 // @ts-ignore - Importing ProductsTable as-is despite potential type conflicts
 import { ProductsTable } from './ProductsTable'
-import { Product } from '@/services/productService'
 import { ProductGrid } from './ProductGrid'
 
 interface ProductsTableAdapterProps {
-  products?: Product[];
-  loading?: boolean;
-  error?: string | null;
-  pagination?: { pageIndex: number; pageSize: number };
-  setPagination?: (pagination: { pageIndex: number; pageSize: number }) => void;
-  totalCount?: number;
-  viewMode?: 'list' | 'grid';
+  viewMode?: 'list' | 'grid'
+  filters?: Record<string, any>
+  hideTopSearch?: boolean
+  hideTopControls?: boolean
 }
 
 /**
@@ -19,23 +15,33 @@ interface ProductsTableAdapterProps {
  * with the new architecture until we can properly refactor it.
  * 
  * Implementation notes:
- * - We only pass the hideTopControls and hideTopSearch props
- * - ProductsTable currently handles its own data fetching internally
- * - In a future refactor, we need to update ProductsTable to use data from props
+ * - All components now use React Query internally for data fetching
+ * - We pass filters to ensure consistent querying
  */
-export function ProductsTableAdapter(props: ProductsTableAdapterProps) {
+export function ProductsTableAdapter({ 
+  viewMode = 'list', 
+  filters = {},
+  hideTopSearch = false,
+  hideTopControls = false
+}: ProductsTableAdapterProps) {
+  // Ensure filters are correctly formatted
+  const normalizedFilters = React.useMemo(() => {
+    // Convert any null values to undefined to prevent API issues
+    return Object.entries(filters).reduce((acc, [key, value]) => {
+      acc[key] = value === null ? undefined : value;
+      return acc;
+    }, {} as Record<string, any>);
+  }, [filters]);
+
   // Switch between ProductsTable and ProductGrid based on viewMode
-  if (props.viewMode === 'grid') {
-    return <ProductGrid 
-      products={props.products || []}
-      loading={props.loading}
-      error={props.error}
-    />
+  if (viewMode === 'grid') {
+    return <ProductGrid filters={normalizedFilters} />
   }
+  
   // Default to list view
-  // @ts-ignore - This is a temporary solution until we properly update ProductsTable
   return <ProductsTable 
-    hideTopSearch={true} 
-    hideTopControls={false}
+    hideTopSearch={hideTopSearch} 
+    hideTopControls={hideTopControls}
+    filters={normalizedFilters}
   />
 } 

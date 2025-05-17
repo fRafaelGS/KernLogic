@@ -35,7 +35,7 @@ export interface ProductsTableFallbackProps {
   columns: ColumnDef<Product>[];
   loading: boolean;
   filteredData: Product[];
-  filters: FilterState;
+  filters: Record<string, any>;
   handleClearFilters: () => void;
   handleRefresh: () => void;
 }
@@ -96,11 +96,13 @@ export function ProductsTableFallback({
   /* -------- 2. No-data / no-match UI ----------------------------- */
   if (filteredData.length === 0) {
     const hasFilters =
-      filters.searchTerm ||
+      filters.search ||
       filters.category ||
       filters.status !== "all" ||
       filters.minPrice ||
-      filters.maxPrice;
+      filters.maxPrice ||
+      (filters.tags && filters.tags.length > 0) ||
+      filters.searchTerm;
 
     return (
       <TableRow>

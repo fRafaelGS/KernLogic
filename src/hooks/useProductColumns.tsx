@@ -46,6 +46,7 @@ import { Breadcrumb } from '@/components/ui/breadcrumb';
 import CreatableSelect from 'react-select/creatable'
 import '@/styles/editable-cell.scss'
 import { pickPrimaryImage } from '@/utils/images';
+import { matchesCategoryFilter } from '@/lib/categoryFilterUtils';
 
 
 // Helper function to safely format price amounts
@@ -226,6 +227,13 @@ export function useProductColumns({
       cell: ({ row }) => {
         // Use the centralized pickPrimaryImage utility for consistent image selection
         const primaryImageUrl = pickPrimaryImage(row.original);
+        
+        console.log("Product thumbnail:", {
+          id: row.original.id,
+          sku: row.original.sku, 
+          primary_asset_url: row.original.primary_asset_url,
+          selected_image: primaryImageUrl,
+        });
 
         return (
           <div className="flex items-center space-x-2">
@@ -236,6 +244,11 @@ export function useProductColumns({
                     src={primaryImageUrl}
                     alt={row.original.name}
                     className="h-14 w-14 rounded border object-cover"
+                    loading="lazy"
+                    onError={(e) => {
+                      // Fallback if image fails to load
+                      (e.target as HTMLImageElement).src = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20width%3D%2256%22%20height%3D%2256%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2056%2056%22%3E%3Cpath%20fill%3D%22%23f0f0f0%22%20d%3D%22M0%200h56v56H0z%22%2F%3E%3C%2Fsvg%3E';
+                    }}
                   />
                 </HoverCardTrigger>
                 <HoverCardContent className="p-2 w-80">
@@ -243,6 +256,11 @@ export function useProductColumns({
                     src={primaryImageUrl}
                     alt={row.original.name}
                     className="w-full h-auto max-h-64 rounded"
+                    loading="lazy"
+                    onError={(e) => {
+                      // Fallback if image fails to load
+                      (e.target as HTMLImageElement).src = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20width%3D%22300%22%20height%3D%22300%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20300%20300%22%3E%3Cpath%20fill%3D%22%23f0f0f0%22%20d%3D%22M0%200h300v300H0z%22%2F%3E%3C%2Fsvg%3E';
+                    }}
                   />
                   <p className="mt-2 text-sm">{row.original.name}</p>
                 </HoverCardContent>
@@ -400,34 +418,77 @@ export function useProductColumns({
         );
       },
       cell: ({ row }) => {
+        // Get family data from the product - might be a family object, ID, or family_name string
         const family = row.original.family;
+        const familyName = row.original.family_name;
         
-        // Get families data using the hook imported at the top
-        const { data: familiesData, isLoading: isFamiliesLoading } = useFamilies();
-        const families = familiesData || [];
+        // Debug log to help diagnose family data
+        console.log("Family rendering:", { 
+          id: row.original.id, 
+          sku: row.original.sku,
+          family, 
+          familyName 
+        });
         
-        // First, normalize the family data for consistent format
-        let normalizedFamily = normalizeFamily(family);
-        
-        // If we have families data and normalized family shows a generic label ("Family X"),
-        // try to find the complete family data from the families list
-        if (normalizedFamily && families.length > 0 && !isFamiliesLoading) {
-          // Check if we need to enhance with full family data (when label is generic "Family X" or is missing properties)
-          const hasGenericLabel = normalizedFamily.label.includes(`Family ${normalizedFamily.id}`);
-          const isMissingProperties = !normalizedFamily.code || normalizedFamily.code === `family-${normalizedFamily.id}`;
+        // First try using family object or ID if available
+        if (family) {
+          // Get families data using the hook imported at the top
+          const { data: familiesData, isLoading: isFamiliesLoading } = useFamilies();
+          const families = familiesData || [];
           
-          if (hasGenericLabel || isMissingProperties) {
-            const fullFamily = families.find(f => f.id === normalizedFamily?.id);
-            if (fullFamily) {
-              normalizedFamily = normalizeFamily(fullFamily);
+          // First, normalize the family data for consistent format
+          let normalizedFamily = normalizeFamily(family);
+          
+          // If we have families data and normalized family shows a generic label ("Family X"),
+          // try to find the complete family data from the families list
+          if (normalizedFamily && families.length > 0 && !isFamiliesLoading) {
+            // Check if we need to enhance with full family data (when label is generic "Family X" or is missing properties)
+            const hasGenericLabel = normalizedFamily.label.includes(`Family ${normalizedFamily.id}`);
+            const isMissingProperties = !normalizedFamily.code || normalizedFamily.code === `family-${normalizedFamily.id}`;
+            
+            if (hasGenericLabel || isMissingProperties) {
+              const fullFamily = families.find(f => f.id === normalizedFamily?.id);
+              if (fullFamily) {
+                normalizedFamily = normalizeFamily(fullFamily);
+              }
             }
           }
+          
+          return (
+            <div className="flex justify-center p-1 w-full">
+              <FamilyDisplay 
+                family={normalizedFamily} 
+                badgeVariant="secondary"
+                showEmpty={true}
+                showCode={false}
+                hideTooltip={true}
+                className="bg-emerald-100 text-emerald-800 hover:bg-emerald-200 transition-colors w-full text-center px-2"
+              />
+            </div>
+          );
         }
         
+        // If direct family object isn't available but family_name is, use that
+        if (familyName) {
+          return (
+            <div className="flex justify-center p-1 w-full">
+              <FamilyDisplay 
+                family={{ label: familyName }}
+                badgeVariant="secondary"
+                showEmpty={true}
+                showCode={false}
+                hideTooltip={true}
+                className="bg-emerald-100 text-emerald-800 hover:bg-emerald-200 transition-colors w-full text-center px-2"
+              />
+            </div>
+          );
+        }
+        
+        // No family data found
         return (
           <div className="flex justify-center p-1 w-full">
             <FamilyDisplay 
-              family={normalizedFamily} 
+              family={null}
               badgeVariant="secondary"
               showEmpty={true}
               showCode={false}
@@ -442,22 +503,33 @@ export function useProductColumns({
       filterFn: (row, columnId, filterValue) => {
         if (!filterValue) return true;
         
+        // Try to match against family object first
         const family = row.getValue(columnId);
-        if (!family) return false;
+        // Then try to match against family_name
+        const familyName = row.original.family_name;
         
-        // Handle different possible family data formats
-        let familyId: number | null = null;
-        
-        if (typeof family === 'object' && family !== null) {
-          // Family might be a complex object with an ID property
-          familyId = (family as any).id;
-        } else if (typeof family === 'number') {
-          // Family might be just the ID
-          familyId = family;
+        if (family) {
+          // Handle different possible family data formats
+          let familyId: number | null = null;
+          
+          if (typeof family === 'object' && family !== null) {
+            // Family might be a complex object with an ID property
+            familyId = (family as any).id;
+          } else if (typeof family === 'number') {
+            // Family might be just the ID
+            familyId = family;
+          }
+          
+          // Compare family ID with filter value
+          return String(familyId) === String(filterValue);
+        } else if (familyName) {
+          // If using family_name, do a string match
+          const familyNameLower = familyName.toLowerCase();
+          const filterValueLower = String(filterValue).toLowerCase();
+          return familyNameLower.includes(filterValueLower);
         }
         
-        // Compare family ID with filter value
-        return String(familyId) === String(filterValue);
+        return false;
       },
     },
 
@@ -479,8 +551,19 @@ export function useProductColumns({
       },
       cell: ({ row }) => {
         const rowIndex = row.index;
-        const raw = row.getValue("category") as Category[] | Category | string;
-        console.log('ProductTable categoryRaw:', raw);
+        
+        // Get all potential category data sources
+        const categoryData = row.getValue("category") as Category[] | Category | string;
+        const categoryName = row.original.category_name as string;
+        
+        console.log("Category rendering:", { 
+          id: row.original.id, 
+          sku: row.original.sku, 
+          categoryData, 
+          categoryName
+        }); // Debug log
+        
+        // Check if we're editing
         const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.columnId === 'category';
         
         // Check if categories have been loaded yet
@@ -488,14 +571,14 @@ export function useProductColumns({
         
         // Determine category ID for editing
         let categoryId = null;
-        if (raw) {
-          if (Array.isArray(raw) && raw.length > 0) {
-            const leafCategory = raw[raw.length - 1];
+        if (categoryData) {
+          if (Array.isArray(categoryData) && categoryData.length > 0) {
+            const leafCategory = categoryData[categoryData.length - 1];
             categoryId = leafCategory.id;
-          } else if (typeof raw === 'object' && raw !== null) {
-            categoryId = (raw as any).id;
-          } else if (typeof raw === 'number') {
-            categoryId = raw;
+          } else if (typeof categoryData === 'object' && categoryData !== null) {
+            categoryId = (categoryData as any).id;
+          } else if (typeof categoryData === 'number') {
+            categoryId = categoryData;
           }
         }
         
@@ -523,11 +606,86 @@ export function useProductColumns({
           return <CategoryCellPlaceholder />;
         }
         
-        // Read-only: show breadcrumb, and clicking the cell enters edit mode
+        // Smart parse category_name to see if it contains path separators
+        const parseBreadcrumb = (text: string | null | undefined): JSX.Element => {
+          if (!text) return <span className="text-muted-foreground text-xs">Uncategorized</span>;
+          
+          // First, detect if the text contains common category separators (/, >, \ or |)
+          const hasSeparators = /[\/\\>|]/.test(text);
+          
+          if (hasSeparators) {
+            // Split by any common separator and trim each part
+            const parts = text.split(/[\/\\>|]+/)
+                              .map(part => part.trim())
+                              .filter(Boolean);
+            
+            if (parts.length > 1) {
+              return (
+                <div className="flex flex-wrap items-center">
+                  {parts.map((part, i) => (
+                    <React.Fragment key={`part-${i}`}>
+                      {i > 0 && <span className="mx-1 text-slate-400">&gt;</span>}
+                      <span className="text-xs font-medium bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded whitespace-nowrap">
+                        {part}
+                      </span>
+                    </React.Fragment>
+                  ))}
+                </div>
+              );
+            }
+          }
+          
+          // No separators found or just a single part, show as a single badge
+          return (
+            <span className="text-xs font-medium bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">
+              {text}
+            </span>
+          );
+        };
+        
+        // For backward compatibility, handle all possible category data formats
+        let breadcrumb: JSX.Element;
+        
+        // First priority: Use category_name from API (most reliable source)
+        if (categoryName) {
+          breadcrumb = parseBreadcrumb(categoryName);
+        }
+        // Second priority: Check category array (full breadcrumb structure)
+        else if (Array.isArray(categoryData) && categoryData.length > 0) {
+          breadcrumb = (
+            <div className="flex flex-wrap items-center">
+              {categoryData.map((cat, i) => (
+                <React.Fragment key={typeof cat === 'object' && cat !== null ? cat.id : i}>
+                  {i > 0 && <span className="mx-1 text-slate-400">&gt;</span>}
+                  <span className="text-xs font-medium bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded whitespace-nowrap">
+                    {typeof cat === 'object' && cat !== null ? cat.name : cat}
+                  </span>
+                </React.Fragment>
+              ))}
+            </div>
+          );
+        }
+        // Third priority: Check if category is a single object
+        else if (typeof categoryData === 'object' && categoryData !== null && 'name' in categoryData) {
+          breadcrumb = (
+            <span className="text-xs font-medium bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">
+              {(categoryData as any).name}
+            </span>
+          );
+        }
+        // Fourth priority: Check if category is a string
+        else if (typeof categoryData === 'string' && categoryData) {
+          breadcrumb = parseBreadcrumb(categoryData);
+        }
+        // Fallback: Uncategorized
+        else {
+          breadcrumb = <span className="text-muted-foreground text-xs">Uncategorized</span>;
+        }
+        
+        // READ-ONLY VIEW: CATEGORY DISPLAY
         return (
           <div
-            className="min-w-[180px] cursor-pointer p-1 hover:bg-muted rounded"
-            title={Array.isArray(raw) ? raw.map(cat => (cat as any).name).join(' > ') : (typeof raw === 'object' && raw !== null && 'name' in raw ? (raw as any).name : raw || 'Uncategorized')}
+            className="min-w-[180px] cursor-pointer p-1 hover:bg-muted rounded flex items-center"
             onClick={e => {
               e.stopPropagation();
               handleCellEdit(rowIndex, 'category', categoryId);
@@ -542,22 +700,7 @@ export function useProductColumns({
               }
             }}
           >
-            {Array.isArray(raw) && raw.length > 0 ? (
-              <Breadcrumb>
-                {raw.map((cat, i, arr) => (
-                  <React.Fragment key={typeof cat === 'object' ? cat.id : i}>
-                    <span className="truncate">{typeof cat === 'object' ? cat.name : cat}</span>
-                    {i < arr.length - 1 && <span className="mx-1">&gt;</span>}
-                  </React.Fragment>
-                ))}
-              </Breadcrumb>
-            ) : typeof raw === 'object' && raw !== null && 'name' in raw ? (
-              <span>{(raw as any).name}</span>
-            ) : typeof raw === 'string' ? (
-              <span>{raw}</span>
-            ) : (
-              <span className="text-muted-foreground">Uncategorized</span>
-            )}
+            {breadcrumb}
           </div>
         );
       },
@@ -659,7 +802,24 @@ export function useProductColumns({
       },
       cell: ({ row }) => {
         const rowIndex = row.index;
-        const tags = (row.getValue("tags") as string[] | undefined) || [];
+        // Handle tags which could be a string or array
+        let tags: string[] = [];
+        const rawTags = row.getValue("tags");
+        
+        // Safely parse tags from various formats
+        if (Array.isArray(rawTags)) {
+          tags = rawTags;
+        } else if (typeof rawTags === 'string') {
+          try {
+            // Try to parse if it's a JSON string
+            const parsed = JSON.parse(rawTags);
+            tags = Array.isArray(parsed) ? parsed : [rawTags];
+          } catch (e) {
+            // If not valid JSON, treat as a single tag
+            tags = [rawTags];
+          }
+        }
+        
         const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.columnId === 'tags';
         // Map editValue (array of tag strings) to tag option objects for the select's value
         const editTagOptions: TagOption[] = Array.isArray(editValue)
@@ -745,7 +905,8 @@ export function useProductColumns({
               aria-label="Edit tags"
               onClick={e => {
                 e.stopPropagation();
-                handleCellEdit(rowIndex, 'tags', tags.join(','));
+                // Pass the actual array of tags instead of converting to a comma-separated string
+                handleCellEdit(rowIndex, 'tags', tags);
               }}
             >
               <PlusIcon className="h-3 w-3" />
@@ -757,22 +918,30 @@ export function useProductColumns({
       enableColumnFilter: true,
       filterFn: (row: Row<Product>, columnId: string, filterValue: any): boolean => {
         if (!filterValue || !Array.isArray(filterValue) || filterValue.length === 0) return true;
-        const tags = row.getValue(columnId) as any[];
-        if (!tags || !Array.isArray(tags) || tags.length === 0) return false;
-        return filterValue.every(filterTag => 
-          tags.some((tag: any) => {
-            if (typeof tag === 'string') return tag === filterTag;
-            if (tag && typeof tag === 'object') {
-              const tagObj = tag as any;
-              return (
-                String(tagObj.id) === filterTag ||
-                String(tagObj.name) === filterTag ||
-                String(tagObj.value) === filterTag ||
-                String(tagObj.label) === filterTag
-              );
-            }
-            return false;
-          })
+        
+        // Get tags and normalize them
+        let tags: string[] = [];
+        const rawTags = row.getValue(columnId);
+        
+        // Safely parse tags from various formats
+        if (Array.isArray(rawTags)) {
+          tags = rawTags;
+        } else if (typeof rawTags === 'string') {
+          try {
+            // Try to parse if it's a JSON string
+            const parsed = JSON.parse(rawTags);
+            tags = Array.isArray(parsed) ? parsed : [rawTags];
+          } catch (e) {
+            // If not valid JSON, treat as a single tag
+            tags = [rawTags];
+          }
+        }
+        
+        if (!tags || tags.length === 0) return false;
+        
+        // Check if all filter tags are present in this product's tags
+        return filterValue.every((filterTag: string) => 
+          tags.some((tag: string) => String(tag).toLowerCase() === String(filterTag).toLowerCase())
         );
       }
     },

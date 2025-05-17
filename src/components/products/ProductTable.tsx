@@ -8,20 +8,57 @@ import {
   TableRow 
 } from '@/components/ui/table';
 import { useProductPrice, ProductWithPrice } from '@/hooks/useProductPrice';
-import { InfoIcon } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Button } from '@/components/ui/button';
 import { pickPrimaryImage } from '@/utils/images';
+import { useFetchProducts } from '@/hooks/useFetchProducts';
+import { Product, PaginatedResponse } from '@/services/productService';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface ProductTableProps {
-  products: ProductWithPrice[];
-  onSelectProduct?: (product: ProductWithPrice) => void;
+  filters?: Record<string, any>;
+  onSelectProduct?: (product: Product) => void;
 }
 
 export const ProductTable: React.FC<ProductTableProps> = ({ 
-  products, 
+  filters = {},
   onSelectProduct 
 }) => {
+  const { data, fetchNextPage, hasNextPage, isFetching, isLoading } = useFetchProducts(filters);
   const { getFormattedPrice, getPriceTypeDisplay } = useProductPrice();
+  
+  const allProducts = React.useMemo(() => {
+    if (!data) return [];
+    return data.pages.flatMap((page: PaginatedResponse<Product>) => page.results);
+  }, [data]);
+  
+  if (isLoading) {
+    return (
+      <div className="w-full overflow-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Image</TableHead>
+              <TableHead>Product</TableHead>
+              <TableHead>SKU</TableHead>
+              <TableHead>Category</TableHead>
+              <TableHead className="text-right">Price</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <TableRow key={i}>
+                <TableCell><Skeleton className="h-10 w-10" /></TableCell>
+                <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                <TableCell className="text-right"><Skeleton className="h-4 w-12 ml-auto" /></TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    );
+  }
   
   return (
     <div className="w-full overflow-auto">
@@ -36,8 +73,8 @@ export const ProductTable: React.FC<ProductTableProps> = ({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {products.map((product) => {
-            const imageUrl = pickPrimaryImage(product)
+          {allProducts.map((product) => {
+            const imageUrl = pickPrimaryImage(product);
             return (
               <TableRow 
                 key={product.id}
@@ -68,26 +105,19 @@ export const ProductTable: React.FC<ProductTableProps> = ({
                   <div className="flex flex-col items-end">
                     <span 
                       data-testid="product-price" 
-                      data-debug={JSON.stringify({
-                        hasDefaultPrice: !!product.default_price,
-                        priceData: product.default_price,
-                        hasPrices: product.prices?.length > 0,
-                        firstPrice: product.prices?.[0]
-                      })}
-                      title={`${getPriceTypeDisplay(product)}: ${getFormattedPrice(product)}`}
                       className="relative group"
                     >
-                      {getFormattedPrice(product)}
+                      {getFormattedPrice(product as ProductWithPrice)}
                       <span className="text-xs text-muted-foreground block">
-                        {getPriceTypeDisplay(product)}
+                        {getPriceTypeDisplay(product as ProductWithPrice)}
                       </span>
                     </span>
                   </div>
                 </TableCell>
               </TableRow>
-            )
+            );
           })}
-          {products.length === 0 && (
+          {allProducts.length === 0 && (
             <TableRow>
               <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
                 No products found
@@ -96,6 +126,18 @@ export const ProductTable: React.FC<ProductTableProps> = ({
           )}
         </TableBody>
       </Table>
+      
+      {hasNextPage && (
+        <div className="mt-4 flex justify-center">
+          <Button 
+            variant="outline" 
+            onClick={() => fetchNextPage()} 
+            disabled={isFetching}
+          >
+            {isFetching ? 'Loading...' : 'Load More'}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }; 

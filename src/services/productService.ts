@@ -70,10 +70,11 @@
         // We also still allow your legacy string‐only clients in some places,
         // so we keep string here too:
         category: ProductCategory[] | ProductCategory | string;
+        category_name?: string; // Simple string category name from API response
         created_by?: string;
         created_at?: string;
         updated_at?: string;
-            is_active: boolean;
+        is_active: boolean;
         
         // Additional Product Information (Optional)
         brand?: string;
@@ -81,17 +82,40 @@
         barcode?: string;
         
         // Technical Specifications (Optional)
-        attributes?: Record<string, string> | ProductAttribute[];
+        weight?: number;
+        height?: number;
+        width?: number;
+        length?: number;
+        volume?: number;
         
-        // Assets
+        // Pricing & Stock Information (Optional)
+        price?: number;
+        prices?: ProductPrice[];
+        stock?: number;
+        min_stock?: number;
+        
+        // Family Reference (Optional)
+        family?: ProductFamily | string | number;
+        family_name?: string; // Simple string family name from API response
+        
+        // Images & Assets (Optional)
+        primary_image_thumb?: string;
+        primary_image_large?: string;
+        primary_asset_url?: string; // URL to primary asset from API response
         assets?: ProductAsset[];
         
-        // Multiple prices (new model)
-        prices?: ProductPrice[];
+        // Attribute-related fields (Optional)
+        attributes?: ProductAttribute[];
+        attribute_groups?: ProductAttributeGroup[];
         
-        // Family relation (can be null)
-        family?: Family | null;
-        family_name?: string;
+        // Completeness metrics (Optional)
+        completeness_percent?: number;
+        
+        // Archiving status (Optional)
+        is_archived?: boolean;
+        
+        // API response may include these fields
+        [key: string]: any;
     }
 
     export const PRODUCTS_API_URL = `/api/products`;
@@ -130,8 +154,8 @@
         name: string;
         type: string;
         asset_type?: string; // Added for compatibility with backend responses
-        url: string;
-        file_url?: string; // Add file_url for backend compatibility
+        url: string;        // For frontend display (derived from file or file_url)
+        file?: string;      // Actual backend field
         size: string;
         resolution?: string;
         uploaded_by: string;
@@ -375,6 +399,23 @@
         return fileOrAsset.content_type || fileOrAsset.type || ''
     }
 
+    // Product family interfaces
+    export interface ProductFamily {
+        id: number;
+        name?: string;
+        code?: string;
+        label?: string;
+        description?: string;
+    }
+
+    // Product attribute group interface
+    export interface ProductAttributeGroup {
+        id: number;
+        name: string;
+        description?: string;
+        items?: ProductAttribute[];
+    }
+
     export const productService = {
         // Get all products with optional pagination support
         getProducts: async (
@@ -386,9 +427,31 @@
              * 1️⃣ build the first-page URL with page & page_size if provided
              * ------------------------------------------------------------------ */
             const qs = new URLSearchParams();
-            if (filters.page)       qs.append('page',       String(filters.page));
-            if (filters.page_size)  qs.append('page_size',  String(filters.page_size));
-            if (filters.search)     qs.append('search',     String(filters.search));
+            
+            // Add all filters as query parameters
+            for (const [key, value] of Object.entries(filters)) {
+                if (value !== undefined && value !== null && value !== '') {
+                    // Handle arrays (like tags)
+                    if (Array.isArray(value)) {
+                        // Only add non-empty arrays
+                        if (value.length > 0) {
+                            qs.append(key, value.join(','));
+                        }
+                    } else {
+                        qs.append(key, String(value));
+                    }
+                }
+            }
+            
+            // Ensure these critical filters are properly applied
+            if (!qs.has('page') && filters.page) qs.append('page', String(filters.page));
+            if (!qs.has('page_size') && filters.page_size) qs.append('page_size', String(filters.page_size));
+            if (!qs.has('search') && filters.search) qs.append('search', String(filters.search));
+            if (!qs.has('category') && filters.category && filters.category !== 'all') qs.append('category', String(filters.category));
+            if (!qs.has('brand') && filters.brand) qs.append('brand', String(filters.brand));
+            if (!qs.has('is_active') && filters.status && filters.status !== 'all') {
+                qs.append('is_active', filters.status === 'active' ? 'true' : 'false');
+            }
 
             let nextPageUrl: string | null =
               qs.toString().length
@@ -963,7 +1026,7 @@
                     data = response.data.results;
                 } else {
                     console.error('[getProductAssets] Unexpected response format:', typeof response.data);
-                    console.log('[getProductAssets] Response data sample:', 
+                    console.log('[getProductAssets] Response data sample:',
                         typeof response.data === 'object' ? JSON.stringify(response.data).substring(0, 100) : response.data);
                     return [];
                 }
@@ -990,21 +1053,28 @@
                 };
                 
                 // Transform the data to match our expected format
-                const assets = data.map((asset: any) => ({
-                    id: asset.id,
-                    name: asset.name || (asset.file ? asset.file.split('/').pop() : 'Unknown'),
-                    type: asset.asset_type || asset.type || 'image',
-                    asset_type: asset.asset_type || asset.type || 'image', // Add both fields for consistency
-                    url: ensureAbsoluteUrl(asset.file || asset.url || ''),
-                    size: asset.file_size || '0',  // Ensure size is always a string for consistent handling
-                    uploaded_by: asset.uploaded_by_name || asset.uploaded_by || 'System',
-                    uploaded_at: asset.uploaded_at || new Date().toISOString(),
-                    is_primary: !!asset.is_primary, // Ensure boolean type
-                    order: asset.order || 0,
-                    archived: asset.archived || false,
-                    tags: asset.tags || [], // Include tags with empty array fallback
-                    content_type: getContentType(asset)
-                }));
+                const assets = data.map((asset: any) => {
+                    // First get the URL from wherever it might be
+                    const assetUrl = ensureAbsoluteUrl(asset.file || asset.url || '');
+                    
+                    return {
+                        id: asset.id,
+                        name: asset.name || (asset.file ? asset.file.split('/').pop() : 'Unknown'),
+                        type: asset.asset_type || asset.type || 'image',
+                        asset_type: asset.asset_type || asset.type || 'image', // Add both fields for consistency
+                        // Set URL for display purposes
+                        url: assetUrl,
+                        file: asset.file,
+                        size: asset.file_size || '0',  // Ensure size is always a string for consistent handling
+                        uploaded_by: asset.uploaded_by_name || asset.uploaded_by || 'System',
+                        uploaded_at: asset.uploaded_at || new Date().toISOString(),
+                        is_primary: !!asset.is_primary, // Ensure boolean type
+                        order: asset.order || 0,
+                        archived: asset.archived || false,
+                        tags: asset.tags || [], // Include tags with empty array fallback
+                        content_type: getContentType(asset)
+                    };
+                });
                 
                 // Save the fetched assets to localStorage for caching
                 try {
@@ -1023,7 +1093,14 @@
                     if (cachedAssetsJSON) {
                         const cachedAssets = JSON.parse(cachedAssetsJSON);
                         console.log(`[getProductAssets] Using ${cachedAssets.length} cached assets from localStorage`);
-                        return cachedAssets;
+                        
+                        // Ensure URL compatibility for cached assets
+                        return cachedAssets.map((asset: any) => {
+                            if (!asset.url && asset.file) {
+                                asset.url = asset.file;
+                            }
+                            return asset;
+                        });
                     }
                 } catch (cacheError) {
                     console.error('[getProductAssets] Error reading from localStorage:', cacheError);
@@ -1405,6 +1482,7 @@
                     name: data.name || file.name,
                     type: data.asset_type || assetType,
                     url: fileUrl,
+                    file: data.file,
                     size: data.file_size || file.size.toString(),
                     uploaded_by: data.uploaded_by_name || 'You',
                     uploaded_at: data.uploaded_at || new Date().toISOString(),

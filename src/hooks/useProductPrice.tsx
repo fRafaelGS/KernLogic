@@ -12,6 +12,8 @@ export interface ProductPrice {
 export interface ProductWithPrice {
   id: number | string;
   default_price?: ProductPrice;
+  primary_asset_url?: string;
+  family_name?: string;
   [key: string]: any; // For other properties
 }
 

@@ -22,14 +22,18 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.renderers import JSONRenderer
 from rest_framework.generics import get_object_or_404
 
-from .models import (    Product, Activity, ProductRelation,     ProductAsset, ProductEvent, Attribute, AttributeValue,    AttributeGroup, AttributeGroupItem, ProductPrice, SalesChannel, Category, AssetBundle)
+from .models import (
+    Product, ProductAsset, Activity, ProductRelation, Attribute, AttributeValue, 
+    AttributeGroup, AttributeGroupItem, SalesChannel, ProductPrice, Category,
+    AssetBundle, Family, FamilyAttributeGroup, Locale
+)
 from .serializers import (
     ProductSerializer, ActivitySerializer, 
     ProductRelationSerializer, ProductStatsSerializer, IncompleteProductSerializer,
     ProductAssetSerializer, ProductEventSerializer, AttributeValueSerializer,
     AttributeValueDetailSerializer, AttributeGroupSerializer, AttributeGroupItemSerializer,
     ProductPriceSerializer, SalesChannelSerializer, SimpleCategorySerializer, CategorySerializer,
-    AssetBundleSerializer
+    AssetBundleSerializer, ProductListSerializer
 )
 from django_filters.rest_framework import DjangoFilterBackend
 import sys
@@ -163,15 +167,40 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         else:
             # Regular users only see their own products
             qs = Product.objects.filter(created_by=user)
+        
+        # For list view: Optimize by selecting only the needed fields
+        if self.action == 'list':
+            qs = qs.only(
+                'id', 'name', 'sku', 'is_active', 'created_at', 'updated_at',
+                'category_id', 'description', 'brand', 'barcode', 'is_archived',
+                'family_id', 'tags'  # Include tags field directly
+            ).select_related('category', 'family')
             
-        # Prefetch all prices for efficient access
-        qs = qs.prefetch_related(
-            Prefetch(
-                'prices',
-                queryset=ProductPrice.objects.all(),
-                to_attr='all_prices'
+            # Optimize price lookup by prefetching only necessary info
+            qs = qs.prefetch_related(
+                Prefetch(
+                    'prices',
+                    queryset=ProductPrice.objects.all()[:1],  # Only prefetch first price
+                    to_attr='first_price'
+                ),
+                Prefetch(
+                    'assets',
+                    queryset=ProductAsset.objects.filter(
+                        is_primary=True
+                    ).only('id', 'file', 'is_primary', 'asset_type')[:1],
+                    to_attr='primary_assets'
+                )
+                # Removed 'tags' from prefetch_related since it's not a relation field
             )
-        )
+        else:
+            # For detail views: Prefetch all prices for efficient access
+            qs = qs.prefetch_related(
+                Prefetch(
+                    'prices',
+                    queryset=ProductPrice.objects.all(),
+                    to_attr='all_prices'
+                )
+            )
             
         # Additional filters from query parameters
         category_id = self.request.query_params.get('category_id')
@@ -205,6 +234,15 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         
         # Filter out archived products
         return qs.filter(is_archived=False)
+        
+    def list(self, request, *args, **kwargs):
+        """
+        Override list method to use the lightweight ProductListSerializer
+        for better performance when listing products.
+        """
+        # Use the slim list serializer for better performance
+        self.serializer_class = ProductListSerializer
+        return super().list(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         """

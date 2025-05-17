@@ -6,6 +6,9 @@ export function useUniqueCategories(products: Product[]) {
   return useMemo(() => {
     const names = new Set<string>();
     for (const p of products) {
+      // Safely check if category exists before processing
+      if (!p || p.category === undefined) continue;
+      
       const raw = p.category;
       if (Array.isArray(raw)) {
         // add every ancestor's name
@@ -33,6 +36,9 @@ export function useUniqueTags(products: Product[]) {
     const tagSet = new Set<string>();
 
     products.forEach((p) => {
+      // Skip products that don't have tags
+      if (!p || p.tags === undefined) return;
+      
       if (Array.isArray(p.tags)) {
         p.tags.forEach((t) => {
           if (t) tagSet.add(String(t));

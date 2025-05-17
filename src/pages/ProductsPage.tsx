@@ -2,16 +2,11 @@ import React, { useState, useEffect } from 'react'
 import { ProductsTableAdapter } from '@/components/products/ProductsTableAdapter'
 import { ProductGrid } from '@/components/products/ProductGrid'
 import { ViewToggle } from '@/components/products/ViewToggle'
-import { PaginationControls } from '@/components/products/PaginationControls'
-import { useFetchProducts, PaginationState, FilterParams } from '@/hooks/useFetchProducts'
+import { useFetchProducts } from '@/hooks/useFetchProducts'
+import { Product, PaginatedResponse } from '@/services/productService'
 import { Button } from '@/components/ui/button'
-import { RefreshCw, Plus } from 'lucide-react'
-import { Link } from 'react-router-dom'
 import { useToast } from '@/components/ui/use-toast'
 import { useDebounce } from '@/hooks/useDebounce'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Label } from '@/components/ui/label'
-import { Input } from '@/components/ui/input'
 import { useUniqueCategories, useUniqueTags } from '@/hooks/useProductDerived'
 
 type ViewMode = 'list' | 'grid'
@@ -27,48 +22,53 @@ export default function ProductsPage() {
   // Add filter toggle state
   const [filtersVisible, setFiltersVisible] = useState(false)
   
-  // Add filter state
-  const [filters, setFilters] = useState<FilterParams>({
-    searchTerm: '',
-    category: 'all',
-    status: 'all',
-    minPrice: '',
-    maxPrice: '',
-    tags: []
+  // Update to use a simpler filters state for React Query
+  const [filters, setFilters] = useState<Record<string, any>>({
+    search: '',
+    page: 1,
+    page_size: viewMode === 'list' ? 10 : 50
   })
-  
-  // Separate pagination states
-  const [listPagination, setListPagination] = useState<PaginationState>({ 
-    pageIndex: 0, 
-    pageSize: 10 
-  })
-  
-  const [gridPagination, setGridPagination] = useState<PaginationState>({ 
-    pageIndex: 0, 
-    pageSize: 50 
-  })
-  
-  // Get the active pagination based on view mode
-  const activePagination = viewMode === 'list' ? listPagination : gridPagination
-  const onPaginationChange = viewMode === 'list' ? setListPagination : setGridPagination
   
   // Update filters when search term changes
   useEffect(() => {
     setFilters(prev => ({
       ...prev,
-      searchTerm: debouncedSearchTerm
+      search: debouncedSearchTerm,
+      page_size: viewMode === 'list' ? 10 : 50
     }))
-  }, [debouncedSearchTerm])
+  }, [debouncedSearchTerm, viewMode])
   
-  // Fetch products with the active pagination and filters
-  const { products, totalCount, loading, error } = useFetchProducts(activePagination, filters)
+  // Fetch products with React Query
+  const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } = useFetchProducts(filters)
+  
+  // Extract products from paginated data
+  const products = React.useMemo(() => {
+    if (!data) return []
+    return data.pages.flatMap((page: PaginatedResponse<Product>) => page.results)
+  }, [data])
+  
+  // Extract total count
+  const totalCount = data?.pages?.[0]?.count || 0
+  
+  // Update pagination handlers to work with the new filters approach
+  const handlePageChange = (pageIndex: number) => {
+    setFilters(prev => ({
+      ...prev,
+      page: pageIndex + 1 // API uses 1-based indexing
+    }))
+  }
+  
+  const handlePageSizeChange = (pageSize: number) => {
+    setFilters(prev => ({
+      ...prev,
+      page_size: pageSize,
+      page: 1 // Reset to first page when changing page size
+    }))
+  }
   
   // Use these hooks to get unique categories and tags
-  const uniqueCategories = useUniqueCategories(products)
-  const uniqueTags = useUniqueTags(products)
-  
-  // Compute page count for controls
-  const pageCount = Math.ceil(totalCount / activePagination.pageSize)
+  const uniqueCategories = useUniqueCategories(products || [])
+  const uniqueTags = useUniqueTags(products || [])
   
   // Load saved view mode preference
   useEffect(() => {
@@ -85,8 +85,8 @@ export default function ProductsPage() {
   
   // Handle refresh button click
   const handleRefresh = () => {
-    // Just trigger a re-fetch by updating the pagination state with the same values
-    onPaginationChange({ ...activePagination })
+    // Trigger a refetch by updating the filters state
+    setFilters(prev => ({ ...prev }))
     toast({ 
       title: 'Refreshing products', 
       variant: 'default' 
@@ -98,20 +98,12 @@ export default function ProductsPage() {
     setSearchTerm(e.target.value)
   }
   
-  // Handle filter change
-  const handleFilterChange = <K extends keyof FilterParams>(key: K, value: FilterParams[K]) => {
-    setFilters(prev => ({ ...prev, [key]: value }))
-  }
-  
   // Handle clearing all filters
   const handleClearFilters = () => {
     setFilters({
-      searchTerm: debouncedSearchTerm, // Keep the search term
-      category: 'all',
-      status: 'all',
-      minPrice: '',
-      maxPrice: '',
-      tags: []
+      search: debouncedSearchTerm, // Keep the search term
+      page: 1,
+      page_size: viewMode === 'list' ? 10 : 50
     })
   }
   
@@ -135,23 +127,30 @@ export default function ProductsPage() {
       <section className="flex flex-col overflow-auto flex-1 min-h-0 min-w-0">
         {/* ONE self-contained scroll region */}
         <div className="flex-1 min-h-0 min-w-0">
-          <ProductsTableAdapter 
-            viewMode={viewMode}
-            products={products}
-            loading={loading}
-            error={error}
-          />
+          {viewMode === 'grid' ? (
+            <ProductGrid filters={filters} />
+          ) : (
+            <ProductsTableAdapter 
+              viewMode="list"
+              filters={filters}
+              hideTopSearch={true} 
+              hideTopControls={false} 
+            />
+          )}
         </div>
       </section>
 
-      {/* Shared Pagination Controls - Only show in grid view, table has its own */}
-      {viewMode === 'grid' && (
-        <PaginationControls
-          pagination={gridPagination}
-          onChange={setGridPagination}
-          pageCount={Math.ceil(totalCount / gridPagination.pageSize)}
-          pageSizeOptions={[50, 100]}
-        />
+      {/* Shared Pagination Controls - Only show in grid view for React Query's fetchNextPage */}
+      {viewMode === 'grid' && hasNextPage && (
+        <div className="flex justify-center py-4">
+          <Button 
+            variant="outline" 
+            onClick={() => fetchNextPage()} 
+            disabled={isFetchingNextPage}
+          >
+            {isFetchingNextPage ? 'Loading more...' : 'Load more products'}
+          </Button>
+        </div>
       )}
     </div>
   )

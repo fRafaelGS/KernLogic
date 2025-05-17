@@ -14,7 +14,6 @@ import { cn } from '@/lib/utils';
 import { PricingModal } from './PricingModal';
 import { CategoryModal } from './CategoryModal';
 import { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbSeparator } from '@/components/ui/breadcrumb';
-import { Category as CategoryFromService, buildCategoryBreadcrumb } from '@/services/categoryService';
 import { formatCurrency } from '@/lib/utils';
 import { CategoryDisplay } from '../common/CategoryDisplay';
 import { normalizeCategory, Category } from '@/types/categories';

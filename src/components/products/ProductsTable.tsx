@@ -77,11 +77,12 @@ import ProductRowDetails from "./productstable/ProductRowDetails";
 import { AnimatePresence } from 'framer-motion';
 import { Category as CategoryType, Category as ProductCategory } from '@/types/categories';
 import { SubcategoryManager } from '@/components/categories/SubcategoryManager/SubcategoryManager';
-import { getCategoryName, matchesCategoryFilter } from '@/lib/utils';
+import { getCategoryName, matchesCategoryFilter } from '@/lib/categoryFilterUtils';
 import { ViewToggle } from './ViewToggle'
 import { ProductGrid } from './ProductGrid'
 import { useOrgSettings } from '@/hooks/useOrgSettings'
 import { useFamilies } from "@/api/familyApi";
+import { useFetchProducts } from "@/hooks/useFetchProducts";
 
 // Define constants for fixed widths
 const ACTION_W = 112; // Width of action column in pixels
@@ -106,6 +107,12 @@ interface FilterState {
 interface CategoryOption {
   label: string;
   value: number | string; // Allow string ID if backend uses it
+}
+
+// Add type for tag options
+interface TagOption {
+  label: string;
+  value: string;
 }
 
 // Add type for raw category data from API
@@ -169,24 +176,24 @@ function toCategoryOption(category: any): CategoryOption {
 interface ProductsTableProps {
   hideTopControls?: boolean;
   hideTopSearch?: boolean;
+  filters?: Record<string, any>;
 }
 
 // Update the function signature to accept props
 export function ProductsTable({ 
   hideTopControls = false,
-  hideTopSearch = false 
+  hideTopSearch = false,
+  filters: initialFilters
 }: ProductsTableProps = {}) {
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
   // Add organization settings hook
   const { defaultLocale, defaultChannel } = useOrgSettings();
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [products, setProducts] = useState<Product[]>([]);
   const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]); // State for formatted options
   const [editingCell, setEditingCell] = useState<{ rowIndex: number; columnId: string } | null>(null);
-  const [editValue, setEditValue] = useState<string>('');
-  const [originalEditValue, setOriginalEditValue] = useState<string>('');
+  const [editValue, setEditValue] = useState<string | string[]>('');
+  const [originalEditValue, setOriginalEditValue] = useState<string | string[]>('');
 
   const { data: families = [], isLoading: isFamiliesLoading } = useFamilies();
 
@@ -256,20 +263,55 @@ export function ProductsTable({
     }
   }, [columnVisibility.actions]);
   
-  // Filters
-  const [filters, setFilters] = useState<FilterState>({
-    category: searchParams.get('category') || 'all',
-    family: searchParams.get('family') || 'all',
-    status: (searchParams.get('status') as 'all' | 'active' | 'inactive') || 'all',
-    minPrice: searchParams.get('minPrice') || '',
-    maxPrice: searchParams.get('maxPrice') || '',
-    tags: [], // Initialize empty tags array
-    brand: searchParams.get('brand') || undefined,
-    barcode: searchParams.get('barcode') || undefined,
-    created_at: searchParams.get('created_at') || undefined,
-    updated_at: searchParams.get('updated_at') || undefined,
+  // Create filter state for React Query
+  const [filters, setFilters] = useState<Record<string, any>>({
+    page_size: pagination.pageSize,
+    page: pagination.pageIndex + 1, // API uses 1-based pagination
+    tags: [], // Ensure tags is initialized with an empty array
+    category: 'all',
+    status: 'all',
+    minPrice: '',
+    maxPrice: '',
+    ...initialFilters // Override defaults with any provided initial filters
   });
-
+  
+  // Replace existing fetch with React Query
+  const { 
+    data, 
+    isLoading: loading, 
+    fetchNextPage, 
+    hasNextPage, 
+    isFetchingNextPage 
+  } = useFetchProducts(filters);
+  
+  // Derive products from the paginated data and add state for products
+  const [productsState, setProducts] = useState<Product[]>([]);
+  const products = useMemo(() => {
+    if (!data) return [];
+    const newProducts = data.pages.flatMap(page => page.results);
+    // Update products state when data changes
+    setProducts(newProducts);
+    return newProducts;
+  }, [data]);
+  
+  // Set total count based on the first page's count
+  useEffect(() => {
+    if (data?.pages?.[0]?.count !== undefined) {
+      setTotalCountState(data.pages[0].count);
+    }
+  }, [data]);
+  
+  // Update filters when pagination or search changes
+  useEffect(() => {
+    setFilters(prev => ({
+      ...prev,
+      page: pagination.pageIndex + 1,
+      page_size: pagination.pageSize,
+      search: debouncedSearchTerm || undefined,
+      // Add other filters as needed
+    }));
+  }, [pagination.pageIndex, pagination.pageSize, debouncedSearchTerm]);
+  
   const [columnOrder, setColumnOrder] = useState<string[]>([]);
   const [filtersVisible, setFiltersVisible] = useState(false);
   // State to control visibility of the Columns selector dropdown
@@ -306,95 +348,32 @@ export function ProductsTable({
     if (fetchedOnceRef.current) return;
     fetchedOnceRef.current = true;
     
-    setLoading(true);
+    // No need to manually set loading state - React Query handles this
     setError(null);
     
     try {
-      // Make the requests one at a time to avoid race conditions
-      let fetchedProducts: Product[] = [];
-      let fetchedCategories: any[] = [];
+      // This function is no longer needed since we're using React Query
+      // Just keeping it as a placeholder until fully migrated
+      console.log('Using React Query for data fetching');
       
+      // Load categories directly
       try {
-        // Use pagination instead of fetching all products
-        const { pageIndex, pageSize } = pagination;
-        const params: Record<string, any> = {
-          page: pageIndex + 1,
-          page_size: pageSize
-        }
-        if (debouncedSearchTerm) params.search = debouncedSearchTerm
-        if (filters.status && filters.status !== 'all') params.is_active = filters.status === 'active'
-        if (filters.category && filters.category !== 'all') params.category = filters.category
-        if (filters.family && filters.family !== 'all') params.family = filters.family
-        if (filters.minPrice) params.min_price = filters.minPrice
-        if (filters.maxPrice) params.max_price = filters.maxPrice
-        if (filters.tags && filters.tags.length > 0) params.tags = filters.tags.join(',')
-        if (filters.brand) params.brand = filters.brand
-        if (filters.barcode) params.barcode = filters.barcode
-        if (filters.created_at) params.created_at = filters.created_at
-        if (filters.updated_at) params.updated_at = filters.updated_at
-        const response = await productService.getProducts(params, false, false)
-        if (response && typeof response === 'object' && 'results' in response) {
-          // Update total count
-          if (typeof response.count === 'number') {
-            console.log(`Setting total count from server: ${response.count}`);
-            setTotalCountState(response.count);
-          }
-          fetchedProducts = response.results;
-        } else if (Array.isArray(response)) {
-          // It's directly an array of products
-          fetchedProducts = response;
-          // If we get an array without count info, update totalCount to match array length
-          setTotalCountState(response.length);
-        } else {
-          // Fallback to empty array
-          fetchedProducts = [];
-          setTotalCountState(0);
-        }
-      } catch (productsError) {
-        // Don't throw, continue to fetch categories
-        fetchedProducts = [];
-        setTotalCountState(0); // Reset total count on error
-      }
-      
-      try {
-        fetchedCategories = await productService.getCategories();
+        const fetchedCategories = await productService.getCategories();
         // Guard against non-array responses
         if (!Array.isArray(fetchedCategories)) {
-          fetchedCategories = [];
+          return;
         }
+        
+        // Flatten the entire tree so we include subcategories
+        const flatCategories = flattenCategories(fetchedCategories);
+        
+        // Create category options from the flattened list using our safe converter
+        const categoryOpts: CategoryOption[] = flatCategories.map(toCategoryOption);
+        
+        setCategoryOptions(categoryOpts);
       } catch (categoriesError) {
-        // Don't throw, continue with empty categories
-        fetchedCategories = [];
+        console.error('Error fetching categories:', categoriesError);
       }
-      
-      // Remove the eager asset loading and just set products directly
-      setProducts(fetchedProducts);
-      
-      if (typeof window !== 'undefined') {
-        // expose for console testing:
-        // eslint-disable-next-line no-console
-        console.log('Loaded products, exposing to window.__products');
-        // @ts-ignore
-        window.__products = fetchedProducts;
-        // @ts-ignore
-        window.getCategoryName = getCategoryName;
-        // @ts-ignore
-        window.matchesCategoryFilter = (raw: unknown, filterValue: string) => matchesCategoryFilter(raw, filterValue);
-      }
-      
-      // Flatten the entire tree so we include subcategories
-      const flatCategories = flattenCategories(fetchedCategories);
-      
-      // Log the flattened categories for debugging
-      console.log('Flattened categories:', flatCategories);
-      
-      // Create category options from the flattened list using our safe converter
-      const categoryOpts: CategoryOption[] = flatCategories.map(toCategoryOption);
-      
-      // Log the complete category options for debugging
-      console.log('Complete category options:', categoryOpts);
-      
-      setCategoryOptions(categoryOpts);
       
     } catch (err) {
       setError('Failed to fetch data');
@@ -403,10 +382,8 @@ export function ProductsTable({
         description: 'Please try refreshing the page',
         variant: 'destructive'
       });
-    } finally {
-      setLoading(false);
     }
-  }, [isAuthenticated, pagination.pageIndex, pagination.pageSize, debouncedSearchTerm, filters, toast]);
+  }, [isAuthenticated, toast]);
 
   /** call this when you need a *fresh* hit even after the first load */
   const forceReload = useCallback(() => {
@@ -439,15 +416,68 @@ export function ProductsTable({
       return false;
     });
   };
+  
+  // Enhanced function to extract unique categories from products
+  const extractUniqueCategories = useCallback((products: Product[]) => {
+    const uniqueCategories = new Set<string>();
+    
+    products.forEach(product => {
+      // Handle complex category objects
+      if (product.category) {
+        if (Array.isArray(product.category)) {
+          // Extract leaf category from array
+          if (product.category.length > 0) {
+            const leaf = product.category[product.category.length - 1];
+            if (typeof leaf === 'object' && leaf !== null && 'name' in leaf) {
+              uniqueCategories.add(leaf.name);
+            } else if (typeof leaf === 'string') {
+              uniqueCategories.add(leaf);
+            }
+          }
+        } else if (typeof product.category === 'object' && product.category !== null && 'name' in product.category) {
+          // Extract name from single category object
+          uniqueCategories.add(product.category.name);
+        } else if (typeof product.category === 'string') {
+          // Handle string category
+          uniqueCategories.add(product.category);
+        }
+      }
+      
+      // Always include category_name if available (from API)
+      if (product.category_name && typeof product.category_name === 'string') {
+        uniqueCategories.add(product.category_name);
+      }
+    });
+    
+    // Convert to sorted array
+    return Array.from(uniqueCategories).sort();
+  }, []);
+  
+  // Define safeCallFetchData helper function to safely call fetchData
+  const safeCallFetchData = useCallback((fetchDataFn?: () => void) => {
+    if (typeof fetchDataFn === 'function') {
+      fetchDataFn();
+    }
+  }, []);
+
+  // Extract unique categories using our enhanced function
+  const uniqueCategories = useMemo(() => 
+    extractUniqueCategories(products), 
+    [products, extractUniqueCategories]
+  );
+  
+  // Remove old useUniqueCategories hook usage
+  // const uniqueCategories = useUniqueCategories(products);
 
   // Update the filteredData tag filtering logic with proper type casting
-  const filteredData = products;
+  const filteredData = productsState;
 
   // Update the productRowMap whenever the filtered products change
   useEffect(() => {
     const newMap: Record<string, number> = {};
+    // Only include products with valid ids
     filteredData.forEach((product, index) => {
-      if (product.id) {
+      if (product && product.id !== undefined) {
         newMap[String(index)] = product.id;
       }
     });
@@ -459,15 +489,11 @@ export function ProductsTable({
     fetchData();
   }, [fetchData]);
 
-  // Handle refresh button click
-  const handleRefresh = () => {
-    if (isAuthenticated) {
-        setLoading(true);
-        forceReload();
-    } else {
-        toast({ title: 'Please log in to refresh data.', variant: 'default' });
-    }
-  };
+  // Update handleRefresh function
+  const handleRefresh = useCallback(() => {
+    // Simply update filters to trigger a refetch
+    setFilters(prev => ({ ...prev }));
+  }, []);
 
   const handleDelete = useCallback(async (productId: number) => {
     if (window.confirm('Are you sure you want to archive this product?')) {
@@ -575,7 +601,6 @@ export function ProductsTable({
   // --- End Bulk Action Handlers ---
 
   // --- Derived Data ---
-  const uniqueCategories = useUniqueCategories(products);
   // eslint-disable-next-line no-console
   console.log('uniqueCategories derived from products:', uniqueCategories);
   
@@ -584,6 +609,7 @@ export function ProductsTable({
     const productId = productRowMap[String(rowIndex)];
     
     if (!productId) {
+      console.warn(`No product ID found for row index ${rowIndex}`);
       return;
     }
 
@@ -618,46 +644,85 @@ export function ProductsTable({
         };
       }
 
+            // Prepare for optimistic update
+
       // Special handling for category updates to maintain correct data structure in UI
       if (columnId === 'category') {
         // Find the selected category in our options
         const selectedCat = categoryOptions.find(c => c.value === formattedValue);
         
         if (selectedCat) {
-          // Update with proper category object structure - ensure we match the ProductCategory type
-          const categoryObj: ProductCategory = {
+          // Create a proper category object
+          const categoryObj = {
             id: typeof selectedCat.value === 'string' ? parseInt(selectedCat.value, 10) : selectedCat.value,
             name: selectedCat.label
           };
           
+          // For proper breadcrumb handling, we need an array with the selected category
+          // If the backend sends category path later, this will be updated on refetch
+          const categoryArray = [categoryObj];
+          
+          // Optimistic update for UI
           setProducts(prev =>
-            prev.map(p => (p.id === productId ? { ...p, category: [categoryObj] } : p))
+            prev.map(p => {
+              if (p.id === productId) {
+                return { 
+                  ...p, 
+                  category: categoryArray,
+                  category_name: selectedCat.label // Also update category_name for consistent display
+                };
+              }
+              return p;
+            })
           );
         } else {
           // If category not found, default to empty array (uncategorized)
           setProducts(prev =>
-            prev.map(p => (p.id === productId ? { ...p, category: [] } : p))
+            prev.map(p => {
+              if (p.id === productId) {
+                return { 
+                  ...p, 
+                  category: [],
+                  category_name: '' // Clear category_name as well
+                };
+              }
+              return p;
+            })
           );
         }
       } else {
         // Normal optimistic update for non-category fields
         setProducts(prev =>
-          prev.map(p => (p.id === productId ? { ...p, [columnId]: formattedValue } : p))
+          prev.map(p => {
+            if (p.id === productId) {
+              // Create a new product object with updated field
+              const updatedProduct = { ...p, [columnId]: formattedValue };
+              console.log(`Optimistic update for product ${productId}, ${columnId}:`, updatedProduct);
+              return updatedProduct;
+            }
+            return p;
+          })
         );
       }
 
       // Save to API with the correct payload
       await productService.updateProduct(productId, apiPayload);
       
-      toast({ title: `${columnId.charAt(0).toUpperCase() + columnId.slice(1)} updated`, variant: 'default' });
+      // Show success notification immediately without refetching
+      toast({ 
+        title: `${columnId.charAt(0).toUpperCase() + columnId.slice(1)} updated`, 
+        variant: 'default' 
+      });
+      
       setEditingCell(null); // Clear editing state
     } catch (error) {
+      console.error('Error updating product:', error);
       toast({ title: 'Failed to update product', variant: 'destructive' });
       
       // Revert optimistic update
       fetchData();
     }
-  }, [fetchData, productRowMap, toast, categoryOptions]);
+  }, [fetchData, productRowMap, toast, categoryOptions, setProducts]);
 
   // Move the price cell input handler to avoid recreating it on each render
   const handlePriceCellChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -669,13 +734,13 @@ export function ProductsTable({
   }, []);
 
   // Handle starting cell editing
-  const handleCellEdit = useCallback((rowIndex: number, columnId: string, value: string) => {
+  const handleCellEdit = useCallback((rowIndex: number, columnId: string, value: string | string[]) => {
     setEditingCell({ rowIndex, columnId });
     
     // Handle special case for price - remove currency formatting
     if (columnId === 'price') {
       // Remove currency symbols and formatting, keep only numbers and decimal
-      const numericValue = value.replace(/[^0-9.]/g, '');
+      const numericValue = (value as string).replace(/[^0-9.]/g, '');
       setEditValue(numericValue);
       setOriginalEditValue(numericValue);
     } else {
@@ -694,9 +759,10 @@ export function ProductsTable({
           // Handle case where editValue is already an array
           tagsArray = editValue.map(tag => {
             if (typeof tag === 'string') return tag
-            if (tag && typeof tag === 'object') {
-              if (typeof tag.label === 'string') return tag.label
-              if (typeof tag.value === 'string') return tag.value
+            if (tag && typeof tag === 'object' && tag !== null) {
+              const tagObj = tag as Record<string, unknown>
+              if (typeof tagObj.label === 'string') return tagObj.label
+              if (typeof tagObj.value === 'string') return tagObj.value
             }
             return ''
           }).filter(Boolean)
@@ -757,7 +823,7 @@ export function ProductsTable({
   }, [navigate, editingCell, handleCancelEdit]);
 
   // Add state for tag options
-  const [tagOptions, setTagOptions] = useState<{ label: string; value: string }[]>([]);
+  const [tagOptions, setTagOptions] = useState<TagOption[]>([]);
 
   // Fetch tags on component mount
   useEffect(() => {
@@ -815,6 +881,9 @@ export function ProductsTable({
 
   // Function to render expanded row content with attributes
   const renderExpandedRow = (row: Row<Product>, index: number) => {
+    // Safety check to ensure row.original exists
+    if (!row?.original) return null;
+    
     const productId = row.original.id;
     
     if (!productId) {
@@ -1031,7 +1100,13 @@ export function ProductsTable({
       if (openKeys.length === 0) return {}
       const last = openKeys[openKeys.length - 1]
       const row = last ? table.getRow(last) : null
-      const productId = row?.original?.id
+      // Add safety check for row.original
+      if (!row?.original) return next;
+      
+      const productId = row.original.id
+      // Skip processing if productId is undefined
+      if (productId === undefined) return next;
+      
       if (productId && !productAssetsCache[productId] && !attrGroupsInFlight.current.has(productId)) {
         productService.getProductAssets(productId)
           .then(assets => {
@@ -1130,7 +1205,28 @@ export function ProductsTable({
       },
       categoryFilter: (row: Row<Product>, columnId: string, filterValue: any): boolean => {
         if (!filterValue) return true;
-        return matchesCategoryFilter(row.getValue(columnId), filterValue as string);
+        
+        // Get both the complex category field and simple category_name
+        const categoryValue = row.getValue(columnId);
+        const product = row.original;
+        
+        // If uncategorized filter is selected
+        if (filterValue === 'uncategorized') {
+          // Check if the product has no category info
+          return (
+            (!categoryValue || 
+             (Array.isArray(categoryValue) && categoryValue.length === 0) ||
+             categoryValue === '') && 
+            (!product.category_name || product.category_name === '')
+          );
+        }
+        
+        // For any other category filter, check both fields
+        const matchesCategory = matchesCategoryFilter(categoryValue, filterValue);
+        const matchesCategoryName = matchesCategoryFilter(product.category_name, filterValue);
+        
+        // Return true if either matches
+        return matchesCategory || matchesCategoryName;
       }
     } as Record<string, FilterFn<Product>>,
     enableRowSelection: true,
@@ -1362,7 +1458,10 @@ export function ProductsTable({
   useEffect(() => {
     if (pagination.pageIndex !== 0) return;                // only first page
 
-    filteredData.slice(0, pagination.pageSize).forEach(async (p) => {
+    // Filter out any products without valid ids first
+    const validProducts = filteredData.filter(p => p && p.id !== undefined);
+
+    validProducts.slice(0, pagination.pageSize).forEach(async (p) => {
       if (!p.id) return;                                   // safety
       if (productAttributes[p.id] !== undefined) return;   // already cached
       if (attrGroupsInFlight.current.has(p.id)) return;    // already fetching
@@ -1707,25 +1806,44 @@ export function ProductsTable({
                                         return (
                                           <Select
                                             value={(table.getColumn("category")?.getFilterValue() as string) ?? "all"}
-                                            onValueChange={(v) => {
+                                            onValueChange={(value) => {
                                               // Debug logging
-                                              console.log("Column header filter - Selected category value:", v);
+                                              console.log("Category filter selected:", value);
                                               
-                                              // Update our local filter state and column filter in one call
-                                              handleFilterChange('category', v);
+                                              // Handle special cases
+                                              if (value === 'all') {
+                                                table.getColumn("category")?.setFilterValue(undefined);
+                                              } else if (value === 'uncategorized') {
+                                                table.getColumn("category")?.setFilterValue('uncategorized');
+                                              } else {
+                                                // For normal categories, set the filter to the selected value
+                                                table.getColumn("category")?.setFilterValue(value);
+                                              }
+                                              
+                                              // Also update our filter state
+                                              setFilters(prev => ({
+                                                ...prev,
+                                                category: value
+                                              }));
                                             }}
                                           >
                                             <SelectTrigger className="h-7 text-xs">
                                               <SelectValue placeholder="Filter category" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                              <SelectItem value="all">All</SelectItem>
+                                              <SelectItem value="all">All Categories</SelectItem>
                                               <SelectItem value="uncategorized">Uncategorized</SelectItem>
-                                              {uniqueCategories.map((category) => (
-                                                <SelectItem key={category} value={category}>
-                                                  {category}
+                                              {uniqueCategories.length > 0 ? (
+                                                uniqueCategories.map((category) => (
+                                                  <SelectItem key={category} value={category}>
+                                                    {category}
+                                                  </SelectItem>
+                                                ))
+                                              ) : (
+                                                <SelectItem value="no-categories" disabled>
+                                                  No categories available
                                                 </SelectItem>
-                                              ))}
+                                              )}
                                             </SelectContent>
                                           </Select>
                                         );
@@ -1895,7 +2013,7 @@ export function ProductsTable({
                                               >
                                                 <TagIcon className="mr-1 h-3 w-3" />
                                                 <span>
-                                                  {filters.tags.length > 0 
+                                                  {Array.isArray(filters.tags) && filters.tags.length > 0 
                                                     ? `${filters.tags.length} Selected`
                                                     : "Filter Tags"}
                                                 </span>
@@ -1910,12 +2028,12 @@ export function ProductsTable({
                                                         <div key={tag} className="flex items-center">
                                                           <Checkbox 
                                                             id={`tag-${tag}`}
-                                                            checked={filters.tags.includes(tag)}
+                                                            checked={Array.isArray(filters.tags) && filters.tags.includes(tag)}
                                                             onCheckedChange={(checked) => {
                                                               // Create new tags array
                                                               const newTags = checked 
-                                                                ? [...filters.tags, tag] 
-                                                                : filters.tags.filter(t => t !== tag);
+                                                                ? [...(Array.isArray(filters.tags) ? filters.tags : []), tag] 
+                                                                : (Array.isArray(filters.tags) ? filters.tags.filter((t: string) => t !== tag) : []);
                                                               
                                                               // Update the filters state directly
                                                               setFilters(prev => ({ ...prev, tags: newTags }));
@@ -2048,10 +2166,15 @@ export function ProductsTable({
                       
                       {!loading && filteredData.length > 0 && 
                         table.getRowModel().rows.map((row, index) => {
+                          // Add a safety check to ensure row.original exists
+                          if (!row?.original) return null;
+                          
                           const productId = row.original.id;
+                          // Skip this row if productId is undefined
+                          if (productId === undefined) return null;
                           
                           return (
-                            <React.Fragment key={row.id}>
+                            <React.Fragment key={row.id || `row-${index}`}>
                               <TableRow 
                                 data-state={row.getIsSelected() && "selected"}
                                 className={cn(

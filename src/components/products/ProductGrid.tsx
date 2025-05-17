@@ -1,20 +1,46 @@
 import React from 'react'
-import { Product } from '@/services/productService'
+import { Product, PaginatedResponse } from '@/services/productService'
 import { ProductCard } from './ProductCard'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useFetchProducts } from '@/hooks/useFetchProducts'
+import { Button } from '@/components/ui/button'
 
 interface ProductGridProps {
-  products: Product[]
+  filters?: Record<string, any>
+  products?: Product[]
   loading?: boolean
   error?: string | null
 }
 
 export function ProductGrid({ 
-  products, 
-  loading = false, 
-  error = null 
+  filters = {}, 
+  products: passedProducts, 
+  loading: passedLoading, 
+  error: passedError 
 }: ProductGridProps) {
-  if (loading) {
+  const { 
+    data, 
+    isLoading, 
+    error, 
+    fetchNextPage, 
+    hasNextPage,
+    isFetchingNextPage 
+  } = useFetchProducts(filters)
+  
+  // Use passed props if they exist, otherwise use values from useFetchProducts
+  const isLoadingData = passedLoading !== undefined ? passedLoading : isLoading
+  const errorMessage = passedError !== undefined ? passedError : error
+  
+  const productsToRender = React.useMemo(() => {
+    // If products are passed directly, use them
+    if (passedProducts) return passedProducts
+    
+    // Otherwise use data from useFetchProducts
+    if (!data) return []
+    return data.pages.flatMap((page: PaginatedResponse<Product>) => page.results)
+  }, [data, passedProducts])
+
+  if (isLoadingData) {
     return (
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 p-4">
         {Array.from({ length: 20 }).map((_, index) => (
@@ -29,18 +55,20 @@ export function ProductGrid({
     )
   }
 
-  if (error) {
+  if (errorMessage) {
     return (
       <div className="flex items-center justify-center p-8 text-center">
         <div className="max-w-md">
           <h3 className="text-lg font-medium mb-2">Failed to load products</h3>
-          <p className="text-sm text-slate-500">{error}</p>
+          <p className="text-sm text-slate-500">
+            {errorMessage instanceof Error ? errorMessage.message : errorMessage || 'An error occurred'}
+          </p>
         </div>
       </div>
     )
   }
 
-  if (products.length === 0) {
+  if (productsToRender.length === 0) {
     return (
       <div className="flex items-center justify-center p-8 text-center">
         <div className="max-w-md">
@@ -54,10 +82,25 @@ export function ProductGrid({
   }
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 p-4">
-      {products.map(product => (
-        <ProductCard key={product.id} product={product} />
-      ))}
+    <div className="flex flex-col">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 p-4">
+        {productsToRender.map(product => (
+          <ProductCard key={product.id} product={product} />
+        ))}
+      </div>
+      
+      {/* Only show load more button if using React Query data */}
+      {!passedProducts && hasNextPage && (
+        <div className="flex justify-center py-4">
+          <Button 
+            variant="outline" 
+            onClick={() => fetchNextPage()} 
+            disabled={isFetchingNextPage}
+          >
+            {isFetchingNextPage ? 'Loading more...' : 'Load more products'}
+          </Button>
+        </div>
+      )}
     </div>
   )
 } 

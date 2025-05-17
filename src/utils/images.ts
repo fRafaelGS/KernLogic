@@ -9,6 +9,18 @@ import type { ProductWithPrice } from '@/hooks/useProductPrice'
  * @returns The URL of the primary image, or undefined if no suitable image is found
  */
 export function pickPrimaryImage(product: Product | ProductWithPrice): string | undefined {
+  // First check if primary_asset_url exists (from API's ProductListSerializer)
+  if (product.primary_asset_url) {
+    // Check if the URL needs to be absolute
+    const url = product.primary_asset_url;
+    // If it's already a full URL, use it directly
+    if (url.startsWith('http') || url.startsWith('data:')) {
+      return url;
+    }
+    // If it's a relative URL, ensure it's properly formed
+    return url.startsWith('/') ? url : `/${url}`;
+  }
+  
   // Check assets array for a primary image
   if (product.assets?.length) {
     // First look for an asset explicitly marked as primary

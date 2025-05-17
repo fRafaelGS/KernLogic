@@ -37,8 +37,21 @@ export function CategoryDisplay({
   if (categories.length > 0) {
     // If we have the full categories list, show the breadcrumb path
     displayName = getCategoryNamePath(category, categories, separator);
+  } else if (typeof category === 'string') {
+    // Check if the string contains path separators (/, >, \ or |)
+    if (/[\/\\>|]/.test(category)) {
+      // Split by any common separator and join with our desired separator
+      displayName = category
+        .split(/[\/\\>|]+/)
+        .map(part => part.trim())
+        .filter(Boolean)
+        .join(separator);
+    } else {
+      // Just use the string as is
+      displayName = category.trim();
+    }
   } else {
-    // Otherwise just show the direct category name
+    // For Category objects, use normalizeCategory
     displayName = normalizeCategory(category).name;
   }
   

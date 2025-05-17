@@ -137,7 +137,7 @@ export function getCategoryName(raw: unknown): string {
 export function matchesCategoryFilter(raw: unknown, filterValue: string): boolean {
   console.log("matchesCategoryFilter called with:", { raw, filterValue });
   
-  // UNCATEGORIZED: no category whatsoever
+  // Special case for "uncategorized" filter (empty string filterValue)
   if (filterValue === "") {
     console.log("Checking for uncategorized");
     
@@ -162,7 +162,7 @@ export function matchesCategoryFilter(raw: unknown, filterValue: string): boolea
       return true;
     }
     
-    // Check if we have a product object - if it has category_name
+    // Check if we have a product object with category_name property
     if (typeof raw === "object" && raw !== null && "category_name" in raw) {
       const categoryName = (raw as any).category_name;
       if (!categoryName || typeof categoryName === "string" && categoryName.trim() === "") {
@@ -175,11 +175,12 @@ export function matchesCategoryFilter(raw: unknown, filterValue: string): boolea
     return false;
   }
 
-  // ANY OTHER CATEGORY: gather all names
+  // For any other category, gather all names for comparison
   const names: string[] = [];
   
-  // Extract category names from complex category structures
+  // Extract category names from various formats
   if (Array.isArray(raw)) {
+    // Case: Array of categories (breadcrumb trail)
     raw.forEach(node => {
       if (node && typeof node === "object" && "name" in node) {
         const n = (node as any).name;
@@ -189,31 +190,70 @@ export function matchesCategoryFilter(raw: unknown, filterValue: string): boolea
       }
     });
   } else if (raw && typeof raw === "object") {
-    // Check for name property
+    // Case: Single category object
     if ("name" in raw) {
       const n = (raw as any).name;
       if (typeof n === "string") names.push(n);
     }
     
-    // Also check for category_name property
+    // Case: Product with category_name that might contain breadcrumb path
     if ("category_name" in raw) {
       const categoryName = (raw as any).category_name;
       if (typeof categoryName === "string" && categoryName.trim() !== "") {
-        names.push(categoryName);
+        // Split category_name by path separators to check each part
+        if (/[\/\\>|]/.test(categoryName)) {
+          const parts = categoryName
+            .split(/[\/\\>|]+/)
+            .map(part => part.trim())
+            .filter(Boolean);
+          names.push(...parts);
+        } else {
+          names.push(categoryName);
+        }
       }
     }
   } else if (typeof raw === "string" && raw.trim() !== "") {
-    names.push(raw);
+    // Case: Simple string category - might contain breadcrumb information
+    if (/[\/\\>|]/.test(raw)) {
+      const parts = raw
+        .split(/[\/\\>|]+/)
+        .map(part => part.trim())
+        .filter(Boolean);
+      names.push(...parts);
+    } else {
+      names.push(raw);
+    }
+  } 
+  // Special case: If we're explicitly filtering by category_name
+  else if (raw && typeof raw === "object" && "original" in raw) {
+    // Handle table row object with original property
+    const original = (raw as any).original;
+    if (original && typeof original === "object" && "category_name" in original) {
+      const categoryName = original.category_name;
+      if (typeof categoryName === "string" && categoryName.trim() !== "") {
+        // Split category_name by path separators to check each part
+        if (/[\/\\>|]/.test(categoryName)) {
+          const parts = categoryName
+            .split(/[\/\\>|]+/)
+            .map(part => part.trim())
+            .filter(Boolean);
+          names.push(...parts);
+        } else {
+          names.push(categoryName);
+        }
+      }
+    }
   }
   
   console.log("Category names found:", names, "Looking for:", filterValue);
   
-  // Check for exact match or substring match (more flexible)
+  // Check for exact match first
   const exactMatch = names.some(name => 
     name.toLowerCase() === filterValue.toLowerCase()
   );
   
-  const substringMatch = names.some(name => 
+  // If no exact match, look for substring match
+  const substringMatch = !exactMatch && names.some(name => 
     name.toLowerCase().includes(filterValue.toLowerCase()) || 
     filterValue.toLowerCase().includes(name.toLowerCase())
   );
@@ -221,4 +261,4 @@ export function matchesCategoryFilter(raw: unknown, filterValue: string): boolea
   const result = exactMatch || substringMatch;
   console.log("Match result:", result);
   return result;
-}
+} 

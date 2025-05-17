@@ -48,6 +48,7 @@ export interface IncompleteProduct {
   name: string;
   sku: string;
   completeness: number;
+  family?: { name: string };
   missing_fields: FieldDetail[];
   missing_fields_count: number; // New field for counting missing fields
   field_completeness: FieldCompletenessEntry[]; // Comprehensive list of all tracked fields and their status

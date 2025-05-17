@@ -103,5 +103,12 @@ export const qkMissingAttributesHeatmap = (filters: ReportFiltersState) =>
  * @param params Filter parameters for the change history
  * @returns Query key array
  */
-export const qkChangeHistory = (params?: { from?: string; to?: string; user?: number }) =>
+export const qkChangeHistory = (params?: { 
+  from?: string; 
+  to?: string; 
+  user?: number;
+  users?: string[];
+  entity?: string;
+  actions?: string[];
+}) =>
   ['analytics', 'changeHistory', params] as const; 

@@ -4,10 +4,10 @@
  */
 
 // Base URL for the products API endpoints
-export const PRODUCTS_API_BASE = process.env.PRODUCTS_API_BASE_URL || '/api';
+export const PRODUCTS_API_BASE = '/api';
 
 // JWT token for service-to-service authentication
-export const SERVICE_JWT = process.env.SERVICE_JWT_TOKEN || '';
+export const SERVICE_JWT = '';
 
 // Request timeout in milliseconds
 export const REQUEST_TIMEOUT = 30000;

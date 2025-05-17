@@ -78,7 +78,14 @@ export const paths = {
       join(API_BASE, 'analytics/enrichment-velocity') + `/?days=${days}`,
     localizationQuality: () => 
       join(API_BASE, 'analytics/localization-quality') + '/', // Used for Localization Coverage report (frontend name updated, API path unchanged)
-    changeHistory: (params?: { from?: string; to?: string; user?: number }) => {
+    changeHistory: (params?: { 
+      from?: string; 
+      to?: string; 
+      user?: number;
+      users?: string[];
+      entity?: string;
+      actions?: string[];
+    }) => {
       const url = join(API_BASE, 'analytics/change-history') + '/';
       if (!params) return url;
       
@@ -86,6 +93,13 @@ export const paths = {
       if (params.from) queryParams.append('from', params.from);
       if (params.to) queryParams.append('to', params.to);
       if (params.user) queryParams.append('user', params.user.toString());
+      if (params.users && params.users.length > 0) {
+        params.users.forEach(user => queryParams.append('username', user));
+      }
+      if (params.entity) queryParams.append('entity', params.entity);
+      if (params.actions && params.actions.length > 0) {
+        params.actions.forEach(action => queryParams.append('action', action));
+      }
       
       const queryString = queryParams.toString();
       return queryString ? `${url}?${queryString}` : url;

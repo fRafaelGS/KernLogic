@@ -169,7 +169,7 @@ kernlogic/
 - Attribute inheritance
 - Override mechanisms for specific products
 
-### 6. Digital Asset Management
+### 6. Digital Asset Management (just at product detail level)
 - Image and document storage
 - Asset bundling
 - File type validation
@@ -200,12 +200,6 @@ kernlogic/
 - Generate product specification sheets
 - Custom templates
 - High-quality print output
-
-### 12. Multi-Channel Pricing
-- Support for different price types (MSRP, wholesale, etc.)
-- Currency handling
-- Sales channel specific pricing
-- Temporal price validity
 
 ## 🔐 Authentication Flow
 
@@ -246,7 +240,6 @@ kernlogic/
 - Workflow automation
 - Approval processes
 - Advanced search with facets
-- Machine learning for data enrichment
 
 ## 🧪 Testing
 
@@ -270,4 +263,4 @@ npm test
 ---
 
 **Documentation version:** 2.0.0  
-**Last updated:** May 2024
+**Last updated:** May 2025

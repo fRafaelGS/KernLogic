@@ -1,23 +1,5 @@
 import { cn } from "@/lib/utils";
-import { 
-  LayoutDashboard, 
-  Package, 
-  Upload, 
-  Settings, 
-  BeakerIcon, 
-  Users, 
-  BarChart2,
-  LogOut,
-  ChevronRight,
-  HelpCircle,
-  FileText,
-  PanelLeft,
-  PanelRight,
-  Pin,
-  PinOff,
-  ChevronDown,
-  ChevronUp
-} from "lucide-react";
+import {   LayoutDashboard,   Package,   Upload,   Settings,   BeakerIcon,   Users,   BarChart2,  FileText,  PanelLeft,  PanelRight,  Pin,  PinOff,  ChevronDown,  ChevronUp} from "lucide-react";
 import { NavLink, useLocation, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -373,87 +355,7 @@ export function Sidebar({ className, isMobile = false }: SidebarProps) {
           ))}
         </div>
 
-        {/* Help & Support section - hide when collapsed */}
-        {!effectiveCollapsed && (
-          <div className="mt-auto mb-6">
-            <div className="rounded-lg bg-enterprise-50 p-4">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="rounded-full bg-primary-100 p-1.5">
-                  <HelpCircle size={20} className="text-primary-600" />
-                </div>
-                <h3 className="font-medium text-enterprise-800">Need Help?</h3>
-              </div>
-              <p className="text-xs text-enterprise-600 mb-3">
-                Check our documentation or contact support for assistance.
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full text-enterprise-700 border-enterprise-200 hover:bg-enterprise-100 focus-visible:ring-0 focus-visible:outline-none"
-                asChild
-              >
-                <Link to="/app/documentation">
-                  View Documentation
-                  <ChevronRight size={18} className="ml-1" />
-                </Link>
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
-      
-      {/* User area */}
-      <div className="mt-auto border-t border-enterprise-200 p-4 sticky bottom-0 bg-white">
-        {effectiveCollapsed ? (
-          <div className="flex justify-center">
-            <TooltipProvider delayDuration={500}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-medium cursor-pointer focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:outline-none">
-                    {user?.name?.[0]?.toUpperCase() || 'U'}
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent 
-                  side="right" 
-                  sideOffset={4}
-                  className="bg-white shadow-md rounded-md p-2 text-sm border border-enterprise-100"
-                >
-                  <p className="font-medium">{user?.name || 'User'}</p>
-                  <p className="text-xs text-enterprise-500">{user?.email || 'user@example.com'}</p>
-                  {user?.role && (
-                    <p className="text-xs bg-enterprise-100 rounded-full px-2 py-0.5 inline-block mt-1 text-enterprise-700">
-                      {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
-                    </p>
-                  )}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-        ) : (
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-medium">
-              {user?.name?.[0]?.toUpperCase() || 'U'}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-enterprise-900 truncate">{user?.name || 'User'}</p>
-              <p className="text-xs text-enterprise-500 truncate">{user?.email || 'user@example.com'}</p>
-              {user?.role && (
-                <p className="text-xs bg-enterprise-100 rounded-full px-2 py-0.5 inline-block mt-1 text-enterprise-700">
-                  {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
-                </p>
-              )}
-            </div>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-8 w-8 text-enterprise-500 hover:text-enterprise-700 hover:bg-enterprise-50 focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:outline-none"
-              onClick={() => logout()}
-            >
-              <LogOut size={20} />
-            </Button>
-          </div>
-        )}
-      </div>
-    </div>
+        
+            </div>    </div>
   );
 }

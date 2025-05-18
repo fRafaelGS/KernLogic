@@ -23,19 +23,27 @@ export interface FilterParams {
   minPrice?: string
   maxPrice?: string
   tags?: string[]
+  page_size?: number
+  page?: number
+  search?: string
 }
 
 const PAGE_SIZE = 25
+const MAX_PAGE_SIZE = 50
+const DEFAULT_PAGE_SIZE = PAGE_SIZE
 
-export function useFetchProducts(filters = {}) {
+export function useFetchProducts(filters: FilterParams = {}) {
+  const effectivePageSize = 
+    Math.min(filters.page_size ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE)
+
   return useInfiniteQuery({
-    queryKey: ['products', filters],
+    queryKey: ['products', { ...filters, page_size: effectivePageSize }],
     queryFn: async ({ pageParam = 1 }) => {
       const response = await productService.getProducts(
         { 
           ...filters, 
           page: pageParam, 
-          page_size: PAGE_SIZE 
+          page_size: effectivePageSize
         }, 
         false, // fetchAll = false to ensure we get paginated response
         false  // includeAssets = false for performance

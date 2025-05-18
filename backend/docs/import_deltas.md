@@ -54,6 +54,20 @@ For example:
 - `weight-es_ES` → Spanish locale value
 - `weight-es_ES-web` → Spanish locale for web channel
 
+#### Attribute Header Default Behavior
+
+When attribute headers don't specify a locale or channel, the system uses the organization defaults:
+
+1. **Default Locale**:
+   - If the attribute header doesn't include a locale (e.g., just `weight`), the system uses the organization's default locale.
+   - If the organization has no default locale, it falls back to the locale specified in the row mapping.
+
+2. **Default Channel**:
+   - If the attribute header doesn't include a channel, the system uses the organization's default channel.
+   - If the organization has no default channel, it falls back to the channel specified in the row mapping.
+
+This ensures attributes are always associated with the correct locale and channel for your organization.
+
 ### Family-Attribute Validation
 
 Products with a family will have their attributes validated against the family definition.

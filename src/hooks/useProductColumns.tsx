@@ -184,7 +184,7 @@ export function useProductColumns({
     /**********  SELECT checkbox **************************************/
     {
       id: "select",
-      size: 36,
+      size: 20,
       header: ({ table }) => (
         <div className="px-1">
           <Checkbox
@@ -213,7 +213,7 @@ export function useProductColumns({
     /**********  THUMBNAIL ********************************************/
     {
       accessorKey: "thumbnail",
-      size: 88,
+      size: 70,
       header: ({ column }) => (
         <Button
           variant="ghost"
@@ -536,7 +536,7 @@ export function useProductColumns({
     /**********  CATEGORY **************************************************/
     {
       accessorKey: "category",
-      size: 160,
+      size: 190,
       header: ({column}) => {
         return (
           <Button

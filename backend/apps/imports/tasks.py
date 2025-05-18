@@ -224,9 +224,25 @@ def import_csv_task(task_id: int):
                                 if not attr_code:
                                     continue
                                 
-                                # Use defaults for locale/channel if not specified
-                                actual_locale_code = locale_code or mapped_row['locale']
-                                actual_channel_code = channel_code or mapped_row['channel']
+                                # Use organization defaults for locale/channel if not specified
+                                if not locale_code:
+                                    if org.default_locale_ref:
+                                        actual_locale_code = org.default_locale_ref.code
+                                    else:
+                                        # fall back to the char field stored on the org
+                                        actual_locale_code = org.default_locale or mapped_row['locale']
+                                else:
+                                    actual_locale_code = locale_code
+
+                                if not channel_code:
+                                    # Use organization default channel if none specified in header
+                                    if org.default_channel:
+                                        default_channel_code = org.default_channel.code if hasattr(org.default_channel, 'code') else org.default_channel
+                                        actual_channel_code = default_channel_code
+                                    else:
+                                        actual_channel_code = mapped_row['channel']
+                                else:
+                                    actual_channel_code = channel_code
                                 
                                 # Value from the CSV
                                 attribute_value = row[col]
@@ -338,6 +354,12 @@ def import_csv_task(task_id: int):
                                             error_line = [row_num, sku, f"{attr_code}-{locale_code}", error_msg]
                                             error_writer.writerow(error_line)
                                             raise ValueError(error_msg)
+                                    elif org.default_locale_ref:
+                                        # Use organization default locale if none specified in header
+                                        from products.models import Locale
+                                        locale_obj = Locale.objects.filter(
+                                            code=org.default_locale_ref.code, organization=org
+                                        ).first()
                                     
                                     # Find the channel object
                                     channel_obj = None
@@ -353,15 +375,26 @@ def import_csv_task(task_id: int):
                                             error_line = [row_num, sku, f"{attr_code}-{locale_code}-{channel_code}", error_msg]
                                             error_writer.writerow(error_line)
                                             raise ValueError(error_msg)
+                                    elif org.default_channel:
+                                        # Use organization default channel if none specified in header
+                                        from products.models import SalesChannel
+                                        default_channel_code = org.default_channel.code if hasattr(org.default_channel, 'code') else org.default_channel
+                                        channel_obj = SalesChannel.objects.filter(
+                                            code=default_channel_code, 
+                                            organization=org
+                                        ).first()
                                     
                                     # Create/update the attribute value with correct object references
                                     AttributeValue.objects.update_or_create(
                                         product=product,
                                         attribute=attr,
-                                        locale=locale_obj,
-                                        channel=channel_obj,  # Fixed: Use channel_obj instead of channel string
+                                        locale_id=locale_obj.id if locale_obj else None,
+                                        channel=actual_channel_code,
                                         organization=org,
-                                        defaults={'value': value}
+                                        defaults={
+                                            "value": value,
+                                            "locale_code": actual_locale_code
+                                        }
                                     )
                                 except Exception as e:
                                     error_msg = f"Error setting attribute {attr_code}: {str(e)}"

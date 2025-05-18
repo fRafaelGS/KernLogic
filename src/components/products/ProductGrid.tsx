@@ -78,7 +78,7 @@ export function ProductGrid({
         const columnCount = getColumnCount(width)
         const rowCount = Math.ceil(productsToRender.length / columnCount)
         // Height calculation - 2 rows visible initially, more as needed
-        const visibleRows = Math.min(rowCount, 2)
+        const visibleRows = Math.min(rowCount, 12)
         const height = visibleRows * rowHeight
         
         setContainerWidth(width)
@@ -152,7 +152,7 @@ export function ProductGrid({
   }
 
   return (
-    <div className="w-full h-full px-2 py-1 overflow-hidden" ref={containerRef}>
+    <div className="w-full h-full px-2 py-1" ref={containerRef}>
       <Grid
         columnCount={columnCount}
         columnWidth={columnWidth}
@@ -162,11 +162,6 @@ export function ProductGrid({
         width={containerWidth}
         overscanRowCount={1}
         className="scrollbar-hide react-window-grid"
-        style={{ 
-          overflow: 'auto',
-          overflowX: 'hidden',
-          maxWidth: '100%'
-        }}
       >
         {({ columnIndex, rowIndex, style }) => {
           const idx = rowIndex * columnCount + columnIndex
@@ -190,14 +185,11 @@ if (typeof document !== 'undefined') {
         display: none !important;
       }
       .react-window-grid {
-        -ms-overflow-style: none !important;
         scrollbar-width: none !important;
-        overflow-x: hidden !important;
       }
       
       /* Ensure no horizontal scrolling anywhere in the products area */
       #root, html, body, .app-main, .products-page, .products-container {
-        overflow-x: hidden !important;
         max-width: 100vw !important;
       }
     `;

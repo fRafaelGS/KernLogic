@@ -13,6 +13,9 @@ import os
 import logging
 from kernlogic.org_queryset import OrganizationQuerySetMixin
 from kernlogic.utils import get_user_organization
+from rest_framework.views import APIView
+from .constants import FIELD_SCHEMA
+from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +42,9 @@ class ImportTaskViewSet(OrganizationQuerySetMixin,
     def perform_create(self, serializer):
         """Handle file upload and start the import task"""
         try:
+            # Debug: log incoming files and data
+            logger.debug(f"request.FILES: {self.request.FILES}")
+            logger.debug(f"request.data: {self.request.data}")
             # Get the uploaded file
             if 'csv_file' in self.request.FILES:
                 file = self.request.FILES['csv_file']
@@ -151,3 +157,33 @@ class ImportTaskViewSet(OrganizationQuerySetMixin,
                 {"detail": f"Error serving error report: {str(e)}"}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )  
+
+
+class FieldSchemaView(APIView):
+    """
+    Provides the canonical schema of importable product fields.
+    
+    This endpoint returns a versioned list of all fields that can be imported
+    via the bulk import process, including metadata like field type and whether
+    the field is required.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    @extend_schema(
+        description="Get the canonical schema of importable fields",
+        responses={
+            200: OpenApiResponse(
+                description="List of importable fields with metadata",
+                response=list,  # Using raw list as response type
+            )
+        },
+        tags=["imports"]
+    )
+    def get(self, request, *args, **kwargs):
+        """
+        Return the canonical list of importable product fields.
+        
+        This is the single source of truth for field definitions used in import mapping.
+        The schema includes field IDs, display labels, required status, and field types.
+        """
+        return Response(FIELD_SCHEMA)  

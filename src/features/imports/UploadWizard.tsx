@@ -7,24 +7,31 @@ import StepUpload from './StepUpload';
 import StepMapping from './StepMapping';
 import StepProgress from './StepProgress';
 import { createImport } from '@/services/importService';
+import { useImportFieldSchema } from './hooks/useImportFieldSchema';
+import { Mapping } from '@/types/import';
 
 const UploadWizard: React.FC = () => {
   const [currentStep, setCurrentStep] = useState<'upload' | 'mapping' | 'progress'>('upload');
   const [file, setFile] = useState<File | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
   const [previewData, setPreviewData] = useState<any[]>([]);
-  const [mapping, setMapping] = useState<Record<string, string>>({});
+  const [mapping, setMapping] = useState<Mapping>({});
   const [importId, setImportId] = useState<number | null>(null);
   const { toast } = useToast();
+  
+  // Fetch the field schema
+  const { data: fieldSchema } = useImportFieldSchema();
 
   const handleFileSelected = (file: File, headers: string[], previewData: any[]) => {
+    // Debug log: check file type
+    console.log('File selected in wizard:', file, 'Type:', typeof file, 'Instanceof File:', file instanceof File)
     setFile(file);
     setHeaders(headers);
     setPreviewData(previewData);
     setCurrentStep('mapping');
   };
 
-  const handleMappingComplete = async (mappingData: Record<string, string>) => {
+  const handleMappingComplete = async (mappingData: Mapping) => {
     if (!file) {
       toast({
         title: "No file selected",
@@ -33,10 +40,12 @@ const UploadWizard: React.FC = () => {
       });
       return;
     }
-
+    
+    // Store the mapping for reference
     setMapping(mappingData);
 
     try {
+      // Submit to API - the backend will handle field validation
       const response = await createImport(file, mappingData);
       setImportId(response.data.id);
       setCurrentStep('progress');

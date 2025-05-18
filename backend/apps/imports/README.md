@@ -25,6 +25,51 @@ The app exposes the following REST API endpoints:
 - **POST /api/imports/{id}/cancel/**: Cancel an in-progress import task
 - **GET /api/imports/{id}/get_report/**: Download the error report for a failed import
 
+## Field Schema API
+
+The imports app provides a field schema endpoint that returns the canonical list of importable fields for products.
+
+### Endpoint
+
+```
+GET /api/field-schema/
+```
+
+This endpoint returns a JSON array of field definitions, each with the following properties:
+
+- `id`: Unique identifier for the field
+- `label`: Human-readable label for the field
+- `required`: Boolean indicating whether the field is required
+- `type`: Field data type (string, text, breadcrumb, fk, json)
+
+### Example Response
+
+```json
+[
+  {
+    "id": "sku",
+    "label": "SKU",
+    "required": true,
+    "type": "string"
+  },
+  {
+    "id": "name",
+    "label": "Name",
+    "required": false,
+    "type": "string"
+  }
+]
+```
+
+### Frontend Usage
+
+The frontend should use this endpoint to dynamically build the field mapping UI for CSV imports.
+This ensures that any changes to the product data model are automatically reflected in the import interface.
+
+### Implementation Note
+
+The field schema endpoint is defined at `/api/field-schema/` rather than nested under `/api/imports/` for backward compatibility with the frontend.
+
 ## Implementation Details
 
 The import process follows these steps:

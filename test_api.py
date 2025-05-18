@@ -2,6 +2,7 @@
 import requests
 import json
 import uuid
+import os
 
 # Configuration
 BASE_URL = "http://localhost:8000"
@@ -119,6 +120,48 @@ def test_team_endpoints():
     else:
         print(f"Error getting memberships: {memberships_response.text}")
 
+# Test the field schema endpoint
+def test_field_schema():
+    # First get a token
+    login_url = "http://localhost:8000/api/token/"
+    login_data = {
+        "email": "admin@example.com",  # Replace with valid credentials
+        "password": "admin"            # Replace with valid credentials
+    }
+    
+    # Get token
+    response = requests.post(login_url, data=login_data)
+    if response.status_code != 200:
+        print(f"Login failed with status {response.status_code}: {response.text}")
+        return
+    
+    token_data = response.json()
+    access_token = token_data.get("access")
+    
+    # Test the field schema endpoint
+    headers = {
+        "Authorization": f"Bearer {access_token}"
+    }
+    schema_url = "http://localhost:8000/api/field-schema/"
+    response = requests.get(schema_url, headers=headers)
+    
+    print(f"Field schema endpoint response: {response.status_code}")
+    if response.status_code == 200:
+        print(json.dumps(response.json(), indent=2))
+    else:
+        print(f"Error: {response.text}")
+    
+    # Try with corrected URL path
+    corrected_url = "http://localhost:8000/api/imports/field-schema/"
+    response = requests.get(corrected_url, headers=headers)
+    
+    print(f"\nCorrected field schema endpoint response: {response.status_code}")
+    if response.status_code == 200:
+        print(json.dumps(response.json(), indent=2))
+    else:
+        print(f"Error: {response.text}")
+
 # Run the test
 if __name__ == "__main__":
-    test_team_endpoints() 
+    test_team_endpoints()
+    test_field_schema() 

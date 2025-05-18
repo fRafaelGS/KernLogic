@@ -1,10 +1,9 @@
-# KernLogic: Enterprise PIM for Small Manufacturers
+# KernLogic: Enterprise PIM for Mid Manufacturers & Retailers
 
 ## 🌟 Project Overview
 
-KernLogic is a powerful Product Information Management (PIM) system designed for small to medium manufacturers. It centralizes product data and provides an intuitive interface for managing complex product attributes, categories, and digital assets without the complexity and cost of full enterprise solutions.
+KernLogic is a powerful Product Information Management (PIM) system designed for small to medium manufacturers or retailers. It centralizes product data and provides an intuitive interface for managing complex product attributes, categories, and digital assets without the complexity and cost of full enterprise solutions.
 
-**Vision:** "Give small manufacturers the power of an ERP's product module without the cost or complexity."
 
 ### 🎯 Key Problems Solved
 
@@ -179,6 +178,8 @@ kernlogic/
 - Validation of imported data
 - Duplicate SKU detection
 - Background processing for large imports
+- Dynamic field schema API (`GET /api/imports/field-schema/`) for up-to-date mapping options
+- Sample CSV import template available at `/docs/sample-import.csv`
 
 ### 8. Dashboard
 - KPI cards (total products, inventory value, low-stock count)

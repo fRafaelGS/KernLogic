@@ -10,6 +10,7 @@ import os
 import json
 from .models import ImportTask
 from unittest.mock import patch
+from .constants import FIELD_SCHEMA
 
 User = get_user_model()
 
@@ -252,21 +253,88 @@ class ImportTaskAPITests(TestCase):
         self.assertEqual(task.status, 'error')
     
     def test_cancel_completed_task_fails(self):
-        """Test that canceling a completed task fails."""
-        # Create a completed task
+        """Test canceling a completed task."""
+        # Create a task with completed status
         with open(self.temp_file.name, 'rb') as f:
             csv_file = SimpleUploadedFile('test.csv', f.read())
             
         task = ImportTask.objects.create(
             csv_file=csv_file,
             mapping={'Product Name': 'name', 'SKU': 'sku', 'Price': 'price'},
-            status='success',
+            status='success',  # Completed status
             created_by=self.user
         )
         
-        # Try to cancel it
+        # Call the cancel action
         url = reverse('imports-cancel', args=[task.id])
         response = self.client.post(url)
         
-        # Check that it fails
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST) 
+        # Check response is a 400 Bad Request
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class FieldSchemaEndpointTests(TestCase):
+    """Tests for the field schema endpoint."""
+    
+    def setUp(self):
+        """Set up test dependencies."""
+        # Create a test user
+        self.user = User.objects.create_user(
+            username='testuser2',
+            email='test2@example.com',
+            password='testpass123',
+            name='Test User 2'
+        )
+        
+        self.client = APIClient()
+        
+        # URL for the field schema endpoint
+        self.url = reverse('field-schema')
+    
+    def test_unauthenticated_access_denied(self):
+        """Test that unauthenticated users cannot access the endpoint."""
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+    
+    def test_authenticated_access_allowed(self):
+        """Test that authenticated users can access the endpoint."""
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+    
+    def test_response_contains_expected_fields(self):
+        """Test that the response contains all expected fields with correct attributes."""
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(self.url)
+        
+        # Verify response status
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # Check that we get a list of fields
+        self.assertIsInstance(response.data, list)
+        
+        # Expected field IDs from the constant
+        expected_field_ids = {field['id'] for field in FIELD_SCHEMA}
+        actual_field_ids = {field['id'] for field in response.data}
+        
+        # Verify all expected field IDs are present
+        self.assertEqual(expected_field_ids, actual_field_ids)
+        
+        # Verify all fields have the required attributes
+        for field in response.data:
+            self.assertIn('id', field)
+            self.assertIn('label', field)
+            self.assertIn('required', field)
+            self.assertIn('type', field)
+    
+    def test_only_sku_is_required(self):
+        """Test that only the 'sku' field is marked as required=True."""
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(self.url)
+        
+        # Verify response status
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # Check required fields
+        required_fields = [field['id'] for field in response.data if field['required']]
+        self.assertEqual(required_fields, ['sku']) 

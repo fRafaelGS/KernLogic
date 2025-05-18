@@ -6,8 +6,7 @@ const axiosInstance = axios.create({
     baseURL: API_URL,
     withCredentials: false, // Changed to false since we're using JWT in headers
     headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
+        'Accept': 'application/json'
     }
 });
 

@@ -1,0 +1,4 @@
+SKU,Name,Description,GTIN,Brand,Category,Family,Attribute Group,Attributes,Channel,Locale
+PROD-001,Premium Paint Brush,High-quality brush for detail work,5901234123457,ArtMaster,"Paint > Brushes > Detail",Painting Tools,Brushes,"{""bristle_type"":""synthetic"",""size"":""small""}",web,en-US
+PROD-002,Standard Paint Roller,Roller for large surface application,5901234123464,PaintPro,"Paint > Rollers",Painting Tools,Rollers,"{""material"":""foam"",""width"":""9-inch""}",web,en-US
+PROD-003,Clear Coat Finish,Protective clear coat finish,5901234123471,CoatMaster,"Paint > Clear Coats",Coatings,Finishes,"{""finish"":""glossy"",""drying_time"":""fast""}",store,en-US 

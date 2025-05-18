@@ -42,6 +42,9 @@ from analytics.views import (
 # Import organization view
 from organizations.views import OrganizationDetailView
 
+# Import the field schema view
+from apps.imports.views import FieldSchemaView
+
 # Debug view for testing exports directly
 def test_csv_export(request):
     """Simple view to test CSV exports directly"""
@@ -144,6 +147,10 @@ urlpatterns = [
     
     # Imports API
     path('api/', include('apps.imports.urls')),
+    
+    # Direct field schema endpoints for compatibility
+    path('api/field-schema/', FieldSchemaView.as_view(), name='field-schema-direct'),
+    path('api/imports/field-schema/', FieldSchemaView.as_view(), name='imports-field-schema-direct'),
     
     # Reports API
     path('api/', include('reports.urls')),

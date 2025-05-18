@@ -146,267 +146,242 @@ def import_csv_task(task_id: int):
             for idx, row in chunk_df.iterrows():
                 row_num = total_processed + idx + 2  # +2 for header row and 1-indexing
                 try:
-                    # Build row dict using mapping, ensuring all canonical fields are present
-                    mapped_row = {}
-                    
-                    # First, process the mapped fields
-                    for field in FIELD_SCHEMA:
-                        src = next((k for k, v in task.mapping.items() if v == field['id']), None)
-                        if src and src in row.index and pd.notna(row[src]):
-                            mapped_row[field['id']] = row[src]
-                        else:
-                            mapped_row[field['id']] = None
-                    
-                    # Apply defaults for channel/locale
-                    mapped_row['channel'] = mapped_row['channel'] or default_channel
-                    mapped_row['locale'] = mapped_row['locale'] or default_locale
-                    
-                    # Validate family if present
-                    family_code = mapped_row.get('family_code')
-                    if family_code:
-                        valid, error = validate_family(family_code, family_attr_map)
-                        if not valid:
-                            error_msg = ERROR_CODES.get(error, f"Error code: {error}")
-                            error_line = [row_num, mapped_row.get('sku', ''), 'family_code', f"{error_msg} - Family '{family_code}' not found"]
-                            error_writer.writerow(error_line)
-                            errors.append(f"Row {row_num}: {error_msg} - Family '{family_code}' not found")
-                            continue
-                    
-                    # Handle duplicate strategy
-                    sku = mapped_row.get('sku')
-                    if not sku:
-                        error_line = [row_num, '', 'sku', 'SKU is required']
-                        error_writer.writerow(error_line)
-                        errors.append(f"Row {row_num}: SKU is required")
-                        continue
+                    # Wrap each row in a transaction for all-or-nothing behavior
+                    with transaction.atomic():
+                        # Build row dict using mapping, ensuring all canonical fields are present
+                        mapped_row = {}
                         
-                    # Prepare core fields for upsert
-                    core_fields = {
-                        'name': mapped_row.get('name'),
-                        'description': mapped_row.get('description'),
-                        'brand': mapped_row.get('brand'),
-                        'barcode': mapped_row.get('gtin'),  # Map gtin to barcode
-                        'is_active': True,
-                        'created_by': task.created_by,
-                        'organization': org
-                    }
-                    
-                    # Set category if present
-                    if mapped_row.get('category'):
-                        cat = resolve_category_breadcrumb(mapped_row['category'], org)
-                        if cat:
-                            core_fields['category'] = cat
-                            
-                    # Set family if present
-                    if family_code:
-                        family = resolve_family(family_code, org)
-                        if family:
-                            core_fields['family'] = family
-                    
-                    # Handle duplicate SKUs according to policy
-                    existing_product = Product.objects.filter(sku=sku, organization=org).first()
-                    if existing_product:
-                        # Check duplicate strategy
-                        if task.duplicate_strategy == 'skip':
-                            # Log that we skipped this row
-                            error_line = [row_num, sku, 'sku', ERROR_CODES['DUPLICATE_SKU_SKIPPED']]
+                        # First, process the mapped fields using FIELD_SCHEMA_V2 for newer field ids
+                        for field in FIELD_SCHEMA_V2:
+                            src = next((k for k, v in task.mapping.items() if v == field['id']), None)
+                            if src and src in row.index and pd.notna(row[src]):
+                                mapped_row[field['id']] = row[src]
+                            else:
+                                mapped_row[field['id']] = None
+                        
+                        # Apply defaults for channel/locale
+                        mapped_row['channel'] = mapped_row['channel'] or default_channel
+                        mapped_row['locale'] = mapped_row['locale'] or default_locale
+                        
+                        logger.info(f"[ROW] {row_num} keys={list(mapped_row.keys())}")
+                        
+                        # PRE-VALIDATION STEP 1: Validate family if present
+                        family_code = mapped_row.get('family_code') or mapped_row.get('family')
+                        if family_code:
+                            valid, error = validate_family(family_code, family_attr_map)
+                            if not valid:
+                                error_msg = ERROR_CODES.get(error, f"Error code: {error}")
+                                error_line = [row_num, mapped_row.get('sku', ''), 'family_code', f"{error_msg} - Family '{family_code}' not found"]
+                                error_writer.writerow(error_line)
+                                errors.append(f"Row {row_num}: {error_msg} - Family '{family_code}' not found")
+                                raise ValueError(f"Family validation failed: {error_msg}")
+                        
+                        # Check SKU requirement
+                        sku = mapped_row.get('sku')
+                        if not sku:
+                            error_line = [row_num, '', 'sku', 'SKU is required']
                             error_writer.writerow(error_line)
-                            total_processed += 1
-                            continue
-                        elif task.duplicate_strategy == 'overwrite':
-                            # Update existing product
-                            for field, value in core_fields.items():
-                                if value is not None:  # Only update non-None values
-                                    setattr(existing_product, field, value)
-                            existing_product.save()
-                            product = existing_product
-                        elif task.duplicate_strategy == 'abort':
-                            # Add error and skip
-                            error_line = [row_num, sku, 'sku', ERROR_CODES['DUPLICATE_SKU']]
-                            error_writer.writerow(error_line)
-                            errors.append(f"Row {row_num}: {ERROR_CODES['DUPLICATE_SKU']}")
-                            continue
-                    else:
-                        # Create new product
-                        product = Product.objects.create(
-                            sku=sku,
-                            **core_fields
-                        )
-                    
-                    # Process tags if present
-                    if mapped_row.get('tags'):
-                        tags = process_tags(mapped_row['tags'])
-                        product.set_tags(tags)
-                        product.save(update_fields=['tags'])
-                    
-                    # Process dynamic attribute headers in format: attribute_code-locale-channel
-                    # Look for columns that were not part of the standard mapping
-                    attribute_errors = []
-                    
-                    # Check for attribute columns that weren't in the standard mapping
-                    attribute_columns = {}
-                    for col in file_columns:
-                        if col not in task.mapping and pd.notna(row[col]) and row[col] is not None:
-                            # Validate column header format with regex
-                            if not ATTRIBUTE_HEADER_REGEX.match(col):
-                                continue
+                            errors.append(f"Row {row_num}: SKU is required")
+                            raise ValueError("SKU is required")
+                            
+                        # Prepare core fields for upsert
+                        core_fields = {
+                            'name': mapped_row.get('name'),
+                            'description': mapped_row.get('description'),
+                            'brand': mapped_row.get('brand'),
+                            'barcode': mapped_row.get('gtin'),  # Map gtin to barcode
+                            'is_active': True,
+                            'created_by': task.created_by,
+                            'organization': org
+                        }
+                        
+                        # Set category if present
+                        if mapped_row.get('category'):
+                            cat = resolve_category_breadcrumb(mapped_row['category'], org)
+                            if cat:
+                                core_fields['category'] = cat
                                 
-                            # Parse the column header
-                            attr_code, locale_code, channel_code = parse_attribute_header(col)
-                            
-                            # Skip if we couldn't parse it
-                            if not attr_code:
-                                continue
-                                
-                            # Use defaults for locale/channel if not specified
-                            actual_locale = locale_code or mapped_row['locale']
-                            actual_channel = channel_code or mapped_row['channel']
-                            
-                            # Value from the CSV
-                            attribute_value = row[col]
-                            
-                            # Only process if we have a value
-                            if attribute_value is not None:
-                                # First, validate that this attribute is allowed for this family (if any)
-                                if family_code:
-                                    attr_valid, attr_error = validate_attribute_in_family(
-                                        attr_code, family_code, family_attr_map, IMPORT_RELAX_TEMPLATE
-                                    )
+                        # Set family if present (use family_code as already determined above)
+                        if family_code:
+                            family = resolve_family(family_code, org)
+                            if family:
+                                core_fields['family'] = family
+                        
+                        # PRE-VALIDATION STEP 2: Pre-validate all attribute headers
+                        attribute_errors = []
+                        attribute_columns = {}
+                        
+                        for col in file_columns:
+                            if col not in task.mapping and pd.notna(row[col]) and row[col] is not None:
+                                # Validate column header format with regex
+                                if not ATTRIBUTE_HEADER_REGEX.match(col):
+                                    continue
                                     
-                                    if not attr_valid:
-                                        error_msg = ERROR_CODES.get(attr_error, f"Error code: {attr_error}")
-                                        attribute_errors.append(f"{error_msg} - Attribute '{attr_code}' not in family '{family_code}'")
-                                        error_line = [row_num, sku, col, f"{error_msg} - Attribute '{attr_code}' not in family '{family_code}'"]
+                                # Parse the column header
+                                attr_code, locale_code, channel_code = parse_attribute_header(col)
+                                
+                                # Skip if we couldn't parse it
+                                if not attr_code:
+                                    continue
+                                
+                                # Use defaults for locale/channel if not specified
+                                actual_locale_code = locale_code or mapped_row['locale']
+                                actual_channel_code = channel_code or mapped_row['channel']
+                                
+                                # Value from the CSV
+                                attribute_value = row[col]
+                                
+                                # Only process if we have a value
+                                if attribute_value is not None:
+                                    # Validate the attribute exists in the database
+                                    attr = Attribute.objects.filter(
+                                        code=attr_code, organization=org
+                                    ).first()
+                                    
+                                    if not attr:
+                                        # Try normalizing attribute code (strict - just remove underscores)
+                                        normalized_code = attr_code.replace('_', '').lower()
+                                        
+                                        # Look for attributes with exact normalized match
+                                        potential_attrs = Attribute.objects.filter(organization=org)
+                                        for potential_attr in potential_attrs:
+                                            if potential_attr.code.replace('_', '').lower() == normalized_code:
+                                                attr = potential_attr
+                                                break
+                                                
+                                    if not attr:
+                                        error_msg = f"Attribute '{attr_code}' not found"
+                                        attribute_errors.append(error_msg)
+                                        error_line = [row_num, sku, attr_code, error_msg]
                                         error_writer.writerow(error_line)
                                         continue
                                     
-                                    # If IMPORT_RELAX_TEMPLATE is True, try to auto-attach the attribute to the family
-                                    if IMPORT_RELAX_TEMPLATE:
-                                        auto_attach_attribute_to_family(attr_code, family_code, org.id)
-                                
-                                # Store for later processing
-                                key = (attr_code, actual_locale, actual_channel)
-                                attribute_columns[key] = attribute_value
-                    
-                    # If there were attribute errors, record them but continue processing the row
-                    if attribute_errors:
-                        for error in attribute_errors:
-                            errors.append(f"Row {row_num}: {error}")
-                    
-                    # Process the attribute values
-                    if attribute_columns:
-                        for (attr_code, locale, channel), value in attribute_columns.items():
-                            try:
-                                # Find the attribute
-                                attr = Attribute.objects.filter(
-                                    code=attr_code, organization=org
-                                ).first()
-                                
-                                # If not found, try more flexible matching
-                                if not attr:
-                                    # Try normalizing the attribute code (remove underscores, etc)
-                                    normalized_code = attr_code.replace('_', '').lower()
-                                    
-                                    # Look for attributes with similar codes
-                                    potential_attributes = Attribute.objects.filter(organization=org)
-                                    for potential_attr in potential_attributes:
-                                        potential_normalized = potential_attr.code.replace('_', '').lower()
-                                        if potential_normalized == normalized_code:
-                                            attr = potential_attr
-                                            break
+                                    # Check family-attribute relationship if family is specified
+                                    if family_code:
+                                        attr_valid, attr_error = validate_attribute_in_family(
+                                            attr_code, family_code, family_attr_map, IMPORT_RELAX_TEMPLATE
+                                        )
                                         
-                                        # Check if one code contains the other
-                                        if normalized_code in potential_normalized or potential_normalized in normalized_code:
-                                            # Additional check if they're very similar
-                                            if len(normalized_code) > 5 and len(potential_normalized) > 5:
-                                                attr = potential_attr
-                                                break
-                                
-                                # Try matching by label if code matching failed
-                                if not attr:
-                                    # Format attribute code into a human-readable form for label comparison
-                                    readable_attr = attr_code.replace('_', ' ').title()
-                                    attr = Attribute.objects.filter(
-                                        label__icontains=readable_attr, organization=org
-                                    ).first()
-                                
-                                if not attr:
-                                    error_msg = f"Attribute '{attr_code}' not found"
+                                        if not attr_valid:
+                                            error_msg = ERROR_CODES.get(attr_error, f"Error code: {attr_error}")
+                                            attribute_errors.append(f"{error_msg} - Attribute '{attr_code}' not in family '{family_code}'")
+                                            error_line = [row_num, sku, col, f"{error_msg} - Attribute '{attr_code}' not in family '{family_code}'"]
+                                            error_writer.writerow(error_line)
+                                            continue
+                                    
+                                    # Store for later processing - using string codes, not objects
+                                    key = (attr_code, actual_locale_code, actual_channel_code)
+                                    attribute_columns[key] = attribute_value
+                        
+                        # If any attribute errors were found, fail the entire row
+                        if attribute_errors:
+                            for error in attribute_errors:
+                                errors.append(f"Row {row_num}: {error}")
+                            raise ValueError(f"Attribute validation failed: {attribute_errors[0]}")
+                        
+                        # Handle duplicate SKUs according to policy
+                        existing_product = Product.objects.filter(sku=sku, organization=org).first()
+                        if existing_product:
+                            # Check duplicate strategy
+                            if task.duplicate_strategy == 'skip':
+                                # Log that we skipped this row
+                                error_line = [row_num, sku, 'sku', ERROR_CODES['DUPLICATE_SKU_SKIPPED']]
+                                error_writer.writerow(error_line)
+                                total_processed += 1
+                                continue
+                            elif task.duplicate_strategy == 'overwrite':
+                                # Update existing product
+                                for field, value in core_fields.items():
+                                    if value is not None:  # Only update non-None values
+                                        setattr(existing_product, field, value)
+                                existing_product.save()
+                                product = existing_product
+                            elif task.duplicate_strategy == 'abort':
+                                # Add error and skip
+                                error_line = [row_num, sku, 'sku', ERROR_CODES['DUPLICATE_SKU']]
+                                error_writer.writerow(error_line)
+                                errors.append(f"Row {row_num}: {ERROR_CODES['DUPLICATE_SKU']}")
+                                raise ValueError(f"Duplicate SKU: {sku}")
+                        else:
+                            # Create new product
+                            logger.debug(f"[PRE-CREATE] core_fields = {core_fields}")
+                            product = Product.objects.create(
+                                sku=sku,
+                                **core_fields
+                            )
+                        
+                        # Process tags if present
+                        if mapped_row.get('tags'):
+                            tags = process_tags(mapped_row['tags'])
+                            product.set_tags(tags)
+                            product.save(update_fields=['tags'])
+                        
+                        # Process attribute values with pre-validated data
+                        if attribute_columns:
+                            logger.debug(f"[IMPORT] {sku} – attribute headers: {list(attribute_columns.keys())}")
+                            for (attr_code, locale_code, channel_code), value in attribute_columns.items():
+                                try:
+                                    # Get attribute by code (should exist from pre-validation)
+                                    attr = Attribute.objects.get(code=attr_code, organization=org)
+                                    
+                                    # Find the locale object
+                                    locale_obj = None
+                                    if locale_code:
+                                        from products.models import Locale
+                                        locale_obj = Locale.objects.filter(
+                                            code=locale_code, organization=org
+                                        ).first()
+                                        
+                                        if not locale_obj:
+                                            error_msg = f"Locale '{locale_code}' not found"
+                                            errors.append(f"Row {row_num}: {error_msg}")
+                                            error_line = [row_num, sku, f"{attr_code}-{locale_code}", error_msg]
+                                            error_writer.writerow(error_line)
+                                            raise ValueError(error_msg)
+                                    
+                                    # Find the channel object
+                                    channel_obj = None
+                                    if channel_code:
+                                        from products.models import SalesChannel
+                                        channel_obj = SalesChannel.objects.filter(
+                                            code=channel_code, organization=org
+                                        ).first()
+                                        
+                                        if not channel_obj:
+                                            error_msg = f"Channel '{channel_code}' not found"
+                                            errors.append(f"Row {row_num}: {error_msg}")
+                                            error_line = [row_num, sku, f"{attr_code}-{locale_code}-{channel_code}", error_msg]
+                                            error_writer.writerow(error_line)
+                                            raise ValueError(error_msg)
+                                    
+                                    # Create/update the attribute value with correct object references
+                                    AttributeValue.objects.update_or_create(
+                                        product=product,
+                                        attribute=attr,
+                                        locale=locale_obj,
+                                        channel=channel_obj,  # Fixed: Use channel_obj instead of channel string
+                                        organization=org,
+                                        defaults={'value': value}
+                                    )
+                                except Exception as e:
+                                    error_msg = f"Error setting attribute {attr_code}: {str(e)}"
                                     errors.append(f"Row {row_num}: {error_msg}")
                                     error_line = [row_num, sku, attr_code, error_msg]
                                     error_writer.writerow(error_line)
-                                    continue
-                                
-                                # Find the locale
-                                locale_obj = None
-                                if locale:
-                                    from products.models import Locale
-                                    
-                                    # Check if locale is already a Locale object
-                                    if isinstance(locale, Locale):
-                                        locale_obj = locale
-                                    else:
-                                        # Try to find locale by code first
-                                        locale_obj = Locale.objects.filter(
-                                            code=locale, organization=org
-                                        ).first()
-                                        
-                                        # If not found and locale is a string with "Name (code)" format
-                                        if not locale_obj and isinstance(locale, str) and '(' in locale and ')' in locale:
-                                            # Try to extract code from format "Name (code)"
-                                            try:
-                                                code_match = locale.split('(')[1].split(')')[0].strip()
-                                                # Try finding by extracted code
-                                                locale_obj = Locale.objects.filter(
-                                                    code=code_match, organization=org
-                                                ).first()
-                                                
-                                                # If still not found, try finding by label
-                                                if not locale_obj:
-                                                    locale_obj = Locale.objects.filter(
-                                                        label__icontains=locale, organization=org
-                                                    ).first()
-                                            except IndexError:
-                                                pass
-                                        
-                                        # If still not found and locale is a string, try finding by label as fallback
-                                        if not locale_obj and isinstance(locale, str):
-                                            locale_obj = Locale.objects.filter(
-                                                label__icontains=locale, organization=org
-                                            ).first()
-                                    
-                                    if not locale_obj:
-                                        error_msg = f"Locale '{locale}' not found"
-                                        errors.append(f"Row {row_num}: {error_msg}")
-                                        error_line = [row_num, sku, f"{attr_code}-{locale}", error_msg]
-                                        error_writer.writerow(error_line)
-                                        continue
-                                
-                                # Create/update the attribute value
-                                AttributeValue.objects.update_or_create(
-                                    product=product,
-                                    attribute=attr,
-                                    locale=locale_obj,
-                                    channel=channel,
-                                    organization=org,
-                                    defaults={'value': value}
-                                )
-                            except Exception as e:
-                                error_msg = f"Error setting attribute {attr_code}: {str(e)}"
-                                errors.append(f"Row {row_num}: {error_msg}")
-                                error_line = [row_num, sku, attr_code, error_msg]
-                                error_writer.writerow(error_line)
-                                logger.error(f"Error processing attribute {attr_code} for product {sku}: {str(e)}")
-                                logger.error(traceback.format_exc())
-                    
-                    total_processed += 1
+                                    logger.error(f"Error processing attribute {attr_code} for product {sku}: {str(e)}")
+                                    logger.error(traceback.format_exc())
+                                    raise  # Re-raise to trigger transaction rollback
+                        
+                        total_processed += 1
+                
                 except Exception as e:
                     errors.append(f"Row {row_num}: Unexpected error: {str(e)}")
-                    error_line = [row_num, mapped_row.get('sku', ''), '', f"Unexpected error: {str(e)}"]
+                    error_line = [row_num, mapped_row.get('sku', '') if 'mapped_row' in locals() and mapped_row.get('sku') else '', '', f"Unexpected error: {str(e)}"]
                     error_writer.writerow(error_line)
                     logger.error(f"Error processing row {row_num}: {str(e)}")
                     logger.error(traceback.format_exc())
-                
+                    # No need for explicit rollback - transaction.atomic() will do it
+            
             # Update task progress
             task.processed = total_processed
             task.save(update_fields=["processed"])

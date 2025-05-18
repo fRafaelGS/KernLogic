@@ -449,4 +449,112 @@ class TestImportWithFamilyValidation(TestCase):
         self.assertEqual(size_value.value, 'XL')
         
         # Cleanup
+        os.unlink(csv_path)
+    
+    def test_import_fails_on_attribute_suffix(self):
+        """Test that a row fails completely if an attribute has an incorrect suffix"""
+        # Create CSV data with attribute that has a suffix (_hp)
+        data = [
+            {
+                'sku': 'WT-4001',
+                'name': 'Wind Turbine 4001',
+                'family': 'electronics',
+                'horsepower_hp': '500'  # Should be just 'horsepower' in the database
+            }
+        ]
+        
+        # Create CSV file
+        csv_path = self._create_csv_file(data)
+        
+        # Create mapping
+        mapping = {
+            'sku': 'sku',
+            'name': 'name',
+            'family': 'family'
+        }
+        
+        # Create import task
+        import_task = self._create_import_task(csv_path, mapping)
+        
+        # Run import task
+        import_csv_task(import_task.id)
+        
+        # Refresh import task from DB
+        import_task.refresh_from_db()
+        
+        # Check import failed
+        self.assertEqual(import_task.status, 'error')
+        self.assertEqual(import_task.processed, 0)
+        
+        # Check error file contains attribute not found error
+        self.assertIsNotNone(import_task.error_file)
+        error_content = import_task.error_file.read().decode('utf-8')
+        self.assertIn('horsepower_hp', error_content)
+        self.assertIn('not found', error_content)
+        
+        # Check no product was created - entire row should be rolled back
+        self.assertFalse(Product.objects.filter(sku='WT-4001', organization=self.organization).exists())
+        
+        # Cleanup
+        os.unlink(csv_path)
+    
+    def test_import_fails_on_locale_error(self):
+        """Test that a row fails completely if there's a locale error"""
+        # Create a valid attribute that we'll use
+        power_attr = Attribute.objects.create(
+            code='power',
+            label='Power',
+            data_type='number',
+            organization=self.organization
+        )
+        
+        # Add the attribute to the family's attribute group
+        AttributeGroupItem.objects.create(
+            group=self.attr_group,
+            attribute=power_attr
+        )
+        
+        # Create CSV data with an invalid locale
+        data = [
+            {
+                'sku': 'WT-4002',
+                'name': 'Wind Turbine 4002',
+                'family': 'electronics',
+                'power-invalid_locale': '800'  # Invalid locale
+            }
+        ]
+        
+        # Create CSV file
+        csv_path = self._create_csv_file(data)
+        
+        # Create mapping
+        mapping = {
+            'sku': 'sku',
+            'name': 'name',
+            'family': 'family'
+        }
+        
+        # Create import task
+        import_task = self._create_import_task(csv_path, mapping)
+        
+        # Run import task
+        import_csv_task(import_task.id)
+        
+        # Refresh import task from DB
+        import_task.refresh_from_db()
+        
+        # Check import failed
+        self.assertEqual(import_task.status, 'error')
+        self.assertEqual(import_task.processed, 0)
+        
+        # Check error file contains locale not found error
+        self.assertIsNotNone(import_task.error_file)
+        error_content = import_task.error_file.read().decode('utf-8')
+        self.assertIn('Locale', error_content)
+        self.assertIn('not found', error_content)
+        
+        # Check no product was created - entire row should be rolled back
+        self.assertFalse(Product.objects.filter(sku='WT-4002', organization=self.organization).exists())
+        
+        # Cleanup
         os.unlink(csv_path) 

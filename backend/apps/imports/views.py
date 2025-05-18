@@ -446,6 +446,7 @@ class FieldSchemaView(APIView):
         
         Query Parameters:
         - v: Schema version (1 or 2). Default is 1 for backwards compatibility.
+          NOTE: v1 is deprecated, please use v2 in new implementations.
         """
         # Get requested version from query parameter
         version = request.query_params.get('v', '1')
@@ -458,7 +459,13 @@ class FieldSchemaView(APIView):
             }
             return Response(response_data)
         else:
-            return Response(FIELD_SCHEMA)
+            # Return V1 schema with deprecation warning
+            response_data = {
+                'fields': FIELD_SCHEMA,
+                'attribute_header_pattern': ATTRIBUTE_HEADER_REGEX.pattern,
+                'deprecated': 'Schema v1 is deprecated. Please use v2 in new implementations.'
+            }
+            return Response(response_data)
 
 
 class AttributeGroupSchemaView(APIView):

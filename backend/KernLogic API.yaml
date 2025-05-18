@@ -123,8 +123,8 @@ paths:
         '200':
           description: No response body
   /orgs/{org_id}/memberships/{id}/avatar/:
-    post:
-      operationId: orgs_memberships_avatar_create
+    get:
+      operationId: orgs_memberships_avatar_retrieve
       description: |-
         Handle membership avatar uploads, viewing, and deletion.
 
@@ -175,8 +175,8 @@ paths:
       responses:
         '204':
           description: No response body
-    get:
-      operationId: orgs_memberships_avatar_retrieve
+    post:
+      operationId: orgs_memberships_avatar_create
       description: |-
         Handle membership avatar uploads, viewing, and deletion.
 
@@ -261,10 +261,86 @@ paths:
       responses:
         '200':
           description: No response body
+  /imports/field-schema/:
+    get:
+      operationId: imports_field_schema_retrieve
+      description: Get the canonical schema of importable fields
+      parameters:
+      - in: query
+        name: v
+        schema:
+          type: integer
+        description: Schema version (1 or 2)
+      tags:
+      - imports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: List of importable fields with metadata
+  /imports/attribute-groups-schema/:
+    get:
+      operationId: imports_attribute_groups_schema_retrieve
+      description: Get the schema for attribute group import fields
+      tags:
+      - imports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: List of importable attribute group fields with metadata
+  /imports/attributes-schema/:
+    get:
+      operationId: imports_attributes_schema_retrieve
+      description: Get the schema for attribute import fields
+      tags:
+      - imports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: List of importable attribute fields with metadata
+  /imports/families-schema/:
+    get:
+      operationId: imports_families_schema_retrieve
+      description: Get the schema for family import fields
+      tags:
+      - imports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: List of importable family fields with metadata
   /products/:
     get:
       operationId: products_list
-      description: API endpoint for managing product data.
+      description: |-
+        Override list method to use the lightweight ProductListSerializer
+        for better performance when listing products.
       parameters:
       - name: ordering
         required: false
@@ -633,6 +709,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/Product'
           description: ''
+    delete:
+      operationId: products_destroy
+      description: Soft delete by setting is_archived=True or permanently delete if
+        requested
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Product.
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
     patch:
       operationId: products_partial_update
       description: API endpoint for managing product data.
@@ -665,24 +759,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Product'
           description: ''
-    delete:
-      operationId: products_destroy
-      description: Soft delete by setting is_archived=True or permanently delete if
-        requested
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Product.
-        required: true
-      tags:
-      - products
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
   /products/{id}/related-add/:
     post:
       operationId: products_related_add_create
@@ -768,6 +844,28 @@ paths:
               schema:
                 $ref: '#/components/schemas/Product'
           description: ''
+    delete:
+      operationId: products_prices_destroy
+      description: GET, PATCH, DELETE operations for a specific price
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Product.
+        required: true
+      - in: path
+        name: price_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
     patch:
       operationId: products_prices_partial_update
       description: GET, PATCH, DELETE operations for a specific price
@@ -805,28 +903,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Product'
           description: ''
-    delete:
-      operationId: products_prices_destroy
-      description: GET, PATCH, DELETE operations for a specific price
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Product.
-        required: true
-      - in: path
-        name: price_id
-        schema:
-          type: string
-        required: true
-      tags:
-      - products
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
   /products/{id}/related/{related_id}/:
     delete:
       operationId: products_related_destroy
@@ -1099,9 +1175,13 @@ paths:
       description: |-
         Return dashboard summary data:
         - KPI numbers (total products, inventory value, inactive products, team members)
-        - Data completeness percentage
-        - Most missing fields
+        - Data completeness percentage (calculated using FactProductAttribute, same as analytics endpoint)
+        - Most missing fields (calculated from fact table where possible)
         - Product status counts
+
+        NOTE: This implementation now uses the FactProductAttribute.completed field for
+        completeness calculation, matching how the /api/analytics/completeness/ endpoint
+        calculates overall completeness. This ensures consistent metrics across the application.
       tags:
       - dashboard
       security:
@@ -1287,6 +1367,28 @@ paths:
                 $ref: '#/components/schemas/Attribute'
           description: ''
   /attributes/{id}/:
+    get:
+      operationId: attributes_retrieve
+      description: Returns details of a specific attribute.
+      summary: Get a specific attribute
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this attribute.
+        required: true
+      tags:
+      - attributes
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Attribute'
+          description: ''
     put:
       operationId: attributes_update
       description: Update an existing attribute. Staff only.
@@ -1321,10 +1423,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/Attribute'
           description: ''
-    get:
-      operationId: attributes_retrieve
-      description: Returns details of a specific attribute.
-      summary: Get a specific attribute
+    delete:
+      operationId: attributes_destroy
+      description: Delete an attribute. Staff only.
+      summary: Delete an attribute
       parameters:
       - in: path
         name: id
@@ -1337,12 +1439,8 @@ paths:
       security:
       - jwtAuth: []
       responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Attribute'
-          description: ''
+        '204':
+          description: No response body
     patch:
       operationId: attributes_partial_update
       description: Partially update an existing attribute. Staff only.
@@ -1376,24 +1474,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Attribute'
           description: ''
-    delete:
-      operationId: attributes_destroy
-      description: Delete an attribute. Staff only.
-      summary: Delete an attribute
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this attribute.
-        required: true
-      tags:
-      - attributes
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
   /attribute-groups/:
     get:
       operationId: attribute_groups_list
@@ -1478,6 +1558,28 @@ paths:
                 $ref: '#/components/schemas/AttributeGroup'
           description: ''
   /attribute-groups/{id}/:
+    get:
+      operationId: attribute_groups_retrieve
+      description: Returns details of a specific attribute group.
+      summary: Get a specific attribute group
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this attribute group.
+        required: true
+      tags:
+      - attribute-groups
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeGroup'
+          description: ''
     put:
       operationId: attribute_groups_update
       description: Update an existing attribute group. Staff only.
@@ -1512,10 +1614,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/AttributeGroup'
           description: ''
-    get:
-      operationId: attribute_groups_retrieve
-      description: Returns details of a specific attribute group.
-      summary: Get a specific attribute group
+    delete:
+      operationId: attribute_groups_destroy
+      description: Delete an attribute group. Staff only.
+      summary: Delete an attribute group
       parameters:
       - in: path
         name: id
@@ -1528,12 +1630,8 @@ paths:
       security:
       - jwtAuth: []
       responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AttributeGroup'
-          description: ''
+        '204':
+          description: No response body
     patch:
       operationId: attribute_groups_partial_update
       description: Partially update an existing attribute group. Staff only.
@@ -1567,24 +1665,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/AttributeGroup'
           description: ''
-    delete:
-      operationId: attribute_groups_destroy
-      description: Delete an attribute group. Staff only.
-      summary: Delete an attribute group
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this attribute group.
-        required: true
-      tags:
-      - attribute-groups
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
   /attribute-groups/{id}/add-item/:
     post:
       operationId: attribute_groups_add_item_create
@@ -1790,6 +1870,25 @@ paths:
               schema:
                 $ref: '#/components/schemas/Category'
           description: ''
+    delete:
+      operationId: categories_destroy
+      description: Delete a category. This will fail if products are still assigned
+        to it.
+      summary: Delete a category
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Category.
+        required: true
+      tags:
+      - categories
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
     patch:
       operationId: categories_partial_update
       description: Partially update an existing category.
@@ -1823,25 +1922,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Category'
           description: ''
-    delete:
-      operationId: categories_destroy
-      description: Delete a category. This will fail if products are still assigned
-        to it.
-      summary: Delete a category
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Category.
-        required: true
-      tags:
-      - categories
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
   /categories/{id}/products/:
     get:
       operationId: categories_products_retrieve
@@ -1939,24 +2019,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Family'
           description: ''
-    delete:
-      operationId: families_destroy
-      description: Delete a product family.
-      summary: Delete a product family
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Product Family.
-        required: true
-      tags:
-      - families
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
     put:
       operationId: families_update
       description: Update an existing product family.
@@ -1991,6 +2053,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/Family'
           description: ''
+    delete:
+      operationId: families_destroy
+      description: Delete a product family.
+      summary: Delete a product family
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Product Family.
+        required: true
+      tags:
+      - families
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
     patch:
       operationId: families_partial_update
       description: Partially update an existing product family.
@@ -2202,6 +2282,31 @@ paths:
                 $ref: '#/components/schemas/Locale'
           description: ''
   /locales/{id}/:
+    get:
+      operationId: locales_retrieve
+      description: |-
+        ViewSet for managing organization locales
+
+        Provides CRUD operations for Locale objects associated with the current
+        user's organization.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Locale.
+        required: true
+      tags:
+      - locales
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Locale'
+          description: ''
     put:
       operationId: locales_update
       description: |-
@@ -2239,8 +2344,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/Locale'
           description: ''
-    get:
-      operationId: locales_retrieve
+    delete:
+      operationId: locales_destroy
       description: |-
         ViewSet for managing organization locales
 
@@ -2258,12 +2363,8 @@ paths:
       security:
       - jwtAuth: []
       responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Locale'
-          description: ''
+        '204':
+          description: No response body
     patch:
       operationId: locales_partial_update
       description: |-
@@ -2300,27 +2401,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Locale'
           description: ''
-    delete:
-      operationId: locales_destroy
-      description: |-
-        ViewSet for managing organization locales
-
-        Provides CRUD operations for Locale objects associated with the current
-        user's organization.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Locale.
-        required: true
-      tags:
-      - locales
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
   /channels/:
     get:
       operationId: channels_list
@@ -2386,6 +2466,31 @@ paths:
                 $ref: '#/components/schemas/SalesChannel'
           description: ''
   /channels/{id}/:
+    get:
+      operationId: channels_retrieve
+      description: |-
+        ViewSet for managing organization sales channels
+
+        Provides CRUD operations for SalesChannel objects associated with the current
+        user's organization.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Sales Channel.
+        required: true
+      tags:
+      - channels
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesChannel'
+          description: ''
     put:
       operationId: channels_update
       description: |-
@@ -2423,8 +2528,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/SalesChannel'
           description: ''
-    get:
-      operationId: channels_retrieve
+    delete:
+      operationId: channels_destroy
       description: |-
         ViewSet for managing organization sales channels
 
@@ -2442,12 +2547,8 @@ paths:
       security:
       - jwtAuth: []
       responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SalesChannel'
-          description: ''
+        '204':
+          description: No response body
     patch:
       operationId: channels_partial_update
       description: |-
@@ -2484,27 +2585,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/SalesChannel'
           description: ''
-    delete:
-      operationId: channels_destroy
-      description: |-
-        ViewSet for managing organization sales channels
-
-        Provides CRUD operations for SalesChannel objects associated with the current
-        user's organization.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Sales Channel.
-        required: true
-      tags:
-      - channels
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
   /products/{product_pk}/assets/:
     get:
       operationId: products_assets_list
@@ -2674,6 +2754,34 @@ paths:
                 $ref: '#/components/schemas/ProductAsset'
           description: ''
   /products/{product_pk}/assets/{id}/:
+    get:
+      operationId: products_assets_retrieve
+      description: |-
+        Nested under /products/<product_pk>/assets/.
+        Handles upload, delete, reorder and set-primary.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this product asset.
+        required: true
+      - in: path
+        name: product_pk
+        schema:
+          type: integer
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductAsset'
+          description: ''
     put:
       operationId: products_assets_update
       description: |-
@@ -2714,8 +2822,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProductAsset'
           description: ''
-    get:
-      operationId: products_assets_retrieve
+    delete:
+      operationId: products_assets_destroy
       description: |-
         Nested under /products/<product_pk>/assets/.
         Handles upload, delete, reorder and set-primary.
@@ -2736,12 +2844,8 @@ paths:
       security:
       - jwtAuth: []
       responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProductAsset'
-          description: ''
+        '204':
+          description: No response body
     patch:
       operationId: products_assets_partial_update
       description: |-
@@ -2781,30 +2885,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProductAsset'
           description: ''
-    delete:
-      operationId: products_assets_destroy
-      description: |-
-        Nested under /products/<product_pk>/assets/.
-        Handles upload, delete, reorder and set-primary.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this product asset.
-        required: true
-      - in: path
-        name: product_pk
-        schema:
-          type: integer
-        required: true
-      tags:
-      - products
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
   /products/{product_pk}/assets/{id}/download/:
     get:
       operationId: products_assets_download_retrieve
@@ -2966,6 +3046,31 @@ paths:
                 $ref: '#/components/schemas/AssetBundle'
           description: ''
   /products/{product_pk}/asset-bundles/{id}/:
+    get:
+      operationId: products_asset_bundles_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: product_pk
+        schema:
+          type: string
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetBundle'
+          description: ''
     put:
       operationId: products_asset_bundles_update
       parameters:
@@ -3003,8 +3108,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/AssetBundle'
           description: ''
-    get:
-      operationId: products_asset_bundles_retrieve
+    delete:
+      operationId: products_asset_bundles_destroy
       parameters:
       - in: path
         name: id
@@ -3022,12 +3127,8 @@ paths:
       - jwtAuth: []
       - {}
       responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AssetBundle'
-          description: ''
+        '204':
+          description: No response body
     patch:
       operationId: products_asset_bundles_partial_update
       parameters:
@@ -3064,27 +3165,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/AssetBundle'
           description: ''
-    delete:
-      operationId: products_asset_bundles_destroy
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      - in: path
-        name: product_pk
-        schema:
-          type: string
-        required: true
-      tags:
-      - products
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '204':
-          description: No response body
   /products/{product_pk}/asset-bundles/{id}/download/:
     get:
       operationId: products_asset_bundles_download_retrieve
@@ -3209,6 +3289,33 @@ paths:
                 $ref: '#/components/schemas/AttributeValue'
           description: ''
   /products/{product_pk}/attributes/{id}/:
+    get:
+      operationId: products_attributes_retrieve
+      description: Returns details of a specific attribute value.
+      summary: Get a specific attribute value
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this attribute value.
+        required: true
+      - in: path
+        name: product_pk
+        schema:
+          type: integer
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeValueDetail'
+          description: ''
     put:
       operationId: products_attributes_update
       description: Update an existing attribute value. Staff only.
@@ -3248,10 +3355,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/AttributeValue'
           description: ''
-    get:
-      operationId: products_attributes_retrieve
-      description: Returns details of a specific attribute value.
-      summary: Get a specific attribute value
+    delete:
+      operationId: products_attributes_destroy
+      description: Delete an attribute value. Staff only.
+      summary: Delete an attribute value
       parameters:
       - in: path
         name: id
@@ -3269,12 +3376,8 @@ paths:
       security:
       - jwtAuth: []
       responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AttributeValueDetail'
-          description: ''
+        '204':
+          description: No response body
     patch:
       operationId: products_attributes_partial_update
       description: Partially update an existing attribute value. Staff only.
@@ -3313,29 +3416,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/AttributeValue'
           description: ''
-    delete:
-      operationId: products_attributes_destroy
-      description: Delete an attribute value. Staff only.
-      summary: Delete an attribute value
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this attribute value.
-        required: true
-      - in: path
-        name: product_pk
-        schema:
-          type: integer
-        required: true
-      tags:
-      - products
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
   /products/{product_pk}/attribute-groups/:
     get:
       operationId: products_attribute_groups_list
@@ -3773,6 +3853,596 @@ paths:
               schema:
                 $ref: '#/components/schemas/ImportTask'
           description: ''
+  /attribute-groups-import/:
+    get:
+      operationId: attribute_groups_import_list
+      description: |-
+        ViewSet for importing attribute groups from CSV or Excel files.
+
+        This endpoint allows uploading a file containing attribute group definitions
+        and initiates an async import process.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      tags:
+      - attribute-groups-import
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ImportTask'
+          description: ''
+    post:
+      operationId: attribute_groups_import_create
+      description: Import attribute groups from a CSV or Excel file
+      tags:
+      - imports
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ImportTaskRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportTaskRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ImportTaskRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          description: Import task created successfully
+        '400':
+          description: Bad request - invalid file or parameters
+  /attribute-groups-import/{id}/:
+    get:
+      operationId: attribute_groups_import_retrieve
+      description: |-
+        ViewSet for importing attribute groups from CSV or Excel files.
+
+        This endpoint allows uploading a file containing attribute group definitions
+        and initiates an async import process.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this import task.
+        required: true
+      tags:
+      - attribute-groups-import
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportTask'
+          description: ''
+    put:
+      operationId: attribute_groups_import_update
+      description: |-
+        ViewSet for importing attribute groups from CSV or Excel files.
+
+        This endpoint allows uploading a file containing attribute group definitions
+        and initiates an async import process.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this import task.
+        required: true
+      tags:
+      - attribute-groups-import
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ImportTaskRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportTaskRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ImportTaskRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportTask'
+          description: ''
+    delete:
+      operationId: attribute_groups_import_destroy
+      description: |-
+        ViewSet for importing attribute groups from CSV or Excel files.
+
+        This endpoint allows uploading a file containing attribute group definitions
+        and initiates an async import process.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this import task.
+        required: true
+      tags:
+      - attribute-groups-import
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+    patch:
+      operationId: attribute_groups_import_partial_update
+      description: |-
+        ViewSet for importing attribute groups from CSV or Excel files.
+
+        This endpoint allows uploading a file containing attribute group definitions
+        and initiates an async import process.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this import task.
+        required: true
+      tags:
+      - attribute-groups-import
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedImportTaskRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedImportTaskRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedImportTaskRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportTask'
+          description: ''
+  /attributes-import/:
+    get:
+      operationId: attributes_import_list
+      description: |-
+        ViewSet for importing attributes from CSV or Excel files.
+
+        This endpoint allows uploading a file containing attribute definitions
+        and initiates an async import process.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      tags:
+      - attributes-import
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ImportTask'
+          description: ''
+    post:
+      operationId: attributes_import_create
+      description: Import attributes from a CSV or Excel file
+      tags:
+      - imports
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ImportTaskRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportTaskRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ImportTaskRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          description: Import task created successfully
+        '400':
+          description: Bad request - invalid file or parameters
+  /attributes-import/{id}/:
+    get:
+      operationId: attributes_import_retrieve
+      description: |-
+        ViewSet for importing attributes from CSV or Excel files.
+
+        This endpoint allows uploading a file containing attribute definitions
+        and initiates an async import process.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this import task.
+        required: true
+      tags:
+      - attributes-import
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportTask'
+          description: ''
+    put:
+      operationId: attributes_import_update
+      description: |-
+        ViewSet for importing attributes from CSV or Excel files.
+
+        This endpoint allows uploading a file containing attribute definitions
+        and initiates an async import process.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this import task.
+        required: true
+      tags:
+      - attributes-import
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ImportTaskRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportTaskRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ImportTaskRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportTask'
+          description: ''
+    delete:
+      operationId: attributes_import_destroy
+      description: |-
+        ViewSet for importing attributes from CSV or Excel files.
+
+        This endpoint allows uploading a file containing attribute definitions
+        and initiates an async import process.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this import task.
+        required: true
+      tags:
+      - attributes-import
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+    patch:
+      operationId: attributes_import_partial_update
+      description: |-
+        ViewSet for importing attributes from CSV or Excel files.
+
+        This endpoint allows uploading a file containing attribute definitions
+        and initiates an async import process.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this import task.
+        required: true
+      tags:
+      - attributes-import
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedImportTaskRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedImportTaskRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedImportTaskRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportTask'
+          description: ''
+  /families-import/:
+    get:
+      operationId: families_import_list
+      description: |-
+        ViewSet for importing product families from CSV or Excel files.
+
+        This endpoint allows uploading a file containing family definitions
+        and initiates an async import process.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      tags:
+      - families-import
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ImportTask'
+          description: ''
+    post:
+      operationId: families_import_create
+      description: Import product families from a CSV or Excel file
+      tags:
+      - imports
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ImportTaskRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportTaskRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ImportTaskRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          description: Import task created successfully
+        '400':
+          description: Bad request - invalid file or parameters
+  /families-import/{id}/:
+    get:
+      operationId: families_import_retrieve
+      description: |-
+        ViewSet for importing product families from CSV or Excel files.
+
+        This endpoint allows uploading a file containing family definitions
+        and initiates an async import process.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this import task.
+        required: true
+      tags:
+      - families-import
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportTask'
+          description: ''
+    put:
+      operationId: families_import_update
+      description: |-
+        ViewSet for importing product families from CSV or Excel files.
+
+        This endpoint allows uploading a file containing family definitions
+        and initiates an async import process.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this import task.
+        required: true
+      tags:
+      - families-import
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ImportTaskRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportTaskRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ImportTaskRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportTask'
+          description: ''
+    delete:
+      operationId: families_import_destroy
+      description: |-
+        ViewSet for importing product families from CSV or Excel files.
+
+        This endpoint allows uploading a file containing family definitions
+        and initiates an async import process.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this import task.
+        required: true
+      tags:
+      - families-import
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+    patch:
+      operationId: families_import_partial_update
+      description: |-
+        ViewSet for importing product families from CSV or Excel files.
+
+        This endpoint allows uploading a file containing family definitions
+        and initiates an async import process.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this import task.
+        required: true
+      tags:
+      - families-import
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedImportTaskRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedImportTaskRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedImportTaskRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportTask'
+          description: ''
+  /field-schema/:
+    get:
+      operationId: field_schema_retrieve
+      description: Get the canonical schema of importable fields
+      parameters:
+      - in: query
+        name: v
+        schema:
+          type: integer
+        description: Schema version (1 or 2)
+      tags:
+      - imports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: List of importable fields with metadata
+  /attribute-groups-schema/:
+    get:
+      operationId: attribute_groups_schema_retrieve
+      description: Get the schema for attribute group import fields
+      tags:
+      - imports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: List of importable attribute group fields with metadata
+  /attributes-schema/:
+    get:
+      operationId: attributes_schema_retrieve
+      description: Get the schema for attribute import fields
+      tags:
+      - imports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: List of importable attribute fields with metadata
+  /families-schema/:
+    get:
+      operationId: families_schema_retrieve
+      description: Get the schema for family import fields
+      tags:
+      - imports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: List of importable family fields with metadata
   /reports/themes/:
     get:
       operationId: reports_themes_list
@@ -3978,6 +4648,20 @@ paths:
       responses:
         '200':
           description: No response body
+  /localization-quality/:
+    get:
+      operationId: localization_quality_retrieve
+      description: |-
+        API endpoint for localization quality analytics.
+
+        GET: Retrieve analytics on attribute translation quality by locale.
+      tags:
+      - localization-quality
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
   /orgs/{org_id}/roles/:
     get:
       operationId: orgs_roles_list
@@ -4038,6 +4722,31 @@ paths:
                 $ref: '#/components/schemas/Role'
           description: ''
   /orgs/{org_id}/roles/{id}/:
+    get:
+      operationId: orgs_roles_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this role.
+        required: true
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+          description: ''
     put:
       operationId: orgs_roles_update
       parameters:
@@ -4075,8 +4784,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/Role'
           description: ''
-    get:
-      operationId: orgs_roles_retrieve
+    delete:
+      operationId: orgs_roles_destroy
       parameters:
       - in: path
         name: id
@@ -4094,12 +4803,8 @@ paths:
       security:
       - jwtAuth: []
       responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Role'
-          description: ''
+        '204':
+          description: No response body
     patch:
       operationId: orgs_roles_partial_update
       parameters:
@@ -4136,27 +4841,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Role'
           description: ''
-    delete:
-      operationId: orgs_roles_destroy
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this role.
-        required: true
-      - in: path
-        name: org_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - orgs
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
   /orgs/{org_id}/memberships/:
     get:
       operationId: orgs_memberships_list
@@ -4245,6 +4929,31 @@ paths:
                 $ref: '#/components/schemas/Membership'
           description: ''
   /orgs/{org_id}/memberships/{id}/:
+    get:
+      operationId: orgs_memberships_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this membership.
+        required: true
+      - in: path
+        name: org_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - orgs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Membership'
+          description: ''
     put:
       operationId: orgs_memberships_update
       parameters:
@@ -4282,8 +4991,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Membership'
           description: ''
-    get:
-      operationId: orgs_memberships_retrieve
+    delete:
+      operationId: orgs_memberships_destroy
+      description: Remove a membership and log the action
       parameters:
       - in: path
         name: id
@@ -4301,12 +5011,8 @@ paths:
       security:
       - jwtAuth: []
       responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Membership'
-          description: ''
+        '204':
+          description: No response body
     patch:
       operationId: orgs_memberships_partial_update
       description: Update a membership (e.g., change role) and log the change
@@ -4344,28 +5050,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Membership'
           description: ''
-    delete:
-      operationId: orgs_memberships_destroy
-      description: Remove a membership and log the action
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this membership.
-        required: true
-      - in: path
-        name: org_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - orgs
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
   /orgs/{org_id}/memberships/{id}/accept/:
     post:
       operationId: orgs_memberships_accept_create
@@ -4612,6 +5296,27 @@ paths:
                 $ref: '#/components/schemas/Currency'
           description: ''
   /currencies/{iso_code}/:
+    get:
+      operationId: currencies_retrieve
+      description: API endpoint for Currency CRUD operations.
+      parameters:
+      - in: path
+        name: iso_code
+        schema:
+          type: string
+        description: A unique value identifying this Currency.
+        required: true
+      tags:
+      - currencies
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Currency'
+          description: ''
     put:
       operationId: currencies_update
       description: API endpoint for Currency CRUD operations.
@@ -4645,8 +5350,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/Currency'
           description: ''
-    get:
-      operationId: currencies_retrieve
+    delete:
+      operationId: currencies_destroy
       description: API endpoint for Currency CRUD operations.
       parameters:
       - in: path
@@ -4660,12 +5365,8 @@ paths:
       security:
       - jwtAuth: []
       responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Currency'
-          description: ''
+        '204':
+          description: No response body
     patch:
       operationId: currencies_partial_update
       description: API endpoint for Currency CRUD operations.
@@ -4698,23 +5399,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Currency'
           description: ''
-    delete:
-      operationId: currencies_destroy
-      description: API endpoint for Currency CRUD operations.
-      parameters:
-      - in: path
-        name: iso_code
-        schema:
-          type: string
-        description: A unique value identifying this Currency.
-        required: true
-      tags:
-      - currencies
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
   /price-types/:
     get:
       operationId: price_types_list
@@ -4766,6 +5450,27 @@ paths:
                 $ref: '#/components/schemas/PriceType'
           description: ''
   /price-types/{id}/:
+    get:
+      operationId: price_types_retrieve
+      description: API endpoint for PriceType CRUD operations.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Price Type.
+        required: true
+      tags:
+      - price-types
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceType'
+          description: ''
     put:
       operationId: price_types_update
       description: API endpoint for PriceType CRUD operations.
@@ -4799,8 +5504,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/PriceType'
           description: ''
-    get:
-      operationId: price_types_retrieve
+    delete:
+      operationId: price_types_destroy
       description: API endpoint for PriceType CRUD operations.
       parameters:
       - in: path
@@ -4814,12 +5519,8 @@ paths:
       security:
       - jwtAuth: []
       responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PriceType'
-          description: ''
+        '204':
+          description: No response body
     patch:
       operationId: price_types_partial_update
       description: API endpoint for PriceType CRUD operations.
@@ -4852,23 +5553,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/PriceType'
           description: ''
-    delete:
-      operationId: price_types_destroy
-      description: API endpoint for PriceType CRUD operations.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Price Type.
-        required: true
-      tags:
-      - price-types
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
   /register/:
     post:
       operationId: register_create
@@ -5537,6 +6221,9 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        row_count:
+          type: integer
+          readOnly: true
         progress_percentage:
           type: integer
           readOnly: true
@@ -5548,6 +6235,11 @@ components:
         error_file_url:
           type: string
           readOnly: true
+        error_count:
+          type: integer
+          readOnly: true
+          default: 0
+          description: Number of rows with errors
         execution_time:
           type: number
           format: double
@@ -5561,6 +6253,7 @@ components:
       required:
       - created_at
       - csv_file
+      - error_count
       - error_file
       - error_file_url
       - execution_time
@@ -5568,6 +6261,7 @@ components:
       - mapping
       - processed
       - progress_percentage
+      - row_count
       - status
       - status_display
       - total_rows
@@ -5857,6 +6551,27 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/FamilyAttributeGroupRequest'
+    PatchedImportTaskRequest:
+      type: object
+      description: |-
+        Serializer for the ImportTask model.
+        Includes calculated fields for progress percentage and status display.
+      properties:
+        csv_file:
+          type: string
+          format: binary
+        mapping:
+          type: object
+          additionalProperties: {}
+        duplicate_strategy:
+          allOf:
+          - $ref: '#/components/schemas/DuplicateStrategyEnum'
+          description: |-
+            Strategy for handling duplicate SKUs
+
+            * `skip` - Skip
+            * `overwrite` - Overwrite
+            * `abort` - Abort
     PatchedLocaleRequest:
       type: object
       description: Serializer for the Locale model

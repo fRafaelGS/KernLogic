@@ -53,6 +53,7 @@ def resolve_family(code: str, org) -> Family:
     try:
         fam = Family.objects.get(code=code.strip(), organization=org)
         _family_cache[key] = fam
+        logger.debug(f"Found family {fam.code}")
         return fam
     except Family.DoesNotExist:
         return None
@@ -64,6 +65,8 @@ def upsert_product(row: dict, org) -> Product:
     Maps canonical 'gtin' field to model's 'barcode' field.
     """
     sku = row.get('sku')
+    logger.debug(f"[UPSERT] row keys = {list(row.keys())}")
+    
     if not sku:
         raise ValueError('SKU is required')
     prod, created = Product.objects.get_or_create(
@@ -78,6 +81,8 @@ def upsert_product(row: dict, org) -> Product:
             'created_by': row.get('created_by'),
         }
     )
+    logger.debug(f"[UPSERT] initial prod.family = {getattr(prod, 'family_id', None)}")
+    
     # Update fields if not created
     if not created:
         for field in ['name', 'description', 'brand', 'is_active', 'tags']:
@@ -92,10 +97,17 @@ def upsert_product(row: dict, org) -> Product:
         cat = resolve_category_breadcrumb(row['category'], org)
         if cat:
             prod.category = cat
-    if row.get('family'):
-        fam = resolve_family(row['family'], org)
+    
+    # Support both 'family_code' and 'family' fields for backward compatibility
+    family_code = row.get('family_code') or row.get('family')
+    if family_code:
+        fam = resolve_family(family_code, org)
         if fam:
             prod.family = fam
+            logger.debug(f"[IMPORT] {sku} – family_code={family_code} -> {fam.code if fam else 'None'}")
+    
+    logger.debug(f"[UPSERT] after family assign -> {getattr(prod, 'family_id', None)}")
+    
     prod.save()
     return prod
 

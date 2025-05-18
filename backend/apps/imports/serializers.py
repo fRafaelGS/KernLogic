@@ -10,6 +10,8 @@ class ImportTaskSerializer(serializers.ModelSerializer):
     progress_percentage = serializers.IntegerField(read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     error_file_url = serializers.SerializerMethodField()
+    error_count = serializers.IntegerField(read_only=True, default=0, help_text="Number of rows with errors")
+    row_count = serializers.IntegerField(source='total_rows', read_only=True)
     
     class Meta:
         model = ImportTask
@@ -22,9 +24,11 @@ class ImportTaskSerializer(serializers.ModelSerializer):
             "status_display",
             "processed", 
             "total_rows", 
+            "row_count",
             "progress_percentage",
             "error_file", 
             "error_file_url",
+            "error_count",
             "execution_time",
             "created_at"
         ]
@@ -34,9 +38,11 @@ class ImportTaskSerializer(serializers.ModelSerializer):
             "status_display", 
             "processed", 
             "total_rows", 
+            "row_count",
             "progress_percentage",
             "error_file", 
             "error_file_url",
+            "error_count",
             "execution_time",
             "created_at"
         ]

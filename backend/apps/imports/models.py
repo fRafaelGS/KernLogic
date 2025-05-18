@@ -34,6 +34,7 @@ class ImportTask(models.Model):
     processed    = models.PositiveIntegerField(default=0)
     total_rows   = models.PositiveIntegerField(null=True)
     error_file   = models.FileField(null=True, upload_to="imports/errors/")
+    error_count  = models.PositiveIntegerField(default=0, help_text="Number of errors encountered during import")
     created_by   = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
     created_at   = models.DateTimeField(auto_now_add=True)
     execution_time = models.FloatField(null=True, blank=True, help_text="Execution time in seconds")

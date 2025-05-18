@@ -4,17 +4,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/use-toast';
-import { SaveIcon, InfoIcon, AlertCircleIcon } from 'lucide-react';
+import { SaveIcon, InfoIcon, AlertCircleIcon, CheckCircleIcon } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useImportFieldSchema } from './hooks/useImportFieldSchema';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Mapping } from '@/types/import';
-import { ImportFieldSchemaEntry } from '@/services/importService';
+import { ImportFieldSchemaEntry, getFamilyAttributes } from '@/services/importService';
 
 interface StepMappingProps {
   sourceHeaders: string[];
   onMappingComplete: (mapping: Mapping) => void;
+  fieldSchema?: ImportFieldSchemaEntry[] | null;
+  previewData?: any[];
 }
 
 // Storage key for saved mapping templates
@@ -25,19 +27,41 @@ const FIELD_TOOLTIPS: Record<string, string> = {
   category: 'Provide breadcrumb path, e.g. Paint > Clear Coats',
   gtin: 'Global Trade Item Number (Barcode/UPC/EAN/ISBN)',
   family: 'Product family for attribute inheritance',
+  family_code: 'Product family for attribute inheritance and validation',
   attribute_group: 'Group that contains related attributes',
   attributes: 'JSON format for custom attributes: {"color":"red","size":"large"}',
   channel: 'Sales channel (e.g., web, store, marketplace)',
   locale: 'Language/region code (e.g., en-US, fr-FR)'
 };
 
-const StepMapping: React.FC<StepMappingProps> = ({ sourceHeaders, onMappingComplete }) => {
+const StepMapping: React.FC<StepMappingProps> = ({ sourceHeaders, onMappingComplete, fieldSchema: propFieldSchema, previewData = [] }) => {
   const [mapping, setMapping] = useState<Mapping>({});
   const [requiredFieldsMapped, setRequiredFieldsMapped] = useState(false);
   const [nameFieldMapped, setNameFieldMapped] = useState(false);
+  const [familyFieldMapped, setFamilyFieldMapped] = useState(false);
+  const [attributeHeaderPattern, setAttributeHeaderPattern] = useState<string | null>(null);
+  const [selectedFamily, setSelectedFamily] = useState<string | null>(null);
+  const [familyAttributes, setFamilyAttributes] = useState<string[]>([]);
+  const [loadingFamilyAttributes, setLoadingFamilyAttributes] = useState(false);
+  const [invalidAttributeHeaders, setInvalidAttributeHeaders] = useState<string[]>([]);
   
-  // Fetch the field schema
-  const { data: fieldSchema, isLoading, isError } = useImportFieldSchema();
+  // Fetch the field schema if not provided via props
+  const { 
+    productFieldSchema: apiFieldSchema, 
+    attributeHeaderPattern: apiHeaderPattern,
+    isLoading, 
+    isError 
+  } = useImportFieldSchema();
+  
+  // Use prop schema if provided, otherwise fall back to API schema
+  const fieldSchema = propFieldSchema || apiFieldSchema;
+
+  // Track attribute header pattern from API
+  useEffect(() => {
+    if (apiHeaderPattern) {
+      setAttributeHeaderPattern(apiHeaderPattern);
+    }
+  }, [apiHeaderPattern]);
   
   // Process the schema to sort fields (required first, then alphabetically)
   const sortedFields = React.useMemo(() => {
@@ -52,6 +76,68 @@ const StepMapping: React.FC<StepMappingProps> = ({ sourceHeaders, onMappingCompl
       return a.label.localeCompare(b.label);
     });
   }, [fieldSchema]);
+
+  // Check if a header matches the attribute header pattern
+  const isAttributeHeader = (header: string): boolean => {
+    if (!attributeHeaderPattern) return false;
+    try {
+      const regex = new RegExp(attributeHeaderPattern);
+      return regex.test(header);
+    } catch (e) {
+      console.error("Invalid regex pattern:", e);
+      return false;
+    }
+  };
+
+  // Extract attribute name from header
+  const getAttributeNameFromHeader = (header: string): string => {
+    if (!isAttributeHeader(header)) return "";
+    
+    // Basic extraction - this might need customization based on your actual pattern
+    // For example, if pattern is "attr_(.*)", extract the capture group
+    const match = header.match(/attr_(.+)/);
+    if (match && match[1]) {
+      return match[1];
+    }
+    
+    // Fall back to the header itself if the pattern is more complex
+    return header;
+  };
+
+  // Check if there are any attribute columns in the source headers
+  const hasAttributeColumns = React.useMemo(() => {
+    return sourceHeaders.some(header => isAttributeHeader(header));
+  }, [sourceHeaders, attributeHeaderPattern]);
+
+  // Fetch family attributes when family is selected
+  useEffect(() => {
+    if (selectedFamily) {
+      setLoadingFamilyAttributes(true);
+      getFamilyAttributes(selectedFamily)
+        .then(response => {
+          const attributes = response.data.map((attr: any) => attr.code || attr.name);
+          setFamilyAttributes(attributes);
+          
+          // Check for invalid attribute headers
+          const attributeHeaders = sourceHeaders.filter(header => isAttributeHeader(header));
+          const invalid = attributeHeaders.filter(header => {
+            const attrName = getAttributeNameFromHeader(header);
+            return !attributes.includes(attrName);
+          });
+          
+          setInvalidAttributeHeaders(invalid);
+        })
+        .catch(error => {
+          console.error('Error fetching family attributes:', error);
+        })
+        .finally(() => {
+          setLoadingFamilyAttributes(false);
+        });
+    } else {
+      setFamilyAttributes([]);
+      setInvalidAttributeHeaders([]);
+    }
+  }, [selectedFamily, sourceHeaders, attributeHeaderPattern]);
 
   // Auto-select fields where header matches API field (case-insensitive)
   useEffect(() => {
@@ -114,6 +200,12 @@ const StepMapping: React.FC<StepMappingProps> = ({ sourceHeaders, onMappingCompl
           return true;
         }
         
+        // Handle special case for family/family_code
+        if (field.id === 'family_code' && 
+            (normalizedHeader.includes('family'))) {
+          return true;
+        }
+        
         return field.id.toLowerCase() === normalizedHeader || 
                field.label.toLowerCase() === normalizedHeader;
       });
@@ -127,9 +219,9 @@ const StepMapping: React.FC<StepMappingProps> = ({ sourceHeaders, onMappingCompl
     checkMappingValidity(autoMapping, fieldSchema);
   }, [sourceHeaders, fieldSchema]);
 
-  // Check if required fields are mapped and if name is mapped
+  // Check if required fields are mapped and if name and family are mapped
   const checkMappingValidity = (currentMapping: Mapping, schema: ImportFieldSchemaEntry[]) => {
-    if (!schema) return { requiredMapped: false, nameMapped: false };
+    if (!schema) return { requiredMapped: false, nameMapped: false, familyMapped: false };
     
     const mappedFields = Object.values(currentMapping);
     
@@ -142,7 +234,15 @@ const StepMapping: React.FC<StepMappingProps> = ({ sourceHeaders, onMappingCompl
     const isNameMapped = mappedFields.includes('name');
     setNameFieldMapped(isNameMapped);
     
-    return { requiredMapped: allRequiredMapped, nameMapped: isNameMapped };
+    // Check if family field is mapped (needed for attribute values)
+    const isFamilyMapped = mappedFields.includes('family_code');
+    setFamilyFieldMapped(isFamilyMapped);
+    
+    return { 
+      requiredMapped: allRequiredMapped, 
+      nameMapped: isNameMapped, 
+      familyMapped: isFamilyMapped 
+    };
   };
 
   // Handle field mapping change
@@ -156,6 +256,14 @@ const StepMapping: React.FC<StepMappingProps> = ({ sourceHeaders, onMappingCompl
     } else {
       // Add or update the mapping
       newMapping[source] = target;
+      
+      // If this is a family_code mapping, fetch the family attributes
+      if (target === 'family_code') {
+        const familyValue = previewData?.[0]?.[source];
+        if (familyValue) {
+          setSelectedFamily(familyValue);
+        }
+      }
     }
     
     setMapping(newMapping);
@@ -197,7 +305,7 @@ const StepMapping: React.FC<StepMappingProps> = ({ sourceHeaders, onMappingCompl
   };
 
   // If still loading the schema, show skeleton loaders
-  if (isLoading) {
+  if (isLoading && !propFieldSchema) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-24 w-full" data-testid="skeleton" />
@@ -211,7 +319,7 @@ const StepMapping: React.FC<StepMappingProps> = ({ sourceHeaders, onMappingCompl
   }
 
   // If there was an error loading the schema
-  if (isError || !fieldSchema) {
+  if ((isError || !fieldSchema) && !propFieldSchema) {
     return (
       <div className="p-6 bg-red-50 border border-red-200 rounded-md">
         <h3 className="text-lg font-medium text-red-800 mb-2">
@@ -240,7 +348,7 @@ const StepMapping: React.FC<StepMappingProps> = ({ sourceHeaders, onMappingCompl
           Map each column from your file to the corresponding field in our system.
         </p>
         <div className="flex flex-wrap gap-2 mb-3">
-          {fieldSchema.filter(f => f.required).map(field => (
+          {fieldSchema?.filter(f => f.required).map(field => (
             <Badge key={field.id} variant="outline" className="bg-red-50 text-red-700 border-red-200">
               {field.label} *
             </Badge>
@@ -258,10 +366,15 @@ const StepMapping: React.FC<StepMappingProps> = ({ sourceHeaders, onMappingCompl
                     className={`${
                       Object.values(mapping).includes(field.id) 
                         ? 'bg-green-50 text-green-700 border-green-200' 
-                        : 'bg-gray-50'
+                        : field.id === 'family_code'
+                          ? 'bg-amber-50 text-amber-700 border-amber-200'
+                          : 'bg-gray-50'
                     } cursor-help`}
                   >
                     {field.label}{field.required ? ' *' : ''} 
+                    {field.id === 'family_code' && (
+                      <span className="ml-1">👪</span>
+                    )}
                     {FIELD_TOOLTIPS[field.id] && (
                       <InfoIcon className="h-3 w-3 ml-1 inline" />
                     )}
@@ -270,6 +383,11 @@ const StepMapping: React.FC<StepMappingProps> = ({ sourceHeaders, onMappingCompl
                 <TooltipContent>
                   <p className="w-[200px] text-xs">
                     {FIELD_TOOLTIPS[field.id] || `Field type: ${field.type}`}
+                    {field.id === 'family_code' && !familyFieldMapped && hasAttributeColumns && (
+                      <span className="block mt-1 text-amber-600 font-medium">
+                        Required for attribute columns!
+                      </span>
+                    )}
                   </p>
                 </TooltipContent>
               </Tooltip>
@@ -278,15 +396,51 @@ const StepMapping: React.FC<StepMappingProps> = ({ sourceHeaders, onMappingCompl
         </div>
       </div>
 
-      {/* Show warning if name is not mapped */}
-      {!nameFieldMapped && (
-        <Alert className="bg-amber-50 border-amber-200">
-          <AlertCircleIcon className="h-4 w-4 text-amber-700" />
-          <AlertDescription className="text-amber-700">
-            We recommend mapping the "Name" field for better product identification.
-          </AlertDescription>
-        </Alert>
-      )}
+      {/* Show warnings */}
+      <div className="space-y-3">
+        {/* Name field warning */}
+        {!nameFieldMapped && (
+          <Alert className="bg-amber-50 border-amber-200">
+            <AlertCircleIcon className="h-4 w-4 text-amber-700" />
+            <AlertDescription className="text-amber-700">
+              We recommend mapping the "Name" field for better product identification.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Family field warning if attribute columns are present */}
+        {!familyFieldMapped && hasAttributeColumns && (
+          <Alert className="bg-amber-50 border-amber-200">
+            <AlertCircleIcon className="h-4 w-4 text-amber-700" />
+            <AlertTitle className="text-amber-700 font-medium">Family field not mapped</AlertTitle>
+            <AlertDescription className="text-amber-700">
+              Attribute columns will be ignored without a family. Please map a column to the "Family" field to use attribute values.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Invalid attribute headers warning */}
+        {familyFieldMapped && selectedFamily && invalidAttributeHeaders.length > 0 && (
+          <Alert className="bg-amber-50 border-amber-200">
+            <AlertCircleIcon className="h-4 w-4 text-amber-700" />
+            <AlertTitle className="text-amber-700 font-medium">Unknown attributes detected</AlertTitle>
+            <AlertDescription className="text-amber-700">
+              The following attribute columns don't match any attributes in the "{selectedFamily}" family: 
+              <code className="ml-1 bg-amber-100 px-1 rounded">
+                {invalidAttributeHeaders.join(', ')}
+              </code>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Loading family attributes indicator */}
+        {loadingFamilyAttributes && (
+          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+            <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full"></div>
+            <span>Checking family attributes...</span>
+          </div>
+        )}
+      </div>
 
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-medium">Map Your Columns</h3>
@@ -306,44 +460,70 @@ const StepMapping: React.FC<StepMappingProps> = ({ sourceHeaders, onMappingCompl
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sourceHeaders.map(header => (
-              <TableRow key={header}>
-                <TableCell className="font-medium">{header}</TableCell>
-                <TableCell>
-                  <Select
-                    value={mapping[header] || 'skip'}
-                    onValueChange={(value) => handleMappingChange(header, value)}
-                  >
-                    <SelectTrigger className="w-[200px]">
-                      <SelectValue placeholder="Select field" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="skip">-- Do not import --</SelectItem>
-                      {sortedFields.map(field => (
-                        <SelectItem key={field.id} value={field.id}>
-                          {field.label}{field.required ? ' *' : ''}
-                          {FIELD_TOOLTIPS[field.id] && (
-                            <InfoIcon className="h-3 w-3 ml-1 inline text-muted-foreground" />
-                          )}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </TableCell>
-                <TableCell className="text-muted-foreground text-sm">
-                  {mapping[header] && fieldSchema && (
-                    <div>
-                      <code className="bg-muted px-2 py-1 rounded">{mapping[header]}</code>
-                      {FIELD_TOOLTIPS[mapping[header]] && (
-                        <div className="text-xs mt-1 text-muted-foreground">
-                          {FIELD_TOOLTIPS[mapping[header]]}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
+            {sourceHeaders.map(header => {
+              const isAttribute = isAttributeHeader(header);
+              const isInvalidAttribute = isAttribute && invalidAttributeHeaders.includes(header);
+              return (
+                <TableRow key={header}>
+                  <TableCell className="font-medium">
+                    {header}
+                    {isAttribute && (
+                      <Badge className={`ml-2 ${isInvalidAttribute ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-700'} hover:bg-gray-200`}>
+                        <CheckCircleIcon className={`h-3 w-3 mr-1 ${isInvalidAttribute ? 'text-amber-600' : 'text-green-600'}`} />
+                        Attribute {isInvalidAttribute ? '⚠️' : '✓'}
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Select
+                      value={mapping[header] || 'skip'}
+                      onValueChange={(value) => handleMappingChange(header, value)}
+                    >
+                      <SelectTrigger className="w-[200px]">
+                        <SelectValue placeholder="Select field" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="skip">-- Do not import --</SelectItem>
+                        {sortedFields.map(field => (
+                          <SelectItem key={field.id} value={field.id}>
+                            {field.label}{field.required ? ' *' : ''}
+                            {field.id === 'family_code' && (
+                              <span className="ml-1">👪</span>
+                            )}
+                            {FIELD_TOOLTIPS[field.id] && (
+                              <InfoIcon className="h-3 w-3 ml-1 inline text-muted-foreground" />
+                            )}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-sm">
+                    {mapping[header] && fieldSchema && (
+                      <div>
+                        <code className="bg-muted px-2 py-1 rounded">{mapping[header]}</code>
+                        {FIELD_TOOLTIPS[mapping[header]] && (
+                          <div className="text-xs mt-1 text-muted-foreground">
+                            {FIELD_TOOLTIPS[mapping[header]]}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {isAttribute && !mapping[header] && (
+                      <div className="text-xs text-green-600">
+                        <p>Will be imported as product attribute</p>
+                        {!familyFieldMapped && (
+                          <p className="text-amber-600 mt-1">Requires Family to be mapped</p>
+                        )}
+                        {isInvalidAttribute && familyFieldMapped && (
+                          <p className="text-amber-600 mt-1">Not found in family "{selectedFamily}"</p>
+                        )}
+                      </div>
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </div>

@@ -42,8 +42,13 @@ from analytics.views import (
 # Import organization view
 from organizations.views import OrganizationDetailView
 
-# Import the field schema view
-from apps.imports.views import FieldSchemaView
+# Import all schema views from imports app
+from apps.imports.views import (
+    FieldSchemaView, 
+    AttributeGroupSchemaView,
+    AttributeSchemaView,
+    FamilySchemaView
+)
 
 # Debug view for testing exports directly
 def test_csv_export(request):
@@ -142,29 +147,20 @@ urlpatterns = [
     path('api/analytics/localization-quality-export/', export_localization_quality_report, name='analytics-localization-quality-export'),
     path('api/analytics/change-history-export/', export_change_history_report, name='analytics-change-history-export'),
     
-    # Product API
+    # Schema endpoints directly at the imports URL path
+    # These match the exact paths the frontend is requesting
+    path('api/imports/field-schema/', FieldSchemaView.as_view(), name='field-schema'),
+    path('api/imports/attribute-groups-schema/', AttributeGroupSchemaView.as_view(), name='attribute-groups-schema'),
+    path('api/imports/attributes-schema/', AttributeSchemaView.as_view(), name='attributes-schema'),
+    path('api/imports/families-schema/', FamilySchemaView.as_view(), name='families-schema'),
+    
+    # Additional apps' APIs
     path('api/', include('products.urls')),
-    
-    # Imports API
     path('api/', include('apps.imports.urls')),
-    
-    # Direct field schema endpoints for compatibility
-    path('api/field-schema/', FieldSchemaView.as_view(), name='field-schema-direct'),
-    path('api/imports/field-schema/', FieldSchemaView.as_view(), name='imports-field-schema-direct'),
-    
-    # Reports API
     path('api/', include('reports.urls')),
-    
-    # Analytics API - make sure module path is correct
     path('api/', include('analytics.urls')),
-    
-    # Teams API
     path('api/', include('teams.urls')),
-    
-    # Prices API
     path('api/', include('prices.urls')),
-    
-    # Accounts API - add this line to include accounts URLs
     path('api/', include('accounts.urls')),
     
     # API Schema documentation
@@ -175,8 +171,10 @@ urlpatterns = [
 
 # For development, serve media and static files
 if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+
+# Always serve media files, regardless of DEBUG setting
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 # React SPA - serve in production
 # This must be last and should NOT match /api/ URLs

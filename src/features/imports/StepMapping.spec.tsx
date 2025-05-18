@@ -56,10 +56,14 @@ describe('StepMapping', () => {
   it('should show loading state when fetching schema', () => {
     // Mock loading state
     vi.mocked(useImportFieldSchema).mockReturnValue({
-      data: undefined,
+      productFieldSchema: undefined,
+      attributeHeaderPattern: null,
+      attributeGroupSchema: null,
+      attributeSchema: null,
+      familySchema: null,
       isLoading: true,
       isError: false
-    } as any)
+    })
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -74,10 +78,14 @@ describe('StepMapping', () => {
   it('should show error state when schema fetch fails', async () => {
     // Mock error state
     vi.mocked(useImportFieldSchema).mockReturnValue({
-      data: undefined,
+      productFieldSchema: undefined,
+      attributeHeaderPattern: null,
+      attributeGroupSchema: null,
+      attributeSchema: null,
+      familySchema: null,
       isLoading: false,
       isError: true
-    } as any)
+    })
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -93,10 +101,14 @@ describe('StepMapping', () => {
   it('should render all source headers and schema fields', async () => {
     // Mock successful schema load
     vi.mocked(useImportFieldSchema).mockReturnValue({
-      data: mockSchema,
+      productFieldSchema: mockSchema,
+      attributeHeaderPattern: null,
+      attributeGroupSchema: null,
+      attributeSchema: null,
+      familySchema: null,
       isLoading: false,
       isError: false
-    } as any)
+    })
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -119,10 +131,14 @@ describe('StepMapping', () => {
   it('should auto-map fields with similar names', async () => {
     // Mock successful schema load
     vi.mocked(useImportFieldSchema).mockReturnValue({
-      data: mockSchema,
+      productFieldSchema: mockSchema,
+      attributeHeaderPattern: null,
+      attributeGroupSchema: null,
+      attributeSchema: null,
+      familySchema: null,
       isLoading: false,
       isError: false
-    } as any)
+    })
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -143,10 +159,14 @@ describe('StepMapping', () => {
   it('should show warning if name is not mapped', async () => {
     // Mock successful schema load
     vi.mocked(useImportFieldSchema).mockReturnValue({
-      data: mockSchema,
+      productFieldSchema: mockSchema,
+      attributeHeaderPattern: null,
+      attributeGroupSchema: null,
+      attributeSchema: null,
+      familySchema: null,
       isLoading: false,
       isError: false
-    } as any)
+    })
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -164,10 +184,14 @@ describe('StepMapping', () => {
   it('should not allow completion if required fields are not mapped', async () => {
     // Mock successful schema load
     vi.mocked(useImportFieldSchema).mockReturnValue({
-      data: mockSchema,
+      productFieldSchema: mockSchema,
+      attributeHeaderPattern: null,
+      attributeGroupSchema: null,
+      attributeSchema: null,
+      familySchema: null,
       isLoading: false,
       isError: false
-    } as any)
+    })
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -186,10 +210,14 @@ describe('StepMapping', () => {
   it('should call onMappingComplete with correct mapping when complete', async () => {
     // Mock successful schema load
     vi.mocked(useImportFieldSchema).mockReturnValue({
-      data: mockSchema,
+      productFieldSchema: mockSchema,
+      attributeHeaderPattern: null,
+      attributeGroupSchema: null,
+      attributeSchema: null,
+      familySchema: null,
       isLoading: false,
       isError: false
-    } as any)
+    })
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -221,5 +249,136 @@ describe('StepMapping', () => {
       'Product SKU': 'sku',
       'Product Name': 'name'
     })
+  })
+
+  it('shows attribute column indicators for matching headers', () => {
+    const sourceHeaders = ['SKU', 'Name', 'attr_color', 'attr_size', 'Price']
+    const onMappingComplete = vi.fn()
+
+    // Mock attribute header pattern
+    vi.mocked(useImportFieldSchema).mockReturnValue({
+      productFieldSchema: mockSchema,
+      attributeHeaderPattern: "attr_.*", 
+      attributeGroupSchema: null,
+      attributeSchema: null,
+      familySchema: null,
+      isLoading: false,
+      isError: false
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <StepMapping
+          sourceHeaders={sourceHeaders}
+          onMappingComplete={onMappingComplete}
+        />
+      </QueryClientProvider>
+    )
+
+    // Check that attribute badges are rendered
+    const attributeBadges = screen.getAllByText(/Attribute/)
+    expect(attributeBadges.length).toBe(2)
+  })
+
+  it('shows family field warning when attribute columns present but family not mapped', async () => {
+    const sourceHeaders = ['SKU', 'Name', 'attr_color', 'attr_size', 'Price']
+    const onMappingComplete = vi.fn()
+
+    // Mock attribute header pattern
+    vi.mocked(useImportFieldSchema).mockReturnValue({
+      productFieldSchema: mockSchema,
+      attributeHeaderPattern: "attr_.*", 
+      attributeGroupSchema: null,
+      attributeSchema: null,
+      familySchema: null,
+      isLoading: false,
+      isError: false
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <StepMapping
+          sourceHeaders={sourceHeaders}
+          onMappingComplete={onMappingComplete}
+        />
+      </QueryClientProvider>
+    )
+
+    // Check that the family warning is shown
+    expect(screen.getByText('Family field not mapped')).toBeInTheDocument()
+    expect(screen.getByText(/Attribute columns will be ignored without a family/)).toBeInTheDocument()
+  })
+
+  it('shows special styling for the family_code field in available fields', () => {
+    const sourceHeaders = ['SKU', 'Name', 'Price']
+    const onMappingComplete = vi.fn()
+
+    // Add family_code to the schema
+    const schemaWithFamily = [
+      ...mockSchema,
+      { id: 'family_code', label: 'Family', required: false, type: 'string' }
+    ]
+
+    vi.mocked(useImportFieldSchema).mockReturnValue({
+      productFieldSchema: schemaWithFamily,
+      attributeHeaderPattern: null,
+      attributeGroupSchema: null,
+      attributeSchema: null,
+      familySchema: null,
+      isLoading: false,
+      isError: false
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <StepMapping
+          sourceHeaders={sourceHeaders}
+          onMappingComplete={onMappingComplete}
+        />
+      </QueryClientProvider>
+    )
+
+    // Find the family badge in available fields
+    const familyBadge = screen.getByText('Family')
+    expect(familyBadge).toBeInTheDocument()
+  })
+
+  it('correctly handles mapping completion when required fields are mapped', async () => {
+    const sourceHeaders = ['SKU', 'Name', 'Price']
+    const onMappingComplete = vi.fn()
+
+    vi.mocked(useImportFieldSchema).mockReturnValue({
+      productFieldSchema: mockSchema,
+      attributeHeaderPattern: null,
+      attributeGroupSchema: null,
+      attributeSchema: null,
+      familySchema: null,
+      isLoading: false,
+      isError: false
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <StepMapping
+          sourceHeaders={sourceHeaders}
+          onMappingComplete={onMappingComplete}
+          previewData={[{ SKU: '123', Name: 'Test', Price: '10.00' }]}
+        />
+      </QueryClientProvider>
+    )
+
+    // Check that the required fields are shown with asterisks
+    expect(screen.getByText('SKU *')).toBeInTheDocument()
+
+    // Simulate SKU mapping
+    const selects = screen.getAllByRole('combobox')
+    fireEvent.click(selects[0]) // SKU select
+    fireEvent.click(screen.getByText('SKU *'))
+
+    // Complete the mapping
+    fireEvent.click(screen.getByText('Next'))
+
+    // Expect the onMappingComplete callback to be called
+    expect(onMappingComplete).toHaveBeenCalled()
   })
 }) 

@@ -90,6 +90,7 @@ class Family(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    version = models.PositiveIntegerField(default=1, help_text='Version counter that increments when attributes are added/removed')
 
     class Meta:
         verbose_name = "Product Family"

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
@@ -6,25 +6,124 @@ import { useToast } from '@/components/ui/use-toast';
 import StepUpload from './StepUpload';
 import StepMapping from './StepMapping';
 import StepProgress from './StepProgress';
-import { createImport } from '@/services/importService';
-import { useImportFieldSchema } from './hooks/useImportFieldSchema';
+import StepImportMode, { ImportMode } from './StepImportMode';
+import { 
+  createImport, 
+  createAttributeGroupImport, 
+  createAttributeImport, 
+  createFamilyImport,
+  getImportFieldSchema,
+  getAttributeGroupSchemaFields,
+  getAttributeSchemaFields,
+  getFamilySchemaFields,
+  DuplicateStrategy,
+  ImportOptions,
+  ImportFieldSchemaEntry
+} from '@/services/importService';
+import { 
+  useImportFieldSchema, 
+  useAttributeGroupSchema, 
+  useAttributeSchema, 
+  useFamilySchema 
+} from './hooks/useImportFieldSchema';
 import { Mapping } from '@/types/import';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 
-const UploadWizard: React.FC = () => {
-  const [currentStep, setCurrentStep] = useState<'upload' | 'mapping' | 'progress'>('upload');
+// Define a type for the current step of the wizard
+type WizardStep = 'mode' | 'upload' | 'mapping' | 'progress';
+
+// Define a type for the structure type to import
+type StructureType = 'attribute_groups' | 'attributes' | 'families' | null;
+
+const UploadWizard = () => {
+  // State for tracking the current step in the wizard
+  const [currentStep, setCurrentStep] = useState<WizardStep>('mode');
+  
+  // Import mode selection
+  const [importMode, setImportMode] = useState<ImportMode>('products');
+  
+  // For structure imports, we need to track which type we're importing
+  const [structureType, setStructureType] = useState<StructureType>(null);
+  
+  // Sequential structure import progress tracking
+  const [structureImportComplete, setStructureImportComplete] = useState(false);
+  
+  // File and data states
   const [file, setFile] = useState<File | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
   const [previewData, setPreviewData] = useState<any[]>([]);
   const [mapping, setMapping] = useState<Mapping>({});
   const [importId, setImportId] = useState<number | null>(null);
+  const [duplicateStrategy, setDuplicateStrategy] = useState<DuplicateStrategy>('overwrite');
+  const [attributeHeaderPattern, setAttributeHeaderPattern] = useState<string | null>(null);
+  
   const { toast } = useToast();
   
-  // Fetch the field schema
-  const { data: fieldSchema } = useImportFieldSchema();
+  // Fetch the schema data for different import types
+  const { productFieldSchema, attributeGroupSchema, attributeSchema, familySchema } = useImportFieldSchema();
+  
+  // Fetch attribute header pattern
+  useEffect(() => {
+    if (importMode === 'products' || (importMode === 'structure-products' && structureImportComplete)) {
+      getImportFieldSchema(2)
+        .then(response => {
+          if (response.data.attribute_header_pattern) {
+            setAttributeHeaderPattern(response.data.attribute_header_pattern);
+          }
+        })
+        .catch(error => {
+          console.error('Failed to fetch attribute header pattern:', error);
+        });
+    }
+  }, [importMode, structureImportComplete]);
+  
+  // Handle import mode selection
+  const handleModeSelected = (mode: ImportMode) => {
+    setImportMode(mode);
+    setCurrentStep('upload');
+    
+    // Reset other states when mode changes
+    setFile(null);
+    setHeaders([]);
+    setPreviewData([]);
+    setMapping({});
+    setImportId(null);
+    setStructureImportComplete(false);
+    
+    // For structure imports, we need to select a structure type
+    if (mode === 'structure' || mode === 'structure-products') {
+      setStructureType(null);
+    }
+  };
+  
+  // Handle structure type selection (for structure imports)
+  const handleStructureTypeSelect = (type: StructureType) => {
+    setStructureType(type);
+    // Could add additional logic here if needed
+  };
+
+  // Get the appropriate field schema based on current mode and structure type
+  const getCurrentFieldSchema = (): ImportFieldSchemaEntry[] | null => {
+    if (importMode === 'products' || (importMode === 'structure-products' && structureImportComplete)) {
+      return productFieldSchema;
+    } else if (importMode === 'structure' || (importMode === 'structure-products' && !structureImportComplete)) {
+      // For structure imports, use the appropriate schema based on structure type
+      switch (structureType) {
+        case 'attribute_groups':
+          return attributeGroupSchema;
+        case 'attributes':
+          return attributeSchema;
+        case 'families':
+          return familySchema;
+        default:
+          return null;
+      }
+    }
+    return productFieldSchema;
+  };
 
   const handleFileSelected = (file: File, headers: string[], previewData: any[]) => {
-    // Debug log: check file type
-    console.log('File selected in wizard:', file, 'Type:', typeof file, 'Instanceof File:', file instanceof File)
     setFile(file);
     setHeaders(headers);
     setPreviewData(previewData);
@@ -45,10 +144,36 @@ const UploadWizard: React.FC = () => {
     setMapping(mappingData);
 
     try {
-      // Submit to API - the backend will handle field validation
-      const response = await createImport(file, mappingData);
-      setImportId(response.data.id);
-      setCurrentStep('progress');
+      let response: { data: { id: number } } | undefined;
+      
+      // Call the appropriate import API based on import mode and structure type
+      if (importMode === 'products' || (importMode === 'structure-products' && structureImportComplete)) {
+        // Product import with duplicate strategy
+        const options: ImportOptions = { overwrite_policy: duplicateStrategy };
+        response = await createImport(file, mappingData, options);
+      } else if (importMode === 'structure' || (importMode === 'structure-products' && !structureImportComplete)) {
+        // Structure import based on type
+        switch (structureType) {
+          case 'attribute_groups':
+            response = await createAttributeGroupImport(file, mappingData);
+            break;
+          case 'attributes':
+            response = await createAttributeImport(file, mappingData);
+            break;
+          case 'families':
+            response = await createFamilyImport(file, mappingData);
+            break;
+          default:
+            throw new Error('Please select a structure type to import');
+        }
+      }
+      
+      if (response?.data?.id) {
+        setImportId(response.data.id);
+        setCurrentStep('progress');
+      } else {
+        throw new Error('Invalid response from server');
+      }
     } catch (error) {
       console.error('Error creating import:', error);
       toast({
@@ -59,61 +184,131 @@ const UploadWizard: React.FC = () => {
     }
   };
 
+  // Handle completion of structure import in the sequential flow
+  const handleStructureImportComplete = () => {
+    setStructureImportComplete(true);
+    setCurrentStep('upload');
+    setFile(null);
+    setHeaders([]);
+    setPreviewData([]);
+    setMapping({});
+    setImportId(null);
+    
+    toast({
+      title: "Structure import complete",
+      description: "Now you can proceed with importing your products.",
+    });
+  };
+
+  // Get the title and description based on the current import mode
+  const getImportTitle = () => {
+    if (importMode === 'products') {
+      return 'Import Products';
+    } else if (importMode === 'structure') {
+      return 'Import Structure';
+    } else if (importMode === 'structure-products') {
+      return structureImportComplete 
+        ? 'Import Products' 
+        : 'Import Structure';
+    }
+    return 'Import Wizard';
+  };
+
+  const getImportDescription = () => {
+    if (importMode === 'products') {
+      return 'Upload a CSV or Excel file to import products in bulk.';
+    } else if (importMode === 'structure') {
+      return 'Import attribute groups, attributes, and product families.';
+    } else if (importMode === 'structure-products') {
+      return structureImportComplete
+        ? 'Now you can import your products that reference the structure you just imported.'
+        : 'First, import your structure (attribute groups, attributes, and families).';
+    }
+    return 'Select an import mode to begin.';
+  };
+
+  // Handle duplicate strategy change
+  const handleDuplicateStrategyChange = (strategy: DuplicateStrategy) => {
+    setDuplicateStrategy(strategy);
+  };
+
   return (
     <div className="container mx-auto py-10">
       <Card className="w-full">
         <CardHeader>
-          <CardTitle>Import Products</CardTitle>
+          <CardTitle>{getImportTitle()}</CardTitle>
           <CardDescription>
-            Upload a CSV or Excel file to import products in bulk.
+            {getImportDescription()}
           </CardDescription>
         </CardHeader>
 
         <CardContent>
-          <Tabs
-            value={currentStep}
-            onValueChange={(value) => {
-              // Only allow going backwards
-              if (
-                (currentStep === 'mapping' && value === 'upload') ||
-                (currentStep === 'progress' && (value === 'upload' || value === 'mapping'))
-              ) {
-                setCurrentStep(value as any);
-              }
-            }}
-            className="w-full"
-          >
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="upload" disabled={currentStep === 'progress'}>
-                1. Upload File
-              </TabsTrigger>
-              <TabsTrigger value="mapping" disabled={!file || currentStep === 'progress'}>
-                2. Map Columns
-              </TabsTrigger>
-              <TabsTrigger value="progress" disabled={!importId}>
-                3. Import Progress
-              </TabsTrigger>
-            </TabsList>
-            
-            <div className="mt-6">
-              <TabsContent value="upload">
-                <StepUpload onFileSelected={handleFileSelected} />
-              </TabsContent>
+          {currentStep === 'mode' ? (
+            <StepImportMode onModeSelected={handleModeSelected} />
+          ) : (
+            <Tabs
+              value={currentStep}
+              onValueChange={(value) => {
+                // Only allow going backwards
+                if (
+                  (currentStep === 'mapping' && value === 'upload') ||
+                  (currentStep === 'progress' && (value === 'upload' || value === 'mapping'))
+                ) {
+                  setCurrentStep(value as WizardStep);
+                }
+              }}
+              className="w-full"
+            >
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="upload" disabled={currentStep === 'progress'}>
+                  1. Upload File
+                </TabsTrigger>
+                <TabsTrigger value="mapping" disabled={!file || currentStep === 'progress'}>
+                  2. Map Columns
+                </TabsTrigger>
+                <TabsTrigger value="progress" disabled={!importId}>
+                  3. Import Progress
+                </TabsTrigger>
+              </TabsList>
               
-              <TabsContent value="mapping">
-                {file && headers.length > 0 && (
-                  <StepMapping 
-                    sourceHeaders={headers} 
-                    onMappingComplete={handleMappingComplete} 
+              <div className="mt-6">
+                <TabsContent value="upload">
+                  <StepUpload 
+                    onFileSelected={handleFileSelected} 
+                    importMode={importMode}
+                    structureType={structureType}
+                    onStructureTypeSelect={handleStructureTypeSelect}
+                    duplicatePolicy={duplicateStrategy}
+                    onDuplicatePolicyChange={handleDuplicateStrategyChange}
                   />
-                )}
-              </TabsContent>
-              
-              <TabsContent value="progress">
-                {importId && <StepProgress importId={importId} />}
-              </TabsContent>
-            </div>
-          </Tabs>
+                </TabsContent>
+                
+                <TabsContent value="mapping">
+                  {file && headers.length > 0 && (
+                    <StepMapping 
+                      sourceHeaders={headers} 
+                      onMappingComplete={handleMappingComplete}
+                      fieldSchema={getCurrentFieldSchema()}
+                      previewData={previewData}
+                    />
+                  )}
+                </TabsContent>
+                
+                <TabsContent value="progress">
+                  {importId && (
+                    <StepProgress 
+                      importId={importId} 
+                      onComplete={
+                        importMode === 'structure-products' && !structureImportComplete
+                          ? handleStructureImportComplete
+                          : undefined
+                      }
+                    />
+                  )}
+                </TabsContent>
+              </div>
+            </Tabs>
+          )}
         </CardContent>
       </Card>
     </div>

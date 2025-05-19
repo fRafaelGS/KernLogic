@@ -4,12 +4,16 @@
 |   |   |-- rules.mdc
 |-- .cursorrules
 |-- .env
+|-- .github
+|   |-- workflows
+|   |   |-- integration-tests.yml
 |-- .gitignore
 |-- accounts
 |   |-- models.py
 |   |-- serializers.py
 |   |-- urls.py
 |   |-- views.py
+|-- add_error_count.py
 |-- ATTRIBUTE_SERVICE_README.md
 |-- backend
 |   |-- .gitignore
@@ -55,6 +59,7 @@
 |   |   |-- services.py
 |   |   |-- tests
 |   |   |   |-- test_localization_quality.py
+|   |   |   |-- test_localization_quality_integration.py
 |   |   |-- tests.py
 |   |   |-- urls.py
 |   |   |-- views.py
@@ -63,11 +68,16 @@
 |   |   |-- imports
 |   |   |   |-- admin.py
 |   |   |   |-- apps.py
+|   |   |   |-- constants.py
 |   |   |   |-- migrations
 |   |   |   |-- models.py
+|   |   |   |-- README-v2.md
 |   |   |   |-- README.md
 |   |   |   |-- serializers.py
+|   |   |   |-- services
+|   |   |   |-- services.py
 |   |   |   |-- tasks.py
+|   |   |   |-- tests
 |   |   |   |-- tests.py
 |   |   |   |-- urls.py
 |   |   |   |-- views.py
@@ -117,7 +127,10 @@
 |   |-- direct_db_fix.py
 |   |-- docs
 |   |   |-- imports.md
+|   |   |-- import_deltas.md
 |   |-- enable_postgres_logging.py
+|   |-- explain_products_query.py
+|   |-- explain_query.py
 |   |-- fix_categories.py
 |   |-- fix_profiles.py
 |   |-- fix_tags_import.py
@@ -130,6 +143,19 @@
 |   |   |-- __init__.py
 |   |-- KernLogic API.yaml
 |   |-- manage.py
+|   |-- media
+|   |   |-- imports
+|   |   |   |-- attributes.csv
+|   |   |   |-- attribute_groups.csv
+|   |   |   |-- attribute_groups_ICafh04.csv
+|   |   |   |-- Book1.csv
+|   |   |   |-- errors
+|   |   |-- products
+|   |   |-- product_assets
+|   |   |   |-- bmw-xm-634dcb7bbc665.webp
+|   |   |   |-- bmw-xm-634dcb7bbc665_0LJWg1b.webp
+|   |   |   |-- bmw-xm-634dcb7bbc665_2oPb81H.webp
+|   |   |   |-- bmw-xm-634dcb7bbc665_3bgBAz5.webp
 |   |-- newrelic-infra.yml
 |   |-- newrelic.ini
 |   |-- organizations
@@ -211,6 +237,7 @@
 |   |   |-- admin.py
 |   |   |-- apps.py
 |   |   |-- events.py
+|   |   |-- filters.py
 |   |   |-- management
 |   |   |   |-- commands
 |   |   |   |-- __init__.py
@@ -238,6 +265,7 @@
 |   |   |   |-- 0028_update_attributevalue_locale_reference.py
 |   |   |   |-- 0029_link_attributevalue_to_locale.py
 |   |   |   |-- 0030_alter_attributevalue_locale_code.py
+|   |   |   |-- 0031_add_created_desc_idx.py
 |   |   |   |-- 10000_attr_groups_phase3.py
 |   |   |   |-- 10001_set_null_orders_to_zero.py
 |   |   |   |-- 10002_merge_20250502_1606.py
@@ -264,6 +292,8 @@
 |   |   |   |-- 10024_remove_legacy_image_fields.py
 |   |   |   |-- 10025_alter_productfamilyoverride_options_and_more.py
 |   |   |   |-- 10026_add_locale_model.py
+|   |   |   |-- 10026_add_version_to_family.py
+|   |   |   |-- 10027_merge_20250518_1507.py
 |   |   |   |-- 9999_attributes_core.py
 |   |   |   |-- manual
 |   |   |   |-- __init__.py
@@ -405,6 +435,13 @@
 |   |   |   |-- index-XwrIO-Sk.js
 |   |   |   |-- index-XwrIO-Sk.js.br
 |   |   |   |-- index-XwrIO-Sk.js.gz
+|   |   |-- django_extensions
+|   |   |   |-- css
+|   |   |   |-- img
+|   |   |   |-- js
+|   |   |-- drf_spectacular_sidecar
+|   |   |   |-- redoc
+|   |   |   |-- swagger-ui-dist
 |   |   |-- favicon.ad1a6f4c5183.ico
 |   |   |-- favicon.ad1a6f4c5183.ico.br
 |   |   |-- favicon.ad1a6f4c5183.ico.gz
@@ -441,6 +478,15 @@
 |   |   |-- index.html
 |   |   |-- index.html.br
 |   |   |-- index.html.gz
+|   |   |-- mptt
+|   |   |   |-- draggable-admin.09e6668468e3.css
+|   |   |   |-- draggable-admin.09e6668468e3.css.gz
+|   |   |   |-- draggable-admin.css
+|   |   |   |-- draggable-admin.css.gz
+|   |   |   |-- draggable-admin.db97bd9bf8c6.js
+|   |   |   |-- draggable-admin.db97bd9bf8c6.js.gz
+|   |   |   |-- draggable-admin.js
+|   |   |   |-- draggable-admin.js.gz
 |   |   |-- placeholder.35707bd9960b.svg
 |   |   |-- placeholder.35707bd9960b.svg.br
 |   |   |-- placeholder.35707bd9960b.svg.gz
@@ -521,7 +567,13 @@
 |   |-- upload_three_images_per_product.py
 |-- backend_data.json
 |-- bun.lockb
+|-- CHANGELOG.md
+|-- check_import.py
+|-- check_import_core_fields.py
+|-- check_import_model.py
+|-- check_locale_issue.py
 |-- check_prices.py
+|-- check_product_import.py
 |-- check_product_org.py
 |-- components.json
 |-- core
@@ -534,11 +586,13 @@
 |-- database.dbml
 |-- db.sqlite3
 |-- dbml-error.log
+|-- debug_import_mapping.py
+|-- debug_import_task.py
 |-- debug_org_id.py
 |-- dist
 |   |-- assets
-|   |   |-- index-D4QDPO3-.js
-|   |   |-- index-DPQrldC8.css
+|   |   |-- index-BHFznO4q.css
+|   |   |-- index-BNXkClfu.js
 |   |-- favicon.ico
 |   |-- images
 |   |   |-- empty-team-illustration.svg
@@ -546,24 +600,35 @@
 |   |-- placeholder.svg
 |   |-- robots.txt
 |   |-- test-export.html
+|-- docker-compose.test.yml
+|-- Dockerfile.test
 |-- docs
 |   |-- api.md
+|   |-- architecture.md
 |   |-- asset-type-service.md
 |   |-- ATTRIBUTE_SYSTEM.md
+|   |-- data-model.md
 |   |-- data_fields_reference.md
 |   |-- implementation-guide
 |   |   |-- collapsible-sections.md
 |   |-- productService.structure.md
 |   |-- ProductsTable.structure.md
+|   |-- sample-import.csv
 |   |-- user-guide
 |   |   |-- collapsible-sections.md
 |-- eslint.config.js
 |-- example_api_output.json
+|-- fixtures
+|   |-- attribute-groups.json
+|   |-- attributes.json
+|   |-- families.json
 |-- fix_membership.py
 |-- fix_migrations.py
 |-- fix_test_db_permissions.py
 |-- fix_user_memberships.py
 |-- full_data.json
+|-- generate_tree.py
+|-- import_debug.log
 |-- index.html
 |-- manage.py
 |-- migrate_to_numeric_ids.py
@@ -581,6 +646,7 @@
 |   |-- models.py
 |   |-- views
 |   |   |-- pdf_export.py
+|-- products-table-playground.html
 |-- products.json
 |-- public
 |   |-- favicon.ico
@@ -591,9 +657,14 @@
 |   |-- test-export.html
 |-- README-changes.md
 |-- README.md
+|-- README_TREE.md
 |-- requirements.txt
 |-- scripts
+|   |-- dumpSchemas.js
+|   |-- fetchLiveConfig.js
+|   |-- README.md
 |   |-- restructure.ts
+|   |-- tsconfig.json
 |-- show_db_permissions.py
 |-- src
 |   |-- api
@@ -811,9 +882,14 @@
 |   |   |   |-- FamilyListPage.tsx
 |   |   |-- imports
 |   |   |   |-- components
+|   |   |   |-- hooks
+|   |   |   |-- StepImportMode.tsx
+|   |   |   |-- StepMapping.spec.tsx
 |   |   |   |-- StepMapping.tsx
+|   |   |   |-- StepProgress.spec.tsx
 |   |   |   |-- StepProgress.tsx
 |   |   |   |-- StepUpload.tsx
+|   |   |   |-- UploadWizard.spec.tsx
 |   |   |   |-- UploadWizard.tsx
 |   |   |-- products
 |   |   |   |-- components
@@ -833,12 +909,14 @@
 |   |   |-- useBulkDownload.ts
 |   |   |-- useBundleDownload.ts
 |   |   |-- useDashboardData.ts
+|   |   |-- useDashboardSummary.ts
 |   |   |-- useDebounce.ts
 |   |   |-- useDebouncedCallback.ts
 |   |   |-- useDownloadAsset.ts
 |   |   |-- useFamilyAttributeGroups.ts
 |   |   |-- useFamilyCompleteness.ts
 |   |   |-- useFetchProducts.ts
+|   |   |-- useIncompleteProducts.ts
 |   |   |-- useLocalizationCoverage.ts
 |   |   |-- useLocalizationQuality.ts
 |   |   |-- useMissingAttributesHeatmap.ts
@@ -863,6 +941,7 @@
 |   |   |-- attributePreferences.ts
 |   |   |-- attributeUtils.ts
 |   |   |-- axiosInstance.ts
+|   |   |-- categoryFilterUtils.ts
 |   |   |-- hooks
 |   |   |   |-- useDebounce.ts
 |   |   |-- logger.ts
@@ -932,6 +1011,13 @@
 |   |   |-- localizationService.ts
 |   |   |-- organizationService.ts
 |   |   |-- priceService.ts
+|   |   |-- productAnalyticsService.ts
+|   |   |-- productsClient
+|   |   |   |-- config.ts
+|   |   |   |-- index.ts
+|   |   |   |-- models.ts
+|   |   |   |-- ProductsApi.ts
+|   |   |   |-- README.md
 |   |   |-- productService.ts
 |   |   |-- teamService.ts
 |   |   |-- types.ts
@@ -947,6 +1033,7 @@
 |   |   |-- families.ts
 |   |   |-- family.ts
 |   |   |-- global.d.ts
+|   |   |-- import.ts
 |   |   |-- lodash.d.ts
 |   |   |-- product.ts
 |   |   |-- react-date-range.d.ts
@@ -963,11 +1050,14 @@
 |   |-- __tests__
 |   |   |-- components
 |   |   |   |-- AssetTagSystem.test.tsx
+|   |   |   |-- productsFilters.test.tsx
 |   |   |-- hooks
 |   |   |   |-- useImageDetection.test.ts
 |   |   |   |-- useLocalizationQuality.test.ts
 |   |   |-- services
 |   |   |   |-- assetTypeService.test.ts
+|   |   |   |-- importService.test.ts
+|   |   |   |-- productAnalyticsService.test.ts
 |   |   |   |-- productService.test.ts
 |   |   |-- utils
 |   |   |   |-- categoryTreeUtils.test.ts
@@ -975,6 +1065,11 @@
 |-- test.webp
 |-- test_api.py
 |-- test_attribute_service.js
+|-- test_core_fields.py
+|-- test_family_import.csv
+|-- test_field_schema.py
+|-- test_frontend_schema.js
+|-- test_import_debug.py
 |-- test_product_creation.py
 |-- test_weasyprint.py
 |-- tree.txt

@@ -1,5 +1,6 @@
 import axiosInstance from '@/lib/axiosInstance';
 import { useAuth } from '@/contexts/AuthContext';
+import { Activity } from './dashboardService';
 
 // Types for team members
 export interface User {
@@ -289,5 +290,59 @@ export const fetchAuditLogs = async (orgId?: string): Promise<AuditLogEntry[]> =
   } catch (error) {
     console.error('Error fetching audit logs:', error);
     return [];
+  }
+};
+
+/**
+ * Fetch last action for a specific user
+ */
+export const fetchLastUserAction = async (userId: string, orgId?: string): Promise<AuditLogEntry | null> => {
+  if (!orgId || !userId) {
+    return null;
+  }
+
+  try {
+    const response = await axiosInstance.get(`/api/orgs/${orgId}/audit/?user=${userId}&limit=1`);
+    const logs = response.data;
+    return logs.length > 0 ? logs[0] : null;
+  } catch (error) {
+    console.error('Error fetching user last action:', error);
+    return null;
+  }
+};
+
+/**
+ * Fetch the last product action for a specific user
+ */
+export const fetchLastUserProductAction = async (userId: string): Promise<any | null> => {
+  if (!userId) {
+    return null;
+  }
+
+  try {
+    // The Activity table in the database has a user foreign key, not user_id
+    // We need to query for activities where the user matches our userId
+    // GET /api/dashboard/activity/ gets all activities, we will filter by user
+    const response = await axiosInstance.get(`/api/dashboard/activity/?limit=50`);
+    
+    // Ensure we're working with valid data
+    if (!response.data || (Array.isArray(response.data) && response.data.length === 0)) {
+      return null;
+    }
+    
+    // Filter for activities by this specific user
+    const activities = Array.isArray(response.data) ? response.data : [];
+    
+    // The Activity model has a user field (not user_id), but in the API it returns user_name
+    // We need to match this user's ID or name in the returned data
+    const userActivities = activities.filter(activity => {
+      return activity.user === parseInt(userId) || activity.user_id === parseInt(userId);
+    });
+    
+    // Return the first activity or null
+    return userActivities.length > 0 ? userActivities[0] : null;
+  } catch (error) {
+    console.error('Error fetching user product actions:', error);
+    return null;
   }
 }; 

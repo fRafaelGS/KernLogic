@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -32,10 +32,12 @@ import BulkInviteModal from '@/components/BulkInviteModal';
 import ManageControls from '@/components/ManageControls';
 import RoleDescriptionTooltip from '@/components/RoleDescriptionTooltip';
 import { Link } from 'react-router-dom';
-import { Download, FileSpreadsheet, History, Search, UserPlus, Users } from 'lucide-react';
+import { History, Search, UserPlus, Users } from 'lucide-react';
 import api from '@/services/api';
+import axiosInstance from '@/lib/axiosInstance';
 import { Role } from '@/types/team';
-import { exportTeamToCSV, fetchRoles } from '@/services/teamService';
+import { fetchRoles, fetchLastUserProductAction } from '@/services/teamService';
+import { Activity } from '@/services/dashboardService';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { PermissionGuard } from '@/components/common/PermissionGuard';
 
@@ -81,6 +83,23 @@ interface PendingInvitation {
     id: string;
     name: string;
   };
+}
+
+// Interface for the product activity data from the Activity model
+interface ProductActivity {
+  id: number;
+  entity: string;
+  entity_id: string | number;
+  action: string;
+  message: string;
+  created_at?: string;
+  timestamp?: string; // Some endpoints return created_at as timestamp
+  user?: number;
+  user_id?: number;
+  user_name?: string;
+  organization?: string | number;
+  type?: string; // Some serializers rename action as type
+  details?: string; // Some serializers rename message as details
 }
 
 export const TeamPage: React.FC = () => {
@@ -214,6 +233,75 @@ export const TeamPage: React.FC = () => {
     placeholderData: (prev) => prev, // Use previous data while new data is loading
   });
 
+  // Fetch last action for each user
+  const userIds = useMemo(() => 
+    membersData.results
+      .map((member: Membership) => {
+        // Extract user ID from different possible formats
+        if (typeof member.user === 'string') return member.user;
+        if (typeof member.user === 'number') return member.user.toString();
+        if (member.user && typeof member.user === 'object' && 'id' in member.user) 
+          return member.user.id.toString();
+        return '';
+      })
+      .filter(Boolean), 
+    [membersData.results]
+  );
+
+  // Fetch last product actions for all users
+  const { data: userProductActions = {}, isLoading: isLoadingActions } = useQuery({
+    queryKey: ['userLastProductActions', userIds, orgID],
+    queryFn: async () => {
+      if (userIds.length === 0) return {};
+      
+      try {
+        // Fetch all activities for the organization
+        const response = await axiosInstance.get(`/api/dashboard/activity/?limit=100`);
+        const allActivities = response.data || [];
+        
+        if (!Array.isArray(allActivities) || allActivities.length === 0) {
+          return {};
+        }
+        
+        // Create a map to store the most recent activity for each user
+        const actionsMap: Record<string, ProductActivity | null> = {};
+        
+        // Initialize all userIds with null (for users with no actions)
+        userIds.forEach((userId: string) => {
+          actionsMap[userId] = null;
+        });
+        
+        // Group activities by user
+        allActivities.forEach(activity => {
+          const activityUserId = activity.user?.toString() || 
+                               activity.user_id?.toString();
+          
+          // Skip if we can't determine the user or it's not in our list
+          if (!activityUserId || !userIds.includes(activityUserId)) {
+            return;
+          }
+          
+          // If we don't have an activity for this user yet or this one is more recent
+          if (!actionsMap[activityUserId] || (
+              (activity.created_at && actionsMap[activityUserId]?.created_at && 
+               new Date(activity.created_at) > new Date(actionsMap[activityUserId]!.created_at!)) ||
+              (activity.timestamp && actionsMap[activityUserId]?.timestamp && 
+               new Date(activity.timestamp) > new Date(actionsMap[activityUserId]!.timestamp!))
+          )) {
+            actionsMap[activityUserId] = activity;
+          }
+        });
+        
+        return actionsMap;
+      } catch (error) {
+        console.error('Error fetching user product actions:', error);
+        return {};
+      }
+    },
+    enabled: userIds.length > 0 && !!orgID,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
   // Handle avatar update for a team member
   const handleAvatarUpdate = (memberId: string, newAvatarUrl: string) => {
     // Skip local state updates and just refetch data
@@ -231,19 +319,6 @@ export const TeamPage: React.FC = () => {
   // Handle page change for pagination
   const handlePageChange = (newPage: number) => {
     setPage(newPage);
-  };
-
-  // Handle CSV export
-  const handleExportTeam = async () => {
-    try {
-      if (!orgID) {
-        throw new Error('No organization ID available');
-      }
-      await exportTeamToCSV(orgID);
-      toast.success('Team exported to CSV successfully');
-    } catch (error) {
-      toast.error('Failed to export team');
-    }
   };
 
   // Loading state - show while auth is still loading or we're waiting for org ID
@@ -402,6 +477,51 @@ export const TeamPage: React.FC = () => {
     }
   };
 
+  const renderProductActionDescription = (activity: ProductActivity | null) => {
+    if (!activity) return 'No action recently';
+    
+    // Activity might come from different serializers with different field names
+    const actionType = activity.type || activity.action;
+    const message = activity.details || activity.message;
+    
+    // Format the message based on the data we have
+    if (message) {
+      return message;
+    } else if (actionType && activity.entity) {
+      return `${actionType} ${activity.entity} ${activity.entity_id}`;
+    } else {
+      return 'Unknown action';
+    }
+  };
+
+  // Format the date of the last action in a user-friendly way
+  const formatActionDate = (activity: ProductActivity | null) => {
+    if (!activity) return '';
+    
+    // Handle both created_at and timestamp fields
+    const dateString = activity.timestamp || activity.created_at;
+    if (!dateString) return '';
+    
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return '';
+      
+      // If less than 24 hours ago, show "X hours ago"
+      const now = new Date();
+      const diffHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+      
+      if (diffHours < 24) {
+        return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+      } else {
+        // Otherwise show the relative time
+        return formatDistanceToNow(date) + ' ago';
+      }
+    } catch (e) {
+      console.error('Error formatting date:', e);
+      return '';
+    }
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6 w-full max-w-full flex-grow" style={{ minWidth: '100%' }}>
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 w-full">
@@ -419,18 +539,6 @@ export const TeamPage: React.FC = () => {
                 History
               </Button>
             </Link>
-          </PermissionGuard>
-          
-          <PermissionGuard permission="team.view">
-            <Button 
-              variant="outline"
-              onClick={handleExportTeam}
-              className="flex items-center"
-              size="sm"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Export CSV
-            </Button>
           </PermissionGuard>
           
           <PermissionGuard permission="team.invite">
@@ -516,7 +624,7 @@ export const TeamPage: React.FC = () => {
                   <EmptyState
                     title="No team members found"
                     description="Try changing your search or filter criteria, or invite someone new."
-                    buttonText={canInviteUsers ? "Invite Member" : undefined}
+                    buttonText={canInviteUsers ? "Invite Member" : ''}
                     buttonIcon={canInviteUsers ? <UserPlus className="h-4 w-4 mr-2" /> : undefined}
                     onButtonClick={() => canInviteUsers && setShowInviteModal(true)}
                   />
@@ -529,9 +637,10 @@ export const TeamPage: React.FC = () => {
                   <Table className="w-full table-fixed">
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[45%]">Member</TableHead>
-                        <TableHead className="w-[15%]">Role</TableHead>
-                        <TableHead className="w-[30%]">Last Activity</TableHead>
+                        <TableHead className="w-[35%]">Member</TableHead>
+                        <TableHead className="w-[10%]">Role</TableHead>
+                        <TableHead className="w-[25%]">Last Action</TableHead>
+                        <TableHead className="w-[20%]">Last Activity</TableHead>
                         <TableHead className="w-[10%] text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -558,6 +667,9 @@ export const TeamPage: React.FC = () => {
                         
                         // Safely get roleId
                         const roleId = roleInfo.id !== undefined ? String(roleInfo.id) : '';
+                        
+                        // Get the last action for this user
+                        const lastProductAction = userId && userProductActions ? userProductActions[userId] : null;
                         
                         return (
                           <TableRow key={member.id}>
@@ -593,6 +705,18 @@ export const TeamPage: React.FC = () => {
                                 <span className="text-amber-600 bg-amber-50 px-2 py-1 rounded-full text-xs">
                                   Pending
                                 </span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-sm text-gray-500">
+                              {lastProductAction ? (
+                                <div>
+                                  <div className="font-medium">{renderProductActionDescription(lastProductAction)}</div>
+                                  <div className="text-xs text-gray-400">
+                                    {formatActionDate(lastProductAction)}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="text-gray-400">No action recently</div>
                               )}
                             </TableCell>
                             <TableCell className="text-sm text-gray-500">

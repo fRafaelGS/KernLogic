@@ -22,8 +22,8 @@ export function ProductCard({ product, onSelect }: ProductCardProps) {
   // Get the primary image using the same utility used in the table
   const imageUrl = pickPrimaryImage(product)
   
-  // Get category name safely
-  const categoryName = getCategoryName(product.category)
+  // Get category name safely - ensure product.category exists before passing it
+  const categoryName = product && product.category ? getCategoryName(product.category) : ''
   
   // Process family data like in the list view
   const processedFamily = React.useMemo(() => {

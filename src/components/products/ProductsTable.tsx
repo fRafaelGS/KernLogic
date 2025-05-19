@@ -243,8 +243,12 @@ export function ProductsTable({
   // Create computed pagination property that uses props if available
   const pagination = paginationState;
   // Create a function to update pagination that uses the prop function if available
-  const setPagination = (newPagination: PaginationState) => {
-    setPaginationState(newPagination);
+  const setPagination = (newPagination: PaginationState | ((prev: PaginationState) => PaginationState)) => {
+    if (typeof newPagination === 'function') {
+      setPaginationState(newPagination(paginationState));
+    } else {
+      setPaginationState(newPagination);
+    }
   };
   
   // Use prop totalCount if provided, otherwise use internal state
@@ -1264,8 +1268,18 @@ export function ProductsTable({
 
   // New utility function for server-side column filtering
   const handleColumnFilterChange = (columnId: string, value: unknown) => {
-    setPagination((p: PaginationState) => ({ ...p, pageIndex: 0 }));       // jump to first page
-    setFilters((f: Record<string, any>) => ({ ...f, [columnId]: value ?? undefined, page: 1 }));
+    setPagination({ ...pagination, pageIndex: 0 });       // jump to first page
+    setFilters((f: Record<string, any>) => {
+      const next: Record<string, any> = { ...f, page: 1 };
+      if (value === '' || value === undefined || value === null ||
+          (Array.isArray(value) && value.length === 0) ||
+          value === 'all') {
+        delete next[columnId];
+      } else {
+        next[columnId] = value;
+      }
+      return next;
+    });
   };
 
   // Save user preferences when they change

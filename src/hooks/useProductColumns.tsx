@@ -552,29 +552,30 @@ export function useProductColumns({
       cell: ({ row }) => {
         const rowIndex = row.index;
         
-        // Get all potential category data sources
-        const categoryData = row.getValue("category") as Category[] | Category | string;
-        const categoryName = row.original.category_name as string;
+        // Get all potential category data sources - use optional chaining for safety
+        const categoryData = row.getValue("category") as Category[] | Category | string | undefined;
+        const categoryName = row.original?.category_name as string | undefined;
         
+        // Debug log
         console.log("Category rendering:", { 
-          id: row.original.id, 
-          sku: row.original.sku, 
+          id: row.original?.id, 
+          sku: row.original?.sku, 
           categoryData, 
-          categoryName
-        }); // Debug log
+          categoryName 
+        });
         
         // Check if we're editing
         const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.columnId === 'category';
         
         // Check if categories have been loaded yet
-        const categoriesLoading = categoryOptions.length === 0;
+        const categoriesLoading = !categoryOptions || categoryOptions.length === 0;
         
         // Determine category ID for editing
         let categoryId = null;
         if (categoryData) {
           if (Array.isArray(categoryData) && categoryData.length > 0) {
             const leafCategory = categoryData[categoryData.length - 1];
-            categoryId = leafCategory.id;
+            categoryId = leafCategory?.id;
           } else if (typeof categoryData === 'object' && categoryData !== null) {
             categoryId = (categoryData as any).id;
           } else if (typeof categoryData === 'number') {
@@ -606,21 +607,22 @@ export function useProductColumns({
           return <CategoryCellPlaceholder />;
         }
         
-        // Smart parse category_name to see if it contains path separators
-        const parseBreadcrumb = (text: string | null | undefined): JSX.Element => {
-          if (!text) return <span className="text-muted-foreground text-xs">Uncategorized</span>;
-          
-          // First, detect if the text contains common category separators (/, >, \ or |)
-          const hasSeparators = /[\/\\>|]/.test(text);
+        // Render the category information - handle all possible formats safely
+        let categoryContent: JSX.Element;
+        
+        // First priority: Use category_name from API (most reliable source)
+        if (categoryName) {
+          // Check if categoryName has path separators (/, >, \ or |)
+          const hasSeparators = /[\/\\>|]/.test(categoryName);
           
           if (hasSeparators) {
             // Split by any common separator and trim each part
-            const parts = text.split(/[\/\\>|]+/)
-                              .map(part => part.trim())
-                              .filter(Boolean);
+            const parts = categoryName.split(/[\/\\>|]+/)
+                               .map(part => part.trim())
+                               .filter(Boolean);
             
             if (parts.length > 1) {
-              return (
+              categoryContent = (
                 <div className="flex flex-wrap items-center">
                   {parts.map((part, i) => (
                     <React.Fragment key={`part-${i}`}>
@@ -632,33 +634,32 @@ export function useProductColumns({
                   ))}
                 </div>
               );
+            } else {
+              // Single part
+              categoryContent = (
+                <span className="text-xs font-medium bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">
+                  {categoryName}
+                </span>
+              );
             }
+          } else {
+            // No separators
+            categoryContent = (
+              <span className="text-xs font-medium bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">
+                {categoryName}
+              </span>
+            );
           }
-          
-          // No separators found or just a single part, show as a single badge
-          return (
-            <span className="text-xs font-medium bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">
-              {text}
-            </span>
-          );
-        };
-        
-        // For backward compatibility, handle all possible category data formats
-        let breadcrumb: JSX.Element;
-        
-        // First priority: Use category_name from API (most reliable source)
-        if (categoryName) {
-          breadcrumb = parseBreadcrumb(categoryName);
         }
         // Second priority: Check category array (full breadcrumb structure)
         else if (Array.isArray(categoryData) && categoryData.length > 0) {
-          breadcrumb = (
+          categoryContent = (
             <div className="flex flex-wrap items-center">
               {categoryData.map((cat, i) => (
                 <React.Fragment key={typeof cat === 'object' && cat !== null ? cat.id : i}>
                   {i > 0 && <span className="mx-1 text-slate-400">&gt;</span>}
                   <span className="text-xs font-medium bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded whitespace-nowrap">
-                    {typeof cat === 'object' && cat !== null ? cat.name : cat}
+                    {typeof cat === 'object' && cat !== null ? cat.name : String(cat)}
                   </span>
                 </React.Fragment>
               ))}
@@ -667,19 +668,48 @@ export function useProductColumns({
         }
         // Third priority: Check if category is a single object
         else if (typeof categoryData === 'object' && categoryData !== null && 'name' in categoryData) {
-          breadcrumb = (
+          categoryContent = (
             <span className="text-xs font-medium bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">
               {(categoryData as any).name}
             </span>
           );
         }
-        // Fourth priority: Check if category is a string
-        else if (typeof categoryData === 'string' && categoryData) {
-          breadcrumb = parseBreadcrumb(categoryData);
+        // Fourth priority: Check if category is a string or primitive that can be displayed
+        else if (categoryData !== null && categoryData !== undefined) {
+          // For safety, explicitly convert to string regardless of type
+          // This avoids TypeScript errors with string[]
+          try {
+            // Convert safely to string, handling arrays and objects
+            let displayText: string;
+            
+            if (Array.isArray(categoryData)) {
+              // If it's an array but not handled by the array case above, join values
+              displayText = categoryData.map(item => 
+                typeof item === 'object' && item !== null ? 
+                  (item.name || String(item)) : 
+                  String(item)
+              ).join(', ');
+            } else if (typeof categoryData === 'object') {
+              // For objects not caught by previous checks
+              displayText = String(categoryData);
+            } else {
+              // For primitives like string, number
+              displayText = String(categoryData);
+            }
+            
+            categoryContent = (
+              <span className="text-xs font-medium bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">
+                {displayText || 'Uncategorized'}
+              </span>
+            );
+          } catch (error) {
+            console.error('Error displaying category:', error);
+            categoryContent = <span className="text-muted-foreground text-xs">Error</span>;
+          }
         }
         // Fallback: Uncategorized
         else {
-          breadcrumb = <span className="text-muted-foreground text-xs">Uncategorized</span>;
+          categoryContent = <span className="text-muted-foreground text-xs">Uncategorized</span>;
         }
         
         // READ-ONLY VIEW: CATEGORY DISPLAY
@@ -700,7 +730,7 @@ export function useProductColumns({
               }
             }}
           >
-            {breadcrumb}
+            {categoryContent}
           </div>
         );
       },
@@ -906,7 +936,7 @@ export function useProductColumns({
               onClick={e => {
                 e.stopPropagation();
                 // Pass the actual array of tags instead of converting to a comma-separated string
-                handleCellEdit(rowIndex, 'tags', tags);
+                handleCellEdit(rowIndex, 'tags', JSON.stringify(tags));
               }}
             >
               <PlusIcon className="h-3 w-3" />

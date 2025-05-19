@@ -32,19 +32,62 @@ const PAGE_SIZE = 25
 const MAX_PAGE_SIZE = 50
 const DEFAULT_PAGE_SIZE = PAGE_SIZE
 
+function buildQueryParams(ui: Record<string, any>) {
+  const qp: Record<string, any> = {
+    page_size: Math.min(ui.page_size ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE),
+  };
+
+  // text search
+  if (ui.search)  qp.search = ui.search;
+  
+  // name, sku, and other direct matches
+  if (ui.name) qp.name = ui.name;
+  if (ui.sku) qp.sku = ui.sku;
+  if (ui.brand) qp.brand = ui.brand;
+  if (ui.barcode) qp.barcode = ui.barcode;
+  if (ui.family) qp.family = ui.family;
+
+  // category
+  if (ui.category && ui.category !== 'all') qp.category = ui.category;
+
+  // status → is_active (bool)
+  if (ui.status && ui.status !== 'all')
+    qp.is_active = ui.status === 'active';
+  else if (ui.is_active !== undefined)
+    qp.is_active = ui.is_active;
+
+  // price range
+  if (ui.minPrice) qp.min_price = ui.minPrice;
+  if (ui.maxPrice) qp.max_price = ui.maxPrice;
+
+  // tags array → comma-separated
+  if (Array.isArray(ui.tags) && ui.tags.length)
+    qp.tags = ui.tags.join(',');
+    
+  // date filters
+  if (ui.created_at_from) qp.created_at_from = ui.created_at_from;
+  if (ui.created_at_to) qp.created_at_to = ui.created_at_to;
+  if (ui.updated_at_from) qp.updated_at_from = ui.updated_at_from;
+  if (ui.updated_at_to) qp.updated_at_to = ui.updated_at_to;
+
+  // strip empty / undefined values
+  Object.keys(qp).forEach(k => {
+    if (qp[k] === '' || qp[k] === undefined) delete qp[k];
+  });
+  return qp;
+}
+
 export function useFetchProducts(filters: FilterParams = {}) {
   const effectivePageSize = 
     Math.min(filters.page_size ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE)
+    
+  const queryParams = buildQueryParams(filters)
 
   return useInfiniteQuery({
-    queryKey: ['products', { ...filters, page_size: effectivePageSize }],
+    queryKey: ['products', queryParams],
     queryFn: async ({ pageParam = 1 }) => {
       const response = await productService.getProducts(
-        { 
-          ...filters, 
-          page: pageParam, 
-          page_size: effectivePageSize
-        }, 
+        { ...queryParams, page: pageParam },
         false, // fetchAll = false to ensure we get paginated response
         false  // includeAssets = false for performance
       )

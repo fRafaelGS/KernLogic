@@ -36,6 +36,7 @@ from .serializers import (
     AssetBundleSerializer, ProductListSerializer
 )
 from django_filters.rest_framework import DjangoFilterBackend
+from .filters import ProductFilter
 import sys
 import zipfile
 import io
@@ -114,7 +115,16 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     """
     serializer_class = ProductSerializer
     pagination_class = StandardResultsSetPagination
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [
+        DjangoFilterBackend,          # Field-level filtering
+        filters.SearchFilter,
+        filters.OrderingFilter,
+    ]
+    
+    # field-level filterset
+    filterset_class = ProductFilter
+    
+    # existing search still works
     search_fields = ['name', 'sku', 'description', 'brand', 'tags', 'barcode']
     ordering_fields = ['name', 'created_at', 'brand']
     ordering = ['-created_at']

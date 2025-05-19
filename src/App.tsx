@@ -140,15 +140,7 @@ export const App: React.FC = () => {
                   />
                   <Route
                       path="/app/products/families"
-                      element={
-                          <ProtectedRoute>
-                              <DashboardLayout>
-                                  <AdminOnly>
-                                      <FamilyListPage />
-                                  </AdminOnly>
-                              </DashboardLayout>
-                          </ProtectedRoute>
-                      }
+                      element={<Navigate to="/app/settings?tab=families" replace />}
                   />
                   <Route
                       path="/app/products/families/new"

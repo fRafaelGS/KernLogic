@@ -268,7 +268,7 @@ export function FamilyFormPage({ mode }: FamilyFormPageProps) {
           variant: 'default'
         })
       }
-      navigate('/app/products/families')
+      navigate(settingsFamiliesUrl)
     } catch (err: any) {
       if (err?.message?.includes('attribute group')) {
         toast({
@@ -314,6 +314,9 @@ export function FamilyFormPage({ mode }: FamilyFormPageProps) {
     })
   }
 
+  // Settings page URL with families tab
+  const settingsFamiliesUrl = '/app/settings?tab=families';
+
   // Update the function names to be clearer
   const handleStayOnPage = () => {
     setShowUnsavedDialog(false);
@@ -324,8 +327,8 @@ export function FamilyFormPage({ mode }: FamilyFormPageProps) {
     setShowUnsavedDialog(false);
     // Reset the form and allow navigation
     reset();
-    // Navigate to the families list page
-    navigate('/app/products/families');
+    // Navigate to the families tab in settings
+    navigate(settingsFamiliesUrl);
   };
 
   // Handle DnD end event
@@ -351,7 +354,7 @@ export function FamilyFormPage({ mode }: FamilyFormPageProps) {
               if (isDirty) {
                 setShowUnsavedDialog(true);
               } else {
-                navigate('/app/products/families');
+                navigate(settingsFamiliesUrl);
               }
             }}
           >

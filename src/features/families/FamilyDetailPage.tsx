@@ -20,6 +20,9 @@ export function FamilyDetailPage() {
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
   
+  // Settings page URL with families tab
+  const settingsFamiliesUrl = '/app/settings?tab=families';
+  
   const numericId = id ? parseInt(id, 10) : 0
   const { data: family, isLoading, isError, error } = useFamily(numericId)
   
@@ -57,7 +60,7 @@ export function FamilyDetailPage() {
         <Button
           variant="outline"
           className="mt-4"
-          onClick={() => navigate('/app/products/families')}
+          onClick={() => navigate(settingsFamiliesUrl)}
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
           {t('families.form.back')}
@@ -78,7 +81,7 @@ export function FamilyDetailPage() {
         <Button
           variant="outline"
           className="mt-4"
-          onClick={() => navigate('/app/products/families')}
+          onClick={() => navigate(settingsFamiliesUrl)}
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
           {t('families.form.back')}
@@ -95,7 +98,7 @@ export function FamilyDetailPage() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigate('/app/products/families')}
+              onClick={() => navigate(settingsFamiliesUrl)}
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
               {t('families.form.back')}

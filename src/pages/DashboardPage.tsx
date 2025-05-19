@@ -146,7 +146,7 @@ export const DashboardPage: React.FC = () => {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Card 
-                  className="h-full bg-white border-enterprise-200 shadow-sm hover:shadow-md hover:translate-y-[-2px] transition-all" 
+                  className="h-full bg-card border-enterprise-200 shadow-sm hover:shadow-md hover:translate-y-[-2px] transition-all" 
                   tabIndex={0} 
                   aria-label="Product status donut chart"
                   onClick={() => navigate('/app/products')}

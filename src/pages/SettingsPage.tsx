@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Card,
   CardContent,
@@ -25,6 +25,7 @@ import { API_URL } from '@/config';
 import { paths } from '@/lib/apiPaths';
 import { ENABLE_CUSTOM_ATTRIBUTES, ENABLE_ATTRIBUTE_GROUPS } from '@/config/featureFlags';
 import { OrganizationSettingsForm } from '@/features/settings/components/settings/OrganizationSettingsForm';
+import { FamilyListPage } from '@/features/families/FamilyListPage';
 
 // --- Zod Schemas ---
 const profileSchema = z.object({
@@ -45,6 +46,14 @@ type PasswordFormData = z.infer<typeof passwordSchema>;
 
 // --- Settings Page Component ---
 const SettingsPage: React.FC = () => {
+  // Get the tab from the URL query parameters
+  const [searchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  
+  // Validate the tab parameter is one of the valid tabs
+  const validTabs = ['profile', 'security', 'notifications', 'organization', 'api', 'attributes', 'families'];
+  const defaultTab = validTabs.includes(tabParam || '') ? tabParam : 'profile';
+
   const { user, updateUserContext } = useAuth();
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isSavingPassword, setIsSavingPassword] = useState(false);
@@ -175,14 +184,15 @@ const SettingsPage: React.FC = () => {
         </p>
       </div>
 
-      <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6 max-w-lg">
+      <Tabs defaultValue={defaultTab} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-7 max-w-lg">
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="organization">Organization</TabsTrigger>
           <TabsTrigger value="api">API Keys</TabsTrigger>
           <TabsTrigger value="attributes">Attributes</TabsTrigger>
+          <TabsTrigger value="families">Families</TabsTrigger>
         </TabsList>
 
         {/* Profile Tab */}
@@ -430,6 +440,19 @@ const SettingsPage: React.FC = () => {
                   No attributes loaded yet. Click the button above to load them.
                 </div>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Families Tab */}
+        <TabsContent value="families">
+          <Card>
+            <CardHeader>
+              <CardTitle>Product Families</CardTitle>
+              <CardDescription>Manage product families and their attributes</CardDescription>
+            </CardHeader>
+            <CardContent className="p-4">
+              <FamilyListPage isEmbedded={true} />
             </CardContent>
           </Card>
         </TabsContent>

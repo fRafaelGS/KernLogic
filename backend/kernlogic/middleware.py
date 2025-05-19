@@ -57,29 +57,33 @@ class UserActivityMiddleware:
         # Skip session-related endpoints to avoid circular updates
         skip_paths = [
             '/api/token/', 
-            '/api/token/refresh/'
+            '/api/token/refresh/',
+            '/api/token/verify/'
         ]
         
         # Process the request
         response = self.get_response(request)
         
         # After view is called, update last_login if needed
-        if request.user.is_authenticated and not any(request.path.startswith(path) for path in skip_paths):
-            # Only update last_login periodically to avoid excessive writes
-            should_update = True
-            
-            # Check if we should throttle updates
-            if self.update_interval > 0 and request.user.last_login:
-                time_since_update = (timezone.now() - request.user.last_login).total_seconds()
-                should_update = time_since_update > self.update_interval
-            
-            if should_update:
-                try:
-                    with transaction.atomic():
-                        # Get a fresh user instance to avoid race conditions
-                        User.objects.filter(pk=request.user.pk).update(last_login=timezone.now())
-                except Exception as e:
-                    # Log but don't disrupt the request
-                    print(f"ERROR updating last_login for user {request.user.pk}: {str(e)}")
+        # First check if request.user exists and has is_authenticated attribute
+        if hasattr(request, 'user') and request.user is not None and hasattr(request.user, 'is_authenticated') and request.user.is_authenticated:
+            # Also skip authentication-related paths
+            if not any(request.path.startswith(path) for path in skip_paths):
+                # Only update last_login periodically to avoid excessive writes
+                should_update = True
+                
+                # Check if we should throttle updates
+                if self.update_interval > 0 and request.user.last_login:
+                    time_since_update = (timezone.now() - request.user.last_login).total_seconds()
+                    should_update = time_since_update > self.update_interval
+                
+                if should_update:
+                    try:
+                        with transaction.atomic():
+                            # Get a fresh user instance to avoid race conditions
+                            User.objects.filter(pk=request.user.pk).update(last_login=timezone.now())
+                    except Exception as e:
+                        # Log but don't disrupt the request
+                        print(f"ERROR updating last_login for user {request.user.pk}: {str(e)}")
         
         return response 

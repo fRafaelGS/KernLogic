@@ -1497,7 +1497,7 @@ export function ProductsTable({
     <React.Fragment>
       <div className="flex flex-col flex-1 px-2 lg:px-4 min-h-0 overflow-x-hidden">
         {/* Table Toolbar */}
-        <div className="flex items-center justify-between py-2 border-b bg-white z-10">
+        <div className="flex items-center justify-between py-2 border-b bg-card z-10">
           <div className="flex items-center space-x-2 w-full sm:w-auto">
             {/* Only show search box if hideTopSearch is false */}
             {!hideTopSearch && (

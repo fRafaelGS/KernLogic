@@ -226,14 +226,6 @@ export function Sidebar({ className, isMobile = false }: SidebarProps) {
       href: "/app/team",
       requiredPermission: "team.view"
     },
-    // Families nav item, admin only
-    ...(user?.role === 'admin' ? [{
-      icon: BeakerIcon,
-      label: "Families",
-      href: "/app/products/families",
-      // Only visible to admins
-      requiredPermission: undefined
-    }] : []),
     {
       icon: Settings,
       label: "Settings",

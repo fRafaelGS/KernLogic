@@ -46,9 +46,6 @@ const UploadWizard = () => {
   // For structure imports, we need to track which type we're importing
   const [structureType, setStructureType] = useState<StructureType>(null);
   
-  // Sequential structure import progress tracking
-  const [structureImportComplete, setStructureImportComplete] = useState(false);
-  
   // File and data states
   const [file, setFile] = useState<File | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -65,7 +62,7 @@ const UploadWizard = () => {
   
   // Fetch attribute header pattern
   useEffect(() => {
-    if (importMode === 'products' || (importMode === 'structure-products' && structureImportComplete)) {
+    if (importMode === 'products') {
       getImportFieldSchema(2)
         .then(response => {
           if (response.data.attribute_header_pattern) {
@@ -76,7 +73,7 @@ const UploadWizard = () => {
           console.error('Failed to fetch attribute header pattern:', error);
         });
     }
-  }, [importMode, structureImportComplete]);
+  }, [importMode]);
   
   // Handle import mode selection
   const handleModeSelected = (mode: ImportMode) => {
@@ -89,10 +86,9 @@ const UploadWizard = () => {
     setPreviewData([]);
     setMapping({});
     setImportId(null);
-    setStructureImportComplete(false);
     
     // For structure imports, we need to select a structure type
-    if (mode === 'structure' || mode === 'structure-products') {
+    if (mode === 'structure') {
       setStructureType(null);
     }
   };
@@ -105,9 +101,9 @@ const UploadWizard = () => {
 
   // Get the appropriate field schema based on current mode and structure type
   const getCurrentFieldSchema = (): ImportFieldSchemaEntry[] | null => {
-    if (importMode === 'products' || (importMode === 'structure-products' && structureImportComplete)) {
+    if (importMode === 'products') {
       return productFieldSchema;
-    } else if (importMode === 'structure' || (importMode === 'structure-products' && !structureImportComplete)) {
+    } else if (importMode === 'structure') {
       // For structure imports, use the appropriate schema based on structure type
       switch (structureType) {
         case 'attribute_groups':
@@ -147,11 +143,11 @@ const UploadWizard = () => {
       let response: { data: { id: number } } | undefined;
       
       // Call the appropriate import API based on import mode and structure type
-      if (importMode === 'products' || (importMode === 'structure-products' && structureImportComplete)) {
+      if (importMode === 'products') {
         // Product import with duplicate strategy
         const options: ImportOptions = { overwrite_policy: duplicateStrategy };
         response = await createImport(file, mappingData, options);
-      } else if (importMode === 'structure' || (importMode === 'structure-products' && !structureImportComplete)) {
+      } else if (importMode === 'structure') {
         // Structure import based on type
         switch (structureType) {
           case 'attribute_groups':
@@ -184,32 +180,12 @@ const UploadWizard = () => {
     }
   };
 
-  // Handle completion of structure import in the sequential flow
-  const handleStructureImportComplete = () => {
-    setStructureImportComplete(true);
-    setCurrentStep('upload');
-    setFile(null);
-    setHeaders([]);
-    setPreviewData([]);
-    setMapping({});
-    setImportId(null);
-    
-    toast({
-      title: "Structure import complete",
-      description: "Now you can proceed with importing your products.",
-    });
-  };
-
   // Get the title and description based on the current import mode
   const getImportTitle = () => {
     if (importMode === 'products') {
       return 'Import Products';
     } else if (importMode === 'structure') {
       return 'Import Structure';
-    } else if (importMode === 'structure-products') {
-      return structureImportComplete 
-        ? 'Import Products' 
-        : 'Import Structure';
     }
     return 'Import Wizard';
   };
@@ -219,10 +195,6 @@ const UploadWizard = () => {
       return 'Upload a CSV or Excel file to import products in bulk.';
     } else if (importMode === 'structure') {
       return 'Import attribute groups, attributes, and product families.';
-    } else if (importMode === 'structure-products') {
-      return structureImportComplete
-        ? 'Now you can import your products that reference the structure you just imported.'
-        : 'First, import your structure (attribute groups, attributes, and families).';
     }
     return 'Select an import mode to begin.';
   };
@@ -297,12 +269,7 @@ const UploadWizard = () => {
                 <TabsContent value="progress">
                   {importId && (
                     <StepProgress 
-                      importId={importId} 
-                      onComplete={
-                        importMode === 'structure-products' && !structureImportComplete
-                          ? handleStructureImportComplete
-                          : undefined
-                      }
+                      importId={importId}
                     />
                   )}
                 </TabsContent>

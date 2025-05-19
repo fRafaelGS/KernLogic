@@ -19,14 +19,34 @@ class MembershipSerializer(serializers.ModelSerializer):
     avatar_url = serializers.SerializerMethodField()
     role = RoleSerializer(read_only=True)
     role_id = serializers.PrimaryKeyRelatedField(queryset=Role.objects.all(), source="role")
+    last_login = serializers.SerializerMethodField()
 
     class Meta:
         model = Membership
-        fields = ["id", "user", "user_email", "user_name", "avatar_url", "role", "role_id", "status", "invited_at", "organization"]
+        fields = ["id", "user", "user_email", "user_name", "avatar_url", "role", "role_id", "status", "invited_at", "organization", "last_login"]
 
     def get_user(self, obj):
         from accounts.serializers import UserSerializer
         return UserSerializer(obj.user, context=self.context).data
+        
+    def get_last_login(self, obj):
+        """
+        Get the most up-to-date last_login timestamp directly from accounts_user table.
+        This ensures we display accurate activity timestamps.
+        """
+        # Directly query the User model to get the latest data
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        try:
+            # Get fresh user data from DB to ensure we have the latest last_login
+            user = User.objects.filter(id=obj.user.id).only('last_login').first()
+            if user and user.last_login:
+                return user.last_login.isoformat()
+            return None
+        except Exception as e:
+            print(f"ERROR: Failed to get latest last_login for user {obj.user.id}: {str(e)}")
+            return None
         
     def get_avatar_url(self, obj):
         # Get the avatar URL from the user's profile

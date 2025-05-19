@@ -188,6 +188,11 @@ export const TeamPage: React.FC = () => {
         // Make the API request
         const response = await api.get(`/orgs/${orgID}/memberships?${params.toString()}`);
         
+        // Log raw API response in development
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Team members API response:', response.data);
+        }
+        
         // Handle different response shapes (array or paginated object)
         const raw = response.data;
         const isArray = Array.isArray(raw);
@@ -337,9 +342,69 @@ export const TeamPage: React.FC = () => {
   // Calculate total pages directly from the data
   const totalPages = Math.ceil(membersData.count / pageSize);
 
+  const formatLastActivity = (member: Membership) => {
+    try {
+      // Log to help diagnose what data we're getting from API
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Member timestamps:', {
+          id: member.id,
+          last_login: member.last_login,
+          updated_at: member.updated_at,
+          created_at: member.created_at,
+          status: member.status
+        });
+      }
+
+      if (member.status === 'pending') {
+        return member.invited_at 
+          ? `Invited ${formatDistanceToNow(new Date(member.invited_at))} ago`
+          : 'Recently invited';
+      } else {
+        // Use the most recent timestamp from these fields
+        const possibleDates: {field: string, date: Date}[] = [];
+        
+        // Add timestamps to array if they exist and are valid dates
+        if (member.last_login) {
+          try {
+            const date = new Date(member.last_login);
+            if (!isNaN(date.getTime())) possibleDates.push({ field: 'last_login', date });
+          } catch (e) {}
+        }
+        
+        if (member.updated_at) {
+          try {
+            const date = new Date(member.updated_at);
+            if (!isNaN(date.getTime())) possibleDates.push({ field: 'updated_at', date });
+          } catch (e) {}
+        }
+        
+        if (member.created_at) {
+          try {
+            const date = new Date(member.created_at);
+            if (!isNaN(date.getTime())) possibleDates.push({ field: 'created_at', date });
+          } catch (e) {}
+        }
+        
+        if (possibleDates.length === 0) {
+          return 'Active recently';
+        }
+        
+        // Sort dates in descending order (newest first)
+        possibleDates.sort((a, b) => b.date.getTime() - a.date.getTime());
+        
+        // Use the most recent date
+        const mostRecent = possibleDates[0];
+        return `Last active ${formatDistanceToNow(mostRecent.date)} ago`;
+      }
+    } catch (e) {
+      console.error('Error formatting last activity:', e);
+      return 'Activity status unknown';
+    }
+  };
+
   return (
-    <div className="mx-auto p-6 space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div className="container mx-auto p-6 space-y-6 w-full max-w-full flex-grow" style={{ minWidth: '100%' }}>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 w-full">
         <div>
           <h1 className="text-3xl font-bold text-enterprise-900">Team Management</h1>
           <p className="text-enterprise-600 mt-1">
@@ -392,7 +457,7 @@ export const TeamPage: React.FC = () => {
         </div>
       </div>
 
-      <Card>
+      <Card className="w-full">
         <CardContent className="p-0">
           <Tabs 
             value={statusFilter} 
@@ -460,8 +525,8 @@ export const TeamPage: React.FC = () => {
 
               {/* Member List */}
               {Array.isArray(membersData.results) && membersData.results.length > 0 && (
-                <div className="overflow-x-auto">
-                  <Table>
+                <div className="overflow-x-auto w-full">
+                  <Table className="w-full table-fixed">
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-[45%]">Member</TableHead>
@@ -532,8 +597,12 @@ export const TeamPage: React.FC = () => {
                             </TableCell>
                             <TableCell className="text-sm text-gray-500">
                               {status === 'pending'
-                                ? `Invited ${formatDistanceToNow(new Date(member.invited_at || new Date()))} ago`
-                                : `Last active ${formatDistanceToNow(new Date(member.last_login || member.invited_at || new Date()))} ago`}
+                                ? member.invited_at 
+                                  ? `Invited ${formatDistanceToNow(new Date(member.invited_at))} ago`
+                                  : 'Recently invited'
+                                : member.last_login 
+                                  ? `Last active ${formatDistanceToNow(new Date(member.last_login))} ago`
+                                  : 'Active recently'}
                             </TableCell>
                             <TableCell className="text-right">
                               <PermissionGuard permission="team.change_role">

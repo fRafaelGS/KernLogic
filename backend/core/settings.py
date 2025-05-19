@@ -74,6 +74,7 @@ class CsrfExemptForAPI:
 
 MIDDLEWARE = [
     "kernlogic.middleware.IdempotencyMiddleware",
+    "kernlogic.middleware.UserActivityMiddleware",  # Add our new activity tracking middleware
     "corsheaders.middleware.CorsMiddleware",  # Must be as high as possible
     "core.settings.CsrfExemptForAPI",  # Add custom middleware before CsrfViewMiddleware
     "django.middleware.security.SecurityMiddleware",
@@ -278,6 +279,9 @@ SIMPLE_JWT = {
     'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
     'TOKEN_TYPE_CLAIM': 'token_type',
 }
+
+# User activity tracking settings
+LAST_ACTIVITY_UPDATE_INTERVAL = 5 * 60  # 5 minutes in seconds
 
 # New Relic Logging Configuration
 LOGGING = {

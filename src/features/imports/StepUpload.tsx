@@ -77,14 +77,10 @@ const StepUpload: React.FC<StepUploadProps> = ({
   };
 
   // Show structure type selection if we're in a structure import mode
-  const showStructureTypeSelector = importMode === 'structure' || 
-    (importMode === 'structure-products' && structureType === null);
+  const showStructureTypeSelector = importMode === 'structure';
 
   // Show duplicate policy only for product imports
-  const showDuplicatePolicy = 
-    (importMode === 'products' || 
-    (importMode === 'structure-products' && structureType !== null)) && 
-    onDuplicatePolicyChange;
+  const showDuplicatePolicy = importMode === 'products' && onDuplicatePolicyChange;
 
   return (
     <div className="space-y-6">

@@ -263,9 +263,9 @@ const StepProgress: React.FC<StepProgressProps> = ({ importId, onComplete }) => 
             </p>
             <Button 
               className="mt-4"
-              onClick={onComplete ? handleContinue : handleViewProducts}
+              onClick={handleContinue}
             >
-              {onComplete ? 'Continue to Product Import' : 'View Products'}
+              View Products
             </Button>
           </div>
         </div>

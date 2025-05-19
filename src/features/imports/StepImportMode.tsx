@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { InfoIcon } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
-export type ImportMode = 'products' | 'structure' | 'structure-products'
+export type ImportMode = 'products' | 'structure'
 
 interface StepImportModeProps {
   onModeSelected: (mode: ImportMode) => void
@@ -77,36 +77,6 @@ export function StepImportMode({ onModeSelected }: StepImportModeProps) {
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
                     Import attribute groups, attributes, and product families
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className={`border-2 p-4 ${selectedMode === 'structure-products' ? 'border-primary' : 'border-muted'}`}>
-            <CardContent className="p-0">
-              <div className="flex items-start space-x-2">
-                <RadioGroupItem value="structure-products" id="structure-products" className="mt-1" />
-                <div className="flex-1">
-                  <div className="flex items-center">
-                    <Label htmlFor="structure-products" className="font-medium text-base cursor-pointer">
-                      Structure → Products
-                    </Label>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger className="ml-2">
-                          <InfoIcon className="h-4 w-4 text-muted-foreground" />
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p className="max-w-xs">
-                            First import your attribute structure, then import products that use those attributes
-                          </p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Import both structure and products in a sequential process
                   </p>
                 </div>
               </div>

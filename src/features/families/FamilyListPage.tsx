@@ -109,7 +109,7 @@ export function FamilyListPage() {
 
   return (
     <ErrorBoundary>
-      <div className="space-y-6">
+      <div className="space-y-6 py-4">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold">{t('families.title')}</h1>
           <Button onClick={() => navigate('/app/products/families/new')}>

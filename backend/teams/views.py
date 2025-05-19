@@ -87,6 +87,10 @@ class MembershipViewSet(viewsets.ModelViewSet):
         # All org IDs are now UUIDs
         queryset = super().get_queryset().filter(organization_id=org_id)
         
+        # Always use select_related to prefetch user data for better performance
+        # This ensures we get the fresh User data including last_login
+        queryset = queryset.select_related('user', 'role', 'organization')
+        
         # Apply search and filter params
         search = self.request.query_params.get('search', None)
         role = self.request.query_params.get('role', None)

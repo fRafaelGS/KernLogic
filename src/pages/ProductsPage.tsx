@@ -8,10 +8,14 @@ import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/use-toast'
 import { useDebounce } from '@/hooks/useDebounce'
 import { useUniqueCategories, useUniqueTags } from '@/hooks/useProductDerived'
+import { config } from '@/config/config'
 
 type ViewMode = 'list' | 'grid'
 
 export default function ProductsPage() {
+  // Get reference to the productsTable config section
+  const tableConfig = config.productsTable
+  
   const { toast } = useToast()
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   
@@ -88,7 +92,7 @@ export default function ProductsPage() {
     // Trigger a refetch by updating the filters state
     setFilters(prev => ({ ...prev }))
     toast({ 
-      title: 'Refreshing products', 
+      title: tableConfig.messages.refresh, 
       variant: 'default' 
     })
   }
@@ -149,7 +153,10 @@ export default function ProductsPage() {
             disabled={isFetchingNextPage}
             className="static"
           >
-            {isFetchingNextPage ? 'Loading more...' : 'Load more products'}
+            {isFetchingNextPage 
+              ? tableConfig.display.buttons.loadingMore 
+              : tableConfig.display.buttons.loadMore
+            }
           </Button>
         </div>
       )}

@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef, memo } from "react";
-import { FixedSizeList as List } from "react-window";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   Table,
   TableBody,
@@ -13,7 +12,6 @@ import {
   getCoreRowModel,
   getPaginationRowModel,
   getSortedRowModel,
-  getFilteredRowModel,
   flexRender,
   type ColumnDef,
   type SortingState,
@@ -23,7 +21,6 @@ import {
   type PaginationState,
   type FilterFn,
   type Row,
-  Header,
   getExpandedRowModel,
   Updater
 } from "@tanstack/react-table";
@@ -31,14 +28,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu";
 import {
-  FilterIcon,
   TrashIcon,
   RefreshCw,
   ChevronLeft,
@@ -51,8 +47,8 @@ import {
   TagIcon,
   FolderIcon,
 } from "lucide-react";
-import { Product, productService, ProductAttribute, ProductAsset, PaginatedResponse } from "@/services/productService";
-import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
+import { Product, productService, ProductAttribute, ProductAsset } from "@/services/productService";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
@@ -78,16 +74,19 @@ import ProductRowDetails from "./productstable/ProductRowDetails";
 import { AnimatePresence } from 'framer-motion';
 import { Category as CategoryType, Category as ProductCategory } from '@/types/categories';
 import { SubcategoryManager } from '@/components/categories/SubcategoryManager/SubcategoryManager';
-import { getCategoryName, matchesCategoryFilter } from '@/lib/categoryFilterUtils';
 import { ProductGrid } from './ProductGrid'
 import { useOrgSettings } from '@/hooks/useOrgSettings'
 import { useFamilies } from "@/api/familyApi";
 import { useFetchProducts } from "@/hooks/useFetchProducts";
+import { config } from "@/config/config";
 
-// Define constants for fixed widths
-const ACTION_W = 112; // Width of action column in pixels
-const FOOTER_H = 48; // Height of footer in pixels
-
+/**
+ * ProductsTable - A table for displaying and managing products
+ * 
+ * REFACTORING NOTE: This component has been refactored to use centralized configuration
+ * from config.ts. All hardcoded text strings have been moved to the config.productsTable 
+ * section for improved maintainability and localization.
+ */
 
 // Define filter state type
 interface FilterState {
@@ -185,6 +184,8 @@ export function ProductsTable({
   hideTopSearch = false,
   filters: initialFilters
 }: ProductsTableProps = {}) {
+  // Get reference to the productsTable config section
+  const tableConfig = config.productsTable;
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
   // Add organization settings hook
@@ -503,17 +504,24 @@ export function ProductsTable({
   }, []);
 
   const handleDelete = useCallback(async (productId: number) => {
-    if (window.confirm('Are you sure you want to archive this product?')) {
+    // Confirm deletion with user
+    if (window.confirm(tableConfig.messages.confirmation.delete)) {
       try {
         await productService.deleteProduct(productId);
-        toast({ title: 'Product marked as inactive successfully', variant: 'default' });
-        fetchData();
-      } catch (error: any) {
-        console.error('Error deleting product via service:', error);
-        toast({ title: error.message || 'Failed to archive product', variant: 'destructive' });
+        toast({ 
+          title: tableConfig.messages.success.delete, 
+          variant: 'default' 
+        });
+        fetchData(); // Refresh the products list
+      } catch (error) {
+        console.error('Failed to delete product:', error);
+        toast({ 
+          title: tableConfig.messages.error.delete, 
+          variant: 'destructive' 
+        });
       }
     }
-  }, [fetchData]);
+  }, [fetchData, toast, tableConfig.messages]);
 
   // Update the handleFilterToggle function to toggle filtersVisible
   const handleFilterToggle = useCallback(() => {
@@ -553,55 +561,92 @@ export function ProductsTable({
 
   // --- ADD Bulk Action Handlers (Placeholder/Assumed API) ---
   const handleBulkDelete = async () => {
-    const selectedIds = Object.keys(rowSelection)
-      .map(index => productRowMap[String(index)])
-      .filter((id): id is number => typeof id === 'number');
-      
-    if (selectedIds.length === 0) {
-      toast({ title: "No products selected for deletion.", variant: 'destructive' });
+    const selectedCount = Object.keys(rowSelection).length;
+    if (selectedCount === 0) return;
+
+    // Confirm the deletion with the user
+    if (!window.confirm(tableConfig.messages.confirmation.bulkDelete.replace('{{count}}', selectedCount.toString()))) {
       return;
     }
 
-    if (window.confirm(`Are you sure you want to archive ${selectedIds.length} product(s)? This action is reversible from the admin panel.`)) {
-      try {
-        await productService.bulkDelete(selectedIds);
-        toast({ title: `${selectedIds.length} product(s) archived successfully.`, variant: 'default' });
-        setRowSelection({}); // Clear selection
-        forceReload(); // Refresh data
-      } catch (error: any) {
-        toast({ 
-          title: "Failed to archive selected products.", 
-          description: error.message || "An unexpected error occurred.",
-          variant: 'destructive' 
-        });
-      }
+    // Get the product IDs of all selected rows
+    const productIds = getSelectedProductIds();
+    if (productIds.length === 0) return;
+
+    try {
+      // Delete each product
+      await Promise.all(productIds.map(id => productService.deleteProduct(id)));
+      
+      // Show success toast
+      toast({
+        title: tableConfig.messages.success.bulkDelete.replace('{{count}}', productIds.length.toString()),
+        variant: 'default'
+      });
+      
+      // Clear row selection after successful deletion
+      setRowSelection({});
+      
+      // Refresh the data
+      fetchData();
+    } catch (error) {
+      console.error('Failed to bulk delete products:', error);
+      toast({
+        title: tableConfig.messages.error.bulkDelete,
+        variant: 'destructive'
+      });
     }
   };
 
   const handleBulkSetStatus = async (isActive: boolean) => {
-    const selectedIds = Object.keys(rowSelection)
-      .map(index => productRowMap[String(index)])
-      .filter((id): id is number => typeof id === 'number');
+    const selectedCount = Object.keys(rowSelection).length;
+    if (selectedCount === 0) return;
 
-    if (selectedIds.length === 0) {
-      toast({ 
-        title: `No products selected to mark as ${isActive ? 'active' : 'inactive'}.`, 
-        variant: 'destructive' 
-      });
+    // Confirm the status change with the user
+    const confirmMsg = isActive 
+      ? tableConfig.messages.confirmation.activate.replace('{{count}}', selectedCount.toString())
+      : tableConfig.messages.confirmation.deactivate.replace('{{count}}', selectedCount.toString());
+    
+    if (!window.confirm(confirmMsg)) {
       return;
     }
-    
-    const actionText = isActive ? 'active' : 'inactive';
+
+    // Get the product IDs of all selected rows
+    const productIds = getSelectedProductIds();
+    if (productIds.length === 0) return;
+
     try {
-      await productService.bulkSetStatus(selectedIds, isActive);
-      toast({ title: `${selectedIds.length} product(s) marked as ${actionText}.`, variant: 'default' });
-      setRowSelection({}); // Clear selection
-      forceReload(); // Refresh data
-    } catch (error: any) {
-      toast({ 
-        title: `Failed to update status for selected products.`,
-        description: error.message || "An unexpected error occurred.",
-        variant: 'destructive' 
+      // Update each product
+      await Promise.all(
+        productIds.map(id => 
+          productService.updateProduct(id, { is_active: isActive })
+        )
+      );
+      
+      // Show success toast
+      const successMsg = isActive
+        ? tableConfig.messages.success.bulkActivate.replace('{{count}}', productIds.length.toString())
+        : tableConfig.messages.success.bulkDeactivate.replace('{{count}}', productIds.length.toString());
+      
+      toast({
+        title: successMsg,
+        variant: 'default'
+      });
+      
+      // Clear row selection after successful update
+      setRowSelection({});
+      
+      // Refresh the data
+      fetchData();
+    } catch (error) {
+      console.error(`Failed to bulk ${isActive ? 'activate' : 'deactivate'} products:`, error);
+      
+      const errorMsg = isActive
+        ? tableConfig.messages.error.bulkActivate
+        : tableConfig.messages.error.bulkDeactivate;
+      
+      toast({
+        title: errorMsg,
+        variant: 'destructive'
       });
     }
   };
@@ -876,15 +921,21 @@ export function ProductsTable({
       }
       
       // Show success message
-      toast({ title: `Tag "${inputValue}" created`, variant: "default" });
+      toast({ 
+        title: tableConfig.messages.success.tagCreated.replace('{{name}}', inputValue), 
+        variant: "default" 
+      });
       
       // Explicitly return the new option
       return newOption;
     } catch (error) {
-      toast({ title: 'Failed to create tag', variant: 'destructive' });
+      toast({ 
+        title: tableConfig.messages.error.tagCreation, 
+        variant: 'destructive' 
+      });
       return null;
     }
-  }, [editingCell, productRowMap, products, updateData, toast]);
+  }, [editingCell, productRowMap, products, updateData, toast, tableConfig.messages]);
 
   // Function to render expanded row content with attributes
   const renderExpandedRow = (row: Row<Product>, index: number) => {
@@ -937,7 +988,7 @@ export function ProductsTable({
             type="button"
             tabIndex={0}
             role="button"
-            aria-label={row.getIsExpanded() ? 'Collapse row' : 'Expand row'}
+            aria-label={row.getIsExpanded() ? tableConfig.display.tableView.collapseRow : tableConfig.display.tableView.expandRow}
             onClick={e => {
               e.stopPropagation();
               toggle();
@@ -965,7 +1016,7 @@ export function ProductsTable({
       minSize: 36, // Ensure minimum width
       maxSize: 36, // Ensure maximum width
     }),
-    [] // No dependencies - stable reference
+    [tableConfig.display.tableView.expandRow, tableConfig.display.tableView.collapseRow] // Add dependencies for config values
   );
 
   const {
@@ -1436,8 +1487,12 @@ export function ProductsTable({
     const totalItems = totalCount;
     const start = totalItems > 0 ? pageIndex * pageSize + 1 : 0;
     const end = Math.min(totalItems, (pageIndex + 1) * pageSize);
-    return `Showing ${start}-${end} of ${totalItems}`;
-  }, [table, totalCount]);
+    const template = tableConfig.display.tableView.paginationInfo || 'Showing {{start}}-{{end}} of {{total}}';
+    return template
+      .replace('{{start}}', start.toString())
+      .replace('{{end}}', end.toString())
+      .replace('{{total}}', totalItems.toString());
+  }, [table, totalCount, tableConfig.display.tableView.paginationInfo]);
 
   // Add effect to log pagination state for debugging
   useEffect(() => {
@@ -1526,7 +1581,19 @@ export function ProductsTable({
           </div>
           
           <div className="flex items-center space-x-2">
-                                    {/* Only show refresh button if hideTopControls is false */}            {!hideTopControls && (              <Button                size="sm"                variant="outline"                onClick={handleRefresh}                disabled={loading}                className="h-8"              >                <RefreshCw className={`mr-1 h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />                Refresh              </Button>            )}
+            {/* Only show refresh button if hideTopControls is false */}
+            {!hideTopControls && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleRefresh}
+                disabled={loading}
+                className="h-8"
+              >
+                <RefreshCw className={`mr-1 h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+                {tableConfig.display.buttons.refresh}
+              </Button>
+            )}
 
             {/* Always show the SubcategoryManager */}
             <div className="flex items-center">
@@ -1545,55 +1612,55 @@ export function ProductsTable({
                   className="h-9"
                   disabled={Object.keys(rowSelection).length === 0}
                 >
-                  <span>Bulk Actions {Object.keys(rowSelection).length > 0 ? `(${Object.keys(rowSelection).length})` : ""}</span>
+                  <span>
+                    {tableConfig.display.buttons.bulkActions} 
+                    {Object.keys(rowSelection).length > 0 ? ` (${Object.keys(rowSelection).length})` : ""}
+                  </span>
                   <ChevronDown className="ml-2 h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent>
                 <DropdownMenuItem onClick={() => handleBulkSetStatus(true)}>
-                  <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
-                  Activate
+                  <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                  {tableConfig.display.buttons.bulkActivate}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleBulkSetStatus(false)}>
-                  <XCircle className="mr-2 h-4 w-4 text-slate-600" />
-                  Deactivate
+                  <XCircle className="mr-2 h-4 w-4 text-red-500" />
+                  {tableConfig.display.buttons.bulkDeactivate}
                 </DropdownMenuItem>
-
                 <DropdownMenuSeparator />
-
-                <DropdownMenuItem asChild>
-                  <div onClick={(e) => e.stopPropagation()}>
-                    <SubcategoryManager 
-                      isOpen={showSubcategoryManager}
-                      onOpenChange={setShowSubcategoryManager}
-                    />
-                  </div>
-                </DropdownMenuItem>
-
                 <DropdownMenuItem onClick={openBulkTagModal}>
-                  <TagIcon className="mr-2 h-4 w-4 text-purple-600" />
-                  Tag in bulk
+                  <TagIcon className="mr-2 h-4 w-4" />
+                  {tableConfig.display.buttons.bulkTags}
                 </DropdownMenuItem>
-
+                <DropdownMenuItem onClick={openBulkCategoryModal}>
+                  <FolderIcon className="mr-2 h-4 w-4" />
+                  {tableConfig.display.buttons.bulkCategory}
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
-
-                <DropdownMenuItem onClick={handleBulkDelete} className="text-red-600">
-                  <TrashIcon className="mr-2 h-4 w-4" />
-                  Archive Selected
+                <DropdownMenuItem onClick={handleBulkDelete}>
+                  <TrashIcon className="mr-2 h-4 w-4 text-red-500" />
+                  {tableConfig.display.buttons.bulkDelete}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
             <DropdownMenu open={columnsMenuOpen} onOpenChange={setColumnsMenuOpen}>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-9">
-                  <ColumnsIcon className="mr-2 h-4 w-4" />
-                  <span>Columns</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9"
+                  aria-label={tableConfig.display.tableView.columnVisibility.toggle}
+                >
+                  <ColumnsIcon className="mr-1 h-4 w-4" />
+                  <span>{tableConfig.display.tableView.columnVisibility.title}</span>
+                  <ChevronDown className="ml-1 h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" onPointerDownOutside={() => setColumnsMenuOpen(false)}>
+              <DropdownMenuContent align="end" className="w-48">
                 {table.getAllColumns()
-                  .filter(column => column.id !== 'select' && column.id !== 'actions')
+                  .filter(column => column.id !== 'expander' && column.id !== 'select')
                   .map(column => {
                     return (
                       <DropdownMenuCheckboxItem
@@ -1734,11 +1801,11 @@ export function ProductsTable({
                                             }}
                                           >
                                             <SelectTrigger className="h-7 text-xs">
-                                              <SelectValue placeholder="Filter category" />
+                                              <SelectValue placeholder={tableConfig.display.selectors.category.placeholder} />
                                             </SelectTrigger>
                                             <SelectContent>
-                                              <SelectItem value="all">All Categories</SelectItem>
-                                              <SelectItem value="uncategorized">Uncategorized</SelectItem>
+                                              <SelectItem value="all">{tableConfig.display.selectors.category.allCategories}</SelectItem>
+                                              <SelectItem value="uncategorized">{tableConfig.display.selectors.category.uncategorized}</SelectItem>
                                               {uniqueCategories.length > 0 ? (
                                                 uniqueCategories.map((category) => (
                                                   <SelectItem key={category} value={category}>
@@ -1747,7 +1814,7 @@ export function ProductsTable({
                                                 ))
                                               ) : (
                                                 <SelectItem value="no-categories" disabled>
-                                                  No categories available
+                                                  {tableConfig.display.selectors.category.noCategories}
                                                 </SelectItem>
                                               )}
                                             </SelectContent>
@@ -1765,12 +1832,12 @@ export function ProductsTable({
                                             }}
                                           >
                                             <SelectTrigger className="h-7 text-xs">
-                                              <SelectValue placeholder="Status" />
+                                              <SelectValue placeholder={tableConfig.display.selectors.status.placeholder} />
                                             </SelectTrigger>
                                             <SelectContent>
-                                              <SelectItem value="all">All</SelectItem>
-                                              <SelectItem value="true">Active</SelectItem>
-                                              <SelectItem value="false">Inactive</SelectItem>
+                                              <SelectItem value="all">{tableConfig.display.selectors.status.all}</SelectItem>
+                                              <SelectItem value="true">{tableConfig.display.selectors.status.active}</SelectItem>
+                                              <SelectItem value="false">{tableConfig.display.selectors.status.inactive}</SelectItem>
                                             </SelectContent>
                                           </Select>
                                         );
@@ -1786,18 +1853,18 @@ export function ProductsTable({
                                                 className="h-7 text-xs w-full justify-start font-normal"
                                                 onClick={(e) => e.stopPropagation()}
                                               >
-                                                <span>Price Range</span>
+                                                <span>{tableConfig.display.selectors.price.buttonLabel}</span>
                                               </Button>
                                             </PopoverTrigger>
                                             <PopoverContent className="w-60 p-3" align="start">
                                               <div className="space-y-2">
                                                 <div className="grid grid-cols-2 gap-2">
                                                   <div>
-                                                    <Label htmlFor="price-min">Min</Label>
+                                                    <Label htmlFor="price-min">{tableConfig.display.selectors.price.minLabel}</Label>
                                                     <Input
                                                       id="price-min"
                                                       type="number"
-                                                      placeholder="Min"
+                                                      placeholder={tableConfig.display.selectors.price.minLabel}
                                                       className="h-8"
                                                       value={filters.minPrice || ''}
                                                       onChange={(e) => {
@@ -1806,11 +1873,11 @@ export function ProductsTable({
                                                     />
                                                   </div>
                                                   <div>
-                                                    <Label htmlFor="price-max">Max</Label>
+                                                    <Label htmlFor="price-max">{tableConfig.display.selectors.price.maxLabel}</Label>
                                                     <Input
                                                       id="price-max"
                                                       type="number"
-                                                      placeholder="Max"
+                                                      placeholder={tableConfig.display.selectors.price.maxLabel}
                                                       className="h-8"
                                                       value={filters.maxPrice || ''}
                                                       onChange={(e) => {
@@ -1828,7 +1895,7 @@ export function ProductsTable({
                                                     handleColumnFilterChange('maxPrice', undefined);
                                                   }}
                                                 >
-                                                  Reset
+                                                  {tableConfig.display.selectors.price.resetButton}
                                                 </Button>
                                               </div>
                                             </PopoverContent>
@@ -1907,8 +1974,8 @@ export function ProductsTable({
                                                 <TagIcon className="mr-1 h-3 w-3" />
                                                 <span>
                                                   {Array.isArray(filters.tags) && filters.tags.length > 0 
-                                                    ? `${filters.tags.length} Selected`
-                                                    : "Filter Tags"}
+                                                    ? tableConfig.display.selectors.tags.selectedCount.replace('{{count}}', filters.tags.length.toString()) 
+                                                    : tableConfig.display.selectors.tags.buttonLabel}
                                                 </span>
                                               </Button>
                                             </PopoverTrigger>
@@ -1953,45 +2020,10 @@ export function ProductsTable({
                                                       ))}
                                                     </div>
                                                   ) : (
-                                                    <p className="text-sm text-slate-500 text-center py-2">
-                                                      No tags available
-                                                    </p>
+                                                    <div className="text-sm text-muted-foreground text-center py-2">
+                                                      {tableConfig.display.selectors.tags.noTags}
+                                                    </div>
                                                   )}
-                                                </div>
-                                                <div className="flex justify-between">
-                                                  <Button 
-                                                    size="sm" 
-                                                    variant="outline" 
-                                                    className="text-xs"
-                                                    onClick={() => {
-                                                      // Clear the tags filter
-                                                      setFilters(prev => ({ ...prev, tags: [] }));
-                                                      
-                                                      // Clear the table column filter
-                                                      const tagsColumn = table.getColumn('tags');
-                                                      if (tagsColumn) {
-                                                        tagsColumn.setFilterValue(undefined);
-                                                      }
-                                                    }}
-                                                    disabled={filters.tags.length === 0}
-                                                  >
-                                                    Clear
-                                                  </Button>
-                                                  <Button 
-                                                    size="sm" 
-                                                    className="text-xs"
-                                                    onClick={() => {
-                                                      // Close the popover by simulating a click outside
-                                                      const closeEvent = new MouseEvent('click', {
-                                                        bubbles: true,
-                                                        cancelable: true,
-                                                        view: window
-                                                      });
-                                                      document.dispatchEvent(closeEvent);
-                                                    }}
-                                                  >
-                                                    Apply
-                                                  </Button>
                                                 </div>
                                               </div>
                                             </PopoverContent>

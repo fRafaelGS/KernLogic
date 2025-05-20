@@ -2,6 +2,7 @@ import React from 'react'
 // @ts-ignore - Importing ProductsTable as-is despite potential type conflicts
 import { ProductsTable } from './ProductsTable'
 import { ProductGrid } from './ProductGrid'
+import { config } from '@/config/config'
 
 interface ProductsTableAdapterProps {
   viewMode?: 'list' | 'grid'
@@ -24,6 +25,9 @@ export function ProductsTableAdapter({
   hideTopSearch = false,
   hideTopControls = false
 }: ProductsTableAdapterProps) {
+  // Get reference to the table config
+  const tableConfig = config.productsTable
+  
   // Ensure filters are correctly formatted
   const normalizedFilters = React.useMemo(() => {
     // Convert any null values to undefined to prevent API issues

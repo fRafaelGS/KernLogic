@@ -593,6 +593,355 @@ export const config = {
       }
     ]
   },
+  productsTable: {
+    display: {
+      pageTitle: 'Products',
+      searchPlaceholder: 'Search products...',
+      filterSectionTitle: 'Filters',
+      filterPlaceholder: 'Filter…',
+      columns: {
+        name: 'Name',
+        sku: 'SKU',
+        brand: 'Brand',
+        barcode: 'Barcode',
+        category: 'Category',
+        price: 'Price',
+        is_active: 'Status',
+        created_at: 'Created',
+        updated_at: 'Updated',
+        tags: 'Tags',
+        actions: 'Actions',
+        family: 'Family'
+      },
+      selectors: {
+        category: {
+          placeholder: 'Filter category',
+          allCategories: 'All Categories',
+          uncategorized: 'Uncategorized', 
+          noCategories: 'No categories available'
+        },
+        status: {
+          placeholder: 'Status',
+          all: 'All',
+          active: 'Active',
+          inactive: 'Inactive'
+        },
+        tags: {
+          buttonLabel: 'Filter Tags',
+          selectedCount: '{{count}} Selected',
+          noTags: 'No tags available'
+        },
+        price: {
+          buttonLabel: 'Price Range',
+          minLabel: 'Min',
+          maxLabel: 'Max',
+          resetButton: 'Reset'
+        },
+        date: {
+          buttonLabel: 'Date Range',
+          fromLabel: 'From',
+          toLabel: 'To',
+          resetButton: 'Reset'
+        }
+      },
+      buttons: {
+        refresh: 'Refresh',
+        addProduct: 'Add Product',
+        manageCategories: 'Manage Categories',
+        expandAll: 'Expand All',
+        collapseAll: 'Collapse All',
+        bulkActions: 'Bulk Actions',
+        bulkDelete: 'Delete Selected',
+        bulkActivate: 'Activate Selected',
+        bulkDeactivate: 'Deactivate Selected',
+        bulkExport: 'Export Selected',
+        bulkCategory: 'Assign Category',
+        bulkTags: 'Manage Tags',
+        viewOptions: 'View Options',
+        list: 'List View',
+        grid: 'Grid View',
+        resetFilters: 'Reset Filters',
+        loadMore: 'Load more products',
+        loadingMore: 'Loading more...'
+      },
+      actionLabels: {
+        edit: 'Edit',
+        delete: 'Delete',
+        view: 'View',
+        duplicate: 'Duplicate'
+      },
+      tableView: {
+        columnVisibility: {
+          title: 'Column Visibility',
+          toggle: 'Toggle columns'
+        },
+        paginationInfo: 'Showing {{start}}-{{end}} of {{total}}',
+        previousPage: 'Previous',
+        nextPage: 'Next',
+        rowsPerPage: 'Rows per page:',
+        expandRow: 'Expand row',
+        collapseRow: 'Collapse row',
+        tableSummary: 'Product catalog table',
+        sortAscending: 'Sort ascending',
+        sortDescending: 'Sort descending',
+        showOptions: 'Show column options',
+        menuLabel: 'Table column menu'
+      },
+      emptyState: {
+        title: 'No products found',
+        description: 'Try changing your search or filter criteria, or add a new product.',
+        addProductButton: 'Add Product'
+      },
+      loadingState: {
+        loadingText: 'Loading products...'
+      },
+      pagination: {
+        previous: 'Previous',
+        next: 'Next',
+        pageLabel: 'Page',
+        of: 'of',
+        rowsPerPage: 'Rows per page:',
+        gotoPage: 'Go to page'
+      },
+      refreshStatus: {
+        refreshing: 'Refreshing products',
+        refreshComplete: 'Products refreshed',
+        refreshFailed: 'Failed to refresh products'
+      }
+    },
+    messages: {
+      success: {
+        delete: 'Product deleted successfully',
+        bulkDelete: '{{count}} products deleted successfully',
+        bulkActivate: '{{count}} products activated successfully',
+        bulkDeactivate: '{{count}} products deactivated successfully',
+        tagCreated: 'Tag "{{name}}" created'
+      },
+      error: {
+        delete: 'Failed to delete product',
+        bulkDelete: 'Failed to delete products',
+        bulkActivate: 'Failed to activate products',
+        bulkDeactivate: 'Failed to deactivate products',
+        loadProducts: 'Could not load products',
+        loadCategories: 'Error fetching categories',
+        tagCreation: 'Failed to create tag',
+        updateProduct: 'Failed to update product',
+        invalidValue: 'Invalid value'
+      },
+      confirmation: {
+        delete: 'Are you sure you want to delete this product?',
+        bulkDelete: 'Are you sure you want to delete these {{count}} products?',
+        activate: 'Are you sure you want to activate these {{count}} products?',
+        deactivate: 'Are you sure you want to deactivate these {{count}} products?'
+      },
+      refresh: 'Refreshing products',
+      refreshSuccess: 'Products refreshed successfully',
+      refreshError: 'Failed to refresh products',
+      loadMoreError: 'Failed to load more products'
+    },
+    statusLabels: {
+      active: 'Active',
+      inactive: 'Inactive'
+    },
+    tooltips: {
+      edit: 'Edit product',
+      delete: 'Delete product',
+      expandRow: 'Show more details',
+      collapseRow: 'Hide details',
+      search: 'Search products by name, SKU, or description',
+      filter: 'Filter products',
+      refresh: 'Reload products',
+      bulkActions: 'Perform actions on selected products',
+      clearSearch: 'Clear search',
+      clearFilters: 'Clear all filters'
+    },
+    modals: {
+      bulkTags: {
+        title: 'Manage Tags for Selected Products',
+        description: 'Add or remove tags for {{count}} selected products',
+        addTagsLabel: 'Add Tags',
+        removeTagsLabel: 'Remove Tags',
+        noTagsSelected: 'No tags selected',
+        searchPlaceholder: 'Search tags...',
+        createNewTag: 'Create new tag: {{name}}',
+        buttons: {
+          apply: 'Apply Changes',
+          cancel: 'Cancel'
+        }
+      },
+      bulkCategory: {
+        title: 'Assign Category to Selected Products',
+        description: 'Choose a category for {{count}} selected products',
+        categoryLabel: 'Category',
+        searchPlaceholder: 'Search categories...',
+        buttons: {
+          apply: 'Apply Category',
+          cancel: 'Cancel'
+        }
+      }
+    }
+  },
+  productDetailTabs: {
+    tabs: {
+      overview: 'Overview',
+      attributes: 'Attributes',
+      assets: 'Assets',
+      history: 'History',
+      price: 'Price'
+    },
+    overview: {
+      productInfo: {
+        title: 'Product Information',
+        description: 'Details and specifications'
+      },
+      productCompleteness: {
+        title: 'Data Completeness',
+        description: 'Track the status of required product data',
+        viewDetails: 'View Details',
+        missingFieldsLabel: 'Missing Fields',
+        criticalFields: 'Critical',
+        recommendedFields: 'Recommended',
+        optionalFields: 'Optional',
+        noDetailsTracked: 'No specific field completeness details are tracked for this product.'
+      },
+      media: {
+        title: 'Media',
+        description: 'Product images and photos',
+        noImagesAvailable: 'No images available yet',
+        addImages: 'Add Images',
+        viewAllImages: 'View All Images',
+        primaryBadge: 'Primary'
+      },
+      relatedProducts: {
+        title: 'Related Products',
+        description: 'Products often purchased together',
+        noRelatedProducts: 'No related products found'
+      }
+    },
+    attributes: {
+      title: 'Attributes',
+      noAttributesFound: 'No attributes found for this product.',
+      addAttribute: 'Add Attribute',
+      loading: 'Loading attributes...',
+      searchPlaceholder: 'Search attributes...',
+      addNew: 'Add New',
+      createNew: 'Create New Attribute',
+      save: 'Save',
+      cancel: 'Cancel',
+      edit: 'Edit',
+      delete: 'Delete',
+      confirmDelete: 'Are you sure you want to delete this attribute?',
+      groupAttributes: {
+        addAll: 'Add All',
+        allAttributesAdded: 'All attributes from this group have been added to the product.'
+      },
+      attributeTypes: {
+        text: 'Text',
+        number: 'Number',
+        boolean: 'Yes/No',
+        select: 'Select',
+        multiselect: 'Multi-select',
+        date: 'Date',
+        rich_text: 'Rich Text',
+        price: 'Price',
+        media: 'Media',
+        measurement: 'Measurement',
+        url: 'URL',
+        email: 'Email',
+        phone: 'Phone'
+      },
+      validation: {
+        required: 'This field is required',
+        numberFormat: 'Must be a valid number',
+        emailFormat: 'Must be a valid email address',
+        urlFormat: 'Must be a valid URL',
+        phoneFormat: 'Must be a valid phone number',
+        dateFormat: 'Must be a valid date'
+      },
+      createAttribute: {
+        title: 'Create New Attribute',
+        nameLabel: 'Attribute Name',
+        namePlaceholder: 'Enter attribute name',
+        typeLabel: 'Data Type',
+        groupLabel: 'Attribute Group',
+        groupPlaceholder: 'Select or create a group',
+        createNewGroup: 'Create new group',
+        mandatoryLabel: 'Is Mandatory',
+        optionsLabel: 'Options (for select/multiselect)',
+        addOption: 'Add Option',
+        optionPlaceholder: 'Enter option value',
+        validationRuleLabel: 'Validation Rule (optional)',
+        validationPlaceholder: 'e.g., min:0,max:100',
+        createButton: 'Create Attribute',
+        cancelButton: 'Cancel',
+        success: 'Attribute created successfully',
+        error: 'Failed to create attribute'
+      }
+    },
+    assets: {
+      title: 'Assets',
+      noAssetsFound: 'No assets found for this product.',
+      addAsset: 'Add Asset',
+      uploadingAsset: 'Uploading...',
+      dragDropText: 'Drag and drop assets here or click to browse',
+      primaryAsset: 'Set as primary',
+      deleteAsset: 'Delete asset',
+      deleteConfirm: 'Are you sure you want to delete this asset?',
+      assetTypes: {
+        image: 'Image',
+        document: 'Document',
+        video: 'Video',
+        other: 'Other'
+      }
+    },
+    history: {
+      title: 'History',
+      noHistoryFound: 'No history records found for this product.',
+      activityTypes: {
+        create: 'created this product',
+        update: 'updated this product',
+        asset_add: 'added assets',
+        status_change: 'changed status',
+        default: 'modified this product'
+      }
+    },
+    price: {
+      title: 'Price',
+      loading: 'Loading price information...',
+      noPricesFound: 'No prices have been set for this product.',
+      addPrice: 'Add Price',
+      currencyLabel: 'Currency',
+      amountLabel: 'Amount',
+      channelLabel: 'Channel',
+      savePrice: 'Save Price',
+      cancelEdit: 'Cancel',
+      editPrice: 'Edit Price',
+      deletePrice: 'Delete Price',
+      deleteConfirm: 'Are you sure you want to delete this price?'
+    },
+    messages: {
+      success: {
+        attributeSaved: 'Attribute saved successfully',
+        attributeDeleted: 'Attribute deleted successfully',
+        assetAdded: 'Asset added successfully',
+        assetDeleted: 'Asset deleted successfully',
+        priceSaved: 'Price saved successfully',
+        priceDeleted: 'Price deleted successfully'
+      },
+      error: {
+        attributeSave: 'Failed to save attribute',
+        attributeDelete: 'Failed to delete attribute',
+        assetAdd: 'Failed to add asset',
+        assetDelete: 'Failed to delete asset',
+        priceSave: 'Failed to save price',
+        priceDelete: 'Failed to delete price',
+        loadAttributes: 'Failed to load attributes',
+        loadAssets: 'Failed to load assets',
+        loadActivity: 'Failed to load activity history',
+        loadPrices: 'Failed to load prices'
+      }
+    }
+  },
   debug: {
     enableLogs: import.meta.env.DEV === true,
     logNetworkRequests: import.meta.env.DEV === true

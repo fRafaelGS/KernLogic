@@ -4,7 +4,7 @@ import { Product, PaginatedResponse } from '@/services/productService'
 import { ProductCard } from './ProductCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useFetchProducts } from '@/hooks/useFetchProducts'
-import { Button } from '@/components/ui/button'
+import { config } from '@/config/config'
 
 interface ProductGridProps {
   filters?: Record<string, any>
@@ -41,6 +41,9 @@ export function ProductGrid({
   loading: passedLoading, 
   error: passedError 
 }: ProductGridProps) {
+  // Get reference to the productsTable config section
+  const tableConfig = config.productsTable
+  
   const { 
     data, 
     isLoading, 
@@ -129,7 +132,7 @@ export function ProductGrid({
     return (
       <div className="flex items-center justify-center p-8 text-center">
         <div className="max-w-md">
-          <h3 className="text-lg font-medium mb-2">Failed to load products</h3>
+          <h3 className="text-lg font-medium mb-2">{tableConfig.messages.error.loadProducts}</h3>
           <p className="text-sm text-slate-500">
             {errorMessage instanceof Error ? errorMessage.message : errorMessage || 'An error occurred'}
           </p>
@@ -142,9 +145,9 @@ export function ProductGrid({
     return (
       <div className="flex items-center justify-center p-8 text-center">
         <div className="max-w-md">
-          <h3 className="text-lg font-medium mb-2">No products found</h3>
+          <h3 className="text-lg font-medium mb-2">{tableConfig.display.emptyState.title}</h3>
           <p className="text-sm text-slate-500">
-            Try adjusting your search criteria or create a new product.
+            {tableConfig.display.emptyState.description}
           </p>
         </div>
       </div>
@@ -162,6 +165,7 @@ export function ProductGrid({
         width={containerWidth}
         overscanRowCount={1}
         className="scrollbar-hide react-window-grid"
+        aria-label={tableConfig.display.tableView.tableSummary}
       >
         {({ columnIndex, rowIndex, style }) => {
           const idx = rowIndex * columnCount + columnIndex

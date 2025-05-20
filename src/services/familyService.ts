@@ -1,6 +1,6 @@
 import axiosInstance from '../lib/axiosInstance';
 import { paths } from '@/lib/apiPaths';
-import { API_ENDPOINTS } from '@/config';
+import { API_ENDPOINTS } from '@/config/config';
 import { Family, normalizeFamily } from '@/types/families';
 
 /**

@@ -4,6 +4,7 @@ import { IncompleteProduct, dashboardService } from '@/services/dashboardService
 import { useAuth } from '@/contexts/AuthContext'
 import { ReportFiltersState } from '@/features/reports/components/filters/ReportFilters'
 import logger from '@/lib/logger'
+import { API_ENDPOINTS } from '@/config/config'
 
 /**
  * Utility function to process promises in batches to limit concurrency
@@ -51,7 +52,7 @@ const fetchIncompleteProducts = async (filters?: ReportFiltersState): Promise<In
       if (filters.to) params.to_date = new Date(filters.to).toISOString()
     }
     
-    const { data: rawProducts } = await axiosInstance.get<IncompleteProduct[]>('/api/dashboard/incomplete-products', { params })
+    const { data: rawProducts } = await axiosInstance.get<IncompleteProduct[]>(API_ENDPOINTS.dashboard + '/incomplete-products', { params })
 
     // Step 2: Extract product IDs
     const productIds = rawProducts.map(p => p.id)

@@ -6,8 +6,9 @@ import { Label } from '@/components/ui/label';
 import { BeakerIcon, LockKeyhole, ArrowRight, AlertCircle, User } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
-import { API_URL } from '@/config';
+import { API_URL } from '@/config/config';
 import { useAuth } from '@/contexts/AuthContext';
+import { ROUTES } from '@/config/routes';
 
 export default function SetPasswordPage() {
   const { orgId } = useParams<{ orgId: string }>();
@@ -80,16 +81,16 @@ export default function SetPasswordPage() {
         try {
           await login(email, password);
           toast.success('Account set up successfully! Logging you in...');
-          navigate('/app');
+          navigate(ROUTES.APP.ROOT);
         } catch (loginError) {
           console.error('Auto-login failed after setting password:', loginError);
           toast.success('Account set up successfully! Please log in.');
-          navigate('/login');
+          navigate(ROUTES.AUTH.LOGIN);
         }
       } else {
         // No tokens returned, redirect to login
         toast.success('Account set up successfully! Please log in.');
-        navigate('/login');
+        navigate(ROUTES.AUTH.LOGIN);
       }
     } catch (err: any) {
       console.error('Error setting up account:', err);

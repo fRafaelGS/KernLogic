@@ -289,8 +289,8 @@ export function FamilyFormPage({ mode }: FamilyFormPageProps) {
   }
   
   // Filter groups based on search term
-  const filteredGroups = groups?.filter(group => 
-    group.name.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredGroups = groups?.filter(group =>
+    group?.name && group.name.toLowerCase().includes(searchTerm.toLowerCase())
   ) || []
   
   // Get already selected group IDs

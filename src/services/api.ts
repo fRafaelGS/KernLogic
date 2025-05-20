@@ -1,9 +1,12 @@
 import axios from 'axios';
-import { API_URL } from '@/config';
+import { API_URL } from '@/config/config';
+
+// Make sure the API URL doesn't end with /api to prevent double paths
+const baseURL = API_URL.endsWith('/api') ? API_URL.slice(0, -4) : API_URL;
 
 // Create an axios instance with default config
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
+  baseURL: baseURL,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -42,7 +45,7 @@ api.interceptors.response.use(
         }
         
         // Try to get a new token
-        const response = await axios.post(`${API_URL}/token/refresh/`, {
+        const response = await axios.post(`${baseURL}/token/refresh/`, {
           refresh: refreshToken
         });
         

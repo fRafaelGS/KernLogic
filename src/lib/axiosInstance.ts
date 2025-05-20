@@ -1,9 +1,12 @@
 import axios, { AxiosError, InternalAxiosRequestConfig, AxiosRequestHeaders } from 'axios';
-import { API_URL } from '@/config';
+import { API_URL } from '@/config/config';
+
+// Make sure the API URL doesn't end with /api to prevent double paths
+const baseURL = API_URL.endsWith('/api') ? API_URL.slice(0, -4) : API_URL;
 
 // Create the single Axios instance
 const axiosInstance = axios.create({
-    baseURL: API_URL,
+    baseURL: baseURL,
     withCredentials: false, // Changed to false since we're using JWT in headers
     headers: {
         'Accept': 'application/json'
@@ -39,7 +42,8 @@ axiosInstance.interceptors.request.use(
                 url: config.url,
                 method: config.method,
                 authHeader: authHeader.substring(0, 20) + '...',
-                fullUrl: `${API_URL}${config.url?.startsWith('/') ? config.url : '/' + config.url}`
+                // Avoid double /api in the full URL
+                fullUrl: `${baseURL}${config.url?.startsWith('/') ? config.url : '/' + config.url}`
             });
         } else {
             console.log('[Request Interceptor] No token found for request:', config.url);
@@ -144,7 +148,7 @@ axiosInstance.interceptors.response.use(
                         }
                         
                         // Use fetch for refresh to bypass this interceptor
-                        const refreshUrl = `${API_URL}/token/refresh/`; 
+                        const refreshUrl = `${baseURL}/token/refresh/`; 
                         console.log('[Refresh] Calling refresh URL:', refreshUrl);
                         console.log('[Refresh] Using refresh token:', refreshToken.substring(0, 10) + '...');
 

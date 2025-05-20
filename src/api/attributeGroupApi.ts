@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import axiosInstance from '@/lib/axiosInstance'
 import { isAxiosError } from 'axios'
+import { API_ENDPOINTS } from '@/config/config'
 
 // Define types
 export interface AttributeGroup {
@@ -43,7 +44,7 @@ const handleApiError = (error: unknown) => {
 // API functions
 export const getAttributeGroups = async (): Promise<AttributeGroup[]> => {
   try {
-    const { data } = await axiosInstance.get('/api/attribute-groups/')
+    const { data } = await axiosInstance.get(API_ENDPOINTS.imports.attributeGroups)
     return data
   } catch (error) {
     return handleApiError(error)
@@ -64,7 +65,7 @@ export const createAttributeGroup = async (data: {
   order?: number
 }) => {
   try {
-    const response = await axiosInstance.post('/api/attribute-groups/', {
+    const response = await axiosInstance.post(API_ENDPOINTS.imports.attributeGroups, {
       name: data.name,
       ...(data.order !== undefined && { order: data.order })
     })
@@ -131,7 +132,7 @@ export const removeAttributeFromGroup = async (groupId: number, itemId: number) 
 
 export const reorderAttributeGroups = async (groupIds: number[]) => {
   try {
-    const response = await axiosInstance.post('/api/attribute-groups/reorder/', {
+    const response = await axiosInstance.post(API_ENDPOINTS.imports.attributeGroups + 'reorder/', {
       group_ids: groupIds
     })
     return response.data

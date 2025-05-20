@@ -65,17 +65,23 @@ import { useProductAssets } from '@/hooks/useProductAssets'
 import { LocaleCode, ChannelCode } from '@/services/types'
 import { useOrgSettings } from '@/hooks/useOrgSettings'
 
-// Update the ProductWithFamily interface
+// Update the ProductWithFamily interface to include all required Product fields for compatibility
 interface ProductWithFamily extends Omit<Product, 'family'> {
-  family?: Family | null;
-  attributes?: any;
-  primary_image_large?: string;
+  name: string
+  description: string
+  sku: string
+  category: string
+  is_active: boolean
+  family?: Family | null
+  attributes?: any
+  primary_image_large?: string
+  tags?: string[]
 }
 
 // Add type for category options used by react-select
 interface CategoryOption {
-  label: string;
-  value: number | string;
+  label: string
+  value: string
 }
 
 interface ProductFormProps {
@@ -150,7 +156,7 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
   // Form definition using react-hook-form with zod resolver and centralized default values
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productEditSchema),
-    defaultValues: getDefaultProductValues(initialProduct),
+    defaultValues: getDefaultProductValues(initialProduct as Product),
     mode: 'onSubmit', // Set submission mode
   });
 
@@ -184,11 +190,11 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
       console.log('Setting initial form values from product:', initialProduct);
       
       // Make sure name and SKU are explicitly set
-      const defaultValues = getDefaultProductValues(initialProduct);
+      const defaultValues = getDefaultProductValues(initialProduct as Product);
       console.log('Default values from helper:', defaultValues);
       
       // Reset form with data using our centralized helper
-      form.reset(getDefaultProductValues(initialProduct as any));
+      form.reset(getDefaultProductValues(initialProduct as Product));
       
       // Just to be extra sure, explicitly set these critical fields
       form.setValue('name', initialProduct.name || '');
@@ -217,21 +223,29 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
         const initialCats = await productService.getCategories();
         const options = initialCats.map(c => ({ 
           label: c.name || '', 
-          value: c.id || ''
+          value: String(c.id || '')
         }));
         setCategoryOptions(options);
         if (initialProduct?.category) {
-          const { label, value } = extractCategoryInfo(initialProduct.category);
+          let normalizedCategory = ''
+          if (isCategoryOption(initialProduct.category)) {
+            normalizedCategory = initialProduct.category.value
+          } else if (typeof initialProduct.category === 'number') {
+            normalizedCategory = String(initialProduct.category)
+          } else {
+            normalizedCategory = initialProduct.category
+          }
+          const { label, value } = extractCategoryInfo(normalizedCategory)
           const initialOption = options.find(opt => 
             String(opt.value) === String(value) || opt.label === label
-          );
+          )
           if (initialOption) {
-            form.setValue('category', initialOption);
-            setSelectedCategory({ label: initialOption.label, id: initialOption.value, value: initialOption.value })
+            form.setValue('category', { label: initialOption.label, value: String(initialOption.value) })
+            setSelectedCategory({ label: initialOption.label, id: String(initialOption.value), value: String(initialOption.value) })
           } else {
-            const newOption = { label, value };
-            form.setValue('category', newOption);
-            setSelectedCategory({ label, id: value, value })
+            const newOption = { label, value: String(value) }
+            form.setValue('category', newOption)
+            setSelectedCategory({ label, id: String(value), value: String(value) })
           }
         }
       } catch (error) {
@@ -250,7 +264,7 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
         console.log('Loading all available tags...');
         const tags = await productService.searchTags('');
         console.log('Loaded tags:', tags);
-        setTagOptions(tags);
+        setTagOptions(tags.map((t: { label: string; value: string | number }) => ({ label: t.label, value: String(t.value) })));
       } catch (error) {
         console.error('Failed to load tags:', error);
       }
@@ -261,18 +275,15 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
     // If we're editing, add the product's existing tags
     if (initialProduct?.tags) {
       console.log('Initializing form with product tags:', initialProduct.tags);
-      // Assuming tags are stored as strings (names or IDs)
-      // Create options from the product's current tags
-      const initialTagOpts = initialProduct.tags.map(tag => ({ label: tag, value: tag }));
-      console.log('Created tag options:', initialTagOpts);
-      // Merge with any tags we've already loaded to avoid duplicates
+      const initialTagOpts = (initialProduct.tags as string[]).map((tag: string) => ({ label: tag, value: String(tag) }))
+      console.log('Created tag options:', initialTagOpts)
       setTagOptions(prev => {
-        const existingValues = new Set(prev.map(opt => opt.value));
-        const newOpts = initialTagOpts.filter(opt => !existingValues.has(opt.value));
-        const mergedOptions = [...prev, ...newOpts];
-        console.log('Merged tag options:', mergedOptions);
-        return mergedOptions;
-      });
+        const existingValues = new Set(prev.map((opt: { label: string; value: string }) => opt.value))
+        const newOpts = initialTagOpts.filter((opt: { label: string; value: string }) => !existingValues.has(opt.value))
+        const mergedOptions = [...prev, ...newOpts]
+        console.log('Merged tag options:', mergedOptions)
+        return mergedOptions
+      })
       // Update the form value to be the array of IDs/values
       form.setValue('tags', initialProduct.tags);
     }
@@ -579,7 +590,7 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
         const refreshedProduct = await productService.getProduct(productId);
         if (refreshedProduct) {
           // Reset form with refreshed data
-          form.reset(getDefaultProductValues(refreshedProduct as any));
+          form.reset(getDefaultProductValues(refreshedProduct as Product));
           
           // Always update our local product state with the latest data
           setProduct(refreshedProduct as any);
@@ -842,7 +853,7 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
                     <input
                       type="hidden"
                       {...form.register('category')}
-                      value={selectedCategory?.value || selectedCategory?.id || ''}
+                      value={selectedCategory ? String(selectedCategory.value || selectedCategory.id || '') : ''}
                     />
                     <FormMessage />
                   </div>
@@ -1054,7 +1065,8 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
             onCategoryUpdated={cat => {
               // Always set both label and value for the form and selectedCategory
               setSelectedCategory({ label: cat.name, value: cat.id })
-              form.setValue('category', { label: cat.name, value: cat.id })
+              form.setValue('category', { label: cat.name, value: String(cat.id) })
+              setSelectedCategory({ label: cat.name, id: String(cat.id), value: String(cat.id) })
               setIsCategoryModalOpen(false)
             }}
           />
@@ -1086,4 +1098,8 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
       </Form>
     </div>
   );
+}
+
+function isCategoryOption(obj: unknown): obj is CategoryOption {
+  return typeof obj === 'object' && obj !== null && 'value' in obj && typeof (obj as any).value === 'string'
 }

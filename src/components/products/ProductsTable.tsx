@@ -79,6 +79,7 @@ import { useOrgSettings } from '@/hooks/useOrgSettings'
 import { useFamilies } from "@/api/familyApi";
 import { useFetchProducts } from "@/hooks/useFetchProducts";
 import { config } from "@/config/config";
+import { ROUTES } from "@/config/routes";
 
 /**
  * ProductsTable - A table for displaying and managing products
@@ -460,13 +461,6 @@ export function ProductsTable({
     // Convert to sorted array
     return Array.from(uniqueCategories).sort();
   }, []);
-  
-  // Define safeCallFetchData helper function to safely call fetchData
-  const safeCallFetchData = useCallback((fetchDataFn?: () => void) => {
-    if (typeof fetchDataFn === 'function') {
-      fetchDataFn();
-    }
-  }, []);
 
   // Extract unique categories using our enhanced function
   const uniqueCategories = useMemo(() => 
@@ -522,12 +516,6 @@ export function ProductsTable({
       }
     }
   }, [fetchData, toast, tableConfig.messages]);
-
-  // Update the handleFilterToggle function to toggle filtersVisible
-  const handleFilterToggle = useCallback(() => {
-    setFiltersVisible(prev => !prev);
-    // Add more visibility logic if needed for specific filter sections
-  }, [filtersVisible]);
 
   // Handle clear filters
   const handleClearFilters = useCallback(() => {
@@ -1381,13 +1369,6 @@ export function ProductsTable({
     setShowTagModal(true);
   }, []);
   
-  const openSubcategoryManager = useCallback((e?: React.MouseEvent) => {
-    if (e) {
-      e.stopPropagation();
-    }
-    setShowSubcategoryManager(true);
-  }, []);
-  
   // Get selected product IDs helper
   const getSelectedProductIds = useCallback(() => {
     return Object.keys(rowSelection)
@@ -1679,7 +1660,7 @@ export function ProductsTable({
             {/* Only show New Product button if hideTopControls is false */}
             {!hideTopControls && (
               <Button className="h-9" asChild>
-                <Link to="/app/products/new">
+                <Link to={ROUTES.APP.NEW}>
                   <PlusIcon className="mr-2 h-4 w-4" />
                   New Product
                 </Link>

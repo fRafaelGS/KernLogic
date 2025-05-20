@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectItem, SelectTrigger, SelectValue, SelectContent } from '@/components/ui/select';
 import { DatePickerWithRange } from '@/components/ui/date-range-picker';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { API_ENDPOINTS } from '@/config/config';
 
 interface ProductHistoryTabProps {
   productId: number;
@@ -171,7 +172,9 @@ function HistoryEventCard({ event }: { event: ProductEvent }) {
 // Add a debugging function to log the complete request details
 const debugAPICall = (productId: number, page: number, filters: Record<string, any>) => {
   // Construct a sample URL to show what the API call will look like
-  const baseUrl = `/api/products/${productId}/history/`;
+  const baseUrl = API_ENDPOINTS.products.history 
+    ? API_ENDPOINTS.products.history(productId) 
+    : `/api/products/${productId}/history/`;
   const queryParams = new URLSearchParams();
   
   Object.entries(filters).forEach(([key, value]) => {

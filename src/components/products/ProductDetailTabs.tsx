@@ -36,7 +36,7 @@ import { getAssetUrl } from '@/utils/isImageAsset'
 import { PriceTab } from './PriceTab'
 import { LocaleCode } from '@/services/types'
 import { useOrgSettings } from '@/hooks/useOrgSettings'
-import { config } from '@/config/config'
+import { config, API_ENDPOINTS, API_CURRENCIES } from '@/config/config'
 
 // ====== ATTRIBUTES INTERFACES (EXACT MATCH TO SPEC) ======
 
@@ -633,8 +633,12 @@ export const ProductDetailTabs = ({
   const [currencies, setCurrencies] = useState<{ iso_code: string; symbol: string; name: string }[]>([])
 
   useEffect(() => {
-    axiosInstance.get('/api/currencies').then(res => setCurrencies(res.data)).catch(() => setCurrencies([]))
-    axiosInstance.get(`/api/products/${product.id}/assets/`).then(res => setAssets(res.data)).catch(() => setAssets([]))
+    axiosInstance.get(API_CURRENCIES).then(res => setCurrencies(res.data)).catch(() => setCurrencies([]))
+    if (typeof product.id === 'number') {
+      axiosInstance.get(API_ENDPOINTS.products.assets(product.id)).then(res => setAssets(res.data)).catch(() => setAssets([]))
+    } else {
+      axiosInstance.get(`/api/products/${product.id}/assets/`).then(res => setAssets(res.data)).catch(() => setAssets([]))
+    }
   }, [product.id])
 
   // Add a fallback implementation if the imported function doesn't exist

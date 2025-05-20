@@ -1,5 +1,5 @@
 import axiosInstance from '@/lib/axiosInstance';
-import { API_ENDPOINTS } from '@/config';
+import { API_ENDPOINTS } from '@/config/config';
 import { config } from '@/config/config';
 
 // Define types for dashboard data

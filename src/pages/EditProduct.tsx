@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, ChevronRight, ArrowLeft } from 'lucide-react';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { Button } from '@/components/ui/button';
+import { ROUTES } from '@/config/routes';
 
 export const EditProduct: React.FC = () => {
     const { id } = useParams<{ id: string }>();
@@ -67,7 +68,7 @@ export const EditProduct: React.FC = () => {
     return (
         <div className="space-y-4">
             <nav className="flex items-center text-sm text-enterprise-600 mb-2">
-                 <Link to="/app/products" className="hover:underline hover:text-primary-600">Products</Link>
+                 <Link to={ROUTES.APP.PRODUCTS.ROOT} className="hover:underline hover:text-primary-600">Products</Link>
                  <ChevronRight className="h-4 w-4 mx-1" />
                  <span className="font-medium text-enterprise-800">
                     {isLoading ? 'Loading...' : product ? `Edit: ${product.name}` : 'Edit Product'}

@@ -3,9 +3,19 @@
  * Centralized configuration for the KernLogic frontend application
  */
 
+// NOTE: API_URL and API_BASE_URL must NOT include /api at the end. They should be like 'http://localhost:8000', not 'http://localhost:8000/api'.
+
 // API Configuration
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
+// API and static asset paths for use throughout the frontend
+export const API_MEDIA_UPLOAD = '/api/media/upload/'
+export const API_CHECK_USER = '/api/check-user/'
+export const API_CURRENCIES = '/api/currencies'
+export const API_PRICE_TYPES = '/api/price-types/'
+export const API_SALES_CHANNELS = '/api/sales-channels/'
+export const PRODUCTS_PATH = '/api/products'
 
 // Dashboard Configuration
 export const config = {
@@ -892,6 +902,119 @@ export const config = {
         document: 'Document',
         video: 'Video',
         other: 'Other'
+      },
+      assetCard: {
+        unnamed: 'Unnamed',
+        unnamed_asset: 'Unnamed asset',
+        unknown: 'UNKNOWN',
+        unknown_date: 'Unknown date',
+        image_error: 'Error loading image',
+        add_tags: 'Add tags...',
+        add_new_tag: 'New tag...',
+        add_tag_button: 'Add',
+        no_tags: 'No tags (click to add)',
+        size_label: 'Size',
+        primary_badge: 'Primary',
+        set_as_primary: 'Set as Primary',
+        asset_menu: 'Asset menu',
+        buttons: {
+          save: 'Save',
+          cancel: 'Cancel',
+          edit_tags: 'Edit Tags',
+          download: 'Download',
+          rename: 'Rename',
+          archive: 'Archive'
+        }
+      },
+      assetsTab: {
+        coming_soon: 'Assets gallery is coming soon.',
+        upload: {
+          drag_drop: 'Drag and drop files here or click to browse',
+          browsing: 'Browsing',
+          max_size: 'Maximum file size: 10MB',
+          select_files: 'Select Files',
+          uploading: 'Uploading',
+          upload_complete: 'Upload complete',
+          upload_error: 'Upload error',
+          retry: 'Retry',
+          cancel: 'Cancel'
+        },
+        filters: {
+          title: 'Filters',
+          close: 'Close',
+          type: 'Type',
+          date_range: 'Date Range',
+          tags: 'Tags',
+          search_placeholder: 'Search assets...',
+          apply: 'Apply Filters',
+          reset: 'Reset',
+          no_tags_found: 'No tags found'
+        },
+        actions: {
+          select_all: 'Select All',
+          deselect_all: 'Deselect All',
+          archive_selected: 'Archive Selected',
+          download_selected: 'Download Selected',
+          create_bundle: 'Create Bundle',
+          refresh: 'Refresh'
+        },
+        bundle: {
+          create_title: 'Create Asset Bundle',
+          create_description: 'Create a named bundle of assets for easier sharing and downloading',
+          name_label: 'Bundle Name',
+          name_placeholder: 'Enter a name for this bundle',
+          buttons: {
+            create: 'Create Bundle',
+            cancel: 'Cancel',
+            creating: 'Creating...'
+          },
+          success: 'Bundle created successfully',
+          error: 'Failed to create bundle'
+        },
+        rename: {
+          title: 'Rename Asset',
+          description: 'Enter a new name for this asset',
+          name_label: 'Asset Name',
+          buttons: {
+            save: 'Save',
+            cancel: 'Cancel',
+            saving: 'Saving...'
+          },
+          success: 'Asset renamed successfully',
+          error: 'Failed to rename asset'
+        },
+        empty_states: {
+          no_assets: 'No assets found',
+          no_assets_description: 'Upload assets to get started',
+          no_results: 'No results found',
+          no_results_description: 'Try changing your search or filter criteria'
+        },
+        messages: {
+          primary_success: 'Set as primary image',
+          primary_error: 'Failed to set primary image',
+          delete_success: 'Asset deleted',
+          delete_error: 'Failed to delete asset',
+          archive_success: 'Asset archived',
+          archive_error: 'Failed to archive asset',
+          archive_multiple_success: 'Assets archived',
+          archive_multiple_error: 'Failed to archive assets',
+          refresh_success: 'Assets refreshed',
+          refresh_error: 'Failed to refresh assets'
+        }
+      },
+      bulkDownload: {
+        button_text: 'Download ZIP',
+        title: 'Download selected assets as ZIP',
+        aria_label: 'Bulk download assets',
+        large_download: {
+          title: 'Large download',
+          description: 'You are downloading more than 100 files. This may take a while.'
+        }
+      },
+      bundleCard: {
+        assets_count: '{{count}} assets',
+        download_title: 'Download bundle',
+        delete_title: 'Delete bundle'
       }
     },
     history: {
@@ -968,7 +1091,11 @@ export const API_ENDPOINTS = {
     update: (id: number) => `/api/products/${id}/`,
     delete: (id: number) => `/api/products/${id}/`,
     categories: '/api/categories/',
-    stats: '/api/products/stats/'
+    stats: '/api/products/stats/',
+    assets: (id: number) => `/api/products/${id}/assets/`,
+    asset: (productId: number, assetId: number) => `/api/products/${productId}/assets/${assetId}/`,
+    history: (id: number) => `/api/products/${id}/history/`,
+    checkSku: '/api/products/check-sku/'
   },
   categories: {
     list: '/api/categories/',
@@ -1003,7 +1130,7 @@ export const API_ENDPOINTS = {
   },
   imports: {
     create: '/api/imports/',
-    attributeGroups: '/api/attribute-groups-import/',
+    attributeGroups: '/api/attribute-groups/',
     attributes: '/api/attributes-import/',
     families: '/api/families-import/',
     details: (id: number) => `/api/imports/${id}/`,

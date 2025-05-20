@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
-import StepUpload from './StepUpload';
-import StepMapping from './StepMapping';
-import StepProgress from './StepProgress';
-import StepImportMode, { ImportMode } from './StepImportMode';
+import StepUpload from '@/features/imports/StepUpload';
+import StepMapping from '@/features/imports/StepMapping';
+import StepProgress from '@/features/imports/StepProgress';
+import StepImportMode, { ImportMode } from '@/features/imports/StepImportMode';
 import { 
   createImport, 
   createAttributeGroupImport, 

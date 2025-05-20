@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import axiosInstance from '@/lib/axiosInstance'
+import { API_ENDPOINTS } from '@/config/config'
 
 export interface IncompleteProductRaw {
   id: number
@@ -19,7 +20,7 @@ export interface IncompleteProduct {
 }
 
 const fetchTopIncompleteProducts = async (): Promise<IncompleteProduct[]> => {
-  const { data } = await axiosInstance.get<IncompleteProductRaw[]>('/api/dashboard/incomplete-products')
+  const { data } = await axiosInstance.get<IncompleteProductRaw[]>(API_ENDPOINTS.dashboard + '/incomplete-products')
   
   // Transform the raw data to include missingCount
   return data.map(product => ({

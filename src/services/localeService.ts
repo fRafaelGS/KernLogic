@@ -1,7 +1,8 @@
-import axiosInstance from '../lib/axiosInstance'
+import axios from 'axios'
+import axiosInstance from '@/lib/axiosInstance'
 import { paths } from '@/lib/apiPaths'
 import { toast } from 'sonner'
-import { API_ENDPOINTS } from '@/config'
+import { API_ENDPOINTS } from '@/config/config'
 
 /**
  * Interface for Locale objects returned from the API

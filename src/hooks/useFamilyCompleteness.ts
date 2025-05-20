@@ -3,6 +3,7 @@ import { toast } from '@/components/ui/use-toast'
 import axiosInstance from '@/lib/axiosInstance'
 import { ReportFiltersState } from '@/features/reports/components/filters/ReportFilters'
 import { useAuth } from '@/contexts/AuthContext'
+import { API_ENDPOINTS } from '@/config/config'
 
 export interface FamilyCompleteness {
   familyName: string
@@ -27,7 +28,7 @@ const fetchFamilyCompleteness = async (filters?: ReportFiltersState): Promise<Fa
     if (filters.to) params.to_date = new Date(filters.to).toISOString()
   }
   
-  const { data } = await axiosInstance.get<FamilyCompleteness[]>('/api/dashboard/family-completeness', { params })
+  const { data } = await axiosInstance.get<FamilyCompleteness[]>(API_ENDPOINTS.dashboard + '/family-completeness', { params })
   return data
 }
 

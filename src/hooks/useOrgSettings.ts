@@ -31,7 +31,7 @@ export function useOrgSettings() {
     queryKey: ['organization', orgId],
     queryFn: async () => {
       if (!orgId) throw new Error('No organization ID available')
-      const response = await api.get(`/organizations/${orgId}/`)
+      const response = await api.get(`/api/organizations/${orgId}/`)
       return response.data
     },
     enabled: !!orgId && !orgFromHook, // Only fetch if not already loaded by useOrganization

@@ -2,8 +2,8 @@ import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import StepMapping from './StepMapping'
-import { useImportFieldSchema } from './hooks/useImportFieldSchema'
+import StepMapping from '@/features/imports/StepMapping'
+import { useImportFieldSchema } from '@/features/imports/hooks/useImportFieldSchema'
 
 // Mock the useImportFieldSchema hook
 vi.mock('./hooks/useImportFieldSchema', () => ({

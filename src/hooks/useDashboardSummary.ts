@@ -3,6 +3,7 @@ import axiosInstance from '@/lib/axiosInstance'
 import { DashboardSummary } from '@/services/dashboardService'
 import { useAuth } from '@/contexts/AuthContext'
 import { ReportFiltersState } from '@/features/reports/components/filters/ReportFilters'
+import { API_ENDPOINTS } from '@/config/config'
 
 /**
  * Fetches dashboard summary data from the API
@@ -22,7 +23,7 @@ const fetchDashboardSummary = async (filters?: ReportFiltersState): Promise<Dash
     if (filters.to) params.to_date = new Date(filters.to).toISOString()
   }
   
-  const { data } = await axiosInstance.get<DashboardSummary>('/api/dashboard/summary', { params })
+  const { data } = await axiosInstance.get<DashboardSummary>(API_ENDPOINTS.dashboard + '/summary', { params })
   return data
 }
 

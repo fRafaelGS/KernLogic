@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from '@/components/ui/badge';
 import axios from 'axios';
+import { PRODUCTS_PATH } from '@/config/config'
+import { ROUTES } from '@/config/routes'
 
 interface StepProgressProps {
   importId: number;
@@ -177,7 +179,7 @@ const StepProgress: React.FC<StepProgressProps> = ({ importId, onComplete }) => 
   }, [importId, toast, onComplete]);
 
   const handleViewProducts = () => {
-    navigate('/products');
+    navigate(PRODUCTS_PATH);
   };
 
   const handleDownloadErrors = () => {
@@ -190,7 +192,7 @@ const StepProgress: React.FC<StepProgressProps> = ({ importId, onComplete }) => 
     if (onComplete) {
       onComplete();
     } else {
-      navigate('/products');
+      navigate(PRODUCTS_PATH);
     }
   };
 

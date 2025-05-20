@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import axiosInstance from '@/lib/axiosInstance'
 import { toast } from '@/components/ui/use-toast'
+import { API_ENDPOINTS } from '@/config/config'
 
 export interface RequiredAttribute {
   name: string
@@ -12,7 +13,7 @@ export interface RequiredAttribute {
 }
 
 const fetchRequiredAttributes = async (): Promise<RequiredAttribute[]> => {
-  const { data } = await axiosInstance.get<RequiredAttribute[]>('/api/dashboard/required-attributes')
+  const { data } = await axiosInstance.get<RequiredAttribute[]>(API_ENDPOINTS.dashboard + '/required-attributes')
   return data
 }
 
@@ -26,7 +27,7 @@ export function useRequiredAttributes() {
 }
 
 export const startAutoEnrich = async (): Promise<{ message: string }> => {
-  const { data } = await axiosInstance.post<{ message: string }>('/api/dashboard/auto-enrich')
+  const { data } = await axiosInstance.post<{ message: string }>(API_ENDPOINTS.dashboard + '/auto-enrich')
   return data
 }
 

@@ -8,6 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import api from '@/services/api';
 import axios from 'axios';
+import { API_CHECK_USER } from '@/config/config'
 
 export default function OrganizationRegisterPage() {
   const { orgId } = useParams<{ orgId: string }>();
@@ -46,7 +47,7 @@ export default function OrganizationRegisterPage() {
             if (emailFromUrl) {
               try {
                 // Make a request to check if user exists but needs password
-                const checkResponse = await api.post('/api/check-user/', { 
+                const checkResponse = await api.post(API_CHECK_USER, { 
                   email: emailFromUrl,
                   organization_id: orgId
                 });

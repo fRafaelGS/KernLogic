@@ -11,8 +11,9 @@ import { useDebouncedCallback } from '@/hooks/useDebouncedCallback';
 import { Edit, Calendar as CalendarIcon, Globe, Monitor } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { LocaleCode, ChannelCode } from '@/services/types';
+
 import { useOrgSettings } from '@/hooks/useOrgSettings';
+import { config } from '@/config/config';
 
 // Types
 export interface Attribute {
@@ -83,6 +84,9 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
   selectedLocale = "default",
   selectedChannel = "default"
 }) => {
+  // Get configurations
+  const attributeConfig = config.settings.display.attributeComponents.attributeValueRow;
+  
   // --------------------------------------------------------------
   // Normalise incoming JSONField value from API → AttrValue object
   // --------------------------------------------------------------
@@ -172,7 +176,7 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
             value={(localValue as any) || ''}
             onChange={(e) => handleValueChange(e.target.value as AttrValue)}
             disabled={isDisabled}
-            placeholder={`Enter ${attribute.label} (press Enter to save)`}
+            placeholder={attributeConfig.placeholders.text}
             onKeyDown={handleKeyDown}
             autoFocus
           />
@@ -185,7 +189,7 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
             value={(localValue as any) || ''}
             onChange={(e) => handleValueChange(parseFloat(e.target.value) as AttrValue)}
             disabled={isDisabled}
-            placeholder={`Enter ${attribute.label} (press Enter to save)`}
+            placeholder={attributeConfig.placeholders.number}
             onKeyDown={handleKeyDown}
             autoFocus
           />
@@ -200,7 +204,7 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
               disabled={isDisabled}
             />
             <span className="text-sm text-enterprise-600">
-              {Boolean(localValue) ? 'Yes' : 'No'}
+              {Boolean(localValue) ? attributeConfig.labels.boolean.yes : attributeConfig.labels.boolean.no}
             </span>
           </div>
         );
@@ -217,7 +221,7 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
                   disabled={isDisabled}
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
-                  {localValue ? format(new Date(localValue as string), 'PPP') : `Select ${attribute.label}`}
+                  {localValue ? format(new Date(localValue as string), 'PPP') : attributeConfig.placeholders.selectDate}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
@@ -313,7 +317,7 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
             value={(localValue as any) || ''}
             onChange={e => handleValueChange(e.target.value as AttrValue)}
             disabled={isDisabled}
-            placeholder='https://example.com'
+            placeholder={attributeConfig.placeholders.url}
             onKeyDown={handleKeyDown}
             autoFocus
           />
@@ -326,7 +330,7 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
             value={(localValue as any) || ''}
             onChange={e => handleValueChange(e.target.value as AttrValue)}
             disabled={isDisabled}
-            placeholder='name@example.com'
+            placeholder={attributeConfig.placeholders.email}
             onKeyDown={handleKeyDown}
             autoFocus
           />
@@ -339,7 +343,7 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
             value={(localValue as any) || ''}
             onChange={e => handleValueChange(e.target.value as AttrValue)}
             disabled={isDisabled}
-            placeholder='+1 555 555 5555'
+            placeholder={attributeConfig.placeholders.phone}
             onKeyDown={handleKeyDown}
             autoFocus
           />
@@ -379,7 +383,7 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
             value={(localValue as any) || ''}
             onChange={(e) => handleValueChange(e.target.value as AttrValue)}
             disabled={isDisabled}
-            placeholder={`Enter ${attribute.label} (press Enter to save)`}
+            placeholder={attributeConfig.placeholders.text}
             onKeyDown={handleKeyDown}
             autoFocus
           />
@@ -583,10 +587,24 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
           
           {/* Data type indicator */}
           <Badge variant="outline" className="text-xs bg-amber-50 text-amber-800 border-amber-200">
-            {attribute.data_type === 'text' && 'Text'}
-            {attribute.data_type === 'number' && 'Number'}
-            {attribute.data_type === 'date' && 'Date'}
-            {attribute.data_type === 'boolean' && 'Boolean'}
+            {(() => {
+              switch (attribute.data_type) {
+                case 'text': return attributeConfig.labels.dataTypes.text;
+                case 'number': return attributeConfig.labels.dataTypes.number;
+                case 'date': return attributeConfig.labels.dataTypes.date;
+                case 'boolean': return attributeConfig.labels.dataTypes.boolean;
+                case 'select': return attributeConfig.labels.dataTypes.select;
+                case 'multiselect': return attributeConfig.labels.dataTypes.multiselect;
+                case 'price': return attributeConfig.labels.dataTypes.price;
+                case 'measurement': return attributeConfig.labels.dataTypes.measurement;
+                case 'media': return attributeConfig.labels.dataTypes.media;
+                case 'rich_text': return attributeConfig.labels.dataTypes.rich_text;
+                case 'url': return attributeConfig.labels.dataTypes.url;
+                case 'email': return attributeConfig.labels.dataTypes.email;
+                case 'phone': return attributeConfig.labels.dataTypes.phone;
+                default: return attribute.data_type;
+              }
+            })()}
           </Badge>
           
           {/* Group indicator if provided */}
@@ -629,8 +647,8 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
                       </TooltipTrigger>
                       <TooltipContent side="top" align="center" className="max-w-[280px] text-xs">
                         {isSettingsContext 
-                          ? 'Remove this attribute from the group. This will not delete the attribute itself.' 
-                          : 'Remove this value from the product. This will only affect this specific product.'}
+                          ? attributeConfig.tooltips.deleteWarning
+                          : attributeConfig.tooltips.delete}
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -648,7 +666,7 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="top" align="center" className="text-xs">
-                    Edit this attribute value
+                    {attributeConfig.tooltips.edit}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -672,8 +690,8 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
               </TooltipTrigger>
               <TooltipContent side="bottom" className="text-xs">
                 {attribute.is_localisable 
-                  ? 'This attribute can have different values per language'
-                  : 'This attribute has the same value in all languages'}
+                  ? attributeConfig.tooltips.localisable
+                  : attributeConfig.tooltips.nonLocalisable}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -700,8 +718,8 @@ const AttributeValueRow: React.FC<AttributeValueRowProps> = ({
               </TooltipTrigger>
               <TooltipContent side="bottom" className="text-xs">
                 {attribute.is_scopable 
-                  ? 'This attribute can have different values per sales channel'
-                  : 'This attribute has the same value in all sales channels'}
+                  ? attributeConfig.tooltips.scopable
+                  : attributeConfig.tooltips.nonScopable}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>

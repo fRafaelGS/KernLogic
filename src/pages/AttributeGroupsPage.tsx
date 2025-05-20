@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { config } from '@/config/config';
 
 // UI Components
 import {
@@ -156,6 +157,9 @@ const AttributeGroupsPage: React.FC = () => {
   
   // Force isStaff to true for testing
   const isStaff = true;
+  
+  // Access the configuration
+  const attributeGroupsConfig = config.settings.display.attributeGroupsPage;
   
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -591,7 +595,7 @@ const AttributeGroupsPage: React.FC = () => {
       <div>
         <h1 className="text-3xl font-bold text-enterprise-900">Attribute Groups</h1>
         <p className="text-enterprise-600 mt-1">
-          Organize attributes into groups for better product management.
+          {attributeGroupsConfig.description}
         </p>
       </div>
 
@@ -633,7 +637,7 @@ const AttributeGroupsPage: React.FC = () => {
             <CardHeader className="pb-3">
               <CardTitle>Attribute Groups</CardTitle>
               <CardDescription>
-                Group attributes to better organize product information
+                {attributeGroupsConfig.groupDescription}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -738,7 +742,7 @@ const AttributeGroupsPage: React.FC = () => {
                     <AlertDialogHeader>
                       <AlertDialogTitle>Delete Attribute Group</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Are you sure you want to delete the group "{group.name}"? This will not delete the attributes themselves, only the grouping.
+                        {attributeGroupsConfig.deleteConfirmationText}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -764,7 +768,7 @@ const AttributeGroupsPage: React.FC = () => {
           <DialogHeader>
             <DialogTitle>Create New Attribute Group</DialogTitle>
             <DialogDescription>
-              Create a group to organize related attributes.
+              {attributeGroupsConfig.createModalDescription}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit}>
@@ -896,7 +900,7 @@ const AttributeGroupsPage: React.FC = () => {
           <DialogHeader>
             <DialogTitle>Edit Attribute Group</DialogTitle>
             <DialogDescription>
-              Update group properties and attributes.
+              {attributeGroupsConfig.editModalDescription}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit}>

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Attribute, AttributeValue } from './AttributeValueRow';
+import React, { useState, useEffect } from 'react';
+import { Attribute } from './AttributeValueRow';
 import { 
   Dialog, 
   DialogContent, 
@@ -13,14 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
-  Command, 
-  CommandEmpty, 
-  CommandGroup, 
-  CommandInput, 
-  CommandItem, 
-  CommandList 
-} from "@/components/ui/command";
-import { 
   Select, 
   SelectContent, 
   SelectGroup,
@@ -29,12 +21,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from "@/components/ui/select";
-import { Globe, Monitor, Loader2 } from 'lucide-react';
-import { 
-  makeAttributeKey, 
-  normalizeLocaleOrChannel, 
-  filterUnusedAttributes 
-} from '@/lib/attributeUtils';
+import { Globe, Monitor } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Search, Filter, Info } from 'lucide-react';
 import { Label } from "@/components/ui/label";
@@ -45,8 +32,8 @@ import {
   TooltipProvider, 
   TooltipTrigger 
 } from "@/components/ui/tooltip";
-import { LocaleCode, ChannelCode } from '@/services/types';
 import { useOrgSettings } from '@/hooks/useOrgSettings';
+import { config } from '@/config/config';
 
 interface AddAttributeModalProps {
   isOpen: boolean;
@@ -74,6 +61,9 @@ const AddAttributeModal: React.FC<AddAttributeModalProps> = ({
   groupId,
   attributeValues
 }) => {
+  // Get configuration
+  const modalConfig = config.settings.display.attributeComponents.addAttributeModal;
+  
   const [activeTab, setActiveTab] = useState<'standard' | 'advanced'>('standard');
   const [selectedAttribute, setSelectedAttribute] = useState<Attribute | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -179,9 +169,9 @@ const AddAttributeModal: React.FC<AddAttributeModalProps> = ({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle className="text-xl">Add Attribute</DialogTitle>
+          <DialogTitle className="text-xl">{modalConfig.title}</DialogTitle>
           <DialogDescription>
-            Select an attribute to add to {groupId ? 'this group' : 'this product'}.
+            {modalConfig.description}
           </DialogDescription>
         </DialogHeader>
 
@@ -197,7 +187,7 @@ const AddAttributeModal: React.FC<AddAttributeModalProps> = ({
                 <div className="relative flex-1">
                   <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Search attributes..."
+                    placeholder={modalConfig.searchPlaceholder}
                     className="pl-8"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -207,10 +197,10 @@ const AddAttributeModal: React.FC<AddAttributeModalProps> = ({
                 <Select value={filterType} onValueChange={setFilterType}>
                   <SelectTrigger className="w-[140px]">
                     <Filter className="h-4 w-4 mr-2" />
-                    <SelectValue placeholder="Filter by type" />
+                    <SelectValue placeholder={modalConfig.filterLabel} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="all">{modalConfig.filterOptions.all}</SelectItem>
                     <SelectItem value="text">Text</SelectItem>
                     <SelectItem value="number">Number</SelectItem>
                     <SelectItem value="boolean">Boolean</SelectItem>
@@ -222,7 +212,7 @@ const AddAttributeModal: React.FC<AddAttributeModalProps> = ({
               {filteredAttributes.length === 0 ? (
                 <div className="py-8 text-center border rounded-md border-dashed">
                   <Info className="mx-auto h-10 w-10 text-muted-foreground/60 mb-2" />
-                  <p className="text-muted-foreground">No matching attributes found</p>
+                  <p className="text-muted-foreground">{modalConfig.noResults}</p>
                   {searchQuery && (
                     <Button 
                       variant="link" 
@@ -245,7 +235,9 @@ const AddAttributeModal: React.FC<AddAttributeModalProps> = ({
                             <Badge variant="outline" className={getTypeColor(type)}>
                               {getTypeLabel(type)}
                             </Badge>
-                            <span className="text-xs text-muted-foreground">{attrs.length} attributes</span>
+                            <span className="text-xs text-muted-foreground">
+                              {attrs.length} {attrs.length === 1 ? modalConfig.attribute : modalConfig.attributes}
+                            </span>
                           </div>
                           
                           <div className="space-y-1">
@@ -334,8 +326,8 @@ const AddAttributeModal: React.FC<AddAttributeModalProps> = ({
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="font-medium">Selected Attribute</h3>
-                        <p className="text-sm text-muted-foreground mb-2">{selectedAttribute.label}</p>
+                        <h3 className="font-medium">{modalConfig.attributeDetailsSectionTitle}</h3>
+                        <p className="text-sm text-muted-foreground mb-2">{modalConfig.attributeDetailsSectionDesc}</p>
                       </div>
                       <Badge variant="outline" className={getTypeColor(selectedAttribute.data_type)}>
                         {getTypeLabel(selectedAttribute.data_type)}
@@ -401,13 +393,13 @@ const AddAttributeModal: React.FC<AddAttributeModalProps> = ({
             variant="outline"
             onClick={() => onOpenChange(false)}
           >
-            Cancel
+            {modalConfig.buttons.cancel}
           </Button>
           <Button
             onClick={handleAddAttribute}
             disabled={!selectedAttribute || isPending}
           >
-            {isPending ? 'Adding...' : 'Add Attribute'}
+            {isPending ? 'Adding...' : modalConfig.buttons.add}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -18,6 +18,7 @@ import {
 } from '@/lib/attributePreferences';
 import { LocaleCode, ChannelCode } from '@/services/types';
 import { useOrgSettings } from '@/hooks/useOrgSettings';
+import { config } from '@/config/config';
 
 interface LocaleChannelSelectorProps {
   selectedLocale: string;
@@ -86,20 +87,23 @@ const LocaleChannelSelector: React.FC<LocaleChannelSelectorProps> = ({
   const localeLabel = locales.find(l => l.code === selectedLocale)?.label || selectedLocale;
   const channelLabel = channels.find(c => c.code === selectedChannel)?.label || selectedChannel;
   
+  // Access the configuration using the correct path
+  const localeText = config.settings.display.attributeComponents.localeChannelSelector;
+  
   return (
     <div className="flex items-center space-x-4 border p-3 rounded-md bg-slate-50">
       <div className="flex items-center space-x-2">
         <Badge variant="outline" className="text-xs bg-blue-50 px-2">
           <Globe className="w-3.5 h-3.5 mr-1.5" />
-          Locale
+          {localeText.localeLabel}
         </Badge>
         <Select value={selectedLocale} onValueChange={handleLocaleChange}>
           <SelectTrigger className="w-[150px] bg-white">
-            <SelectValue placeholder="Select locale">{localeLabel}</SelectValue>
+            <SelectValue placeholder={localeText.localeChangeTooltip}>{localeLabel}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectGroup>
-              <SelectLabel>Locales</SelectLabel>
+              <SelectLabel>{localeText.localeLabel}</SelectLabel>
               {locales.map((locale) => (
                 <SelectItem key={locale.code} value={locale.code}>
                   {locale.label}
@@ -113,15 +117,15 @@ const LocaleChannelSelector: React.FC<LocaleChannelSelectorProps> = ({
       <div className="flex items-center space-x-2">
         <Badge variant="outline" className="text-xs bg-purple-50 px-2">
           <Monitor className="w-3.5 h-3.5 mr-1.5" />
-          Channel
+          {localeText.channelLabel}
         </Badge>
         <Select value={selectedChannel} onValueChange={handleChannelChange}>
           <SelectTrigger className="w-[150px] bg-white">
-            <SelectValue placeholder="Select channel">{channelLabel}</SelectValue>
+            <SelectValue placeholder={localeText.channelChangeTooltip}>{channelLabel}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectGroup>
-              <SelectLabel>Channels</SelectLabel>
+              <SelectLabel>{localeText.channelLabel}</SelectLabel>
               {channels.map((channel) => (
                 <SelectItem key={channel.code} value={channel.code}>
                   {channel.label}

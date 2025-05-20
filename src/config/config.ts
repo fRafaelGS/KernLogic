@@ -311,6 +311,152 @@ export const config = {
           }
         }
       },
+      attributeComponents: {
+        localeChannelSelector: {
+          localeLabel: 'Language',
+          localeChangeTooltip: 'Change display language',
+          allLocalesOption: 'All locales',
+          defaultLocaleOption: 'Default locale',
+          channelLabel: 'Channel',
+          channelChangeTooltip: 'Change sales channel',
+          allChannelsOption: 'All channels',
+          defaultChannelOption: 'Default channel'
+        },
+        attributeValueRow: {
+          tooltips: {
+            edit: 'Edit this attribute value',
+            delete: 'Remove this attribute from the product',
+            deleteWarning: 'Remove this attribute from the group. This will not delete the attribute itself.',
+            localisable: 'This attribute can have different values per language',
+            nonLocalisable: 'This attribute has the same value in all languages',
+            scopable: 'This attribute can have different values per sales channel',
+            nonScopable: 'This attribute has the same value in all sales channels'
+          },
+          placeholders: {
+            text: 'Enter text (press Enter to save)',
+            number: 'Enter number (press Enter to save)',
+            selectDate: 'Select date',
+            url: 'Enter URL (press Enter to save)',
+            email: 'Enter email (press Enter to save)',
+            phone: 'Enter phone (press Enter to save)'
+          },
+          labels: {
+            boolean: {
+              yes: 'Yes',
+              no: 'No'
+            },
+            dataTypes: {
+              text: 'Text',
+              number: 'Number',
+              date: 'Date',
+              boolean: 'Boolean',
+              select: 'Select',
+              multiselect: 'Multiselect',
+              price: 'Price',
+              measurement: 'Measurement',
+              media: 'Media',
+              rich_text: 'Rich Text',
+              url: 'URL',
+              email: 'Email',
+              phone: 'Phone'
+            }
+          },
+          buttons: {
+            save: 'Save',
+            cancel: 'Cancel',
+            edit: 'Edit',
+            delete: 'Delete',
+            browse: 'Browse'
+          }
+        },
+        addAttributeModal: {
+          title: 'Add Attribute',
+          description: 'Select an attribute to add to this product',
+          searchPlaceholder: 'Search attributes',
+          noResults: 'No attributes found matching your criteria',
+          filterLabel: 'Filter by',
+          filterOptions: {
+            all: 'All attributes',
+            unused: 'Unused attributes only'
+          },
+          attributeDetailsSectionTitle: 'Attribute Details',
+          attributeDetailsSectionDesc: 'Configure the new attribute',
+          localeChannelSectionTitle: 'Language & Channel',
+          localeChannelSectionDesc: 'Set specific locale and channel for this attribute value (optional)',
+          buttons: {
+            add: 'Add Attribute',
+            cancel: 'Cancel',
+            addAnother: 'Add & Add Another'
+          },
+          success: 'Attribute added successfully',
+          error: 'Failed to add attribute',
+          attributes: 'attributes',
+          attribute: 'attribute'
+        },
+        productAttributesPanel: {
+          title: 'Attributes',
+          emptyState: {
+            title: 'No attributes found',
+            description: 'No attributes have been added to this product yet',
+            addButton: 'Add Attribute'
+          },
+          noGroupsState: {
+            title: 'No attribute groups found',
+            description: 'Your product is associated with a family, but this family doesn\'t have any attribute groups configured yet.',
+            configureButton: 'Configure Family Attribute Groups',
+            tip: 'You need to add attribute groups to the family to manage product attributes effectively.'
+          },
+          attributeGroups: {
+            addTooltip: 'Add all attributes from this group to product',
+            addSuccess: 'Added group to product',
+            addError: 'Failed to add group',
+            removeSuccess: 'Removed group from product',
+            removeError: 'Failed to remove group',
+            allGroupsAdded: 'All attribute groups are already added to this product.',
+            noAttributesInGroup: 'No attributes found in this group to delete'
+          },
+          buttons: {
+            addAttribute: 'Add Attribute',
+            addAttributeGroup: 'Add Attribute Group',
+            expandAll: 'Expand All',
+            collapseAll: 'Collapse All',
+            deleteGroup: 'Delete Group'
+          },
+          loadError: 'Unable to load attributes',
+          saveError: 'Failed to save attribute',
+          validation: {
+            email: 'Invalid email address',
+            phone: 'Invalid phone number',
+            date: 'Invalid date format (YYYY-MM-DD)',
+            url: 'Invalid URL format'
+          },
+          addAttributeModal: {
+            title: 'Add Attribute',
+            description: 'Select an attribute to add to this product. You can set its value after adding.',
+            success: 'Attribute added. Use the edit button to set its value.',
+            error: 'Failed to add attribute',
+            buttons: {
+              add: 'Add',
+              cancel: 'Cancel'
+            }
+          },
+          deleteGroupModal: {
+            title: 'Delete Attribute Group',
+            warning: 'Warning: This will remove all attributes in the selected group from this product. The group itself will remain available for other products.',
+            selectLabel: 'Select Group to Delete',
+            selectPlaceholder: 'Choose a group...',
+            aboutToDelete: 'You are about to delete:',
+            allAttributesIn: 'All',
+            attributesIn: 'attributes in group',
+            actionDescription: 'This action only removes these attributes from the current product. The attributes and group definition will still be available for other products.',
+            buttons: {
+              confirm: 'Confirm Delete',
+              deleting: 'Deleting...',
+              cancel: 'Cancel'
+            }
+          }
+        }
+      },
       addLocaleModal: {
         title: 'Add New Locale',
         description: 'Enter a locale code and display name.',

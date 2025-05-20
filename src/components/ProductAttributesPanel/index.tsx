@@ -17,6 +17,7 @@ import { ChannelCode, LocaleCode } from '@/services/types'
 import axiosInstance from '@/lib/axiosInstance'
 import { useFamilyAttributeGroups } from '@/hooks/useFamilyAttributeGroups'
 import { useOrgSettings } from '@/hooks/useOrgSettings'
+import { config } from '@/config/config'
 
 interface ProductAttributesPanelProps {
   productId: string
@@ -182,6 +183,9 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
 
   // Add validation state for phone, email, url, date
   const [validationError, setValidationError] = useState<string | null>(null)
+  
+  // Access the centralized configuration
+  const panelConfig = config.settings.display.attributeComponents.productAttributesPanel
 
   const handleSave = (attr: Attribute) => {
     let value = draftValue
@@ -189,15 +193,15 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
     const type = attr.attribute_type || attr.type
     // Basic validation for enterprise polish
     if (type === 'email' && value && !/^\S+@\S+\.\S+$/.test(value)) {
-      setValidationError('Invalid email address')
+      setValidationError(panelConfig.validation.email)
       return
     }
     if (type === 'phone' && value && !/^\+?[0-9\-\s]{7,}$/.test(value)) {
-      setValidationError('Invalid phone number')
+      setValidationError(panelConfig.validation.phone)
       return
     }
     if (type === 'date' && value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-      setValidationError('Invalid date format (YYYY-MM-DD)')
+      setValidationError(panelConfig.validation.date)
       return
     }
     if (type === 'url' && value && value.length > 0 && !/^https?:\/\//i.test(value)) {
@@ -265,7 +269,7 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
     // Get all attribute IDs for this group
     const attrs = grouped[groupName] || []
     if (attrs.length === 0) {
-      toast.error('No attributes found in this group to delete')
+      toast.error(panelConfig.attributeGroups.noAttributesInGroup)
       return
     }
     
@@ -277,48 +281,44 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
     try {
       await Promise.all(attrPromises)
       await queryClient.invalidateQueries({ queryKey: ['attributes', productId, selectedLocale, selectedChannel] })
-      toast.success(`Successfully removed all attributes from group "${groupName}"`)
+      toast.success(panelConfig.attributeGroups.removeSuccess)
       setIsDeleteGroupModalOpen(false)
       setGroupToDelete(undefined)
     } catch (error) {
-      toast.error('Failed to remove some attributes')
+      toast.error(panelConfig.attributeGroups.removeError)
     }
   }
 
   // Helper: add all attributes from a group to the product
   async function handleAddGroupToProduct(group: AttributeGroup) {
-    // With the new backend changes, groups can only be added via family overrides
-    // If the product doesn't have a family, show an error message
-    // If it does, use the family override mechanism
-    
+    if (!group || !group.items || !productId) return
+
     setAddingAllGroup(group.name)
     try {
-      // Check if product has a family assigned
-      const productResponse = await axiosInstance.get(`/api/products/${productId}/`)
-      const productData = productResponse.data
-      
-      if (!productData.family) {
-        toast.error('This product has no family assigned. Attribute groups can only be inherited from a family.')
-        setAddingAllGroup(undefined)
+      const attrIds = group.items
+        .map((item: any) => item.attribute)
+        .filter((id: any) => id != null)
+
+      if (attrIds.length === 0) {
+        toast.error(panelConfig.attributeGroups.noAttributesInGroup)
         return
       }
-      
-      // Use family override mechanism to add group
-      // POST to /api/products/{productId}/family-overrides/
-      await axiosInstance.post(`/api/products/${productId}/family-overrides/`, [
-        {
-          attribute_group: group.id,
-          removed: false // false means "add this group"
-        }
-      ])
-      
-      // Refresh data after override is applied
+
+      // Create a blank value for each attribute - users can edit after adding
+      const promises = attrIds.map((attrId: number) =>
+        createMutation.mutateAsync({
+          attributeId: attrId,
+          value: '',
+          locale: selectedLocale,
+          channel: selectedChannel
+        })
+      )
+
+      await Promise.all(promises)
       await queryClient.invalidateQueries({ queryKey: ['attributes', productId, selectedLocale, selectedChannel] })
-      await queryClient.invalidateQueries({ queryKey: GROUPS_QUERY_KEY(productId) })
-      
-      toast.success(`Added group '${group.name}' to product via family override`)
+      toast.success(panelConfig.attributeGroups.addSuccess)
     } catch (err) {
-      toast.error('Failed to add group to product. Groups can only be added via family inheritance.')
+      toast.error(panelConfig.attributeGroups.addError)
     } finally {
       setAddingAllGroup(undefined)
     }
@@ -620,7 +620,7 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
 
   if (hasError) {
     return (
-      <p className='text-destructive'>Unable to load attributes</p>
+      <p className='text-destructive'>{panelConfig.loadError}</p>
     )
   }
 
@@ -628,10 +628,9 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
     <div className='space-y-4'>
       {hasFamily && hasNoGroups && (
         <div className='bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-4'>
-          <h3 className='font-medium text-yellow-800 mb-1'>No attribute groups found</h3>
+          <h3 className='font-medium text-yellow-800 mb-1'>{panelConfig.noGroupsState.title}</h3>
           <p className='text-sm text-yellow-700'>
-            This product belongs to the family "{productData?.family_name || productData?.label || 'ID: ' + familyId}" (ID: {familyId}), 
-            but this family doesn't have any attribute groups configured yet.
+            {panelConfig.noGroupsState.description}
           </p>
           <div className='mt-3'>
             <Button 
@@ -642,11 +641,11 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
                 window.open(`/families/${familyId}`, '_blank')
               }}
             >
-              Configure Family Attribute Groups
+              {panelConfig.noGroupsState.configureButton}
             </Button>
           </div>
           <p className='text-xs text-yellow-600 mt-2'>
-            Tip: You need to add attribute groups to the family to manage product attributes effectively.
+            {panelConfig.noGroupsState.tip}
           </p>
         </div>
       )}
@@ -660,7 +659,7 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
 
       {/* Group management UI */}
       <div className="flex justify-between items-center mb-2">
-        <h3 className="text-sm font-medium">Group Management</h3>
+        <h3 className="text-sm font-medium">{panelConfig.title}</h3>
         {!isCreateMode && Object.keys(grouped).filter(name => name !== 'Ungrouped').length > 0 && (
           <Button 
             size="sm" 
@@ -668,7 +667,7 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
             className="text-red-600 border-red-300 hover:bg-red-50"
             onClick={() => setIsDeleteGroupModalOpen(true)}
           >
-            Delete Group
+            {panelConfig.buttons.deleteGroup}
           </Button>
         )}
       </div>
@@ -711,13 +710,13 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
                   <span>Add group: {group.name}</span>
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Add all attributes from this group to product</TooltipContent>
+              <TooltipContent>{panelConfig.attributeGroups.addTooltip}</TooltipContent>
             </Tooltip>
           ))}
         </div>
       ) : (
         missingGroups.length === 0 && sourceGroups.length > 0 ? (
-          <div className='text-xs text-muted-foreground mb-2'>All attribute groups are already added to this product.</div>
+          <div className='text-xs text-muted-foreground mb-2'>{panelConfig.attributeGroups.allGroupsAdded}</div>
         ) : null
       )}
 
@@ -726,8 +725,8 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
         <Dialog open onOpenChange={open => { if (!open) { setAddDialogGroup(null); setNewAttrId(null); setNewAttrValue('') } }}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Add attribute to {addDialogGroup}</DialogTitle>
-              <DialogDescription>Select an attribute to add to this product. You can set its value after adding.</DialogDescription>
+              <DialogTitle>{panelConfig.buttons.addAttribute}</DialogTitle>
+              <DialogDescription>{panelConfig.addAttributeModal.description}</DialogDescription>
             </DialogHeader>
 
             {/* Attribute select - simplified to just the dropdown */}
@@ -780,17 +779,17 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
                     setAddDialogGroup(null)
                     
                     // Show success message with hint to edit
-                    toast.success('Attribute added. Use the edit button to set its value.')
+                    toast.success(panelConfig.addAttributeModal.success)
                   } catch (err) {
-                    toast.error('Failed to add attribute')
+                    toast.error(panelConfig.addAttributeModal.error)
                   }
                 }}
                 disabled={!newAttrId || createMutation.isPending}
               >
-                Add
+                {panelConfig.addAttributeModal.buttons.add}
               </Button>
               <DialogClose asChild>
-                <Button variant='outline'>Cancel</Button>
+                <Button variant='outline'>{panelConfig.addAttributeModal.buttons.cancel}</Button>
               </DialogClose>
             </DialogFooter>
           </DialogContent>
@@ -801,22 +800,21 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
       <Dialog open={isDeleteGroupModalOpen} onOpenChange={setIsDeleteGroupModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Attribute Group</DialogTitle>
+            <DialogTitle>{panelConfig.deleteGroupModal.title}</DialogTitle>
             <DialogDescription className="text-amber-600">
-              Warning: This will remove all attributes in the selected group from this product.
-              The group itself will remain available for other products.
+              {panelConfig.deleteGroupModal.warning}
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Select Group to Delete</label>
+              <label className="text-sm font-medium">{panelConfig.deleteGroupModal.selectLabel}</label>
               <select
                 className="w-full border rounded px-3 py-2"
                 value={groupToDelete || ''}
                 onChange={e => setGroupToDelete(e.target.value)}
               >
-                <option value="" disabled>Choose a group...</option>
+                <option value="" disabled>{panelConfig.deleteGroupModal.selectPlaceholder}</option>
                 {Object.keys(grouped)
                   .filter(name => name !== 'Ungrouped' && grouped[name].length > 0)
                   .map(name => (
@@ -830,13 +828,12 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
             
             {groupToDelete && (
               <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm">
-                <p className="font-medium text-amber-800 mb-1">You are about to delete:</p>
+                <p className="font-medium text-amber-800 mb-1">{panelConfig.deleteGroupModal.aboutToDelete}</p>
                 <p className="text-amber-700">
-                  All {grouped[groupToDelete]?.length || 0} attributes in group "{groupToDelete}"
+                  {panelConfig.deleteGroupModal.allAttributesIn} {grouped[groupToDelete]?.length || 0} {panelConfig.deleteGroupModal.attributesIn} "{groupToDelete}"
                 </p>
                 <p className="mt-2 text-xs text-amber-600">
-                  This action only removes these attributes from the current product.
-                  The attributes and group definition will still be available for other products.
+                  {panelConfig.deleteGroupModal.actionDescription}
                 </p>
               </div>
             )}
@@ -848,10 +845,10 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
               onClick={() => groupToDelete && handleDeleteGroup(groupToDelete)}
               disabled={!groupToDelete || deleteMutation.isPending}
             >
-              {deleteMutation.isPending ? 'Deleting...' : 'Confirm Delete'}
+              {deleteMutation.isPending ? panelConfig.deleteGroupModal.buttons.deleting : panelConfig.deleteGroupModal.buttons.confirm}
             </Button>
             <Button variant="outline" onClick={() => setIsDeleteGroupModalOpen(false)}>
-              Cancel
+              {panelConfig.deleteGroupModal.buttons.cancel}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -894,9 +891,9 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
                               await Promise.all(promises)
                               // 🔄 REFRESH DATA
                               await queryClient.invalidateQueries({ queryKey: ['attributes', productId, selectedLocale, selectedChannel] })
-                              toast.success(`Added ${unusedAttrIds.length} attributes from '${groupName}'`)
+                              toast.success(`${panelConfig.attributeGroups.addSuccess} '${groupName}'`)
                             } catch (err) {
-                              toast.error('Failed to add all attributes')
+                              toast.error(panelConfig.attributeGroups.addError)
                             } finally {
                               setAddingAllGroup(undefined)
                             }
@@ -915,7 +912,7 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
                           )}
                         </span>
                       </TooltipTrigger>
-                      <TooltipContent>Add all attributes from this group to product</TooltipContent>
+                      <TooltipContent>{panelConfig.attributeGroups.addTooltip}</TooltipContent>
                     </Tooltip>
                   )}
                   {!isCreateMode && (
@@ -934,7 +931,7 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
                           setAddDialogGroup(groupName)
                         }
                       }}
-                      aria-label={`Add attribute to ${groupName}`}
+                      aria-label={`${panelConfig.buttons.addAttribute}`}
                     >
                       <PlusIcon className='h-4 w-4' />
                     </span>
@@ -946,11 +943,11 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
                   // Instead of trying to render individual attribute rows which causes linter errors, 
                   // Just show an improved message explaining how to add attributes
                   <div className="py-4 text-sm text-muted-foreground px-4 flex flex-col gap-2">
-                    <p>No attributes in this group yet.</p>
+                    <p>{panelConfig.emptyState.title}</p>
                     {isCreateMode ? (
-                      <p>Attributes will be available after saving the product.</p>
+                      <p>{panelConfig.emptyState.description}</p>
                     ) : (
-                      <p>Click the + button in the header to add attributes.</p>
+                      <p>{panelConfig.buttons.addAttribute}</p>
                     )}
                   </div>
                 ) : (
@@ -996,6 +993,12 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
                                         <X className='h-4 w-4' />
                                       </Button>
                                     </div>
+                                    {updateMutation.isPending ? (
+                                      <p className='text-red-600'>{panelConfig.saveError}</p>
+                                    ) : null}
+                                    {validationError && !updateMutation.isPending ? (
+                                      <p className='text-red-600'>{validationError}</p>
+                                    ) : null}
                                   </>
                                 ) : (
                                   formatAttributeValue(attr)

@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import axiosInstance from '@/lib/axiosInstance';
-import { paths } from '@/lib/apiPaths';
-import { ENABLE_CUSTOM_ATTRIBUTES } from '@/config/featureFlags';
-import { useAuth } from '@/contexts/AuthContext';
+import React, { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import axiosInstance from '@/lib/axiosInstance'
+import { paths } from '@/lib/apiPaths'
+import { ENABLE_CUSTOM_ATTRIBUTES } from '@/config/featureFlags'
+import { useAuth } from '@/contexts/AuthContext'
 import { usePriceMetadata } from '@/hooks/usePriceMetadata'
+import { config } from '@/config/config'
 
 // UI Components
 import {
@@ -13,11 +14,11 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Loader2, PlusCircle, AlertCircle, Pencil, Trash, Check, X, InfoIcon } from 'lucide-react';
-import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
+} from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Loader2, PlusCircle, AlertCircle, Pencil, Trash, Check, X } from 'lucide-react'
+import { Badge } from "@/components/ui/badge"
+import { toast } from "sonner"
 import {
   Dialog,
   DialogContent,
@@ -25,8 +26,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+} from "@/components/ui/dialog"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,14 +37,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+} from "@/components/ui/alert-dialog"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@/components/ui/select"
 import {
   Table,
   TableBody,
@@ -52,38 +52,38 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Skeleton } from "@/components/ui/skeleton";
+} from "@/components/ui/table"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Skeleton } from "@/components/ui/skeleton"
 
 // Types
 interface Attribute {
-  id: number;
-  code: string;
-  label: string;
-  data_type: string;
-  is_localisable: boolean;
-  is_scopable: boolean;
-  organization: number;
-  created_by: number;
-  is_core?: boolean;
-  in_use?: boolean;
+  id: number
+  code: string
+  label: string
+  data_type: string
+  is_localisable: boolean
+  is_scopable: boolean
+  organization: number
+  created_by: number
+  is_core?: boolean
+  in_use?: boolean
 }
 
 // Attribute form values interface
 interface AttributeFormValues {
-  code: string;
-  label: string;
-  data_type: string;
-  is_localisable: boolean;
-  is_scopable: boolean;
-  currencies?: string[];
-  units?: string[];
-  options?: string[];
-  enableHtmlSanitizer?: boolean;
+  code: string
+  label: string
+  data_type: string
+  is_localisable: boolean
+  is_scopable: boolean
+  currencies?: string[]
+  units?: string[]
+  options?: string[]
+  enableHtmlSanitizer?: boolean
 }
 
 // --- PriceTypeControls ---
@@ -102,7 +102,7 @@ function PriceTypeControls({ selectedCurrencies, onChange }: { selectedCurrencie
 
   return (
     <div className='pt-2'>
-      <Label>Currencies</Label>
+      <Label>{config.settings.display.attributesPage.form.labels.currencies}</Label>
       <div className='flex flex-wrap gap-2 mt-1'>
         {currencies.map(c => (
           <label key={c.iso_code} className='flex items-center gap-1 text-sm'>
@@ -133,7 +133,7 @@ function MeasurementTypeControls({ selectedUnits, onChange }: { selectedUnits: s
 
   return (
     <div className='pt-2'>
-      <Label>Units</Label>
+      <Label>{config.settings.display.attributesPage.form.labels.units}</Label>
       <div className='flex flex-wrap gap-2 mt-1'>
         {DEFAULT_UNITS.map(unit => (
           <label key={unit} className='flex items-center gap-1 text-sm'>
@@ -147,7 +147,7 @@ function MeasurementTypeControls({ selectedUnits, onChange }: { selectedUnits: s
         ))}
       </div>
       <div className='mt-2'>
-        <Label htmlFor='custom-units' className='text-xs'>Custom units (comma separated)</Label>
+        <Label htmlFor='custom-units' className='text-xs'>{config.settings.display.attributesPage.form.labels.customUnits}</Label>
         <input
           id='custom-units'
           type='text'
@@ -167,6 +167,7 @@ function MeasurementTypeControls({ selectedUnits, onChange }: { selectedUnits: s
 
 function OptionListEditor({ options, onChange }: { options: string[], onChange: (options: string[]) => void }) {
   const [input, setInput] = useState('')
+  
   function addOption() {
     const val = input.trim()
     if (val && !options.includes(val)) {
@@ -174,25 +175,30 @@ function OptionListEditor({ options, onChange }: { options: string[], onChange: 
       setInput('')
     }
   }
+  
   function removeOption(idx: number) {
     onChange(options.filter((_, i) => i !== idx))
   }
+  
   function editOption(idx: number, val: string) {
     const newOpts = [...options]
     newOpts[idx] = val
     onChange(newOpts)
   }
+  
   return (
     <div className='pt-2'>
-      <Label>Options</Label>
+      <Label>{config.settings.display.attributesPage.form.labels.options}</Label>
       <div className='flex gap-2 mt-1'>
         <Input
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') addOption() }}
-          placeholder='Add option'
+          placeholder={config.settings.display.attributesPage.form.labels.addOption}
         />
-        <Button type='button' onClick={addOption}>Add</Button>
+        <Button type='button' onClick={addOption}>
+          {config.settings.display.attributesPage.form.labels.addOption}
+        </Button>
       </div>
       <ul className='mt-2 space-y-1'>
         {options.map((opt, i) => (
@@ -212,29 +218,28 @@ function OptionListEditor({ options, onChange }: { options: string[], onChange: 
   )
 }
 
-const AttributesPage: React.FC = () => {
-  const queryClient = useQueryClient();
-  const { user } = useAuth();
-  // const isStaff = (user as any)?.is_staff || false;
-
+function AttributesPage() {
+  const queryClient = useQueryClient()
+  const { user } = useAuth()
+  
   // Add debug logs
-  console.log("User in AttributesPage:", user);
-  console.log("Original isStaff value:", (user as any)?.is_staff || false);
+  console.log("User in AttributesPage:", user)
+  console.log("Original isStaff value:", (user as any)?.is_staff || false)
 
   // Temporarily force isStaff to true for testing
-  const isStaff = true;
+  const isStaff = true
 
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [selectedAttribute, setSelectedAttribute] = useState<Attribute | null>(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [selectedAttribute, setSelectedAttribute] = useState<Attribute | null>(null)
   const [formValues, setFormValues] = useState<AttributeFormValues>({
     code: '',
     label: '',
     data_type: 'text',
     is_localisable: false,
     is_scopable: false,
-  });
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  })
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({})
 
   // Fetch attributes
   const { data: attributes, isLoading, error, refetch } = useQuery({
@@ -244,11 +249,11 @@ const AttributesPage: React.FC = () => {
         headers: {
           'Accept': 'application/json'
         }
-      });
-      return response.data;
+      })
+      return response.data
     },
     enabled: ENABLE_CUSTOM_ATTRIBUTES,
-  });
+  })
 
   // Create attribute mutation
   const createMutation = useMutation({
@@ -258,26 +263,26 @@ const AttributesPage: React.FC = () => {
           'Accept': 'application/json',
           'Content-Type': 'application/json'
         }
-      });
-      return response.data;
+      })
+      return response.data
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['attributes'] });
-      toast.success('Attribute created successfully');
-      setIsAddModalOpen(false);
-      resetForm();
+      queryClient.invalidateQueries({ queryKey: ['attributes'] })
+      toast.success(config.settings.display.attributesPage.messages.success.create)
+      setIsAddModalOpen(false)
+      resetForm()
     },
     onError: (error: any) => {
-      console.error('Error creating attribute:', error);
-      const errorMessage = error.response?.data?.detail || 'Failed to create attribute';
-      toast.error(errorMessage);
+      console.error('Error creating attribute:', error)
+      const errorMessage = error.response?.data?.detail || config.settings.display.attributesPage.messages.error.create
+      toast.error(errorMessage)
       
       // Set form errors if returned from API
       if (error.response?.data) {
-        setFormErrors(error.response.data);
+        setFormErrors(error.response.data)
       }
     },
-  });
+  })
 
   // Update attribute mutation
   const updateMutation = useMutation({
@@ -287,52 +292,52 @@ const AttributesPage: React.FC = () => {
           'Accept': 'application/json',
           'Content-Type': 'application/json'
         }
-      });
-      return response.data;
+      })
+      return response.data
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['attributes'] });
-      toast.success('Attribute updated successfully');
-      setIsEditModalOpen(false);
-      resetForm();
+      queryClient.invalidateQueries({ queryKey: ['attributes'] })
+      toast.success(config.settings.display.attributesPage.messages.success.update)
+      setIsEditModalOpen(false)
+      resetForm()
     },
     onError: (error: any) => {
-      console.error('Error updating attribute:', error);
-      const errorMessage = error.response?.data?.detail || 'Failed to update attribute';
-      toast.error(errorMessage);
+      console.error('Error updating attribute:', error)
+      const errorMessage = error.response?.data?.detail || config.settings.display.attributesPage.messages.error.update
+      toast.error(errorMessage)
       
       // Set form errors if returned from API
       if (error.response?.data) {
-        setFormErrors(error.response.data);
+        setFormErrors(error.response.data)
       }
     },
-  });
+  })
 
   // Delete attribute mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
       // Add staff gate
       if (!isStaff) {
-        toast.error('Read-only tenant');
-        throw new Error('Permission denied');
+        toast.error('Read-only tenant')
+        throw new Error('Permission denied')
       }
       
       await axiosInstance.delete(paths.attributes.byId(id), {
         headers: {
           'Accept': 'application/json'
         }
-      });
+      })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['attributes'] });
-      toast.success('Attribute deleted successfully');
+      queryClient.invalidateQueries({ queryKey: ['attributes'] })
+      toast.success(config.settings.display.attributesPage.messages.success.delete)
     },
     onError: (error: any) => {
-      console.error('Error deleting attribute:', error);
-      const errorMessage = error.response?.data?.detail || 'Failed to delete attribute';
-      toast.error(errorMessage);
+      console.error('Error deleting attribute:', error)
+      const errorMessage = error.response?.data?.detail || config.settings.display.attributesPage.messages.error.delete
+      toast.error(errorMessage)
     },
-  });
+  })
 
   // Reset form values and errors
   const resetForm = () => {
@@ -342,131 +347,131 @@ const AttributesPage: React.FC = () => {
       data_type: 'text',
       is_localisable: false,
       is_scopable: false,
-    });
-    setFormErrors({});
-  };
+    })
+    setFormErrors({})
+  }
 
   // Handle opening the edit modal
   const handleEdit = (attribute: Attribute) => {
-    setSelectedAttribute(attribute);
+    setSelectedAttribute(attribute)
     setFormValues({
       code: attribute.code,
       label: attribute.label,
       data_type: attribute.data_type,
       is_localisable: attribute.is_localisable,
       is_scopable: attribute.is_scopable,
-    });
-    setIsEditModalOpen(true);
-  };
+    })
+    setIsEditModalOpen(true)
+  }
 
   // Handle form input change
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormValues(prev => ({ ...prev, [name]: value }));
+    const { name, value } = e.target
+    setFormValues(prev => ({ ...prev, [name]: value }))
     
     // Clear error for this field
     if (formErrors[name]) {
       setFormErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors[name];
-        return newErrors;
-      });
+        const newErrors = { ...prev }
+        delete newErrors[name]
+        return newErrors
+      })
     }
-  };
+  }
 
   // Handle select change
   const handleSelectChange = (name: string, value: string) => {
-    setFormValues(prev => ({ ...prev, [name]: value }));
+    setFormValues(prev => ({ ...prev, [name]: value }))
     
     // Clear error for this field
     if (formErrors[name]) {
       setFormErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors[name];
-        return newErrors;
-      });
+        const newErrors = { ...prev }
+        delete newErrors[name]
+        return newErrors
+      })
     }
-  };
+  }
 
   // Handle switch change
   const handleSwitchChange = (name: string, checked: boolean) => {
-    setFormValues(prev => ({ ...prev, [name]: checked }));
-  };
+    setFormValues(prev => ({ ...prev, [name]: checked }))
+  }
 
   // Validate form
   const validateForm = (): boolean => {
-    const errors: Record<string, string> = {};
+    const newErrors: Record<string, string> = {}
     
     if (!formValues.code.trim()) {
-      errors.code = 'Code is required';
+      newErrors.code = config.settings.display.attributesPage.form.errors.required
     } else if (!/^[a-z0-9_]+$/.test(formValues.code)) {
-      errors.code = 'Code must contain only lowercase letters, numbers, and underscores';
+      newErrors.code = config.settings.display.attributesPage.form.errors.alphanumeric
     }
     
     if (!formValues.label.trim()) {
-      errors.label = 'Label is required';
+      newErrors.label = config.settings.display.attributesPage.form.errors.required
     }
     
     if (!formValues.data_type) {
-      errors.data_type = 'Data type is required';
+      newErrors.data_type = config.settings.display.attributesPage.form.errors.required
     }
     
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
+    setFormErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
 
   // Handle form submission
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+    e.preventDefault()
     
     if (!validateForm()) {
-      return;
+      return
     }
     
     if (selectedAttribute && isEditModalOpen) {
-      updateMutation.mutate({ id: selectedAttribute.id, data: formValues });
+      updateMutation.mutate({ id: selectedAttribute.id, data: formValues })
     } else {
-      createMutation.mutate(formValues);
+      createMutation.mutate(formValues)
     }
-  };
+  }
 
   // Handle attribute deletion
   const handleDelete = (attribute: Attribute) => {
     if (attribute.is_core) {
-      toast.error('Core attributes cannot be deleted');
-      return;
+      toast.error(config.settings.display.attributesPage.form.tooltips.coreAttribute)
+      return
     }
     
     if (attribute.in_use) {
-      toast.error('Attributes in use cannot be deleted');
-      return;
+      toast.error(config.settings.display.attributesPage.form.tooltips.inUseAttribute)
+      return
     }
     
-    deleteMutation.mutate(attribute.id);
-  };
+    deleteMutation.mutate(attribute.id)
+  }
 
   // Categorize attributes by data type for display
   const categorizedAttributes = (attributes && Array.isArray(attributes)) 
     ? attributes.reduce((acc: Record<string, Attribute[]>, attr: Attribute) => {
-        const category = attr.data_type;
+        const category = attr.data_type
         if (!acc[category]) {
-          acc[category] = [];
+          acc[category] = []
         }
-        acc[category].push(attr);
-        return acc;
+        acc[category].push(attr)
+        return acc
       }, {})
-    : {};
+    : {}
 
   if (!ENABLE_CUSTOM_ATTRIBUTES) {
-    return null;
+    return null
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-enterprise-900">Attributes</h1>
+        <h1 className="text-3xl font-bold text-enterprise-900">{config.settings.display.attributesPage.title}</h1>
         <p className="text-enterprise-600 mt-1">
-          Manage product attributes that can be assigned to products.
+          {config.settings.display.attributesPage.description}
         </p>
       </div>
 
@@ -480,7 +485,7 @@ const AttributesPage: React.FC = () => {
           <CardContent className="pt-6">
             <div className="flex items-center justify-center text-danger-500 p-8">
               <AlertCircle className="h-6 w-6 mr-2" />
-              <p>Failed to load attributes. Please try again.</p>
+              <p>{config.settings.display.attributesPage.messages.error.load}</p>
             </div>
             <div className="flex justify-center mt-4">
               <Button onClick={() => refetch()}>Retry</Button>
@@ -495,32 +500,31 @@ const AttributesPage: React.FC = () => {
             </p>
             {isStaff && (
               <Button onClick={() => {
-                resetForm();
-                setIsAddModalOpen(true);
+                resetForm()
+                setIsAddModalOpen(true)
               }}>
                 <PlusCircle className="h-4 w-4 mr-2" />
-                New Attribute
+                {config.settings.display.attributesPage.form.labels.addNew}
               </Button>
             )}
           </div>
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle>Attribute Definitions</CardTitle>
+              <CardTitle>{config.settings.display.attributesPage.title}</CardTitle>
               <CardDescription>
-                Define attributes that can be assigned to products
+                {config.settings.display.attributesPage.description}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Code</TableHead>
-                    <TableHead>Label</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Localisable</TableHead>
-                    <TableHead>Scopable</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    {config.settings.display.attributesPage.table.columns.map(column => (
+                      <TableHead key={column.key} className={column.align === 'right' ? 'text-right' : ''}>
+                        {column.label}
+                      </TableHead>
+                    ))}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -570,7 +574,9 @@ const AttributesPage: React.FC = () => {
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                  {attribute.is_core ? 'Core attributes cannot be edited' : 'Edit attribute'}
+                                  {attribute.is_core 
+                                    ? config.settings.display.attributesPage.form.tooltips.coreAttribute 
+                                    : config.settings.display.attributesPage.form.labels.editAttribute}
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
@@ -584,7 +590,7 @@ const AttributesPage: React.FC = () => {
                                     onClick={() => {
                                       if (!(attribute.is_core || attribute.in_use || !isStaff)) {
                                         // Open alert dialog programmatically
-                                        document.getElementById(`delete-dialog-${attribute.id}`)?.click();
+                                        document.getElementById(`delete-dialog-${attribute.id}`)?.click()
                                       }
                                     }}
                                     disabled={attribute.is_core || attribute.in_use || !isStaff}
@@ -594,10 +600,10 @@ const AttributesPage: React.FC = () => {
                                 </TooltipTrigger>
                                 <TooltipContent>
                                   {attribute.is_core
-                                    ? 'Core attributes cannot be deleted'
+                                    ? config.settings.display.attributesPage.form.tooltips.coreAttribute
                                     : attribute.in_use
-                                    ? 'Attributes in use cannot be deleted'
-                                    : 'Delete attribute'}
+                                    ? config.settings.display.attributesPage.form.tooltips.inUseAttribute
+                                    : config.settings.display.attributesPage.form.labels.delete}
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
@@ -608,7 +614,7 @@ const AttributesPage: React.FC = () => {
                   ) : (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center py-6 text-slate-500">
-                        No attributes found. Create your first attribute to get started.
+                        {config.settings.display.attributesPage.table.emptyState.noData}
                       </TableCell>
                     </TableRow>
                   )}
@@ -624,18 +630,18 @@ const AttributesPage: React.FC = () => {
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Attribute</AlertDialogTitle>
+                        <AlertDialogTitle>{config.settings.display.attributesPage.form.labels.confirmDelete}</AlertDialogTitle>
                         <AlertDialogDescription>
-                          Are you sure you want to delete the attribute "{attribute.label}"? This action cannot be undone.
+                          {config.settings.display.attributesPage.form.deleteWarning}
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel>{config.settings.display.attributesPage.form.labels.cancel}</AlertDialogCancel>
                         <AlertDialogAction
                           onClick={() => handleDelete(attribute)}
                           className="bg-danger-500 hover:bg-danger-600 text-white"
                         >
-                          Delete
+                          {config.settings.display.attributesPage.form.labels.delete}
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
@@ -651,7 +657,7 @@ const AttributesPage: React.FC = () => {
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create New Attribute</DialogTitle>
+            <DialogTitle>{config.settings.display.attributesPage.form.labels.addAttribute}</DialogTitle>
             <DialogDescription>
               Add a new attribute that can be assigned to products.
             </DialogDescription>
@@ -660,14 +666,14 @@ const AttributesPage: React.FC = () => {
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="code">
-                  Code <span className="text-danger-500">*</span>
+                  {config.settings.display.attributesPage.form.labels.code} <span className="text-danger-500">*</span>
                 </Label>
                 <Input
                   id="code"
                   name="code"
                   value={formValues.code}
                   onChange={handleInputChange}
-                  placeholder="e.g. material, color, weight"
+                  placeholder={config.settings.display.attributesPage.form.labels.codePlaceholder}
                   className={formErrors.code ? 'border-danger-500' : ''}
                 />
                 {formErrors.code && (
@@ -680,14 +686,14 @@ const AttributesPage: React.FC = () => {
               
               <div className="space-y-2">
                 <Label htmlFor="label">
-                  Label <span className="text-danger-500">*</span>
+                  {config.settings.display.attributesPage.form.labels.label} <span className="text-danger-500">*</span>
                 </Label>
                 <Input
                   id="label"
                   name="label"
                   value={formValues.label}
                   onChange={handleInputChange}
-                  placeholder="e.g. Material, Color, Weight"
+                  placeholder={config.settings.display.attributesPage.form.labels.labelPlaceholder}
                   className={formErrors.label ? 'border-danger-500' : ''}
                 />
                 {formErrors.label && (
@@ -697,7 +703,7 @@ const AttributesPage: React.FC = () => {
               
               <div className="space-y-2">
                 <Label htmlFor="data_type">
-                  Data Type <span className="text-danger-500">*</span>
+                  {config.settings.display.attributesPage.form.labels.dataType} <span className="text-danger-500">*</span>
                 </Label>
                 <Select
                   value={formValues.data_type}
@@ -710,18 +716,9 @@ const AttributesPage: React.FC = () => {
                     <SelectValue placeholder="Select data type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="text">Text</SelectItem>
-                    <SelectItem value="number">Number</SelectItem>
-                    <SelectItem value="boolean">Boolean</SelectItem>
-                    <SelectItem value="date">Date</SelectItem>
-                    <SelectItem value="select">Select</SelectItem>
-                    <SelectItem value="rich_text">Rich Text</SelectItem>
-                    <SelectItem value="price">Price</SelectItem>
-                    <SelectItem value="media">Media</SelectItem>
-                    <SelectItem value="measurement">Measurement</SelectItem>
-                    <SelectItem value="url">URL</SelectItem>
-                    <SelectItem value="email">Email</SelectItem>
-                    <SelectItem value="phone">Phone</SelectItem>
+                    {config.settings.display.attributesPage.dataTypes.map(type => (
+                      <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 {formErrors.data_type && (
@@ -760,9 +757,9 @@ const AttributesPage: React.FC = () => {
               
               <div className="flex items-center justify-between space-x-2 pt-2">
                 <div className="flex flex-col">
-                  <Label htmlFor="is_localisable">Localisable</Label>
+                  <Label htmlFor="is_localisable">{config.settings.display.attributesPage.form.labels.isLocalisable}</Label>
                   <p className="text-xs text-slate-500">
-                    Can have different values per locale
+                    {config.settings.display.attributesPage.form.tooltips.localisable}
                   </p>
                 </div>
                 <Switch
@@ -774,9 +771,9 @@ const AttributesPage: React.FC = () => {
               
               <div className="flex items-center justify-between space-x-2 pt-2">
                 <div className="flex flex-col">
-                  <Label htmlFor="is_scopable">Scopable</Label>
+                  <Label htmlFor="is_scopable">{config.settings.display.attributesPage.form.labels.isScopable}</Label>
                   <p className="text-xs text-slate-500">
-                    Can have different values per channel
+                    {config.settings.display.attributesPage.form.tooltips.scopable}
                   </p>
                 </div>
                 <Switch
@@ -792,11 +789,11 @@ const AttributesPage: React.FC = () => {
                 type="button" 
                 variant="outline" 
                 onClick={() => {
-                  resetForm();
-                  setIsAddModalOpen(false);
+                  resetForm()
+                  setIsAddModalOpen(false)
                 }}
               >
-                Cancel
+                {config.settings.display.attributesPage.form.labels.cancel}
               </Button>
               <Button 
                 type="submit" 
@@ -805,10 +802,10 @@ const AttributesPage: React.FC = () => {
                 {createMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating...
+                    {config.settings.display.attributesPage.form.labels.saving}
                   </>
                 ) : (
-                  'Create Attribute'
+                  config.settings.display.attributesPage.form.labels.save
                 )}
               </Button>
             </DialogFooter>
@@ -820,7 +817,7 @@ const AttributesPage: React.FC = () => {
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Attribute</DialogTitle>
+            <DialogTitle>{config.settings.display.attributesPage.form.labels.editAttribute}</DialogTitle>
             <DialogDescription>
               Update attribute properties.
             </DialogDescription>
@@ -829,7 +826,7 @@ const AttributesPage: React.FC = () => {
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="edit-code">
-                  Code
+                  {config.settings.display.attributesPage.form.labels.code}
                 </Label>
                 <Input
                   id="edit-code"
@@ -846,14 +843,14 @@ const AttributesPage: React.FC = () => {
               
               <div className="space-y-2">
                 <Label htmlFor="edit-label">
-                  Label <span className="text-danger-500">*</span>
+                  {config.settings.display.attributesPage.form.labels.label} <span className="text-danger-500">*</span>
                 </Label>
                 <Input
                   id="edit-label"
                   name="label"
                   value={formValues.label}
                   onChange={handleInputChange}
-                  placeholder="e.g. Material, Color, Weight"
+                  placeholder={config.settings.display.attributesPage.form.labels.labelPlaceholder}
                   className={formErrors.label ? 'border-danger-500' : ''}
                 />
                 {formErrors.label && (
@@ -863,7 +860,7 @@ const AttributesPage: React.FC = () => {
               
               <div className="space-y-2">
                 <Label htmlFor="edit-data-type">
-                  Data Type
+                  {config.settings.display.attributesPage.form.labels.dataType}
                 </Label>
                 <Input
                   id="edit-data-type"
@@ -878,9 +875,9 @@ const AttributesPage: React.FC = () => {
               
               <div className="flex items-center justify-between space-x-2 pt-2">
                 <div className="flex flex-col">
-                  <Label htmlFor="edit-is-localisable">Localisable</Label>
+                  <Label htmlFor="edit-is-localisable">{config.settings.display.attributesPage.form.labels.isLocalisable}</Label>
                   <p className="text-xs text-slate-500">
-                    Can have different values per locale
+                    {config.settings.display.attributesPage.form.tooltips.localisable}
                   </p>
                 </div>
                 <Switch
@@ -892,9 +889,9 @@ const AttributesPage: React.FC = () => {
               
               <div className="flex items-center justify-between space-x-2 pt-2">
                 <div className="flex flex-col">
-                  <Label htmlFor="edit-is-scopable">Scopable</Label>
+                  <Label htmlFor="edit-is-scopable">{config.settings.display.attributesPage.form.labels.isScopable}</Label>
                   <p className="text-xs text-slate-500">
-                    Can have different values per channel
+                    {config.settings.display.attributesPage.form.tooltips.scopable}
                   </p>
                 </div>
                 <Switch
@@ -910,11 +907,11 @@ const AttributesPage: React.FC = () => {
                 type="button" 
                 variant="outline" 
                 onClick={() => {
-                  resetForm();
-                  setIsEditModalOpen(false);
+                  resetForm()
+                  setIsEditModalOpen(false)
                 }}
               >
-                Cancel
+                {config.settings.display.attributesPage.form.labels.cancel}
               </Button>
               <Button 
                 type="submit" 
@@ -923,10 +920,10 @@ const AttributesPage: React.FC = () => {
                 {updateMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Updating...
+                    {config.settings.display.attributesPage.form.labels.saving}
                   </>
                 ) : (
-                  'Update Attribute'
+                  config.settings.display.attributesPage.form.labels.save
                 )}
               </Button>
             </DialogFooter>
@@ -934,7 +931,7 @@ const AttributesPage: React.FC = () => {
         </DialogContent>
       </Dialog>
     </div>
-  );
-};
+  )
+}
 
-export default AttributesPage; 
+export default AttributesPage 

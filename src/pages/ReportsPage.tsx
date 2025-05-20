@@ -6,7 +6,6 @@ import { qkReportThemes, qkCompleteness } from '@/lib/queryKeys';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { 
@@ -17,9 +16,6 @@ import {
   CartesianGrid, 
   Tooltip, 
   ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
   LabelList
 } from 'recharts';
 import { Tooltip as UITooltip } from '@/components/ui/tooltip';
@@ -37,6 +33,7 @@ import type { ReportFiltersState } from '@/features/reports/components/filters/R
 
 // Dashboard summary service for completeness integration
 import { useQuery as useDashboardQuery } from '@tanstack/react-query';
+import { config } from '@/config/config';
 
 // Helper to fetch dashboard summary (overall completeness & missing fields)
 const fetchDashboardSummary = () =>
@@ -73,8 +70,8 @@ interface Category {
   children?: Category[];
 }
 
-// Colors for charts
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#A4DE6C', '#8884D8'];
+// Get chart colors from config
+const COLORS = config.reports.display.chartColors;
 
 interface CompletenessReportProps {
   data?: {
@@ -94,13 +91,14 @@ const CompletenessReport: React.FC = () => {
   const { data: dashboardSummary } = useDashboardQuery({
     queryKey: ['dashboard', 'summary'],
     queryFn: fetchDashboardSummary,
-    staleTime: 5 * 60 * 1000, // 5 min – dashboard KPIs don't change that fast
+    staleTime: config.dashboard.staleTimes.summary,
   });
 
   // Fetch categories to resolve IDs to names
   const { data: categories } = useQuery({
     queryKey: ['categories'],
     queryFn: () => axiosInstance.get<Category[]>(paths.categories.root() + '?as_tree=false').then(res => res.data),
+    staleTime: config.reports.staleTimes.themes,
   });
 
   // Define fallback data structure that fully matches the expected API response
@@ -133,9 +131,12 @@ const CompletenessReport: React.FC = () => {
         ? `${paths.analytics.completeness()}?${queryString}`
         : paths.analytics.completeness();
       
-      console.log('Fetching completeness data with URL:', url);  
+      if (config.debug.enableLogs) {
+        console.log('Fetching completeness data with URL:', url);
+      }
       return axiosInstance.get<CompletenessAPIResponse>(url).then(res => res.data);
-    }
+    },
+    staleTime: config.reports.staleTimes.completeness,
   });
 
   // Process the data to ensure it matches the expected structure
@@ -257,8 +258,9 @@ const CompletenessReport: React.FC = () => {
       return aPct - bPct; // sort by lowest completeness
     });
 
-    // Only show top 10 if not showing all
-    const filteredData = showAllAttributes ? sorted : sorted.slice(0, 10);
+    // Only show configured number of items if not showing all
+    const defaultMaxItems = config.reports.display.defaultMaxItems;
+    const filteredData = showAllAttributes ? sorted : sorted.slice(0, defaultMaxItems);
 
     // Format data for the chart
     return filteredData.map((attr) => ({
@@ -427,13 +429,19 @@ const CompletenessReport: React.FC = () => {
             onClick={() => setShowAllAttributes(!showAllAttributes)}
             className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
           >
-            {showAllAttributes ? 'Show Top 10' : 'Show All'}
+            {showAllAttributes ? `Show Top ${config.reports.display.defaultMaxItems}` : 'Show All'}
           </Button>
         </CardHeader>
         <CardContent>
-          <div className="h-auto" style={{ minHeight: '300px' }}>
+          <div className="h-auto" style={{ minHeight: `${config.reports.display.defaultChartHeight}px` }}>
             {attributeChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={Math.max(300, attributeChartData.length * 40)}>
+              <ResponsiveContainer 
+                width="100%" 
+                height={Math.max(
+                  config.reports.display.defaultChartHeight, 
+                  attributeChartData.length * config.reports.display.attributeChartRowHeight
+                )}
+              >
                 <BarChart
                   data={attributeChartData}
                   layout="vertical"
@@ -454,16 +462,16 @@ const CompletenessReport: React.FC = () => {
                   />
                   <Tooltip 
                     formatter={(value) => {
-                      return [`${value}% complete`, ''];
+                      return [`${value}% complete`, '']
                     }}
                     labelFormatter={(name) => {
-                      const item = attributeChartData.find(i => i.name === name);
-                      return `${name} (${item?.completed} of ${item?.total})`;
+                      const item = attributeChartData.find(i => i.name === name)
+                      return `${name} (${item?.completed} of ${item?.total})`
                     }}
                   />
                   <Bar 
                     dataKey="pct" 
-                    fill="#3b82f6" 
+                    fill={config.dashboard.display.chartColors.primary}
                     radius={[0, 4, 4, 0]}
                     barSize={20}
                     name="Completion Rate"
@@ -484,8 +492,8 @@ const CompletenessReport: React.FC = () => {
             )}
           </div>
           <div className="text-sm text-gray-500 mt-3 text-center">
-            {attributeChartData.length > 0 && !showAllAttributes && data.byAttribute.length > 10 && (
-              <p>{data.byAttribute.length - 10} more attributes not shown</p>
+            {attributeChartData.length > 0 && !showAllAttributes && data.byAttribute.length > config.reports.display.defaultMaxItems && (
+              <p>{data.byAttribute.length - config.reports.display.defaultMaxItems} more attributes not shown</p>
             )}
           </div>
         </CardContent>
@@ -508,7 +516,7 @@ const CompletenessReport: React.FC = () => {
                   <XAxis dataKey="name" />
                   <YAxis domain={[0, 100]} unit="%" />
                   <Tooltip formatter={(value) => [`${value}%`, 'Completeness']} />
-                  <Bar dataKey="value" fill="#00C49F" />
+                  <Bar dataKey="value" fill={config.dashboard.display.chartColors.secondary} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -523,33 +531,32 @@ const CompletenessReport: React.FC = () => {
   );
 }
 
-// Define all available reports with their slug, name, and component
-const REPORTS = [
-  {
-    slug: 'completeness',
-    name: 'Data Completeness',
-    description: 'Analyze the completeness of your product data across all fields and categories.',
-    component: CompletenessReport
-  },
-  {
-    slug: 'localization', 
-    name: 'Localization Coverage',
-    description: 'Monitor the translation coverage and quality across different locales.',
-    component: LocalizationCoverageReport
-  },
-  {
-    slug: 'history',
-    name: 'Change History',
-    description: 'View the history of changes to products and their attributes over time.',
-    component: ChangeHistoryReport
-  },
-  {
-    slug: 'attributes',
-    name: 'Attribute Insights',
-    description: 'Analyze attribute usage patterns and distribution across your product catalog.',
-    component: AttributeInsightsReport
+// Get report definitions from configuration
+const REPORTS = config.reports.definitions.map(report => {
+  // Map component based on slug
+  let component
+  switch (report.slug) {
+    case 'completeness':
+      component = CompletenessReport
+      break
+    case 'localization':
+      component = LocalizationCoverageReport
+      break
+    case 'history':
+      component = ChangeHistoryReport
+      break
+    case 'attributes':
+      component = AttributeInsightsReport
+      break
+    default:
+      component = () => <div>Report not implemented</div>
   }
-];
+  
+  return {
+    ...report,
+    component
+  }
+})
 
 const ReportsPage: React.FC = () => {
   // Active report tab
@@ -560,12 +567,10 @@ const ReportsPage: React.FC = () => {
     queryKey: qkReportThemes(),
     queryFn: () =>
       axiosInstance.get<Theme[]>(paths.reports.themes()).then(res => res.data),
-    // Use our local reports definition without relying on placeholderData
-    // as we'll explicitly use the static REPORTS array if API returns empty data
+    staleTime: config.reports.staleTimes.themes
   });
 
-  // Always use the static REPORTS array since it's now the source of truth
-  // and we don't need to rely on the API for the report definitions
+  // Always use the config-defined REPORTS array since it's the source of truth
   const themes = REPORTS.map(r => ({
     slug: r.slug,
     name: r.name,

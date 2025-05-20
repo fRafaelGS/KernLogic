@@ -15,9 +15,9 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useOrgSettings } from '@/hooks/useOrgSettings'
 import api from '@/services/api'
 import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog'
-import localeService, { Locale } from '@/services/localeService'
-import channelService, { Channel } from '@/services/channelService'
+import channelService from '@/services/channelService'
 import { AddLocaleModal } from './AddLocaleModal'
+import { config } from '@/config/config'
 
 const orgSettingsSchema = z.object({
   name: z.string().min(1, { message: 'Organization name is required' }),
@@ -72,13 +72,13 @@ export function OrganizationSettingsForm() {
       return response.data
     },
     onSuccess: () => {
-      toast.success('Organization settings updated successfully')
+      toast.success(config.settings.display.organization.successMessage)
       queryClient.invalidateQueries({ queryKey: ['organization', orgId] })
       refetch()
     },
     onError: (error) => {
       console.error('Failed to update organization settings:', error)
-      toast.error('Failed to update organization settings')
+      toast.error(config.settings.errors.loadOrganization)
     }
   })
 
@@ -116,7 +116,7 @@ export function OrganizationSettingsForm() {
       <Card>
         <CardContent className="pt-6">
           <div className="text-center py-4 text-destructive">
-            Error loading organization settings. Please try again later.
+            {config.settings.errors.loadOrganization}
           </div>
         </CardContent>
       </Card>
@@ -126,9 +126,9 @@ export function OrganizationSettingsForm() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Organization Settings</CardTitle>
+        <CardTitle>{config.settings.display.organization.title}</CardTitle>
         <CardDescription>
-          Configure your organization-wide settings and defaults
+          {config.settings.display.organization.description}
         </CardDescription>
       </CardHeader>
       <Form {...form}>
@@ -139,7 +139,7 @@ export function OrganizationSettingsForm() {
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Organization Name</FormLabel>
+                  <FormLabel>{config.settings.display.organization.nameLabel}</FormLabel>
                   <FormControl>
                     <Input {...field} />
                   </FormControl>
@@ -153,7 +153,7 @@ export function OrganizationSettingsForm() {
               name="default_locale"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Default Locale</FormLabel>
+                  <FormLabel>{config.settings.display.organization.defaultLocaleLabel}</FormLabel>
                   <Select
                     value={field.value}
                     onValueChange={field.onChange}
@@ -173,11 +173,11 @@ export function OrganizationSettingsForm() {
                   </Select>
                   <div className="mt-2">
                     <Button type="button" variant="outline" size="sm" onClick={() => setLocaleModalOpen(true)}>
-                      + Add New
+                      {config.settings.display.organization.addNewButton}
                     </Button>
                   </div>
                   <FormDescription>
-                    The default locale will be used when no locale is specified
+                    {config.settings.display.organization.localeDescription}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -189,7 +189,7 @@ export function OrganizationSettingsForm() {
               name="default_channel"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Default Sales Channel</FormLabel>
+                  <FormLabel>{config.settings.display.organization.defaultChannelLabel}</FormLabel>
                   <Select
                     value={field.value}
                     onValueChange={field.onChange}
@@ -210,11 +210,11 @@ export function OrganizationSettingsForm() {
                   </Select>
                   <div className="mt-2">
                     <Button type="button" variant="outline" size="sm" onClick={() => setChannelModalOpen(true)}>
-                      + Add New
+                      {config.settings.display.organization.addNewButton}
                     </Button>
                   </div>
                   <FormDescription>
-                    The default channel will be used for prices and other channel-specific data
+                    {config.settings.display.organization.channelDescription}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -224,7 +224,7 @@ export function OrganizationSettingsForm() {
           <CardFooter>
             <Button type="submit" disabled={isPending}>
               {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Settings
+              {isPending ? config.settings.display.organization.savingLabel : config.settings.display.organization.updateButton}
             </Button>
           </CardFooter>
         </form>
@@ -243,8 +243,8 @@ export function OrganizationSettingsForm() {
       <Dialog open={isChannelModalOpen} onOpenChange={setChannelModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add New Channel</DialogTitle>
-            <DialogDescription>Enter the code, name, and description for the new channel.</DialogDescription>
+            <DialogTitle>{config.settings.display.addChannelModal.title}</DialogTitle>
+            <DialogDescription>{config.settings.display.addChannelModal.description}</DialogDescription>
           </DialogHeader>
           <form
             onSubmit={channelForm.handleSubmit(async (data) => {
@@ -259,7 +259,7 @@ export function OrganizationSettingsForm() {
                 setChannelModalOpen(false)
                 channelForm.reset()
               } catch (err: any) {
-                setChannelError(err?.response?.data?.detail || 'Failed to create channel')
+                setChannelError(err?.response?.data?.detail || config.settings.errors.channelCreate)
               } finally {
                 setChannelLoading(false)
               }
@@ -267,31 +267,31 @@ export function OrganizationSettingsForm() {
             className="space-y-4"
           >
             <div>
-              <Label htmlFor="channel-code">Code</Label>
+              <Label htmlFor="channel-code">{config.settings.display.addChannelModal.codeLabel}</Label>
               <Input id="channel-code" {...channelForm.register('code', { required: true })} disabled={channelLoading} />
               {channelForm.formState.errors.code && (
                 <span className="text-destructive text-xs">Code is required</span>
               )}
             </div>
             <div>
-              <Label htmlFor="channel-name">Name</Label>
+              <Label htmlFor="channel-name">{config.settings.display.addChannelModal.nameLabel}</Label>
               <Input id="channel-name" {...channelForm.register('name', { required: true })} disabled={channelLoading} />
               {channelForm.formState.errors.name && (
                 <span className="text-destructive text-xs">Name is required</span>
               )}
             </div>
             <div>
-              <Label htmlFor="channel-description">Description</Label>
+              <Label htmlFor="channel-description">{config.settings.display.addChannelModal.descriptionLabel}</Label>
               <Input id="channel-description" {...channelForm.register('description')} disabled={channelLoading} />
             </div>
             {channelError && <div className="text-destructive text-xs">{channelError}</div>}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setChannelModalOpen(false)} disabled={channelLoading}>
-                Cancel
+                {config.settings.display.addChannelModal.cancelButton}
               </Button>
               <Button type="submit" disabled={channelLoading}>
                 {channelLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Add Channel
+                {channelLoading ? config.settings.display.addChannelModal.savingLabel : config.settings.display.addChannelModal.addButton}
               </Button>
             </DialogFooter>
           </form>

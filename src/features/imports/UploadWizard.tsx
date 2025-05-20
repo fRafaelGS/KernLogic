@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
 import StepUpload from './StepUpload';
 import StepMapping from './StepMapping';
@@ -13,22 +12,15 @@ import {
   createAttributeImport, 
   createFamilyImport,
   getImportFieldSchema,
-  getAttributeGroupSchemaFields,
-  getAttributeSchemaFields,
-  getFamilySchemaFields,
   DuplicateStrategy,
   ImportOptions,
   ImportFieldSchemaEntry
 } from '@/services/importService';
 import { 
   useImportFieldSchema, 
-  useAttributeGroupSchema, 
-  useAttributeSchema, 
-  useFamilySchema 
 } from './hooks/useImportFieldSchema';
 import { Mapping } from '@/types/import';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
+import { config } from '@/config/config';
 
 // Define a type for the current step of the wizard
 type WizardStep = 'mode' | 'upload' | 'mapping' | 'progress';
@@ -52,7 +44,9 @@ const UploadWizard = () => {
   const [previewData, setPreviewData] = useState<any[]>([]);
   const [mapping, setMapping] = useState<Mapping>({});
   const [importId, setImportId] = useState<number | null>(null);
-  const [duplicateStrategy, setDuplicateStrategy] = useState<DuplicateStrategy>('overwrite');
+  const [duplicateStrategy, setDuplicateStrategy] = useState<DuplicateStrategy>(
+    config.imports.defaults.duplicateStrategy as DuplicateStrategy
+  );
   const [attributeHeaderPattern, setAttributeHeaderPattern] = useState<string | null>(null);
   
   const { toast } = useToast();
@@ -129,8 +123,8 @@ const UploadWizard = () => {
   const handleMappingComplete = async (mappingData: Mapping) => {
     if (!file) {
       toast({
-        title: "No file selected",
-        description: "Please select a file first.",
+        title: config.imports.display.uploadErrors.noFileSelected || "No file selected",
+        description: config.imports.display.uploadErrors.pleaseSelectFile || "Please select a file first.",
         variant: "destructive"
       });
       return;
@@ -173,8 +167,8 @@ const UploadWizard = () => {
     } catch (error) {
       console.error('Error creating import:', error);
       toast({
-        title: "Error starting import",
-        description: "There was an error starting the import process. Please try again.",
+        title: config.imports.display.uploadErrors.errorStartingImport || "Error starting import",
+        description: config.imports.display.uploadErrors.errorStartingImportDesc || "There was an error starting the import process. Please try again.",
         variant: "destructive"
       });
     }
@@ -183,20 +177,20 @@ const UploadWizard = () => {
   // Get the title and description based on the current import mode
   const getImportTitle = () => {
     if (importMode === 'products') {
-      return 'Import Products';
+      return config.imports.display.titles.products;
     } else if (importMode === 'structure') {
-      return 'Import Structure';
+      return config.imports.display.titles.structure;
     }
-    return 'Import Wizard';
+    return config.imports.display.titles.default;
   };
 
   const getImportDescription = () => {
     if (importMode === 'products') {
-      return 'Upload a CSV or Excel file to import products in bulk.';
+      return config.imports.display.descriptions.products;
     } else if (importMode === 'structure') {
-      return 'Import attribute groups, attributes, and product families.';
+      return config.imports.display.descriptions.structure;
     }
-    return 'Select an import mode to begin.';
+    return config.imports.display.descriptions.default;
   };
 
   // Handle duplicate strategy change
@@ -232,15 +226,19 @@ const UploadWizard = () => {
               className="w-full"
             >
               <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="upload" disabled={currentStep === 'progress'}>
-                  1. Upload File
-                </TabsTrigger>
-                <TabsTrigger value="mapping" disabled={!file || currentStep === 'progress'}>
-                  2. Map Columns
-                </TabsTrigger>
-                <TabsTrigger value="progress" disabled={!importId}>
-                  3. Import Progress
-                </TabsTrigger>
+                {config.imports.display.steps.map((step) => (
+                  <TabsTrigger 
+                    key={step.value} 
+                    value={step.value}
+                    disabled={
+                      (step.value === 'mapping' && !file) || 
+                      (step.value === 'progress' && !importId) ||
+                      (step.value === 'upload' && currentStep === 'progress')
+                    }
+                  >
+                    {step.label}
+                  </TabsTrigger>
+                ))}
               </TabsList>
               
               <div className="mt-6">

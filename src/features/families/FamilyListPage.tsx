@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useFamilies, useDeleteFamily } from '@/api/familyApi'
 import { Family } from '@/types/family'
@@ -37,13 +37,13 @@ import {
 } from 'lucide-react'
 import { formatDate } from '@/utils/date'
 import ErrorBoundary from '@/components/ErrorBoundary'
+import { config } from '@/config/config'
 
 interface FamilyListPageProps {
   isEmbedded?: boolean;
 }
 
 export function FamilyListPage({ isEmbedded = false }: FamilyListPageProps) {
-  console.log('FamilyListPage rendered')
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
@@ -53,7 +53,8 @@ export function FamilyListPage({ isEmbedded = false }: FamilyListPageProps) {
   const { data: families, isLoading, isError, error } = useFamilies()
   const deleteFamily = useDeleteFamily()
   
-  const PAGE_SIZE = 25
+  // Use configuration for pagination
+  const PAGE_SIZE = config.settings.display.families.pagination.pageSize
   
   // Filter families based on search term
   const filteredFamilies = useMemo(() => {
@@ -102,22 +103,25 @@ export function FamilyListPage({ isEmbedded = false }: FamilyListPageProps) {
     return (
       <div className="p-6 bg-red-50 rounded-md border border-red-200">
         <h2 className="text-lg font-medium text-red-800 mb-2">
-          {t('common.messages.error')}
+          {config.settings.display.families.messages.error}
         </h2>
         <p className="text-red-700">
-          {error instanceof Error ? error.message : t('common.messages.unknownError')}
+          {error instanceof Error ? error.message : config.settings.display.families.messages.unknownError}
         </p>
       </div>
     )
   }
 
+  // Get column configuration
+  const columns = config.settings.display.families.table.columns
+
   const content = (
     <>
       <div className="flex justify-between items-center">
-        {!isEmbedded && <h1 className="text-2xl font-bold">{t('families.title')}</h1>}
+        {!isEmbedded && <h1 className="text-2xl font-bold">{isEmbedded ? config.settings.display.families.title : t('families.title')}</h1>}
         <Button onClick={() => navigate('/app/products/families/new')}>
           <PlusIcon className="h-4 w-4 mr-2" />
-          {t('families.createNew')}
+          {config.settings.display.families.actions.create}
         </Button>
       </div>
       
@@ -125,7 +129,7 @@ export function FamilyListPage({ isEmbedded = false }: FamilyListPageProps) {
         <div className="relative w-64">
           <SearchIcon className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-enterprise-400" />
           <Input
-            placeholder={t('families.searchPlaceholder')}
+            placeholder={config.settings.display.families.table.searchPlaceholder}
             value={search}
             onChange={(e) => handleSearch(e.target.value)}
             className="pl-9"
@@ -135,9 +139,9 @@ export function FamilyListPage({ isEmbedded = false }: FamilyListPageProps) {
         {!isLoading && (
           <div className="text-sm text-enterprise-500">
             {totalPages > 0 ? (
-              `Showing ${(page - 1) * PAGE_SIZE + 1}-${Math.min(page * PAGE_SIZE, filteredFamilies.length)} of ${filteredFamilies.length}`
+              `${config.settings.display.families.table.paginationPrefix} ${(page - 1) * PAGE_SIZE + 1}-${Math.min(page * PAGE_SIZE, filteredFamilies.length)} ${config.settings.display.families.table.paginationOf} ${filteredFamilies.length}`
             ) : (
-              'No results found'
+              config.settings.display.families.table.emptyState.noResults
             )}
           </div>
         )}
@@ -147,16 +151,16 @@ export function FamilyListPage({ isEmbedded = false }: FamilyListPageProps) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>{t('families.table.code')}</TableHead>
-              <TableHead>{t('families.table.label')}</TableHead>
-              <TableHead>{t('families.table.attributeGroups')}</TableHead>
-              <TableHead>{t('families.table.createdAt')}</TableHead>
-              <TableHead className="text-right">{t('families.table.actions')}</TableHead>
+              {columns.map(column => (
+                <TableHead key={column.key} className={column.align === 'right' ? 'text-right' : ''}>
+                  {column.label}
+                </TableHead>
+              ))}
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              Array.from({ length: 5 }).map((_, i) => (
+              Array.from({ length: config.settings.display.families.pagination.skeletonRows }).map((_, i) => (
                 <TableRow key={i}>
                   <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-36" /></TableCell>
@@ -184,7 +188,7 @@ export function FamilyListPage({ isEmbedded = false }: FamilyListPageProps) {
                         onClick={() => navigate(`/app/products/families/${family.id}`)}
                       >
                         <EyeIcon className="h-4 w-4" />
-                        <span className="sr-only">{t('common.actions.view')}</span>
+                        <span className="sr-only">{config.settings.display.families.actions.view}</span>
                       </Button>
                       <Button
                         variant="ghost"
@@ -192,7 +196,7 @@ export function FamilyListPage({ isEmbedded = false }: FamilyListPageProps) {
                         onClick={() => navigate(`/app/products/families/${family.id}/edit`)}
                       >
                         <PencilIcon className="h-4 w-4" />
-                        <span className="sr-only">{t('common.actions.edit')}</span>
+                        <span className="sr-only">{config.settings.display.families.actions.edit}</span>
                       </Button>
                       
                       <AlertDialog>
@@ -204,23 +208,23 @@ export function FamilyListPage({ isEmbedded = false }: FamilyListPageProps) {
                             onClick={() => setSelectedFamily(family)}
                           >
                             <TrashIcon className="h-4 w-4" />
-                            <span className="sr-only">{t('common.actions.delete')}</span>
+                            <span className="sr-only">{config.settings.display.families.actions.delete}</span>
                           </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                           <AlertDialogHeader>
-                            <AlertDialogTitle>{t('common.actions.delete')}</AlertDialogTitle>
+                            <AlertDialogTitle>{config.settings.display.families.actions.delete}</AlertDialogTitle>
                             <AlertDialogDescription>
-                              {t('families.messages.deleteConfirm', { code: family.code || '' })}
+                              {config.settings.display.families.messages.deleteConfirm.replace('{{code}}', family.code || '')}
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
-                            <AlertDialogCancel>{t('families.form.cancel')}</AlertDialogCancel>
+                            <AlertDialogCancel>{config.settings.display.families.messages.cancel}</AlertDialogCancel>
                             <AlertDialogAction
                               className="bg-red-500 hover:bg-red-600"
                               onClick={handleDelete}
                             >
-                              {t('common.actions.delete')}
+                              {config.settings.display.families.actions.delete}
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
@@ -233,8 +237,8 @@ export function FamilyListPage({ isEmbedded = false }: FamilyListPageProps) {
               <TableRow>
                 <TableCell colSpan={5} className="text-center h-24 text-enterprise-400">
                   {search 
-                    ? t('common.messages.noSearchResults')
-                    : t('families.noData')}
+                    ? config.settings.display.families.table.emptyState.noResults
+                    : config.settings.display.families.table.emptyState.noData}
                 </TableCell>
               </TableRow>
             )}
@@ -251,10 +255,10 @@ export function FamilyListPage({ isEmbedded = false }: FamilyListPageProps) {
             disabled={page === 1}
           >
             <ChevronLeftIcon className="h-4 w-4" />
-            <span className="ml-1">Previous</span>
+            <span className="ml-1">{config.settings.display.families.table.previousButton}</span>
           </Button>
           <div className="text-sm text-enterprise-500">
-            Page {page} of {totalPages}
+            {config.settings.display.families.table.pageText} {page} {config.settings.display.families.table.paginationOf} {totalPages}
           </div>
           <Button
             variant="outline"
@@ -262,7 +266,7 @@ export function FamilyListPage({ isEmbedded = false }: FamilyListPageProps) {
             onClick={goToNextPage}
             disabled={page === totalPages}
           >
-            <span className="mr-1">Next</span>
+            <span className="mr-1">{config.settings.display.families.table.nextButton}</span>
             <ChevronRightIcon className="h-4 w-4" />
           </Button>
         </div>

@@ -5,5 +5,5 @@ from .views import (
 
 urlpatterns = [
     # Avatar endpoint
-    path('orgs/<int:org_id>/memberships/<int:id>/avatar/', membership_avatar, name='membership-avatar'),
-] 
+    path('orgs/<int:org_id>/memberships/<int:membership_id>/avatar/', membership_avatar, name='membership-avatar'),
+]

@@ -6,7 +6,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EmptyState } from '@/components/EmptyState';
-import { AvatarBadge } from '@/components/AvatarBadge';
 import { Avatar } from '@/components/Avatar';
 import { Input } from '@/components/ui/input';
 import { 
@@ -33,13 +32,28 @@ import ManageControls from '@/components/ManageControls';
 import RoleDescriptionTooltip from '@/components/RoleDescriptionTooltip';
 import { Link } from 'react-router-dom';
 import { History, Search, UserPlus, Users } from 'lucide-react';
-import api from '@/services/api';
-import axiosInstance from '@/lib/axiosInstance';
-import { Role } from '@/types/team';
-import { fetchRoles, fetchLastUserProductAction } from '@/services/teamService';
-import { Activity } from '@/services/dashboardService';
+import { fetchRoles, fetchTeamMembers, fetchUserProductActions } from '@/services/teamService';
 import { useDebounce } from '@/hooks/useDebounce';
 import { PermissionGuard } from '@/components/common/PermissionGuard';
+
+// Import the configuration
+import { config as appConfig } from '@/config/config';
+
+// Create a local reference to avoid name conflicts
+const config = appConfig;
+
+// Table column interface - ensure it matches the actual config format
+interface TableColumn {
+  name: string;
+  width: string;
+  align?: string;
+}
+
+// Tab interface
+interface TabItem {
+  value: string;
+  label: string;
+}
 
 interface Membership {
   id: string;
@@ -110,7 +124,7 @@ export const TeamPage: React.FC = () => {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showBulkInviteModal, setShowBulkInviteModal] = useState(false);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(config.team.pagination.defaultPageSize);
   const [orgError, setOrgError] = useState(false);
   
   // Get auth context and navigation
@@ -177,9 +191,9 @@ export const TeamPage: React.FC = () => {
       }
       return fetchRoles(orgID);
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    enabled: hasOrgID, // Only run if we have an org ID
-    retry: 1, // Only retry once
+    staleTime: config.team.staleTimes.roles,
+    enabled: hasOrgID,
+    retry: 1,
   });
 
   // Fetch team members
@@ -191,46 +205,21 @@ export const TeamPage: React.FC = () => {
   } = useQuery({
     queryKey: ['teamMembers', debouncedSearchText, roleFilter, statusFilter, orgID, page, pageSize],
     queryFn: async () => {
-      try {
-        if (!orgID) {
-          throw new Error('No organization ID available for fetching memberships');
-        }
-        
-        // Build query parameters for filtering
-        const params = new URLSearchParams();
-        if (debouncedSearchText) params.append('search', debouncedSearchText);
-        if (roleFilter !== 'all') params.append('role', roleFilter);
-        if (statusFilter !== 'all') params.append('status', statusFilter);
-        params.append('page', page.toString());
-        params.append('page_size', pageSize.toString());
-        
-        // Make the API request
-        const response = await api.get(`/orgs/${orgID}/memberships?${params.toString()}`);
-        
-        // Log raw API response in development
-        if (process.env.NODE_ENV === 'development') {
-          console.log('Team members API response:', response.data);
-        }
-        
-        // Handle different response shapes (array or paginated object)
-        const raw = response.data;
-        const isArray = Array.isArray(raw);
-        
-        return {
-          results: isArray ? raw
-                 : Array.isArray(raw.results) ? raw.results
-                 : [],
-          count: isArray ? raw.length
-                 : raw.count ?? 0
-        };
-      } catch (err) {
-        toast.error('Failed to load team members');
-        return { results: [], count: 0 }; // Return empty array on error
+      if (!orgID) {
+        throw new Error('No organization ID available for fetching memberships');
       }
+      
+      return fetchTeamMembers(orgID, {
+        search: debouncedSearchText,
+        role: roleFilter,
+        status: statusFilter,
+        page,
+        page_size: pageSize
+      });
     },
     retry: 1,
-    enabled: hasOrgID, // Only run the query if we have an organization ID
-    placeholderData: (prev) => prev, // Use previous data while new data is loading
+    enabled: hasOrgID,
+    placeholderData: (prev) => prev,
   });
 
   // Fetch last action for each user
@@ -252,54 +241,11 @@ export const TeamPage: React.FC = () => {
   const { data: userProductActions = {}, isLoading: isLoadingActions } = useQuery({
     queryKey: ['userLastProductActions', userIds, orgID],
     queryFn: async () => {
-      if (userIds.length === 0) return {};
-      
-      try {
-        // Fetch all activities for the organization
-        const response = await axiosInstance.get(`/api/dashboard/activity/?limit=100`);
-        const allActivities = response.data || [];
-        
-        if (!Array.isArray(allActivities) || allActivities.length === 0) {
-          return {};
-        }
-        
-        // Create a map to store the most recent activity for each user
-        const actionsMap: Record<string, ProductActivity | null> = {};
-        
-        // Initialize all userIds with null (for users with no actions)
-        userIds.forEach((userId: string) => {
-          actionsMap[userId] = null;
-        });
-        
-        // Group activities by user
-        allActivities.forEach(activity => {
-          const activityUserId = activity.user?.toString() || 
-                               activity.user_id?.toString();
-          
-          // Skip if we can't determine the user or it's not in our list
-          if (!activityUserId || !userIds.includes(activityUserId)) {
-            return;
-          }
-          
-          // If we don't have an activity for this user yet or this one is more recent
-          if (!actionsMap[activityUserId] || (
-              (activity.created_at && actionsMap[activityUserId]?.created_at && 
-               new Date(activity.created_at) > new Date(actionsMap[activityUserId]!.created_at!)) ||
-              (activity.timestamp && actionsMap[activityUserId]?.timestamp && 
-               new Date(activity.timestamp) > new Date(actionsMap[activityUserId]!.timestamp!))
-          )) {
-            actionsMap[activityUserId] = activity;
-          }
-        });
-        
-        return actionsMap;
-      } catch (error) {
-        console.error('Error fetching user product actions:', error);
-        return {};
-      }
+      if (!orgID || userIds.length === 0) return {};
+      return fetchUserProductActions(orgID, userIds);
     },
     enabled: userIds.length > 0 && !!orgID,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: config.team.staleTimes.activity,
   });
 
   // Handle avatar update for a team member
@@ -526,9 +472,9 @@ export const TeamPage: React.FC = () => {
     <div className="container mx-auto p-6 space-y-6 w-full max-w-full flex-grow" style={{ minWidth: '100%' }}>
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 w-full">
         <div>
-          <h1 className="text-3xl font-bold text-enterprise-900">Team Management</h1>
+          <h1 className="text-3xl font-bold text-enterprise-900">{config.team.display.pageTitle}</h1>
           <p className="text-enterprise-600 mt-1">
-            Manage team members and permissions.
+            {config.team.display.pageDescription}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -577,9 +523,11 @@ export const TeamPage: React.FC = () => {
           >
             <div className="flex items-center justify-between border-b px-4 py-2">
               <TabsList>
-                <TabsTrigger value="all" className="data-[state=active]:bg-primary/10">All Members</TabsTrigger>
-                <TabsTrigger value="active" className="data-[state=active]:bg-primary/10">Active</TabsTrigger>
-                <TabsTrigger value="pending" className="data-[state=active]:bg-primary/10">Pending</TabsTrigger>
+                {config.team.display.tabs.map((tab: TabItem) => (
+                  <TabsTrigger key={tab.value} value={tab.value} className="data-[state=active]:bg-primary/10">
+                    {tab.label}
+                  </TabsTrigger>
+                ))}
               </TabsList>
             </div>
             
@@ -622,8 +570,8 @@ export const TeamPage: React.FC = () => {
               {membersData.results.length === 0 && (
                 <div className="p-8">
                   <EmptyState
-                    title="No team members found"
-                    description="Try changing your search or filter criteria, or invite someone new."
+                    title={config.team.display.emptyState.title}
+                    description={config.team.display.emptyState.description}
                     buttonText={canInviteUsers ? "Invite Member" : ''}
                     buttonIcon={canInviteUsers ? <UserPlus className="h-4 w-4 mr-2" /> : undefined}
                     onButtonClick={() => canInviteUsers && setShowInviteModal(true)}
@@ -637,11 +585,14 @@ export const TeamPage: React.FC = () => {
                   <Table className="w-full table-fixed">
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[35%]">Member</TableHead>
-                        <TableHead className="w-[10%]">Role</TableHead>
-                        <TableHead className="w-[25%]">Last Action</TableHead>
-                        <TableHead className="w-[20%]">Last Activity</TableHead>
-                        <TableHead className="w-[10%] text-right">Actions</TableHead>
+                        {config.team.display.tableColumns.map((column, index) => (
+                          <TableHead 
+                            key={index} 
+                            className={`w-[${column.width}]${column.align ? ` text-${column.align}` : ''}`}
+                          >
+                            {column.name}
+                          </TableHead>
+                        ))}
                       </TableRow>
                     </TableHeader>
                     <TableBody>

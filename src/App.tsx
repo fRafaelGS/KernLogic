@@ -17,7 +17,6 @@ import AttributesPage from '@/pages/AttributesPage';
 import AttributeGroupsPage from '@/pages/AttributeGroupsPage';
 import { ENABLE_CUSTOM_ATTRIBUTES, ENABLE_ATTRIBUTE_GROUPS } from '@/config/featureFlags';
 import AdminOnly from '@/components/auth/AdminOnly'
-import { FamilyListPage } from '@/features/families/FamilyListPage'
 import { FamilyFormPage } from '@/features/families/FamilyFormPage'
 import { FamilyDetailPage } from '@/features/families/FamilyDetailPage'
 
@@ -27,7 +26,6 @@ import PricingPage from "./pages/marketing/PricingPage";
 import ProductPage from "./pages/marketing/ProductPage";
 
 // App Pages
-import NotFound from "./pages/NotFound";
 import ReportsPage from './pages/ReportsPage';
 import UploadPage from './pages/UploadPage';
 import DocumentationPage from './pages/DocumentationPage';

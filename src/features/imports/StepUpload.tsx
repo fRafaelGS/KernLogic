@@ -2,7 +2,7 @@ import React, { useCallback, useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
-import { UploadIcon, FileSpreadsheetIcon, InfoIcon } from 'lucide-react';
+import { UploadIcon, InfoIcon } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { parse as parseCsv } from 'papaparse';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { ImportMode } from './StepImportMode';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DuplicateStrategy } from '@/services/importService';
+import { config } from '@/config/config';
 
 // Define the structure type
 type StructureType = 'attribute_groups' | 'attributes' | 'families' | null;
@@ -28,7 +29,7 @@ const StepUpload: React.FC<StepUploadProps> = ({
   importMode = 'products',
   structureType = null,
   onStructureTypeSelect,
-  duplicatePolicy = 'overwrite',
+  duplicatePolicy = config.imports.defaults.duplicateStrategy as DuplicateStrategy,
   onDuplicatePolicyChange
 }) => {
   const [previewData, setPreviewData] = useState<any[]>([]);
@@ -46,7 +47,7 @@ const StepUpload: React.FC<StepUploadProps> = ({
         const parsed = parseCsv(result as string, {
           header: true,
           skipEmptyLines: true,
-          preview: 5
+          preview: config.imports.defaults.previewRows
         });
         data = parsed.data;
         headers = parsed.meta.fields || [];
@@ -55,7 +56,7 @@ const StepUpload: React.FC<StepUploadProps> = ({
         const sheetName = workbook.SheetNames[0];
         const worksheet = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
         headers = worksheet[0] as string[];
-        data = worksheet.slice(1, 6);
+        data = worksheet.slice(1, config.imports.defaults.previewRows + 1);
       }
       setPreviewData(data);
       setHeaders(headers);
@@ -96,35 +97,17 @@ const StepUpload: React.FC<StepUploadProps> = ({
             onValueChange={(value) => onStructureTypeSelect?.(value as StructureType)}
             className="space-y-4"
           >
-            <div className="flex items-start space-x-2 p-4 rounded-md border border-gray-200 hover:bg-gray-50">
-              <RadioGroupItem value="attribute_groups" id="attribute_groups" className="mt-1" />
-              <div className="space-y-1">
-                <Label htmlFor="attribute_groups" className="font-medium">Attribute Groups</Label>
-                <p className="text-sm text-muted-foreground">
-                  Import attribute groups that organize related attributes
-                </p>
+            {config.imports.display.structureTypes.map((type) => (
+              <div key={type.value} className="flex items-start space-x-2 p-4 rounded-md border border-gray-200 hover:bg-gray-50">
+                <RadioGroupItem value={type.value} id={type.value} className="mt-1" />
+                <div className="space-y-1">
+                  <Label htmlFor={type.value} className="font-medium">{type.label}</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {type.description}
+                  </p>
+                </div>
               </div>
-            </div>
-
-            <div className="flex items-start space-x-2 p-4 rounded-md border border-gray-200 hover:bg-gray-50">
-              <RadioGroupItem value="attributes" id="attributes" className="mt-1" />
-              <div className="space-y-1">
-                <Label htmlFor="attributes" className="font-medium">Attributes</Label>
-                <p className="text-sm text-muted-foreground">
-                  Import product attributes like color, size, material, etc.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-start space-x-2 p-4 rounded-md border border-gray-200 hover:bg-gray-50">
-              <RadioGroupItem value="families" id="families" className="mt-1" />
-              <div className="space-y-1">
-                <Label htmlFor="families" className="font-medium">Product Families</Label>
-                <p className="text-sm text-muted-foreground">
-                  Import product families that define which attributes products should have
-                </p>
-              </div>
-            </div>
+            ))}
           </RadioGroup>
         </div>
       )}
@@ -155,25 +138,17 @@ const StepUpload: React.FC<StepUploadProps> = ({
             onValueChange={(value) => onDuplicatePolicyChange?.(value as DuplicateStrategy)}
             className="space-y-3"
           >
-            <div className="flex items-start space-x-2 p-3 rounded-md border border-gray-200 hover:bg-gray-50">
-              <RadioGroupItem value="overwrite" id="overwrite" className="mt-1" />
-              <div className="space-y-1">
-                <Label htmlFor="overwrite" className="font-medium">Overwrite existing products</Label>
-                <p className="text-sm text-muted-foreground">
-                  Update existing products with the data from your import file
-                </p>
+            {config.imports.display.duplicateStrategies.map((strategy) => (
+              <div key={strategy.value} className="flex items-start space-x-2 p-3 rounded-md border border-gray-200 hover:bg-gray-50">
+                <RadioGroupItem value={strategy.value} id={strategy.value} className="mt-1" />
+                <div className="space-y-1">
+                  <Label htmlFor={strategy.value} className="font-medium">{strategy.label}</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {strategy.description}
+                  </p>
+                </div>
               </div>
-            </div>
-
-            <div className="flex items-start space-x-2 p-3 rounded-md border border-gray-200 hover:bg-gray-50">
-              <RadioGroupItem value="skip" id="skip" className="mt-1" />
-              <div className="space-y-1">
-                <Label htmlFor="skip" className="font-medium">Skip existing products</Label>
-                <p className="text-sm text-muted-foreground">
-                  Only import new products and leave existing ones unchanged
-                </p>
-              </div>
-            </div>
+            ))}
           </RadioGroup>
         </div>
       )}
@@ -186,22 +161,22 @@ const StepUpload: React.FC<StepUploadProps> = ({
           onClick={() => fileInputRef.current?.click()}
           disabled={showStructureTypeSelector && !structureType}
         >
-          Select File
+          {config.imports.display.uploadInstructions.selectButtonLabel}
         </Button>
         <input
           ref={fileInputRef}
           type="file"
-          accept=".csv,.xlsx,.xls"
+          accept={config.imports.defaults.acceptedFileTypes.join(',')}
           onChange={handleFileChange}
           className="hidden"
         />
-        <p className="text-lg mt-2">Choose a CSV or Excel file to import</p>
+        <p className="text-lg mt-2">{config.imports.display.uploadInstructions.title}</p>
         <p className="text-sm text-muted-foreground mt-1">
-          Supported formats: CSV, Excel (.xlsx, .xls)
+          {config.imports.display.uploadInstructions.subtitle}
         </p>
         {showStructureTypeSelector && !structureType && (
           <p className="text-sm text-amber-600 mt-2">
-            Please select a structure type above before uploading a file
+            {config.imports.display.uploadInstructions.structureTypeRequired}
           </p>
         )}
       </div>
@@ -228,7 +203,7 @@ const StepUpload: React.FC<StepUploadProps> = ({
           </div>
           {previewData.length > 0 && (
             <div className="overflow-x-auto">
-              <h4 className="text-sm font-medium mb-2">Preview (First 5 rows)</h4>
+              <h4 className="text-sm font-medium mb-2">Preview (First {config.imports.defaults.previewRows} rows)</h4>
               <Table>
                 <TableHeader>
                   <TableRow>

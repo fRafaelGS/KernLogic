@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { dashboardService, DashboardSummary, InventoryTrend, Activity, IncompleteProduct } from '@/services/dashboardService';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { config } from '@/config/config';
 
 // Define cache types
 interface DashboardCache {
@@ -28,8 +29,8 @@ interface DashboardCache {
   };
 }
 
-// Cache TTL in milliseconds (30 seconds)
-const CACHE_TTL = 30 * 1000;
+// Cache TTL from configuration
+const CACHE_TTL = config.dashboard.cacheTTL;
 
 // Initialize cache
 const cache: DashboardCache = {};
@@ -106,7 +107,8 @@ export function useDashboardData() {
         active_products: 0,
         inactive_products: 0,
         attributes_missing_count: 0,
-        mandatory_attributes: []
+        mandatory_attributes: [],
+        recent_products: []
       });
       return;
     }
@@ -134,7 +136,9 @@ export function useDashboardData() {
   const fetchActivity = useCallback(async (force = false) => {
     // Skip if no organization ID is available
     if (!organizationId) {
-      console.log('Cannot fetch activity: No organization ID available');
+      if (config.debug.enableLogs) {
+        console.log('Cannot fetch activity: No organization ID available');
+      }
       setActivity([]);
       return;
     }
@@ -163,7 +167,9 @@ export function useDashboardData() {
       console.error('Activity error:', err);
       // Don't logout on dashboard API failures
       if (err.response?.status === 401) {
-        console.log('Authentication issue with activity. Using empty data.');
+        if (config.debug.enableLogs) {
+          console.log('Authentication issue with activity. Using empty data.');
+        }
         setActivity([]);
       } else {
         setError(prev => ({ ...prev, activity: err }));
@@ -180,7 +186,9 @@ export function useDashboardData() {
   const fetchIncompleteProducts = useCallback(async (force = false) => {
     // Skip if no organization ID is available
     if (!organizationId) {
-      console.log('Cannot fetch incomplete products: No organization ID available');
+      if (config.debug.enableLogs) {
+        console.log('Cannot fetch incomplete products: No organization ID available');
+      }
       setIncompleteProducts([]);
       return;
     }
@@ -210,7 +218,9 @@ export function useDashboardData() {
       console.error('Incomplete products error:', err);
       // Don't logout on dashboard API failures
       if (err.response?.status === 401) {
-        console.log('Authentication issue with incomplete products. Using empty data.');
+        if (config.debug.enableLogs) {
+          console.log('Authentication issue with incomplete products. Using empty data.');
+        }
         setIncompleteProducts([]);
       } else {
         setError(prev => ({ ...prev, incompleteProducts: err }));
@@ -251,11 +261,17 @@ export function useDashboardData() {
       }
     };
 
+    // Add message event listener
     window.addEventListener('message', handleMessage);
+
+    // Fetch data on mount
+    fetchAll();
+
+    // Clean up event listener
     return () => {
       window.removeEventListener('message', handleMessage);
     };
-  }, [invalidateCache, fetchAll]);
+  }, [fetchAll, invalidateCache]);
 
   // Return hook data and functions
   return {
@@ -266,10 +282,10 @@ export function useDashboardData() {
     },
     loading,
     error,
+    invalidateCache,
+    fetchAll,
     fetchSummary,
     fetchActivity,
-    fetchIncompleteProducts,
-    fetchAll,
-    invalidateCache
+    fetchIncompleteProducts
   };
 } 

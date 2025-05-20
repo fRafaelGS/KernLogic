@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Loader2 } from 'lucide-react'
 import localeService, { Locale } from '@/services/localeService'
 import { LOCALES } from '@/config/locale'
+import { config } from '@/config/config'
 
 // Use the centralized locale configuration from config/locale.ts
 
@@ -63,7 +64,7 @@ export function AddLocaleModal({ open, onClose, onSuccess, existingLocales }: Ad
       onClose()
       form.reset()
     } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Failed to create locale')
+      setError(err?.response?.data?.detail || config.settings.errors.localeCreate)
     } finally {
       setLoading(false)
     }
@@ -83,15 +84,15 @@ export function AddLocaleModal({ open, onClose, onSuccess, existingLocales }: Ad
     <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add New Locale</DialogTitle>
-          <DialogDescription>Select a locale to add to your organization.</DialogDescription>
+          <DialogTitle>{config.settings.display.addLocaleModal.title}</DialogTitle>
+          <DialogDescription>{config.settings.display.addLocaleModal.description}</DialogDescription>
         </DialogHeader>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <div>
-            <Label htmlFor="locale-search">Search Locale</Label>
+            <Label htmlFor="locale-search">{config.settings.display.addLocaleModal.codeLabel}</Label>
             <Input
               id="locale-search"
-              placeholder="Type to search..."
+              placeholder={config.settings.display.addLocaleModal.codePlaceholder}
               value={search}
               onChange={e => setSearch(e.target.value)}
               disabled={loading}
@@ -99,7 +100,7 @@ export function AddLocaleModal({ open, onClose, onSuccess, existingLocales }: Ad
             />
           </div>
           <div>
-            <Label htmlFor="locale-select">Locale</Label>
+            <Label htmlFor="locale-select">{config.settings.display.addLocaleModal.nameLabel}</Label>
             <select
               id="locale-select"
               {...form.register('locale', { required: true })}
@@ -120,10 +121,12 @@ export function AddLocaleModal({ open, onClose, onSuccess, existingLocales }: Ad
           </div>
           {error && <div className="text-destructive text-xs">{error}</div>}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose} disabled={loading}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
+              {config.settings.display.addLocaleModal.cancelButton}
+            </Button>
             <Button type="submit" disabled={loading || filteredLocales.length === 0}>
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Add Locale
+              {loading ? config.settings.display.addLocaleModal.savingLabel : config.settings.display.addLocaleModal.addButton}
             </Button>
           </DialogFooter>
         </form>

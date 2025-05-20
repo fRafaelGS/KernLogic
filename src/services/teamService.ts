@@ -1,6 +1,7 @@
 import axiosInstance from '@/lib/axiosInstance';
-import { useAuth } from '@/contexts/AuthContext';
-import { Activity } from './dashboardService';
+import { Activity } from '@/services/dashboardService';
+import { API_ENDPOINTS } from '@/config';
+import { Role } from '@/types/team';
 
 // Types for team members
 export interface User {
@@ -8,13 +9,6 @@ export interface User {
   name: string;
   email: string;
   avatar_url?: string;
-}
-
-export interface Role {
-  id: number;
-  name: string;
-  description: string;
-  permissions: string[];
 }
 
 export interface TeamMember {
@@ -42,6 +36,12 @@ export interface AuditLogEntry {
   details: Record<string, any>;
 }
 
+// Manually define missing team endpoints until API_ENDPOINTS type is updated
+const TEAM_ENDPOINTS = {
+  activity: '/api/dashboard/activity/',
+  history: '/api/team/history/'
+};
+
 // Utility function to log in development only
 const devLog = (...args: any[]) => {
   if (process.env.NODE_ENV === 'development') {
@@ -50,32 +50,133 @@ const devLog = (...args: any[]) => {
 };
 
 /**
- * Fetch team members for the current organization with optional filters
+ * Fetches all available roles for an organization
+ * @param orgId Organization ID
+ * @returns List of roles
  */
-export const fetchTeamMembers = async (
-  search?: string,
-  role?: string,
-  status?: string,
-  orgId?: string | number
-): Promise<TeamMember[]> => {
-  // Validate that we have an organization ID
-  if (!orgId) {
-    throw new Error('No organization ID provided');
-  }
-
-  const params: Record<string, string> = {};
-  if (search) params.search = search;
-  if (role) params.role = role;
-  if (status) params.status = status;
-
-  devLog('Fetching team members with params:', params);
-  
+export const fetchRoles = async (orgId: string): Promise<Role[]> => {
   try {
-    const response = await axiosInstance.get(`/api/orgs/${orgId}/memberships/`, { params });
-    return response.data;
+    const response = await axiosInstance.get(API_ENDPOINTS.orgs.roles(orgId));
+    return response.data || [];
+  } catch (error) {
+    console.error('Error fetching roles:', error);
+    throw error;
+  }
+};
+
+/**
+ * Fetches last product action for a user
+ * @param userId User ID
+ * @returns Last product action or null
+ */
+export const fetchLastUserProductAction = async (userId: string): Promise<Activity | null> => {
+  try {
+    const response = await axiosInstance.get(`${TEAM_ENDPOINTS.activity}?user=${userId}&limit=1`);
+    const activities = response.data || [];
+    return activities.length > 0 ? activities[0] : null;
+  } catch (error) {
+    console.error('Error fetching user product action:', error);
+    return null;
+  }
+};
+
+/**
+ * Fetches team members for an organization
+ * @param orgId Organization ID
+ * @param params Query parameters for filtering and pagination
+ * @returns List of team members with pagination info
+ */
+export const fetchTeamMembers = async (orgId: string, params: {
+  search?: string;
+  role?: string;
+  status?: string;
+  page?: number;
+  page_size?: number;
+}) => {
+  try {
+    if (!orgId) {
+      throw new Error('No organization ID available for fetching memberships');
+    }
+    
+    // Build query parameters for filtering
+    const queryParams = new URLSearchParams();
+    if (params.search) queryParams.append('search', params.search);
+    if (params.role && params.role !== 'all') queryParams.append('role', params.role);
+    if (params.status && params.status !== 'all') queryParams.append('status', params.status);
+    if (params.page) queryParams.append('page', params.page.toString());
+    if (params.page_size) queryParams.append('page_size', params.page_size.toString());
+    
+    // Make the API request
+    const response = await axiosInstance.get(`${API_ENDPOINTS.orgs.memberships(orgId)}?${queryParams.toString()}`);
+    
+    // Handle different response shapes (array or paginated object)
+    const raw = response.data;
+    const isArray = Array.isArray(raw);
+    
+    return {
+      results: isArray ? raw
+             : Array.isArray(raw.results) ? raw.results
+             : [],
+      count: isArray ? raw.length
+             : raw.count ?? 0
+    };
   } catch (error) {
     console.error('Error fetching team members:', error);
-    return [];
+    throw error;
+  }
+};
+
+/**
+ * Fetches all activities for the organization to determine last actions
+ * @param orgId Organization ID
+ * @param userIds List of user IDs to filter activities
+ * @returns Map of user IDs to their last activity
+ */
+export const fetchUserProductActions = async (orgId: string, userIds: string[]) => {
+  try {
+    if (userIds.length === 0) return {};
+    
+    // Fetch all activities for the organization
+    const response = await axiosInstance.get(`${TEAM_ENDPOINTS.activity}?limit=100`);
+    const allActivities = response.data || [];
+    
+    if (!Array.isArray(allActivities) || allActivities.length === 0) {
+      return {};
+    }
+    
+    // Create a map to store the most recent activity for each user
+    const actionsMap: Record<string, any> = {};
+    
+    // Initialize all userIds with null (for users with no actions)
+    userIds.forEach((userId: string) => {
+      actionsMap[userId] = null;
+    });
+    
+    // Group activities by user
+    allActivities.forEach(activity => {
+      const activityUserId = activity.user?.toString() || 
+                          activity.user_id?.toString();
+      
+      // Skip if we can't determine the user or it's not in our list
+      if (!activityUserId || !userIds.includes(activityUserId)) {
+        return;
+      }
+      
+      // If we don't have an activity for this user yet or this one is more recent
+      if (!actionsMap[activityUserId] || (
+          (activity.created_at && actionsMap[activityUserId]?.created_at && 
+          new Date(activity.created_at) > new Date(actionsMap[activityUserId].created_at)) ||
+          (activity.timestamp && actionsMap[activityUserId]?.timestamp && 
+          new Date(activity.timestamp) > new Date(actionsMap[activityUserId].timestamp))
+      )) {
+        actionsMap[activityUserId] = activity;
+      }
+    });
+    
+    return actionsMap;
+  } catch (error) {
+    console.error('Error fetching user product actions:', error);
+    return {};
   }
 };
 
@@ -211,28 +312,6 @@ export const cancelInvite = async (membershipId: number, orgId?: string): Promis
 };
 
 /**
- * Fetch available roles for the current organization
- */
-export const fetchRoles = async (orgId?: string | number): Promise<Role[]> => {
-  if (!orgId) {
-    throw new Error('No organization ID provided');
-  }
-
-  try {
-    devLog(`Fetching roles for organization: ${orgId}`, {
-      endpoint: `/api/orgs/${orgId}/roles/`
-    });
-    
-    // Use the correct API path with organization ID
-    const response = await axiosInstance.get(`/api/orgs/${orgId}/roles/`);
-    return response.data;
-  } catch (error) {
-    console.error('Error fetching roles:', error);
-    return [];
-  }
-};
-
-/**
  * Update a team member's role
  */
 export const updateMemberRole = async (membershipId: number | string, roleId: number, orgId?: string | number): Promise<TeamMember> => {
@@ -307,42 +386,6 @@ export const fetchLastUserAction = async (userId: string, orgId?: string): Promi
     return logs.length > 0 ? logs[0] : null;
   } catch (error) {
     console.error('Error fetching user last action:', error);
-    return null;
-  }
-};
-
-/**
- * Fetch the last product action for a specific user
- */
-export const fetchLastUserProductAction = async (userId: string): Promise<any | null> => {
-  if (!userId) {
-    return null;
-  }
-
-  try {
-    // The Activity table in the database has a user foreign key, not user_id
-    // We need to query for activities where the user matches our userId
-    // GET /api/dashboard/activity/ gets all activities, we will filter by user
-    const response = await axiosInstance.get(`/api/dashboard/activity/?limit=50`);
-    
-    // Ensure we're working with valid data
-    if (!response.data || (Array.isArray(response.data) && response.data.length === 0)) {
-      return null;
-    }
-    
-    // Filter for activities by this specific user
-    const activities = Array.isArray(response.data) ? response.data : [];
-    
-    // The Activity model has a user field (not user_id), but in the API it returns user_name
-    // We need to match this user's ID or name in the returned data
-    const userActivities = activities.filter(activity => {
-      return activity.user === parseInt(userId) || activity.user_id === parseInt(userId);
-    });
-    
-    // Return the first activity or null
-    return userActivities.length > 0 ? userActivities[0] : null;
-  } catch (error) {
-    console.error('Error fetching user product actions:', error);
     return null;
   }
 }; 

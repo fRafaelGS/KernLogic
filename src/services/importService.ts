@@ -1,4 +1,5 @@
 import axiosInstance from '@/lib/axiosInstance';
+import { API_ENDPOINTS, config } from '@/config/config';
 
 export interface ImportTask {
   id: number;
@@ -36,7 +37,7 @@ export interface ImportOptions {
 export const createImport = (
   file: File, 
   mapping: Record<string, string>, 
-  options: ImportOptions = { overwrite_policy: 'overwrite' }
+  options: ImportOptions = { overwrite_policy: config.imports.defaults.duplicateStrategy as DuplicateStrategy }
 ) => {
   if (!(file instanceof File)) {
     throw new Error('The file is not a real File object. Please re-select the file before uploading.');
@@ -44,8 +45,8 @@ export const createImport = (
   const fd = new FormData();
   fd.append("csv_file", file, file.name);
   fd.append("mapping", JSON.stringify(mapping));
-  fd.append("duplicate_strategy", options.overwrite_policy || 'overwrite');
-  return axiosInstance.post<ImportTask>("/api/imports/", fd);
+  fd.append("duplicate_strategy", options.overwrite_policy || config.imports.defaults.duplicateStrategy);
+  return axiosInstance.post<ImportTask>(API_ENDPOINTS.imports.create, fd);
 };
 
 export const createAttributeGroupImport = (file: File, mapping: Record<string, string>) => {
@@ -55,7 +56,7 @@ export const createAttributeGroupImport = (file: File, mapping: Record<string, s
   const fd = new FormData();
   fd.append("csv_file", file, file.name);
   fd.append("mapping", JSON.stringify(mapping));
-  return axiosInstance.post<ImportTask>("/api/attribute-groups-import/", fd);
+  return axiosInstance.post<ImportTask>(API_ENDPOINTS.imports.attributeGroups, fd);
 };
 
 export const createAttributeImport = (file: File, mapping: Record<string, string>) => {
@@ -65,7 +66,7 @@ export const createAttributeImport = (file: File, mapping: Record<string, string
   const fd = new FormData();
   fd.append("csv_file", file, file.name);
   fd.append("mapping", JSON.stringify(mapping));
-  return axiosInstance.post<ImportTask>("/api/attributes-import/", fd);
+  return axiosInstance.post<ImportTask>(API_ENDPOINTS.imports.attributes, fd);
 };
 
 export const createFamilyImport = (file: File, mapping: Record<string, string>) => {
@@ -75,26 +76,27 @@ export const createFamilyImport = (file: File, mapping: Record<string, string>) 
   const fd = new FormData();
   fd.append("csv_file", file, file.name);
   fd.append("mapping", JSON.stringify(mapping));
-  return axiosInstance.post<ImportTask>("/api/families-import/", fd);
+  return axiosInstance.post<ImportTask>(API_ENDPOINTS.imports.families, fd);
 };
 
-export const getImport = (id: number) => axiosInstance.get<ImportTask>(`/api/imports/${id}/`);
+export const getImport = (id: number) => 
+  axiosInstance.get<ImportTask>(API_ENDPOINTS.imports.details(id));
 
 export const getImportFieldSchema = (version?: number) => {
   const url = version === 2 
-    ? "/api/imports/field-schema/?v=2"
-    : "/api/imports/field-schema/";
+    ? API_ENDPOINTS.imports.fieldSchemaV2
+    : API_ENDPOINTS.imports.fieldSchema;
   return axiosInstance.get<FieldSchemaResponse>(url);
 };
 
 export const getAttributeGroupSchemaFields = () => 
-  axiosInstance.get<ImportFieldSchemaEntry[]>("/api/imports/attribute-groups-schema/");
+  axiosInstance.get<ImportFieldSchemaEntry[]>(API_ENDPOINTS.imports.attributeGroupsSchema);
 
 export const getAttributeSchemaFields = () => 
-  axiosInstance.get<ImportFieldSchemaEntry[]>("/api/imports/attributes-schema/");
+  axiosInstance.get<ImportFieldSchemaEntry[]>(API_ENDPOINTS.imports.attributesSchema);
 
 export const getFamilySchemaFields = () => 
-  axiosInstance.get<ImportFieldSchemaEntry[]>("/api/imports/families-schema/");
+  axiosInstance.get<ImportFieldSchemaEntry[]>(API_ENDPOINTS.imports.familiesSchema);
 
 export const getFamilyAttributes = (familyCode: string) => 
-  axiosInstance.get(`/api/families/${familyCode}/attributes/`); 
+  axiosInstance.get(API_ENDPOINTS.imports.familyAttributes(familyCode)); 

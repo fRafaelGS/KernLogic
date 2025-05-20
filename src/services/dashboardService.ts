@@ -1,5 +1,6 @@
 import axiosInstance from '@/lib/axiosInstance';
 import { API_ENDPOINTS } from '@/config';
+import { config } from '@/config/config';
 
 // Define types for dashboard data
 export interface DashboardSummary {
@@ -64,8 +65,10 @@ export interface IncompleteProductsParams {
 // Define path to dashboard endpoints - use the path from config
 const DASHBOARD_URL = API_ENDPOINTS.dashboard;
 
-// Log the dashboard endpoint configuration
-console.log('Dashboard API endpoints configured at:', DASHBOARD_URL);
+// Log the dashboard endpoint configuration if debugging is enabled
+if (config.debug.enableLogs) {
+  console.log('Dashboard API endpoints configured at:', DASHBOARD_URL);
+}
 
 /**
  * Build URL with organization ID parameter
@@ -86,25 +89,29 @@ const withOrgParam = (endpoint: string, organizationId?: string): string => {
  */
 export const getDashboardSummary = async (organizationId?: string): Promise<DashboardSummary> => {
   try {
-    // Log the request URL and authorization header
     const token = localStorage.getItem('access_token');
     const url = withOrgParam(`${DASHBOARD_URL}/summary/`, organizationId);
     
-    console.log('Dashboard Summary API Call:', {
-      url,
-      hasToken: !!token,
-      tokenPrefix: token ? token.substring(0, 15) + '...' : 'none',
-      organizationId: organizationId || 'not provided'
-    });
+    // Only log if debug logging is enabled
+    if (config.debug.enableLogs) {
+      console.log('Dashboard Summary API Call:', {
+        url,
+        hasToken: !!token,
+        tokenPrefix: token ? token.substring(0, 15) + '...' : 'none',
+        organizationId: organizationId || 'not provided'
+      });
+    }
     
     const response = await axiosInstance.get(url);
     
-    // Debug the response data
-    console.log('Dashboard Summary Response:', {
-      status: response.status,
-      data: response.data,
-      dataType: typeof response.data
-    });
+    // Debug the response data if logging is enabled
+    if (config.debug.enableLogs) {
+      console.log('Dashboard Summary Response:', {
+        status: response.status,
+        data: response.data,
+        dataType: typeof response.data
+      });
+    }
     
     return response.data;
   } catch (error) {
@@ -119,26 +126,30 @@ export const getDashboardSummary = async (organizationId?: string): Promise<Dash
  */
 export const getRecentActivity = async (organizationId?: string): Promise<Activity[]> => {
   try {
-    // Log the request URL for debugging
     const token = localStorage.getItem('access_token');
     const url = withOrgParam(`${DASHBOARD_URL}/activity/`, organizationId);
     
-    console.log('Recent Activity API Call:', {
-      url,
-      hasToken: !!token,
-      tokenPrefix: token ? token.substring(0, 15) + '...' : 'none',
-      organizationId: organizationId || 'not provided'
-    });
+    // Only log if debug logging is enabled
+    if (config.debug.enableLogs) {
+      console.log('Recent Activity API Call:', {
+        url,
+        hasToken: !!token,
+        tokenPrefix: token ? token.substring(0, 15) + '...' : 'none',
+        organizationId: organizationId || 'not provided'
+      });
+    }
     
     const response = await axiosInstance.get(url);
     
-    // Debug log to check the response structure
-    console.log('Activity API response:', {
-      status: response.status,
-      isArray: Array.isArray(response.data),
-      dataType: typeof response.data,
-      dataPreview: response.data
-    });
+    // Debug log to check the response structure if logging is enabled
+    if (config.debug.enableLogs) {
+      console.log('Activity API response:', {
+        status: response.status,
+        isArray: Array.isArray(response.data),
+        dataType: typeof response.data,
+        dataPreview: response.data
+      });
+    }
     
     // Ensure we always return an array
     return Array.isArray(response.data) ? response.data : [];
@@ -164,10 +175,12 @@ export const getIncompleteProducts = async (
       // Legacy support - organizationId as string parameter
       url = withOrgParam(url, params);
       
-      console.log('Incomplete Products API Call (legacy):', {
-        url,
-        organizationId: params || 'not provided'
-      });
+      if (config.debug.enableLogs) {
+        console.log('Incomplete Products API Call (legacy):', {
+          url,
+          organizationId: params || 'not provided'
+        });
+      }
     } else {
       // New parameter object format
       const { organization_id, limit, product_id } = params;
@@ -183,21 +196,25 @@ export const getIncompleteProducts = async (
         url += `&product_id=${product_id}`;
       }
       
-      console.log('Incomplete Products API Call:', {
-        url,
-        params
-      });
+      if (config.debug.enableLogs) {
+        console.log('Incomplete Products API Call:', {
+          url,
+          params
+        });
+      }
     }
     
     const response = await axiosInstance.get(url);
     
-    // Debug log to check the response structure
-    console.log('Incomplete Products API response:', {
-      status: response.status,
-      isArray: Array.isArray(response.data),
-      dataType: typeof response.data,
-      dataPreview: response.data
-    });
+    // Debug log to check the response structure if logging is enabled
+    if (config.debug.enableLogs) {
+      console.log('Incomplete Products API response:', {
+        status: response.status,
+        isArray: Array.isArray(response.data),
+        dataType: typeof response.data,
+        dataPreview: response.data
+      });
+    }
     
     // If product_id is provided, the response might be a single object
     // Convert it to an array for consistent return type
@@ -214,7 +231,7 @@ export const getIncompleteProducts = async (
 };
 
 /**
- * Custom hook for fetching all dashboard data with caching
+ * Dashboard service module
  */
 export const dashboardService = {
   getDashboardSummary,

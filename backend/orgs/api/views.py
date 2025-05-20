@@ -6,7 +6,7 @@ from organizations.models import Organization
 
 @api_view(['POST', 'DELETE', 'GET'])
 @permission_classes([IsAuthenticated])
-def membership_avatar(request, org_id, id):
+def membership_avatar(request, org_id, membership_id):
     """
     Handle membership avatar uploads, viewing, and deletion.
     
@@ -22,7 +22,7 @@ def membership_avatar(request, org_id, id):
     
     # Get the membership
     try:
-        membership = Membership.objects.get(id=id, organization_id=org_id)
+        membership = Membership.objects.get(id=membership_id, organization_id=org_id)
     except Membership.DoesNotExist:
         return Response({"detail": "Membership not found"}, status=404)
     

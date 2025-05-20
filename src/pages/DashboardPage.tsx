@@ -12,6 +12,7 @@ import { ProductStatusChart } from '@/components/dashboard/ProductStatusChart';
 import { MostMissingAttributesCard } from '@/components/dashboard/MostMissingAttributesCard';
 import { TopIncompleteProductsCard } from '@/components/dashboard/TopIncompleteProductsCard';
 import { RecentActivityCard } from '@/components/dashboard/RecentActivityCard';
+import { config } from '@/config/config';
 import { 
   Plus, 
   Package, 
@@ -20,13 +21,16 @@ import {
   Activity as ActivityIcon,
 } from 'lucide-react';
 
+// Get recent products count from config
+const RECENT_PRODUCTS_COUNT = config.dashboard.display.recentProductsCount;
+
 /**
- * Format currency in USD
+ * Format currency based on configuration
  */
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: 'USD',
+    currency: config.dashboard.display.defaultCurrency,
     maximumFractionDigits: 0
   }).format(value);
 };
@@ -166,11 +170,11 @@ export const DashboardPage: React.FC = () => {
                         </div>
                         <hr className="my-2 border-gray-200" />
                         {summary?.recent_products?.length ? (
-                          <div className="mt-2 mb-1 text-xs text-gray-400 font-medium">Last 5 products added</div>
+                          <div className="mt-2 mb-1 text-xs text-gray-400 font-medium">Last {RECENT_PRODUCTS_COUNT} products added</div>
                         ) : null}
                         <div className="space-y-2 mt-8 text-sm text-gray-700 max-h-[200px] overflow-auto">
-                          {Array.from({ length: 5 }).map((_, i) => {
-                            const p = summary?.recent_products?.slice(0, 5)[i]
+                          {Array.from({ length: RECENT_PRODUCTS_COUNT }).map((_, i) => {
+                            const p = summary?.recent_products?.slice(0, RECENT_PRODUCTS_COUNT)[i]
                             return p ? (
                               <div
                                 key={p.id}

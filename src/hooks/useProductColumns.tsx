@@ -42,11 +42,9 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { CategoryTreeSelect } from '@/components/categories/CategoryTreeSelect';
-import { Breadcrumb } from '@/components/ui/breadcrumb';
 import CreatableSelect from 'react-select/creatable'
 import '@/styles/editable-cell.scss'
 import { pickPrimaryImage } from '@/utils/images';
-import { matchesCategoryFilter } from '@/lib/categoryFilterUtils';
 
 
 // Helper function to safely format price amounts

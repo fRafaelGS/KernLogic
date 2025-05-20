@@ -14,7 +14,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
@@ -26,6 +25,7 @@ import { paths } from '@/lib/apiPaths';
 import { ENABLE_CUSTOM_ATTRIBUTES, ENABLE_ATTRIBUTE_GROUPS } from '@/config/featureFlags';
 import { OrganizationSettingsForm } from '@/features/settings/components/settings/OrganizationSettingsForm';
 import { FamilyListPage } from '@/features/families/FamilyListPage';
+import { config } from '@/config/config';
 
 // --- Zod Schemas ---
 const profileSchema = z.object({
@@ -51,8 +51,8 @@ const SettingsPage: React.FC = () => {
   const tabParam = searchParams.get('tab');
   
   // Validate the tab parameter is one of the valid tabs
-  const validTabs = ['profile', 'security', 'notifications', 'organization', 'api', 'attributes', 'families'];
-  const defaultTab = validTabs.includes(tabParam || '') ? tabParam : 'profile';
+  const validTabs = config.settings.display.tabs.map(tab => tab.value);
+  const defaultTab = validTabs.includes(tabParam || '') ? tabParam || validTabs[0] : validTabs[0];
 
   const { user, updateUserContext } = useAuth();
   const [isSavingProfile, setIsSavingProfile] = useState(false);
@@ -107,10 +107,10 @@ const SettingsPage: React.FC = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       updateUserContext(response.data); // Update context state
-      toast.success('Profile updated successfully!');
+      toast.success(config.settings.display.profile.successMessage);
     } catch (err: any) {
       console.error("Profile update error:", err);
-      const errorMsg = err.response?.data?.detail || err.message || 'Failed to update profile';
+      const errorMsg = err.response?.data?.detail || err.message || config.settings.errors.profileUpdate;
       toast.error(errorMsg);
     } finally {
       setIsSavingProfile(false);
@@ -128,7 +128,7 @@ const SettingsPage: React.FC = () => {
         }, {
             headers: { Authorization: `Bearer ${token}` },
         });
-        toast.success('Password changed successfully!');
+        toast.success(config.settings.display.security.successMessage);
         resetPasswordForm(); // Clear fields on success
     } catch (err: any) {
         console.error("Password change error:", err.response?.data || err);
@@ -139,7 +139,7 @@ const SettingsPage: React.FC = () => {
             setPasswordError("newPassword", { type: "server", message: err.response.data.new_password2[0] });
             setPasswordError("confirmPassword", { type: "server", message: err.response.data.new_password2[0] });
         } else {
-             const errorMsg = err.response?.data?.detail || err.message || 'Failed to change password';
+             const errorMsg = err.response?.data?.detail || err.message || config.settings.errors.passwordChange;
              toast.error(errorMsg);
         }
     } finally {
@@ -151,7 +151,7 @@ const SettingsPage: React.FC = () => {
   const handleSaveNotifications = async () => {
     setIsSavingNotifications(true);
     await new Promise(resolve => setTimeout(resolve, 1500));
-    toast.success("Notification preferences saved (simulated)!");
+    toast.success(config.settings.display.notifications.successMessage);
     setIsSavingNotifications(false);
   };
 
@@ -178,34 +178,32 @@ const SettingsPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-enterprise-900">Settings</h1>
+        <h1 className="text-3xl font-bold text-enterprise-900">{config.settings.display.pageTitle}</h1>
         <p className="text-enterprise-600 mt-1">
-          Manage your account, security, and notification preferences.
+          {config.settings.display.pageDescription}
         </p>
       </div>
 
       <Tabs defaultValue={defaultTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-7 max-w-lg">
-          <TabsTrigger value="profile">Profile</TabsTrigger>
-          <TabsTrigger value="security">Security</TabsTrigger>
-          <TabsTrigger value="notifications">Notifications</TabsTrigger>
-          <TabsTrigger value="organization">Organization</TabsTrigger>
-          <TabsTrigger value="api">API Keys</TabsTrigger>
-          <TabsTrigger value="attributes">Attributes</TabsTrigger>
-          <TabsTrigger value="families">Families</TabsTrigger>
+        <TabsList className={`grid w-full grid-cols-${config.settings.display.tabs.length} max-w-lg`}>
+          {config.settings.display.tabs.map((tab) => (
+            <TabsTrigger key={tab.value} value={tab.value}>
+              {tab.label}
+            </TabsTrigger>
+          ))}
         </TabsList>
 
         {/* Profile Tab */}
         <TabsContent value="profile">
           <Card>
             <CardHeader>
-              <CardTitle>Profile Information</CardTitle>
-              <CardDescription>Update your personal details.</CardDescription>
+              <CardTitle>{config.settings.display.profile.title}</CardTitle>
+              <CardDescription>{config.settings.display.profile.description}</CardDescription>
             </CardHeader>
             <form onSubmit={handleProfileSubmitHook(handleProfileUpdate)}>
               <CardContent className="space-y-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="setting-name">Full Name</Label>
+                  <Label htmlFor="setting-name">{config.settings.display.profile.nameLabel}</Label>
                   <Input 
                     id="setting-name" 
                     {...registerProfile("name")} 
@@ -216,7 +214,7 @@ const SettingsPage: React.FC = () => {
                   {profileErrors.name && <p className="text-sm text-danger-600 flex items-center mt-1"><AlertCircle className="h-4 w-4 mr-1" />{profileErrors.name.message}</p>}
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="setting-email">Email Address</Label>
+                  <Label htmlFor="setting-email">{config.settings.display.profile.emailLabel}</Label>
                   <Input 
                     id="setting-email" 
                     type="email" 
@@ -230,7 +228,7 @@ const SettingsPage: React.FC = () => {
               </CardContent>
               <CardFooter className="border-t px-6 py-4">
                 <Button type="submit" variant="primary" disabled={isSavingProfile}>
-                   {isSavingProfile ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</> : 'Update Profile'}
+                   {isSavingProfile ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {config.settings.display.profile.savingLabel}</> : config.settings.display.profile.updateButton}
                 </Button>
               </CardFooter>
             </form>
@@ -241,13 +239,13 @@ const SettingsPage: React.FC = () => {
         <TabsContent value="security">
           <Card>
             <CardHeader>
-              <CardTitle>Password Management</CardTitle>
-              <CardDescription>Change your account password.</CardDescription>
+              <CardTitle>{config.settings.display.security.title}</CardTitle>
+              <CardDescription>{config.settings.display.security.description}</CardDescription>
             </CardHeader>
             <form onSubmit={handlePasswordSubmitHook(handlePasswordChange)}>
               <CardContent className="space-y-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="setting-current-password">Current Password</Label>
+                  <Label htmlFor="setting-current-password">{config.settings.display.security.currentPasswordLabel}</Label>
                   <Input 
                     id="setting-current-password" 
                     type="password" 
@@ -260,7 +258,7 @@ const SettingsPage: React.FC = () => {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label htmlFor="setting-new-password">New Password</Label>
+                    <Label htmlFor="setting-new-password">{config.settings.display.security.newPasswordLabel}</Label>
                     <Input 
                       id="setting-new-password" 
                       type="password" 
@@ -272,7 +270,7 @@ const SettingsPage: React.FC = () => {
                      {passwordErrors.newPassword && <p className="text-sm text-danger-600 flex items-center mt-1"><AlertCircle className="h-4 w-4 mr-1" />{passwordErrors.newPassword.message}</p>}
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="setting-confirm-password">Confirm New Password</Label>
+                    <Label htmlFor="setting-confirm-password">{config.settings.display.security.confirmPasswordLabel}</Label>
                     <Input 
                       id="setting-confirm-password" 
                       type="password" 
@@ -287,7 +285,7 @@ const SettingsPage: React.FC = () => {
               </CardContent>
               <CardFooter className="border-t px-6 py-4">
                  <Button type="submit" variant="primary" disabled={isSavingPassword}>
-                   {isSavingPassword ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</> : 'Change Password'}
+                   {isSavingPassword ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {config.settings.display.security.savingLabel}</> : config.settings.display.security.updateButton}
                 </Button>
               </CardFooter>
             </form>
@@ -298,14 +296,14 @@ const SettingsPage: React.FC = () => {
         <TabsContent value="notifications">
           <Card>
             <CardHeader>
-              <CardTitle>Notification Preferences</CardTitle>
-              <CardDescription>Manage how you receive notifications.</CardDescription>
+              <CardTitle>{config.settings.display.notifications.title}</CardTitle>
+              <CardDescription>{config.settings.display.notifications.description}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between p-3 border rounded-md">
                 <div>
-                   <p className="text-sm font-medium">Email Notifications</p>
-                   <p className="text-xs text-enterprise-500">Receive notifications via email.</p>
+                   <p className="text-sm font-medium">{config.settings.display.notifications.emailNotificationsTitle}</p>
+                   <p className="text-xs text-enterprise-500">{config.settings.display.notifications.emailNotificationsDescription}</p>
                 </div>
                 <Switch 
                    id="notification-email" 
@@ -323,10 +321,10 @@ const SettingsPage: React.FC = () => {
                   >
                     {isSavingNotifications ? (
                       <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> {config.settings.display.notifications.savingLabel}
                       </>
                     ) : (
-                      'Save Preferences'
+                      config.settings.display.notifications.updateButton
                     )}
                 </Button>
             </CardFooter>
@@ -342,19 +340,19 @@ const SettingsPage: React.FC = () => {
         <TabsContent value="api">
            <Card>
             <CardHeader>
-              <CardTitle>API Keys</CardTitle>
-              <CardDescription>Manage API keys for integrations. (Placeholder)</CardDescription>
+              <CardTitle>{config.settings.display.api.title}</CardTitle>
+              <CardDescription>{config.settings.display.api.description}</CardDescription>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-enterprise-600 mb-4">
-                Generate and manage API keys to connect KernLogic with other applications.
+                {config.settings.display.api.placeholderText}
               </p>
               <div className="p-4 border rounded-md bg-enterprise-50 text-center text-enterprise-500">
-                API Key management coming soon.
+                {config.settings.display.api.comingSoonText}
               </div>
             </CardContent>
             <CardFooter className="border-t px-6 py-4">
-               <Button variant="outline" disabled className="mt-4">Generate New Key</Button>
+               <Button variant="outline" disabled className="mt-4">{config.settings.display.api.generateButton}</Button>
             </CardFooter>
           </Card>
         </TabsContent>
@@ -363,20 +361,20 @@ const SettingsPage: React.FC = () => {
         <TabsContent value="attributes">
           <Card>
             <CardHeader>
-              <CardTitle>Product Attributes</CardTitle>
-              <CardDescription>Manage product attributes (Admin only)</CardDescription>
+              <CardTitle>{config.settings.display.attributes.title}</CardTitle>
+              <CardDescription>{config.settings.display.attributes.description}</CardDescription>
             </CardHeader>
             <CardContent>
               {ENABLE_CUSTOM_ATTRIBUTES ? (
                 <>
                   <p className="text-sm text-enterprise-600 mb-4">
-                    View and manage product attributes that can be assigned to your products.
+                    {config.settings.display.attributes.placeholderText}
                   </p>
                   
                   <div className="flex flex-col space-y-4">
                     <Button asChild className="w-full md:w-auto">
                       <Link to="/app/settings/attributes" className="flex items-center">
-                        Manage Attributes
+                        {config.settings.display.attributes.manageAttributesButton}
                         <ExternalLink className="ml-2 h-4 w-4" />
                       </Link>
                     </Button>
@@ -384,14 +382,14 @@ const SettingsPage: React.FC = () => {
                     {ENABLE_ATTRIBUTE_GROUPS && (
                       <Button asChild className="w-full md:w-auto">
                         <Link to="/app/settings/attribute-groups" className="flex items-center">
-                          Manage Attribute Groups
+                          {config.settings.display.attributes.manageAttributeGroupsButton}
                           <ExternalLink className="ml-2 h-4 w-4" />
                         </Link>
                       </Button>
                     )}
                     
                     <div className="text-sm text-enterprise-500">
-                      Define custom attributes like colors, sizes, materials, and more for your products.
+                      {config.settings.display.attributes.attributeDescription}
                     </div>
                   </div>
                 </>
@@ -403,10 +401,10 @@ const SettingsPage: React.FC = () => {
                   >
                     {loadingAttributes ? (
                       <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading...
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> {config.settings.display.attributes.loadingLabel}
                       </>
                     ) : (
-                      'Load Attributes'
+                      config.settings.display.attributes.loadAttributesButton
                     )}
                   </Button>
                 </div>
@@ -437,7 +435,7 @@ const SettingsPage: React.FC = () => {
               
               {!ENABLE_CUSTOM_ATTRIBUTES && attributes.length === 0 && !loadingAttributes && (
                 <div className="p-4 border rounded-md bg-enterprise-50 text-center text-enterprise-500">
-                  No attributes loaded yet. Click the button above to load them.
+                  {config.settings.display.attributes.noAttributesText}
                 </div>
               )}
             </CardContent>
@@ -448,8 +446,8 @@ const SettingsPage: React.FC = () => {
         <TabsContent value="families">
           <Card>
             <CardHeader>
-              <CardTitle>Product Families</CardTitle>
-              <CardDescription>Manage product families and their attributes</CardDescription>
+              <CardTitle>{config.settings.display.families.title}</CardTitle>
+              <CardDescription>{config.settings.display.families.description}</CardDescription>
             </CardHeader>
             <CardContent className="p-4">
               <FamilyListPage isEmbedded={true} />

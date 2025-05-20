@@ -98,7 +98,7 @@ import {
   removeAttributeFromGroup,
   createAttributeGroup,
   deleteAttributeGroup,
-} from '../api/attributeGroupsApi';
+} from '../api/attributeGroupApi';
 
 // Sortable item wrapper for drag-and-drop
 const SortableAttributeItem = ({ item, attributes, onRemove }: { 
@@ -350,7 +350,7 @@ const AttributeGroupsPage: React.FC = () => {
       const group = groups?.find((g: AttributeGroup) => g.id === selectedGroupId);
       if (group) {
         // Filter out attributes that are already in the group
-        const groupAttributeIds = group.items.map(item => item.attribute);
+        const groupAttributeIds = group.items.map((item: AttributeGroupItem) => item.attribute);
         setAvailableAttributes(attributes.filter((attr: Attribute) => !groupAttributeIds.includes(attr.id)));
       } else {
         setAvailableAttributes(attributes);
@@ -575,9 +575,9 @@ const AttributeGroupsPage: React.FC = () => {
     if (!attributes || !formValues.items) return [];
     
     // Get attribute IDs already in the form
-    const formAttributeIds = formValues.items.map(item => item.attribute);
+    const formAttributeIds = formValues.items.map((item: AttributeGroupItem) => item.attribute);
     
-    return attributes.filter(attr => 
+    return attributes.filter((attr: Attribute) => 
       !formAttributeIds.includes(attr.id) // Don't show attributes already in the form
     );
   };
@@ -815,7 +815,7 @@ const AttributeGroupsPage: React.FC = () => {
                     disabled={isLoadingAttributes || getUnassignedAttributes().length === 0}
                   >
                     <option value="">Select an attribute</option>
-                    {getUnassignedAttributes().map((attr) => (
+                    {getUnassignedAttributes().map((attr: Attribute) => (
                       <option key={attr.id} value={attr.id}>
                         {attr.label} ({attr.data_type})
                       </option>
@@ -947,7 +947,7 @@ const AttributeGroupsPage: React.FC = () => {
                     disabled={isLoadingAttributes || getUnassignedAttributes().length === 0}
                   >
                     <option value="">Select an attribute</option>
-                    {getUnassignedAttributes().map((attr) => (
+                    {getUnassignedAttributes().map((attr: Attribute) => (
                       <option key={attr.id} value={attr.id}>
                         {attr.label} ({attr.data_type})
                       </option>

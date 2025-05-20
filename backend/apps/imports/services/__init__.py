@@ -1,3 +1,16 @@
+"""
+Services package for the imports app. 
+
+This modular approach organizes services by functionality:
+- product_services.py: Product import and manipulation functions
+- structure_services.py: Functions for managing attribute groups, attributes, and families
+- family_validation.py: Functions for validating family and attribute relationships
+
+The legacy monolithic services.py file is maintained for backward compatibility,
+but it now imports and re-exports functions from this modular structure.
+For new code, please import directly from these modules.
+"""
+
 # Import all functions that should be available directly from the services package
 from .family_validation import (
     build_family_attribute_map,

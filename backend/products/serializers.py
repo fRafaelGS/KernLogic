@@ -643,7 +643,8 @@ class AttributeSerializer(serializers.ModelSerializer):
     def get_options(self, obj):
         """Return the options for this attribute"""
         try:
-            return AttributeOptionSerializer(obj.attributeoption_set.all(), many=True).data
+            # Use the related_name "options" defined on the AttributeOption FK
+            return AttributeOptionSerializer(obj.options.all(), many=True).data
         except Exception as e:
             print(f"ERROR: Failed to get options for attribute {obj.id}: {str(e)}")
             return []

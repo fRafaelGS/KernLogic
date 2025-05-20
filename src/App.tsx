@@ -13,7 +13,6 @@ import LoginPage from '@/pages/auth/LoginPage';
 import RegisterPage from '@/pages/auth/RegisterPage';
 import OrganizationRegisterPage from '@/pages/auth/OrganizationRegisterPage';
 import ProductsPage from "@/pages/ProductsPage";
-import ButtonDemo from "@/pages/ButtonDemo";
 import AttributesPage from '@/pages/AttributesPage';
 import AttributeGroupsPage from '@/pages/AttributeGroupsPage';
 import { ENABLE_CUSTOM_ATTRIBUTES, ENABLE_ATTRIBUTE_GROUPS } from '@/config/featureFlags';
@@ -283,14 +282,6 @@ export const App: React.FC = () => {
                     />
                   )}
                   {/* UI Component Demo Routes */}
-                  <Route
-                      path="/app/ui/buttons"
-                      element={
-                          <ProtectedRoute>
-                              <ButtonDemo />
-                          </ProtectedRoute>
-                      }
-                  />
                   <Route path="/accept-invite/:membershipId" element={<AcceptInvitePage />} />
                   <Route path="/set-password/:orgId" element={<SetPasswordPage />} />
                   <Route path="*" element={<Navigate to="/" replace />} />

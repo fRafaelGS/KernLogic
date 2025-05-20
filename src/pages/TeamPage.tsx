@@ -38,7 +38,7 @@ import axiosInstance from '@/lib/axiosInstance';
 import { Role } from '@/types/team';
 import { fetchRoles, fetchLastUserProductAction } from '@/services/teamService';
 import { Activity } from '@/services/dashboardService';
-import { useDebounce } from '@/lib/hooks/useDebounce';
+import { useDebounce } from '@/hooks/useDebounce';
 import { PermissionGuard } from '@/components/common/PermissionGuard';
 
 interface Membership {

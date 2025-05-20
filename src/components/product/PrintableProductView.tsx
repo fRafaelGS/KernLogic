@@ -1,5 +1,4 @@
 import React from 'react';
-import Image from 'next/image';
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import { format } from 'date-fns';
 import { Product, AttributeGroup } from '@/types/product';
@@ -55,12 +54,10 @@ const PrintableProductView: React.FC<PrintableProductViewProps> = ({ product }) 
       {hasImage ? (
         <div className="flex justify-center my-6">
           <div className="relative h-[200px] w-[300px]">
-            <Image
+            <img
               src={primaryImage.url}
               alt={name}
-              fill
-              className="object-contain"
-              priority
+              className="object-contain h-full w-full"
             />
           </div>
         </div>

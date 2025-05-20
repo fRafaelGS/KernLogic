@@ -1,11 +1,37 @@
-import logging
-from products.models import Category, Family, Product, Attribute, AttributeValue, AttributeGroup, SalesChannel, Locale, AttributeGroupItem, FamilyAttributeGroup
-from prices.models import ProductPrice, PriceType, Currency
-from django.db import transaction
-from decimal import Decimal
-from django.core.exceptions import ObjectDoesNotExist
-from .constants import ATTRIBUTE_TYPES, VALIDATION_RULES
+# This file is maintained for backward compatibility but all functionality
+# has been moved to the services/ directory. Please use the modular imports
+# directly in new code.
 
+# Import all functions from the modular services package
+# to maintain backward compatibility
+from .services.family_validation import (
+    build_family_attribute_map,
+    validate_family,
+    validate_attribute_in_family,
+    auto_attach_attribute_to_family,
+    ERROR_FAMILY_UNKNOWN,
+    ERROR_NOT_IN_FAMILY
+)
+
+from .services.product_services import (
+    resolve_category_breadcrumb,
+    resolve_family,
+    upsert_product,
+    attach_attribute_values,
+    attach_price_if_present,
+    process_tags
+)
+
+from .services.structure_services import (
+    upsert_attribute_group,
+    upsert_attribute,
+    upsert_family,
+    parse_attribute_header,
+    attach_attribute_value_from_header
+)
+
+# Set up logging for backward compatibility
+import logging
 logger = logging.getLogger(__name__)
 
 # Per-task caches (should be reset per import task)

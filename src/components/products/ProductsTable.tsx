@@ -72,14 +72,13 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { ProductsTableFallback } from "@/components/products/productstable/ProductsTableFallback";
 import { IconBtn } from "@/components/products/productstable/IconBtn";
 import { SortableTableHeader } from "@/components/products/productstable/SortableTableHeader";
-import { useUniqueCategories, useUniqueTags } from "@/hooks/useProductDerived";
+import { useUniqueTags } from "@/hooks/useProductDerived";
 import { useProductColumns } from "@/hooks/useProductColumns";    
 import ProductRowDetails from "./productstable/ProductRowDetails";
 import { AnimatePresence } from 'framer-motion';
 import { Category as CategoryType, Category as ProductCategory } from '@/types/categories';
 import { SubcategoryManager } from '@/components/categories/SubcategoryManager/SubcategoryManager';
 import { getCategoryName, matchesCategoryFilter } from '@/lib/categoryFilterUtils';
-import { ViewToggle } from './ViewToggle'
 import { ProductGrid } from './ProductGrid'
 import { useOrgSettings } from '@/hooks/useOrgSettings'
 import { useFamilies } from "@/api/familyApi";
@@ -207,6 +206,9 @@ export function ProductsTable({
   
   // 🆕 keep track of attribute-group requests that are in progress
   const attrGroupsInFlight = useRef<Set<number>>(new Set());
+  
+  // 🆕 reference to the react-table instance used across callbacks
+  const tableRef = useRef<ReturnType<typeof useReactTable<Product>> | null>(null);
   
   // Add reference to track if we've already fetched once for this pagination state
   const fetchedOnceRef = useRef(false);
@@ -1103,48 +1105,56 @@ export function ProductsTable({
       const next = typeof updater === 'function' ? updater(prev) : updater
       const openKeys = Object.keys(next).filter(k => next[k])
       if (openKeys.length === 0) return {}
-      const last = openKeys[openKeys.length - 1]
-      const row = last ? table.getRow(last) : null
-      // Add safety check for row.original
-      if (!row?.original) return next;
       
-      const productId = row.original.id
-      // Skip processing if productId is undefined
-      if (productId === undefined) return next;
-      
-      if (productId && !productAssetsCache[productId] && !attrGroupsInFlight.current.has(productId)) {
-        productService.getProductAssets(productId)
-          .then(assets => {
-            setProductAssetsCache(prev => ({ ...prev, [productId]: assets }))
-            setProducts(prevProducts => 
-              prevProducts.map(prod => {
-                if (prod.id === productId) {
-                  const primaryAsset =
-                    assets.find(a => (a.is_primary && ((a.type || a.asset_type) || '').toLowerCase().includes('image')))
-                    || assets.find(a => ((a.type || a.asset_type) || '').toLowerCase().includes('image'))
-                  if (primaryAsset?.url) {
-                    return {
-                      ...prod,
-                      assets,
-                      primary_image_thumb: primaryAsset.url,
-                      primary_image_large: primaryAsset.url,
-                    } as Product
+      // Process all newly expanded rows to load their assets
+      openKeys.forEach(key => {
+        const tableInstance = tableRef.current
+        if (!tableInstance) return
+        const row = tableInstance.getRow(key)
+        // Skip if row doesn't exist or has no original data
+        if (!row?.original) return
+        
+        const productId = row.original.id
+        // Skip processing if productId is undefined
+        if (productId === undefined) return
+        
+        // Only fetch assets if they're not already cached and not currently being fetched
+        if (productId && !productAssetsCache[productId] && !attrGroupsInFlight.current.has(productId)) {
+          productService.getProductAssets(productId)
+            .then(assets => {
+              setProductAssetsCache(prev => ({ ...prev, [productId]: assets }))
+              setProducts(prevProducts => 
+                prevProducts.map(prod => {
+                  if (prod.id === productId) {
+                    const primaryAsset =
+                      assets.find(a => (a.is_primary && ((a.type || a.asset_type) || '').toLowerCase().includes('image')))
+                      || assets.find(a => ((a.type || a.asset_type) || '').toLowerCase().includes('image'))
+                    if (primaryAsset?.url) {
+                      return {
+                        ...prod,
+                        assets,
+                        primary_image_thumb: primaryAsset.url,
+                        primary_image_large: primaryAsset.url,
+                      } as Product
+                    }
                   }
-                }
-                return prod
-              })
-            )
-          })
-          .catch(err => {
-            console.error(`Error loading assets for product ${productId}:`, err)
-          })
-      }
-      return { [last]: true }
+                  return prod
+                })
+              )
+            })
+            .catch(err => {
+              console.error(`Error loading assets for product ${productId}:`, err)
+            })
+        }
+      })
+      
+      // Return the full next state to preserve all expanded rows
+      return next
     })
-  }, [productAssetsCache])
+  }, [productAssetsCache, productService])
 
   // Configure the table with useReactTable
-  const table = useReactTable({
+  const table = useReactTable<Product>({
     data: filteredData,
     columns: allColumnsWithExpander,
     state: {
@@ -1193,9 +1203,12 @@ export function ProductsTable({
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    // Allow every row to be expandable even without subRows
+    getRowCanExpand: () => true,
     // Remove getFilteredRowModel here
   });
 
+  // Keep the ref updated so callbacks can access the latest table instance
   // Add effect to fetch attributes when expanded state changes
   useEffect(() => {
     const expandedIds = Object.keys(expanded).filter(id => expanded[id]);
@@ -2045,7 +2058,7 @@ export function ProductsTable({
                       />
                       
                       {!loading && filteredData.length > 0 && 
-                        table.getRowModel().rows.map((row, index) => {
+                        table.getRowModel().rows.map((row, index: number) => {
                           // Add a safety check to ensure row.original exists
                           if (!row?.original) return null;
                           
@@ -2084,7 +2097,7 @@ export function ProductsTable({
                                   }
                                 }}
                               >
-                                {row.getVisibleCells().map((cell) => {
+                                {row.getVisibleCells().map((cell: any) => {
                                   const columnId = cell.column.id;
                                   const hideOnMobileClass = ['brand', 'barcode', 'created_at', 'tags'].includes(columnId) ? 'hidden md:table-cell' : '';
                                   

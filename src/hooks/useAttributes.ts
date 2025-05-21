@@ -6,7 +6,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import { makeAttributeKey, normalizeLocaleOrChannel } from '@/lib/attributeUtils';
 import isEqual from 'lodash/isEqual';
-import useOrganization from './useOrganization';
+import useOrganization from '@/hooks/useOrganization';
 
 /**
  * Custom hook for managing product attributes

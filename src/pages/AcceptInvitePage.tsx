@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/domains/app/providers/AuthContext';
 import api from '@/services/api';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/domains/core/components/ui/button';
 import { InvitationToken } from '@/types/team';
 import { AlertCircle, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/domains/core/components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { ROUTES } from '@/config/routes';
 

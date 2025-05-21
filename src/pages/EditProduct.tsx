@@ -1,13 +1,13 @@
 import React from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ProductForm } from '@/components/products/ProductForm';
+import { ProductForm } from '@/domains/products/components/ProductForm';
 import { productService } from '@/services/productService';
 import { toast } from 'sonner';
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@/domains/core/components/ui/skeleton";
 import { AlertCircle, ChevronRight, ArrowLeft } from 'lucide-react';
 import ErrorBoundary from '@/components/ErrorBoundary';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/domains/core/components/ui/button';
 import { ROUTES } from '@/config/routes';
 
 export const EditProduct: React.FC = () => {

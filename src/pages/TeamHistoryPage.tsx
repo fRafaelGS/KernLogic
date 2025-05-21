@@ -10,11 +10,11 @@ import {
   DownloadCloud, RefreshCw, AlertCircle, Trash,
   ChevronLeft, ChevronRight, X, Info, User, Calendar, FileText
 } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/domains/app/providers/AuthContext';
+import { Badge } from '@/domains/core/components/ui/badge';
+import { Button } from '@/domains/core/components/ui/button';
+import { Input } from '@/domains/core/components/ui/input';
+import { Skeleton } from '@/domains/core/components/ui/skeleton';
 import {
   Pagination,
   PaginationContent,
@@ -22,20 +22,20 @@ import {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-} from '@/components/ui/pagination';
+} from '@/domains/core/components/ui/pagination';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from '@/domains/core/components/ui/select';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+} from '@/domains/core/components/ui/dropdown-menu';
 import {
   Dialog,
   DialogContent,
@@ -44,7 +44,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog';
+} from '@/domains/core/components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -55,7 +55,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+} from '@/domains/core/components/ui/alert-dialog';
 import {
   Sheet,
   SheetContent,
@@ -65,7 +65,7 @@ import {
   SheetTrigger,
   SheetFooter,
   SheetClose
-} from '@/components/ui/sheet';
+} from '@/domains/core/components/ui/sheet';
 import {
   Card,
   CardContent,
@@ -73,13 +73,13 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "@/domains/core/components/ui/card";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-} from "@/components/ui/accordion";
+} from "@/domains/core/components/ui/accordion";
 import { ROUTES } from '@/config/routes';
 
 // Development only logging helper

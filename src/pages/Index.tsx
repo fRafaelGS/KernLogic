@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { DashboardLayout } from "@/domains/app/layout/DashboardLayout";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { ProgressCard } from "@/components/dashboard/ProgressCard";
-import { FileUpload } from "@/components/upload/FileUpload";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { FileUpload } from "@/domains/core/components/upload/FileUpload";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/domains/core/components/ui/card";
 import { DatabaseIcon, PackageIcon, TagIcon, FileTextIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/domains/core/components/ui/button";
 import { productService } from "@/services/productService";
 import { useNavigate } from "react-router-dom";
 

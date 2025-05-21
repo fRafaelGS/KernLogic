@@ -1,14 +1,14 @@
 import React from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent } from '@/domains/core/components/ui/card';
 import { DateRange } from 'react-day-picker';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/domains/core/components/ui/button';
 import { Filter, X } from 'lucide-react';
 
-import DateRangeFilter from './DateRangeFilter';
-import LocaleFilter from './LocaleFilter';
-import CategoryFilter from './CategoryFilter';
-import ChannelFilter from './ChannelFilter';
-import FamilyFilter from './FamilyFilter';
+import DateRangeFilter from '@/features/reports/components/filters/DateRangeFilter';
+import LocaleFilter from '@/features/reports/components/filters/LocaleFilter';
+import CategoryFilter from '@/features/reports/components/filters/CategoryFilter';
+import ChannelFilter from '@/features/reports/components/filters/ChannelFilter';
+import FamilyFilter from '@/features/reports/components/filters/FamilyFilter';
 
 export interface ReportFiltersState {
   from?: string;

@@ -16,20 +16,20 @@ import {
   Loader2,
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
+import { Button } from "@/domains/core/components/ui/button";
+import { Badge } from "@/domains/core/components/ui/badge";
+import { Checkbox } from "@/domains/core/components/ui/checkbox";
+import { Input } from "@/domains/core/components/ui/input";
 import {
   HoverCard,
   HoverCardTrigger,
   HoverCardContent,
-} from "@/components/ui/hover-card";
+} from "@/domains/core/components/ui/hover-card";
 import type { OnChangeValue } from "react-select";
 
 import { useFamilies } from '@/api/familyApi';
 import { normalizeFamily } from '@/utils/familyNormalizer';
-import { FamilyDisplay } from '@/components/products/FamilyDisplay';
+import { FamilyDisplay } from '@/domains/products/components/FamilyDisplay';
 
 import {
   Product,
@@ -40,8 +40,8 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@/components/ui/tooltip"
-import { CategoryTreeSelect } from '@/components/categories/CategoryTreeSelect';
+} from "@/domains/core/components/ui/tooltip"
+import { CategoryTreeSelect } from '@/domains/categories/components/CategoryTreeSelect';
 import CreatableSelect from 'react-select/creatable'
 import '@/styles/editable-cell.scss'
 import { pickPrimaryImage } from '@/utils/images';

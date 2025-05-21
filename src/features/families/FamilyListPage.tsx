@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useFamilies, useDeleteFamily } from '@/api/familyApi'
 import { Family } from '@/types/family'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Button } from '@/domains/core/components/ui/button'
+import { Input } from '@/domains/core/components/ui/input'
 import { 
   Table, 
   TableBody, 
@@ -12,7 +12,7 @@ import {
   TableHead, 
   TableHeader, 
   TableRow 
-} from '@/components/ui/table'
+} from '@/domains/core/components/ui/table'
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -23,9 +23,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
-import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
+} from '@/domains/core/components/ui/alert-dialog'
+import { Badge } from '@/domains/core/components/ui/badge'
+import { Skeleton } from '@/domains/core/components/ui/skeleton'
 import { 
   ChevronLeftIcon, 
   ChevronRightIcon, 

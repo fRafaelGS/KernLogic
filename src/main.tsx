@@ -1,6 +1,6 @@
-import React, { ErrorInfo, useState } from 'react'
+import React, { ErrorInfo } from 'react'
 import { createRoot } from 'react-dom/client'
-import App from './App.tsx'
+import App from '@/domains/app/App'
 import './index.css'
 
 // Import i18n (must be imported before any component that uses it)

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ProductForm } from '@/components/products/ProductForm';
+import { ProductForm } from '@/domains/products/components/ProductForm';
 
 export const NewProduct: React.FC = () => {
     return (

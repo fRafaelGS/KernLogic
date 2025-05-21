@@ -1,5 +1,5 @@
 // utils/isImageAsset.ts
-import { assetTypeService } from '../services/assetTypeService'
+import { assetTypeService } from '@/services/assetTypeService'
 
 export function getAssetUrl(asset: {
   url?: string;

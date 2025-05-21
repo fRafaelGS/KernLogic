@@ -1,7 +1,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/domains/core/components/ui/select';
+import { Skeleton } from '@/domains/core/components/ui/skeleton';
 import { getFamilies } from '@/services/familyService';
 import { Family, normalizeFamily } from '@/types/families';
 

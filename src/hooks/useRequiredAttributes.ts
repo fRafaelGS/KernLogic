@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import axiosInstance from '@/lib/axiosInstance'
-import { toast } from '@/components/ui/use-toast'
+import { toast } from '@/domains/core/components/ui/use-toast'
 import { API_ENDPOINTS } from '@/config/config'
 
 export interface RequiredAttribute {

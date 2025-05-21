@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useToast } from '@/components/ui/use-toast';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/domains/core/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/domains/core/components/ui/tabs';
+import { useToast } from '@/domains/core/components/ui/use-toast';
 import StepUpload from '@/features/imports/StepUpload';
 import StepMapping from '@/features/imports/StepMapping';
 import StepProgress from '@/features/imports/StepProgress';

@@ -1,21 +1,21 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { DashboardLayout } from '@/domains/app/layout/DashboardLayout';
 import { Product, productService, ProductPrice } from '@/services/productService';
-import { ProductDetailLayout } from '@/components/products/ProductDetailLayout';
-import ProductDetailSidebar from '@/components/products/ProductDetailSidebar';
-import { ProductDetailTabs } from '@/components/products/ProductDetailTabs';
-import { ProductDetailDescription } from '@/components/products/ProductDetailDescription';
+import { ProductDetailLayout } from '@/domains/products/components/productdetail/ProductDetailLayout';
+import ProductDetailSidebar from '@/domains/products/components/productdetail/ProductDetailSidebar';
+import { ProductDetailTabs } from '@/domains/products/components/productdetail/ProductDetailTabs';
+import { ProductDetailDescription } from '@/domains/products/components/productdetail/ProductDetailDescription';
 import { 
   Breadcrumb,
   BreadcrumbList,
   BreadcrumbItem,
   BreadcrumbLink,
   BreadcrumbSeparator 
-} from '@/components/ui/breadcrumb';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
+} from '@/domains/core/components/ui/breadcrumb';
+import { Badge } from '@/domains/core/components/ui/badge';
+import { Button } from '@/domains/core/components/ui/button';
+import { Skeleton } from '@/domains/core/components/ui/skeleton';
 import { ChevronLeft, Edit, Copy, Trash, Download, AlertCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { 
@@ -23,9 +23,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger 
-} from '@/components/ui/dropdown-menu';
-import { useAuth } from '@/contexts/AuthContext';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+} from '@/domains/core/components/ui/dropdown-menu';
+import { useAuth } from '@/domains/app/providers/AuthContext';
+import { Alert, AlertDescription, AlertTitle } from '@/domains/core/components/ui/alert';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
 import { useQueryClient } from '@tanstack/react-query';

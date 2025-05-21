@@ -1,9 +1,9 @@
 import React, { useEffect } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Progress } from '@/components/ui/progress'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/domains/core/components/ui/card'
+import { Progress } from '@/domains/core/components/ui/progress'
+import { Skeleton } from '@/domains/core/components/ui/skeleton'
+import { Alert, AlertDescription, AlertTitle } from '@/domains/core/components/ui/alert'
+import { Button } from '@/domains/core/components/ui/button'
 import { AlertCircle, RefreshCw, HelpCircle } from 'lucide-react'
 import { useDashboardData } from '@/hooks/useDashboardData'
 import { ReportFiltersState } from '@/features/reports/components/filters/ReportFilters'
@@ -12,7 +12,7 @@ import {
   TooltipContent, 
   TooltipProvider, 
   TooltipTrigger 
-} from '@/components/ui/tooltip'
+} from '@/domains/core/components/ui/tooltip'
 
 interface GlobalCoverageSummaryCardProps {
   filters?: ReportFiltersState

@@ -1,17 +1,17 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Card, CardContent, CardHeader, CardTitle } from '@/domains/core/components/ui/card';
+import { Button } from '@/domains/core/components/ui/button';
+import { Skeleton } from '@/domains/core/components/ui/skeleton';
 import { useDashboardData } from '@/hooks/useDashboardData';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { AnimatedValue } from '@/components/ui/animated-value';
-import { IncompleteProductsList } from '@/components/dashboard/IncompleteProductsList';
-import { DataCompletenessCard } from '@/components/dashboard/DataCompletenessCard';
-import { ProductStatusChart } from '@/components/dashboard/ProductStatusChart';
-import { MostMissingAttributesCard } from '@/components/dashboard/MostMissingAttributesCard';
-import { TopIncompleteProductsCard } from '@/components/dashboard/TopIncompleteProductsCard';
-import { RecentActivityCard } from '@/components/dashboard/RecentActivityCard';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/domains/core/components/ui/tooltip';
+import { AnimatedValue } from '@/domains/core/components/ui/animated-value';
+import { IncompleteProductsList } from '@/domains/dashboard/components/IncompleteProductsList';
+import { DataCompletenessCard } from '@/domains/dashboard/components/DataCompletenessCard';
+import { ProductStatusChart } from '@/domains/dashboard/components/ProductStatusChart';
+import { MostMissingAttributesCard } from '@/domains/dashboard/components/MostMissingAttributesCard';
+import { TopIncompleteProductsCard } from '@/domains/dashboard/components/TopIncompleteProductsCard';
+import { RecentActivityCard } from '@/domains/dashboard/components/RecentActivityCard';
 import { config } from '@/config/config';
 import { 
   Plus, 

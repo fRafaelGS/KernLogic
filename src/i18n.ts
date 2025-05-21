@@ -2,8 +2,8 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
 // Import translations
-import enSettings from './locales/en/settings.json';
-import enFamilies from './locales/en/familiespage.json';
+import enSettings from '@/locales/en/settings.json';
+import enFamilies from '@/locales/en/familiespage.json';
 
 // Initialize i18n
 i18n

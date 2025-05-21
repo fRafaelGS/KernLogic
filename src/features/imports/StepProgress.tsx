@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Card } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
-import { Button } from '@/components/ui/button';
-import { useToast } from '@/components/ui/use-toast';
+import { Card } from '@/domains/core/components/ui/card';
+import { Progress } from '@/domains/core/components/ui/progress';
+import { Button } from '@/domains/core/components/ui/button';
+import { useToast } from '@/domains/core/components/ui/use-toast';
 import { CheckCircleIcon, XCircleIcon, FileIcon, AlertTriangleIcon, DownloadIcon } from 'lucide-react';
 import { getImport, ImportTask } from '@/services/importService';
 import { useNavigate } from 'react-router-dom';
@@ -13,8 +13,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Badge } from '@/components/ui/badge';
+} from "@/domains/core/components/ui/table";
+import { Badge } from '@/domains/core/components/ui/badge';
 import axios from 'axios';
 import { PRODUCTS_PATH } from '@/config/config'
 import { ROUTES } from '@/config/routes'

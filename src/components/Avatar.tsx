@@ -7,14 +7,14 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
+} from '@/domains/core/components/ui/dialog';
+import { Button } from '@/domains/core/components/ui/button';
+import { Label } from '@/domains/core/components/ui/label';
 import { toast } from 'sonner';
 import { Camera, Loader2 } from 'lucide-react';
 import api from '@/services/api';
-import { useAuth } from '@/contexts/AuthContext';
-import { Progress } from '@/components/ui/progress';
+import { useAuth } from '@/domains/app/providers/AuthContext';
+import { Progress } from '@/domains/core/components/ui/progress';
 
 interface AvatarProps {
   className?: string;

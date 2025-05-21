@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useFamily } from '@/api/familyApi'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/domains/core/components/ui/button'
 import { 
   Table, 
   TableBody, 
@@ -9,8 +9,8 @@ import {
   TableHead, 
   TableHeader, 
   TableRow 
-} from '@/components/ui/table'
-import { Skeleton } from '@/components/ui/skeleton'
+} from '@/domains/core/components/ui/table'
+import { Skeleton } from '@/domains/core/components/ui/skeleton'
 import { ArrowLeft, PencilIcon, CheckIcon, XIcon } from 'lucide-react'
 import { formatDate } from '@/utils/date'
 import ErrorBoundary from '@/components/ErrorBoundary'

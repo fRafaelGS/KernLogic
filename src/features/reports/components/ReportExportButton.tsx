@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/domains/core/components/ui/button';
 import { Download, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { API_URL } from '@/config/config';

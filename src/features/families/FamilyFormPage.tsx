@@ -9,23 +9,23 @@ import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrate
 import { CSS } from '@dnd-kit/utilities'
 import { useFamily, useCreateFamily, useUpdateFamily, useAddAttributeGroupToFamily, useRemoveAttributeGroupFromFamily } from '@/api/familyApi'
 import { useAttributeGroups } from '@/api/attributeGroupApi'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
+import { Button } from '@/domains/core/components/ui/button'
+import { Input } from '@/domains/core/components/ui/input'
+import { Label } from '@/domains/core/components/ui/label'
+import { Textarea } from '@/domains/core/components/ui/textarea'
 import { 
   Select, 
   SelectContent, 
   SelectItem, 
   SelectTrigger, 
   SelectValue 
-} from '@/components/ui/select'
-import { Checkbox } from '@/components/ui/checkbox'
+} from '@/domains/core/components/ui/select'
+import { Checkbox } from '@/domains/core/components/ui/checkbox'
 import { 
   Popover,
   PopoverContent,
   PopoverTrigger 
-} from '@/components/ui/popover'
+} from '@/domains/core/components/ui/popover'
 import { 
   Dialog,
   DialogContent,
@@ -34,7 +34,7 @@ import {
   DialogTitle,
   DialogTrigger,
   DialogFooter
-} from '@/components/ui/dialog'
+} from '@/domains/core/components/ui/dialog'
 import {
   ArrowLeft,
   PlusIcon,
@@ -44,7 +44,7 @@ import {
   AlertTriangle
 } from 'lucide-react'
 import ErrorBoundary from '@/components/ErrorBoundary'
-import { toast } from '@/components/ui/use-toast'
+import { toast } from '@/domains/core/components/ui/use-toast'
 
 // Form validation schema
 const FamilySchema = z.object({

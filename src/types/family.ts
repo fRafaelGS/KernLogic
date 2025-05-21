@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { AttributeGroup } from './attributeGroup'
+import { AttributeGroup } from '@/types/attributeGroup'
 
 // Family interfaces
 export interface Family {

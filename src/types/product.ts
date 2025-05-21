@@ -1,5 +1,5 @@
-import { AttributeGroup } from './attributeGroup.ts'
-import { Family, FamilyOverride } from './family'
+import { AttributeGroup } from '@/types/attributeGroup.ts'
+import { Family, FamilyOverride } from '@/types/family'
 
 export interface Product {
   id: number;

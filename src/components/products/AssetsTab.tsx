@@ -9,18 +9,18 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Product, ProductAsset, productService, AssetBundle, QUERY_KEYS } from '@/services/productService';
 import axiosInstance from '@/lib/axiosInstance';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/domains/core/components/ui/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { useProductAssets } from '@/hooks/useProductAssets';
 import { invalidateProductAndAssets } from '@/utils/queryInvalidation';
 import { config, API_ENDPOINTS } from '@/config/config';
 
 // UI Components
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Progress } from '@/components/ui/progress';
+import { Button } from '@/domains/core/components/ui/button';
+import { Badge } from '@/domains/core/components/ui/badge';
+import { Checkbox } from '@/domains/core/components/ui/checkbox';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/domains/core/components/ui/tooltip';
+import { Progress } from '@/domains/core/components/ui/progress';
 import {
   Dialog,
   DialogContent,
@@ -28,17 +28,17 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { DatePickerWithRange } from '@/components/ui/date-range-picker';
-import { Label } from '@/components/ui/label';
+} from '@/domains/core/components/ui/dialog';
+import { Input } from '@/domains/core/components/ui/input';
+import { DatePickerWithRange } from '@/domains/core/components/ui/date-range-picker';
+import { Label } from '@/domains/core/components/ui/label';
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@/components/ui/collapsible"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Separator } from "@/components/ui/separator"
+} from "@/domains/core/components/ui/collapsible"
+import { ScrollArea } from "@/domains/core/components/ui/scroll-area"
+import { Separator } from "@/domains/core/components/ui/separator"
 import {
   FileTypeIcon,
   Calendar as CalendarIcon,
@@ -52,12 +52,12 @@ import {
 const ENABLE_ASSET_GALLERY = true;
 
 // Add import for AssetCard
-import { AssetCard } from '@/components/products/AssetCard'
+import { AssetCard } from '@/domains/products/components/productdetail/AssetCard'
 import { useDownloadAsset } from '@/hooks/useDownloadAsset'
 import { useBulkDownload } from '@/hooks/useBulkDownload'
-import { BundleCard } from './BundleCard'
+import { BundleCard } from '@/components/products/BundleCard'
 import { assetTypeService } from '@/services/assetTypeService';
-import { BulkDownloadToolbar } from './BulkDownloadToolbar';
+import { BulkDownloadToolbar } from '@/components/products/BulkDownloadToolbar';
 
 // Get product asset configuration
 const assetConfig = config.productDetailTabs.assets.assetsTab;

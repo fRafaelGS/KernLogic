@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { dashboardService, DashboardSummary, InventoryTrend, Activity, IncompleteProduct } from '@/services/dashboardService';
 import { toast } from 'sonner';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/domains/app/providers/AuthContext';
 import { config } from '@/config/config';
 
 // Define cache types

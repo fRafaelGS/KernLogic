@@ -3,11 +3,11 @@ import { useQuery } from '@tanstack/react-query';
 import axiosInstance from '@/lib/axiosInstance';
 import { paths } from '@/lib/apiPaths';
 import { qkReportThemes, qkCompleteness } from '@/lib/queryKeys';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Button } from '@/components/ui/button';
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/domains/core/components/ui/card';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/domains/core/components/ui/tabs';
+import { Badge } from '@/domains/core/components/ui/badge';
+import { Skeleton } from '@/domains/core/components/ui/skeleton';
+import { Button } from '@/domains/core/components/ui/button';
 import { 
   BarChart, 
   Bar, 
@@ -18,8 +18,8 @@ import {
   ResponsiveContainer,
   LabelList
 } from 'recharts';
-import { Tooltip as UITooltip } from '@/components/ui/tooltip';
-import { TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip as UITooltip } from '@/domains/core/components/ui/tooltip';
+import { TooltipContent, TooltipProvider, TooltipTrigger } from '@/domains/core/components/ui/tooltip';
 
 // Import report components
 import LocalizationCoverageReport from '@/features/reports/LocalizationCoverageReport';

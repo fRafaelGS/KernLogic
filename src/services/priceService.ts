@@ -1,5 +1,5 @@
 import axiosInstance from '@/lib/axiosInstance'
-import { PriceFormValues } from '@/components/products/PricingForm'
+import { PriceFormValues } from '@/domains/products/components/PricingForm'
 
 export interface RawPrice {
   id: number

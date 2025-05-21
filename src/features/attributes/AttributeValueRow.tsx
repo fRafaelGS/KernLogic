@@ -1,16 +1,16 @@
 import React, { useState, useCallback } from 'react';
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
+import { Input } from "@/domains/core/components/ui/input";
+import { Switch } from "@/domains/core/components/ui/switch";
+import { Badge } from "@/domains/core/components/ui/badge";
+import { Button } from "@/domains/core/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/domains/core/components/ui/popover";
+import { Calendar } from "@/domains/core/components/ui/calendar";
 import { Check, X, Loader2, CheckCircle2, AlertCircle, Trash2, LayoutGrid } from 'lucide-react';
 import { format } from 'date-fns';
 import { useDebouncedCallback } from '@/hooks/useDebouncedCallback';
 import { Edit, Calendar as CalendarIcon, Globe, Monitor } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/domains/core/components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/domains/core/components/ui/tooltip";
 
 import { useOrgSettings } from '@/hooks/useOrgSettings';
 import { config } from '@/config/config';

@@ -1,6 +1,6 @@
-import { ProductsApi } from './productsClient';
-import { PRODUCTS_API_BASE } from './productsClient/config';
-import { AttributeValue, Product } from './productsClient/models';
+import { ProductsApi } from '@/services/productsClient';
+import { PRODUCTS_API_BASE } from '@/services/productsClient/config';
+import { AttributeValue, Product } from '@/services/productsClient/models';
 import logger from '@/lib/logger';
 
 // Define ReportFiltersState interface to match the expected filter format

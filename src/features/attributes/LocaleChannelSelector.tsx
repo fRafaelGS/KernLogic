@@ -7,9 +7,9 @@ import {
   SelectLabel, 
   SelectTrigger, 
   SelectValue 
-} from "@/components/ui/select";
+} from "@/domains/core/components/ui/select";
 import { Globe, Monitor } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Badge } from '@/domains/core/components/ui/badge';
 import { 
   saveLastLocale, 
   getLastLocale, 

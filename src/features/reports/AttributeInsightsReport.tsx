@@ -1,9 +1,9 @@
 import React, { useState } from 'react'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
-import ReportFilters from './components/filters/ReportFilters'
-import ReportExportButton from './components/ReportExportButton'
-import type { ReportFiltersState } from './components/filters/ReportFilters'
+import { Card, CardHeader, CardTitle, CardContent } from '@/domains/core/components/ui/card'
+import { Skeleton } from '@/domains/core/components/ui/skeleton'
+import ReportFilters from '@/features/reports/components/filters/ReportFilters'
+import ReportExportButton from '@/features/reports/components/ReportExportButton'
+import type { ReportFiltersState } from '@/features/reports/components/filters/ReportFilters'
 
 const AttributeInsightsReport: React.FC = () => {
   const [filters, setFilters] = useState<ReportFiltersState>({})

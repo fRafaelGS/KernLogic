@@ -1,4 +1,4 @@
-import axiosInstance from '../lib/axiosInstance';
+import axiosInstance from '@/lib/axiosInstance';
 import { API_URL, API_ENDPOINTS } from '@/config/config';
 import { Category as CategoryType, TreeNode } from '@/types/categories';
 

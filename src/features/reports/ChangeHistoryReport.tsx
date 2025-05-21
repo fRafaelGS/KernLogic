@@ -2,12 +2,12 @@ import React, { useState, useCallback, useEffect, memo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axiosInstance from '@/lib/axiosInstance';
 import { paths } from '@/lib/apiPaths';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { DatePickerWithRange } from '@/components/ui/date-range-picker';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/domains/core/components/ui/card';
+import { DatePickerWithRange } from '@/domains/core/components/ui/date-range-picker';
 import { format } from 'date-fns';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Skeleton } from '@/domains/core/components/ui/skeleton';
+import { Badge } from '@/domains/core/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/domains/core/components/ui/table';
 import {
   Pagination,
   PaginationContent,
@@ -15,14 +15,14 @@ import {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-} from "@/components/ui/pagination";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+} from "@/domains/core/components/ui/pagination";
+import { Checkbox } from "@/domains/core/components/ui/checkbox";
+import { Label } from "@/domains/core/components/ui/label";
+import { Button } from "@/domains/core/components/ui/button";
+import { Input } from "@/domains/core/components/ui/input";
 import { X, Filter } from "lucide-react";
 import { debounce } from 'lodash';
-import { Sheet, SheetContent, SheetTrigger, SheetOverlay } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTrigger, SheetOverlay } from "@/domains/core/components/ui/sheet";
 import { DateRange } from "react-day-picker";
 
 // Define types

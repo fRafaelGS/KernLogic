@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { toast } from '@/components/ui/use-toast';
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/domains/core/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/domains/core/components/ui/select';
+import { Button } from '@/domains/core/components/ui/button';
+import { Badge } from '@/domains/core/components/ui/badge';
+import { toast } from '@/domains/core/components/ui/use-toast';
 import { SaveIcon, InfoIcon, AlertCircleIcon, CheckCircleIcon } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { useImportFieldSchema } from './hooks/useImportFieldSchema';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/domains/core/components/ui/tooltip';
+import { Alert, AlertDescription, AlertTitle } from '@/domains/core/components/ui/alert';
+import { useImportFieldSchema } from '@/features/imports/hooks/useImportFieldSchema';
+import { Skeleton } from '@/domains/core/components/ui/skeleton';
 import { Mapping } from '@/types/import';
 import { ImportFieldSchemaEntry, getFamilyAttributes } from '@/services/importService';
 

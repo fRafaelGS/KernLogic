@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import axiosInstance from '@/lib/axiosInstance'
-import { toast } from '@/components/ui/use-toast'
+import { toast } from '@/domains/core/components/ui/use-toast'
 
 export function useBundleDownload(productId: number, bundleId: number) {
   const [isLoading, setIsLoading] = useState(false)

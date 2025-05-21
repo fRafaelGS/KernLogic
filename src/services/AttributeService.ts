@@ -8,9 +8,9 @@ import {
   deduplicateAttributes,
   filterUnusedAttributes
 } from '@/lib/attributeUtils';
-import organizationService from './organizationService';
-import localeService from './localeService';
-import channelService from './channelService';
+import organizationService from '@/services/organizationService';
+import localeService from '@/services/localeService';
+import channelService from '@/services/channelService';
 
 // Cached organization defaults to avoid repetitive API calls
 let orgDefaults: { locale: string, channel: string } | null = null;

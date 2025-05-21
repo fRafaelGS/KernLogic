@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
-import { toast } from '@/components/ui/use-toast'
+import { toast } from '@/domains/core/components/ui/use-toast'
 import axiosInstance from '@/lib/axiosInstance'
 import { ReportFiltersState } from '@/features/reports/components/filters/ReportFilters'
-import { useAuth } from '@/contexts/AuthContext'
+import { useAuth } from '@/domains/app/providers/AuthContext'
 import { API_ENDPOINTS } from '@/config/config'
 
 export interface FamilyCompleteness {

@@ -2,8 +2,8 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getCategories } from '@/services/categoryService';
 import { Category, normalizeCategory } from '@/types/categories';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/domains/core/components/ui/select';
+import { Skeleton } from '@/domains/core/components/ui/skeleton';
 
 interface CategoryFilterProps {
   value: string | undefined;

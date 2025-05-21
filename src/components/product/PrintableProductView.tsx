@@ -1,5 +1,5 @@
 import React from 'react';
-import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
+import { CollapsibleSection } from '@/domains/core/components/ui/CollapsibleSection';
 import { format } from 'date-fns';
 import { Product, AttributeGroup } from '@/types/product';
 import { cn } from '@/lib/utils';

@@ -1,4 +1,4 @@
-import type { Attribute } from './attribute.ts'
+import type { Attribute } from '@/types/attribute.ts'
 
 export interface AttributeGroup {
   id: number

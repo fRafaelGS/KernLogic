@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/domains/app/providers/AuthContext';
 
 interface PermissionGuardProps {
   permission: string;

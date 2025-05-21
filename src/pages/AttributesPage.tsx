@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import axiosInstance from '@/lib/axiosInstance'
 import { paths } from '@/lib/apiPaths'
 import { ENABLE_CUSTOM_ATTRIBUTES } from '@/config/featureFlags'
-import { useAuth } from '@/contexts/AuthContext'
+import { useAuth } from '@/domains/app/providers/AuthContext'
 import { usePriceMetadata } from '@/hooks/usePriceMetadata'
 import { config } from '@/config/config'
 
@@ -14,10 +14,10 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+} from "@/domains/core/components/ui/card"
+import { Button } from "@/domains/core/components/ui/button"
 import { Loader2, PlusCircle, AlertCircle, Pencil, Trash, Check, X } from 'lucide-react'
-import { Badge } from "@/components/ui/badge"
+import { Badge } from "@/domains/core/components/ui/badge"
 import { toast } from "sonner"
 import {
   Dialog,
@@ -26,7 +26,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
+} from "@/domains/core/components/ui/dialog"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,14 +37,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
+} from "@/domains/core/components/ui/alert-dialog"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
+} from "@/domains/core/components/ui/select"
 import {
   Table,
   TableBody,
@@ -52,12 +52,12 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Skeleton } from "@/components/ui/skeleton"
+} from "@/domains/core/components/ui/table"
+import { Input } from "@/domains/core/components/ui/input"
+import { Label } from "@/domains/core/components/ui/label"
+import { Switch } from "@/domains/core/components/ui/switch"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/domains/core/components/ui/tooltip"
+import { Skeleton } from "@/domains/core/components/ui/skeleton"
 
 // Types
 interface Attribute {

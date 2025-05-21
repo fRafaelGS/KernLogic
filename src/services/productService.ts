@@ -1,10 +1,10 @@
     import axios, { AxiosError, AxiosProgressEvent, AxiosResponse } from 'axios';
     import { API_CURRENCIES, API_PRICE_TYPES, API_SALES_CHANNELS, API_ENDPOINTS } from '@/config/config';
     import axiosInstance from '@/lib/axiosInstance';
-    import { IncompleteProduct } from './dashboardService';
-    import { getCategories as fetchCategories, createCategory as createCategoryService, Category as CategoryFromService } from './categoryService';
+    import { IncompleteProduct } from '@/services/dashboardService';
+    import { getCategories as fetchCategories, createCategory as createCategoryService, Category as CategoryFromService } from '@/services/categoryService';
     import { Category as ProductCategory } from '@/types/categories';
-    import type { AttributeGroup } from '@/components/ProductAttributesPanel/types'
+    import type { AttributeGroup } from '@/domains/products/components/ProductAttributesPanel/types'
     import type { Family } from '@/types/family'
     import { useOrgSettings } from '@/hooks/useOrgSettings';
 

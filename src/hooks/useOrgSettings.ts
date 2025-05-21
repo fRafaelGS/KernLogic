@@ -1,4 +1,4 @@
-import { useAuth } from '@/contexts/AuthContext'
+import { useAuth } from '@/domains/app/providers/AuthContext'
 import { useQuery } from '@tanstack/react-query'
 import api from '@/services/api'
 import { Locale } from '@/services/localeService'
@@ -6,7 +6,7 @@ import localeService from '@/services/localeService'
 import { Channel } from '@/services/channelService'
 import channelService from '@/services/channelService'
 import { paths } from '@/lib/apiPaths'
-import useOrganization from './useOrganization'
+import useOrganization from '@/hooks/useOrganization'
 
 interface OrgSettings {
   id: number

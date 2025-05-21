@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { paths } from '@/lib/apiPaths'
 import axiosInstance from '@/lib/axiosInstance'
 import { isAxiosError } from 'axios'
-import { Family, FamilyInput, FamilyOverride } from '../types/family'
-import { Attribute } from '../types/attribute'
-import { AttributeGroup } from '../types/attributeGroup'
+import { Family, FamilyInput, FamilyOverride } from '@/types/family'
+import { Attribute } from '@/types/attribute'
+import { AttributeGroup } from '@/types/attributeGroup'
 import { API_ENDPOINTS } from '@/config/config'
 
 // Query keys

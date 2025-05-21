@@ -1,4 +1,4 @@
-import { formatCurrency } from '../lib/utils';
+import { formatCurrency } from '@/lib/utils';
 
 // Types for product price data
 export interface ProductPrice {

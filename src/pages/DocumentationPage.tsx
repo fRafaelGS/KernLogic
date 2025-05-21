@@ -1,6 +1,6 @@
 import React from 'react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/domains/core/components/ui/card';
+import { Button } from '@/domains/core/components/ui/button';
 import { Link } from 'react-router-dom';
 
 const DocumentationPage: React.FC = () => {

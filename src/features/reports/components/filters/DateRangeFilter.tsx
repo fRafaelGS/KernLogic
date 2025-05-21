@@ -1,5 +1,5 @@
 import React from 'react';
-import { DatePickerWithRange } from '@/components/ui/date-range-picker';
+import { DatePickerWithRange } from '@/domains/core/components/ui/date-range-picker';
 import { DateRange } from 'react-day-picker';
 
 interface DateRangeFilterProps {

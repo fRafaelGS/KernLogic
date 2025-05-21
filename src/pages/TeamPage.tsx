@@ -1,21 +1,21 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/domains/app/providers/AuthContext';
 import { useQuery } from '@tanstack/react-query';
-import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/domains/core/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/domains/core/components/ui/tabs';
 import { EmptyState } from '@/components/EmptyState';
 import { Avatar } from '@/components/Avatar';
-import { Input } from '@/components/ui/input';
+import { Input } from '@/domains/core/components/ui/input';
 import { 
   Select,
   SelectTrigger,
   SelectValue,
   SelectContent,
   SelectItem
-} from '@/components/ui/select';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+} from '@/domains/core/components/ui/select';
+import { Card, CardContent, CardHeader, CardTitle } from '@/domains/core/components/ui/card';
 import {
   Table,
   TableBody,
@@ -23,13 +23,13 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Skeleton } from '@/components/ui/skeleton';
+} from "@/domains/core/components/ui/table";
+import { Skeleton } from '@/domains/core/components/ui/skeleton';
 import { formatDistanceToNow } from 'date-fns';
-import InviteUserModal from '@/components/InviteUserModal';
-import BulkInviteModal from '@/components/BulkInviteModal';
-import ManageControls from '@/components/ManageControls';
-import RoleDescriptionTooltip from '@/components/RoleDescriptionTooltip';
+import InviteUserModal from '@/domains/accounts/components/InviteUserModal';
+import BulkInviteModal from '@/domains/accounts/components/BulkInviteModal';
+import ManageControls from '@/domains/core/components/ManageControls';
+import RoleDescriptionTooltip from '@/domains/accounts/components/RoleDescriptionTooltip';
 import { Link } from 'react-router-dom';
 import { History, Search, UserPlus, Users } from 'lucide-react';
 import { fetchRoles, fetchTeamMembers, fetchUserProductActions } from '@/services/teamService';

@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+import { Button } from "@/domains/core/components/ui/button";
 import { Link } from "react-router-dom";
 import { 
   Check, 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Attribute } from './AttributeValueRow';
+import { Attribute } from '@/features/attributes/AttributeValueRow';
 import { 
   Dialog, 
   DialogContent, 
@@ -7,11 +7,11 @@ import {
   DialogFooter, 
   DialogHeader, 
   DialogTitle 
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
+} from "@/domains/core/components/ui/dialog";
+import { Input } from "@/domains/core/components/ui/input";
+import { Button } from "@/domains/core/components/ui/button";
+import { Badge } from "@/domains/core/components/ui/badge";
+import { ScrollArea } from "@/domains/core/components/ui/scroll-area";
 import { 
   Select, 
   SelectContent, 
@@ -20,18 +20,18 @@ import {
   SelectLabel,
   SelectTrigger, 
   SelectValue 
-} from "@/components/ui/select";
+} from "@/domains/core/components/ui/select";
 import { Globe, Monitor } from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/domains/core/components/ui/tabs";
 import { Search, Filter, Info } from 'lucide-react';
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
+import { Label } from "@/domains/core/components/ui/label";
+import { Separator } from "@/domains/core/components/ui/separator";
 import { 
   Tooltip, 
   TooltipContent, 
   TooltipProvider, 
   TooltipTrigger 
-} from "@/components/ui/tooltip";
+} from "@/domains/core/components/ui/tooltip";
 import { useOrgSettings } from '@/hooks/useOrgSettings';
 import { config } from '@/config/config';
 

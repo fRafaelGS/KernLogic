@@ -1,5 +1,5 @@
 import React, { forwardRef } from 'react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/domains/core/components/ui/avatar';
 import { nameToInitials } from '@/lib/utils';
 
 export interface AvatarBadgeProps {

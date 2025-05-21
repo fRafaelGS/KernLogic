@@ -1,11 +1,11 @@
 import React, { useState } from 'react'
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
+import { Alert, AlertTitle, AlertDescription } from '@/domains/core/components/ui/alert'
+import { Button } from '@/domains/core/components/ui/button'
 import { AlertCircle, RefreshCw } from 'lucide-react'
-import { ReportFiltersState } from './components/filters/ReportFilters'
-import ReportFilters from './components/filters/ReportFilters'
-import GlobalCoverageSummaryCard from './components/cards/GlobalCoverageSummaryCard'
-import MissingAttributesHeatmapCard from './components/cards/MissingAttributesHeatmapCard'
+import { ReportFiltersState } from '@/features/reports/components/filters/ReportFilters'
+import ReportFilters from '@/features/reports/components/filters/ReportFilters'
+import GlobalCoverageSummaryCard from '@/features/reports/components/cards/GlobalCoverageSummaryCard'
+import MissingAttributesHeatmapCard from '@/features/reports/components/cards/MissingAttributesHeatmapCard'
 import useLocalizationQuality from '@/hooks/useLocalizationQuality'
 
 const LocalizationCoverageReport: React.FC = () => {

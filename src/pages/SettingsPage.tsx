@@ -10,13 +10,13 @@ import {
   CardHeader,
   CardTitle,
   CardFooter,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useAuth } from "@/contexts/AuthContext";
+} from "@/domains/core/components/ui/card";
+import { Button } from "@/domains/core/components/ui/button";
+import { Input } from "@/domains/core/components/ui/input";
+import { Label } from "@/domains/core/components/ui/label";
+import { Switch } from "@/domains/core/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/domains/core/components/ui/tabs";
+import { useAuth } from "@/domains/app/providers/AuthContext";
 import { toast } from "sonner";
 import { Loader2, AlertCircle, ExternalLink } from 'lucide-react';
 import axios from 'axios';

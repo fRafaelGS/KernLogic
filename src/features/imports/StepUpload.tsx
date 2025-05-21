@@ -1,14 +1,14 @@
 import React, { useCallback, useState, useRef } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
+import { Button } from '@/domains/core/components/ui/button';
+import { Card } from '@/domains/core/components/ui/card';
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/domains/core/components/ui/table';
 import { UploadIcon, InfoIcon } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { parse as parseCsv } from 'papaparse';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Label } from '@/components/ui/label';
-import { ImportMode } from './StepImportMode';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { RadioGroup, RadioGroupItem } from '@/domains/core/components/ui/radio-group';
+import { Label } from '@/domains/core/components/ui/label';
+import { ImportMode } from '@/features/imports/StepImportMode';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/domains/core/components/ui/tooltip';
 import { DuplicateStrategy } from '@/services/importService';
 import { config } from '@/config/config';
 

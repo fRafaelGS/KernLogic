@@ -3,7 +3,7 @@ import {
   Product, 
   productService, 
   RelationshipType 
-} from '@/services/productService';
+} from '@/domains/products/services/productService';
 import { Input } from '@/domains/core/components/ui/input';
 import { Button } from '@/domains/core/components/ui/button';
 import { Badge } from '@/domains/core/components/ui/badge';
@@ -50,7 +50,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/domains/core/components/ui/popover";
-import { pickPrimaryImage } from '@/utils/images';
+import { pickPrimaryImage } from '@/domains/products/utils/images';
 
 interface EnhancedAddRelatedProductPanelProps {
   productId: number;

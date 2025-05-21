@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { productService, ProductAsset, QUERY_KEYS } from '@/services/productService';
-import { invalidateProductAndAssets } from '@/utils/queryInvalidation';
+import { productService, ProductAsset, QUERY_KEYS } from '@/domains/products/services/productService';
+import { invalidateProductAndAssets } from '@/domains/core/utils/query/queryInvalidation';
 import { toast } from 'sonner';
 
 /**

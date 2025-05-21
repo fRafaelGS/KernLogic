@@ -1,6 +1,6 @@
 import React, { memo, useRef, useEffect, useState } from 'react'
 import { FixedSizeGrid as Grid } from 'react-window'
-import { Product, PaginatedResponse } from '@/services/productService'
+import { Product, PaginatedResponse } from '@/domains/products/services/productService'
 import { ProductCard } from '@/domains/products/components/ProductCard'
 import { Skeleton } from '@/domains/core/components/ui/skeleton'
 import { useFetchProducts } from '@/domains/products/components/hooks/useFetchProducts'

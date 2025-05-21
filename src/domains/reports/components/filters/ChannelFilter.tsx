@@ -2,7 +2,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/domains/core/components/ui/select';
 import { Skeleton } from '@/domains/core/components/ui/skeleton';
-import channelService, { Channel } from '@/services/channelService';
+import channelService, { Channel } from '@/domains/organization/services/channelService';
 
 interface ChannelFilterProps {
   value: string | undefined;

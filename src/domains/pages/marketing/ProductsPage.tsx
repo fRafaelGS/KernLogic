@@ -3,7 +3,7 @@ import { ProductsTableAdapter } from '@/domains/products/components/productstabl
 import { ProductGrid } from '@/domains/products/components/productstable/ProductGrid'
 import { ViewToggle } from '@/domains/products/components/productstable/ViewToggle'
 import { useFetchProducts } from '@/domains/products/components/hooks/useFetchProducts'
-import { Product, PaginatedResponse } from '@/services/productService'
+import { Product, PaginatedResponse } from '@/domains/products/services/productService'
 import { Button } from '@/domains/core/components/ui/button'
 import { useToast } from '@/domains/core/components/ui/use-toast'
 import { useDebounce } from '@/domains/core/hooks/useDebounce'

@@ -21,7 +21,16 @@ import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query';
 import { useToast } from '@/domains/core/components/ui/use-toast';
 import axios from 'axios';
 import AsyncCreatableSelect from 'react-select/async-creatable';
-import { productEditSchema, getDefaultProductValues, ProductFormValues, extractCategoryInfo } from '@/schemas/product';
+// Import from our local schema file to avoid import issues
+import { 
+  productEditSchema, 
+  getDefaultProductValues, 
+  ProductFormValues,
+  extractCategoryInfo
+} from '@/domains/products/schemas/product-local';
+import { cn } from '@/domains/core/lib/utils'
+import { LocaleCode, ChannelCode } from '@/config/config'
+import { Category } from '@/domains/products/types/categories'
 
 // UI components
 import { Button } from '@/domains/core/components/ui/button';
@@ -48,22 +57,25 @@ import { Spinner } from "@/domains/core/components/ui/spinner";
 import { CategoryModal } from '@/domains/products/components/productstable/CategoryModal';
 
 // Services
-import { productService, Product, ProductPrice, QUERY_KEYS, PRODUCTS_API_URL } from '@/services/productService';
-import { invalidateProductQueries, invalidateProductAndAssets } from '@/utils/queryInvalidation';
-import { normalizeFamily } from '@/utils/familyNormalizer';
+import { productService, Product, ProductPrice, QUERY_KEYS, PRODUCTS_API_URL } from '@/domains/products/services/productService';
+import { invalidateProductQueries, invalidateProductAndAssets } from '@/domains/core/utils/query/queryInvalidation';
+import { normalizeFamily } from '@/domains/core/utils/familyNormalizer';
 
 // Custom components
 import { RichTextEditor } from '@/domains/core/components/ui/RichTextEditor';
 import { PriceSummaryBadge } from '@/domains/products/components/PriceSummaryBadge';
 import { PricingModal } from '@/domains/products/components/PricingModal';
 
-import { useFamilies, useOverrideAttributeGroup } from '@/domains/products/services/familyApi';
-import { Family } from '@/types/family';
+import { useFamilies, useOverrideAttributeGroup } from '@/domains/families/services/familyApi';
+import { Family as FamilyBase } from '@/domains/families/types/family';
+import { NormalizedFamily } from '@/domains/core/utils/familyNormalizer';
 import { ProductAttributeGroups } from '@/domains/products/components/ProductAttributeGroups';
 import { ProductAttributesPanel } from '@/domains/products/components/ProductAttributesPanel';
 import { useProductAssets } from '@/domains/products/components/hooks/useProductAssets';
-import { LocaleCode, ChannelCode } from '@/services/types';
 import { useOrgSettings } from '@/domains/organization/hooks/useOrgSettings';
+
+// Create a composite type that includes properties from both Family interfaces
+type Family = NormalizedFamily & Partial<FamilyBase>;
 
 // Update the ProductWithFamily interface to include all required Product fields for compatibility
 interface ProductWithFamily extends Omit<Product, 'family'> {

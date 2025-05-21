@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import axiosInstance from '@/lib/axiosInstance'
-import { DashboardSummary } from '@/services/dashboardService'
+import axiosInstance from '@/domains/core/lib/axiosInstance'
+import { DashboardSummary } from '@/domains/dashboard/services/dashboardService'
 import { useAuth } from '@/domains/app/providers/AuthContext'
 import { ReportFiltersState } from '@/domains/reports/components/filters/ReportFilters'
 import { API_ENDPOINTS } from '@/config/config'

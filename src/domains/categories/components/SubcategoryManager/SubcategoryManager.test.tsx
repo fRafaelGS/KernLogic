@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { SubcategoryManager } from '@/domains/categories/components/SubcategoryManager/SubcategoryManager';
 import { useCategories } from '@/domains/categories/components/SubcategoryManager/useCategories';
 import { useAuth } from '@/domains/app/providers/AuthContext';
-import { Category } from '@/types/categories';
+import { Category } from '@/domains/products/types/categories';
 
 // Mock the useCategories hook
 jest.mock('./useCategories', () => ({

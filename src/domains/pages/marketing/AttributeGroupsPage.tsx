@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import axiosInstance from '@/lib/axiosInstance';
-import { paths } from '@/lib/apiPaths';
+import axiosInstance from '@/domains/core/lib/axiosInstance';
+import { API_PATHS } from '@/config/config';
 import { ENABLE_ATTRIBUTE_GROUPS } from '@/config/featureFlags';
 import { useAuth } from '@/domains/app/providers/AuthContext';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
@@ -99,7 +99,7 @@ import {
   removeAttributeFromGroup,
   createAttributeGroup,
   deleteAttributeGroup,
-} from '../../products/services/attributeGroupApi';
+} from '../../attributes/services/attributeGroupApi';
 
 // Sortable item wrapper for drag-and-drop
 const SortableAttributeItem = ({ item, attributes, onRemove }: { 
@@ -192,7 +192,7 @@ const AttributeGroupsPage: React.FC = () => {
   } = useQuery({
     queryKey: ['attributeGroups'],
     queryFn: async () => {
-      const response = await axiosInstance.get(paths.attributeGroups.root(), {
+      const response = await axiosInstance.get(API_PATHS.attributeGroups.root(), {
         headers: { 'Accept': 'application/json' }
       });
       return response.data;
@@ -207,7 +207,7 @@ const AttributeGroupsPage: React.FC = () => {
   } = useQuery({
     queryKey: ['attributes'],
     queryFn: async () => {
-      const response = await axiosInstance.get(paths.attributes.root(), {
+      const response = await axiosInstance.get(API_PATHS.attributes.root(), {
         headers: { 'Accept': 'application/json' }
       });
       return response.data;
@@ -637,7 +637,7 @@ const AttributeGroupsPage: React.FC = () => {
             <CardHeader className="pb-3">
               <CardTitle>Attribute Groups</CardTitle>
               <CardDescription>
-                {attributeGroupsConfig.groupDescription}
+                {attributeGroupsConfig.description}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -742,7 +742,7 @@ const AttributeGroupsPage: React.FC = () => {
                     <AlertDialogHeader>
                       <AlertDialogTitle>Delete Attribute Group</AlertDialogTitle>
                       <AlertDialogDescription>
-                        {attributeGroupsConfig.deleteConfirmationText}
+                        {attributeGroupsConfig.form.deleteWarning}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -768,7 +768,7 @@ const AttributeGroupsPage: React.FC = () => {
           <DialogHeader>
             <DialogTitle>Create New Attribute Group</DialogTitle>
             <DialogDescription>
-              {attributeGroupsConfig.createModalDescription}
+              Create a new group to organize related attributes together.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit}>
@@ -900,7 +900,7 @@ const AttributeGroupsPage: React.FC = () => {
           <DialogHeader>
             <DialogTitle>Edit Attribute Group</DialogTitle>
             <DialogDescription>
-              {attributeGroupsConfig.editModalDescription}
+              Update this attribute group's properties and manage its attributes.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit}>

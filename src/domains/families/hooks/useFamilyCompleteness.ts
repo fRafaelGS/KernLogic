@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { toast } from '@/domains/core/components/ui/use-toast'
-import axiosInstance from '@/lib/axiosInstance'
+import axiosInstance from '@/domains/core/lib/axiosInstance'
 import { ReportFiltersState } from '@/domains/reports/components/filters/ReportFilters'
 import { useAuth } from '@/domains/app/providers/AuthContext'
 import { API_ENDPOINTS } from '@/config/config'

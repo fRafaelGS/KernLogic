@@ -1,13 +1,13 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Check, ChevronDown, ChevronRight, Folder, FolderOpen, Plus, Search, X, Loader2 } from 'lucide-react';
-import { getCategoryTree, createCategory } from '@/services/categoryService';
-import { TreeNode } from '@/types/categories';
+import { getCategoryTree, createCategory } from '@/domains/categories/services/categoryService';
+import { TreeNode } from '@/domains/products/types/categories';
 import { useToast } from '@/domains/core/components/ui/use-toast';
 import { Button } from '@/domains/core/components/ui/button';
 import { Input } from '@/domains/core/components/ui/input';
 import * as Popover from '@radix-ui/react-popover';
 import { useDebounce } from '@/domains/core/hooks/useDebounce';
-import '@/styles/category-tree-select.css';
+import '@/domains/categories/styles/category-tree-select.css';
 
 interface CategoryTreeSelectProps {
   selectedValue?: string | number | null;
@@ -92,7 +92,7 @@ const TreeNodeRow: React.FC<TreeNodeRowProps> = ({
         )}
       </div>
       
-      {hasChildren && node.expanded && (
+      {hasChildren && node.expanded && node.children && (
         <ul className="list-none">
           {node.children.map(childNode => (
             <TreeNodeRow

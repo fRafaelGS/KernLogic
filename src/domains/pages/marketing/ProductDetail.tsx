@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { DashboardLayout } from '@/domains/app/layout/DashboardLayout';
-import { Product, productService, ProductPrice } from '@/services/productService';
+import { Product, productService, ProductPrice } from '@/domains/products/services/productService';
 import { ProductDetailLayout } from '@/domains/products/components/productdetail/ProductDetailLayout';
 import ProductDetailSidebar from '@/domains/products/components/productdetail/ProductDetailSidebar';
 import { ProductDetailTabs } from '@/domains/products/components/productdetail/ProductDetailTabs';
@@ -29,7 +29,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/domains/core/components/u
 import { AnimatePresence, motion } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
 import { useQueryClient } from '@tanstack/react-query';
-import { normalizeFamily } from '@/utils/familyNormalizer';
+import { normalizeFamily } from '@/domains/core/utils/familyNormalizer';
 import { ROUTES } from '@/config/routes';
 
 export const ProductDetail = () => {

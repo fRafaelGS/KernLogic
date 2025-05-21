@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { productService } from '@/services/productService';
+import { productService } from '@/domains/products/services/productService';
 
 export interface PriceType   { id: number; code: string; label: string }
 export interface Currency    { iso_code: string; symbol: string; name: string; decimals: number }

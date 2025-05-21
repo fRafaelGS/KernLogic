@@ -1,5 +1,5 @@
 import React from 'react';
-import { normalizeCategory, getCategoryNamePath, Category } from '@/types/categories';
+import { normalizeCategory, getCategoryNamePath, Category } from '@/domains/products/types/categories';
 import { Badge } from '@/domains/core/components/ui/badge';
 
 interface CategoryDisplayProps {

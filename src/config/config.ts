@@ -17,12 +17,124 @@ export const API_PRICE_TYPES = '/api/price-types/'
 export const API_SALES_CHANNELS = '/api/sales-channels/'
 export const PRODUCTS_PATH = '/api/products'
 
+// API Base path
+export const API_BASE = '/api'
+
+// Helper function to join path segments
+const join = (...parts: (string | number)[]) =>
+  parts
+    .filter(Boolean)
+    .map(p => p.toString().replace(/^\/|\/$/g, '')) // trim slashes
+    .join('/')
+    .replace(/^/, '/');                             // ensure leading slash
+
+// Centralized API paths
+export const API_PATHS = {
+  auth: {
+    token:   () => join(API_BASE, 'token')   + '/',   //   /api/token/
+    refresh: () => join(API_BASE, 'token/refresh') + '/',   // /api/token/refresh/
+  },
+  organizations: {
+    root: () => join(API_BASE, 'organizations') + '/',
+    byId: (id: number) => join(API_BASE, 'organizations', id) + '/',
+    current: () => join(API_BASE, 'organizations', 'current') + '/',
+  },
+  products: {
+    root:    () => join(API_BASE, 'products') + '/',
+    byId:    (id: number)          => join(API_BASE, 'products', id) + '/',
+    nested:  (id: number, child: string) =>
+                                  join(API_BASE, 'products', id, child) + 
+                                    (child.endsWith('/') ? '' : '/'),
+    assets:  (id: number)          => join(API_BASE, 'products', id, 'assets') + '/',
+    asset:   (id: number, aid: number) => join(API_BASE, 'products', id, 'assets', aid) + '/',
+    attributes: (id: number) => join(API_BASE, 'products', id, 'attributes') + '/',
+    attributeValue: (id: number, avId: number) => join(API_BASE, 'products', id, 'attributes', avId) + '/',
+    groups: (id: number) => join(API_BASE, 'products', id, 'attribute-groups') + '/',
+  },
+  attributes: {
+    root: () => join(API_BASE, 'attributes') + '/',
+    byId: (id: number) => join(API_BASE, 'attributes', id) + '/',
+  },
+  attributeGroups: {
+    root: () => join(API_BASE, 'attribute-groups') + '/',
+    byId: (id: number) => join(API_BASE, 'attribute-groups', id) + '/',
+    addItem: (id: number) => join(API_BASE, 'attribute-groups', id, 'items') + '/',
+    removeItem: (gid: number, itemId: number) => join(API_BASE, 'attribute-groups', gid, 'items', itemId) + '/',
+  },
+  attributeSets: {
+    byId:    (id: number)          => join(API_BASE, 'attribute-sets', id) + '/',
+  },
+  locales: {
+    root: () => join(API_BASE, 'locales') + '/',
+    byId: (id: number) => join(API_BASE, 'locales', id) + '/',
+  },
+  channels: {
+    root: () => join(API_BASE, 'channels') + '/',
+    byId: (id: number) => join(API_BASE, 'channels', id) + '/',
+  },
+  categories: {
+    root: () => join(API_BASE, 'categories') + '/',
+    byId: (id: number) => join(API_BASE, 'categories', id) + '/',
+    products: (id: number) => join(API_BASE, 'categories', id, 'products') + '/',
+  },
+  families: {
+    root: () => join(API_BASE, 'families') + '/',
+    byId: (id: number) => join(API_BASE, 'families', id) + '/',
+    attributeGroups: (id: number) => join(API_BASE, 'families', id, 'attribute-groups') + '/',
+  },
+  reports: {
+    themes: () => join(API_BASE, 'reports/themes') + '/',
+  },
+  analytics: {
+    completeness: () => join(API_BASE, 'analytics/completeness') + '/',
+    readiness: () => join(API_BASE, 'analytics/readiness') + '/',
+    enrichmentVelocity: (days: number = 30) => 
+      join(API_BASE, 'analytics/enrichment-velocity') + `/?days=${days}`,
+    localizationQuality: () => 
+      join(API_BASE, 'analytics/localization-quality') + '/',
+    localizationMissing: () => 
+      join(API_BASE, 'analytics/localization-missing') + '/',
+    changeHistory: (params?: { 
+      from?: string; 
+      to?: string; 
+      user?: number;
+      users?: string[];
+      entity?: string;
+      actions?: string[];
+    }) => {
+      const url = join(API_BASE, 'analytics/change-history') + '/';
+      if (!params) return url;
+      
+      const queryParams = new URLSearchParams();
+      if (params.from) queryParams.append('from', params.from);
+      if (params.to) queryParams.append('to', params.to);
+      if (params.user) queryParams.append('user', params.user.toString());
+      if (params.users && params.users.length > 0) {
+        params.users.forEach(user => queryParams.append('username', user));
+      }
+      if (params.entity) queryParams.append('entity', params.entity);
+      if (params.actions && params.actions.length > 0) {
+        params.actions.forEach(action => queryParams.append('action', action));
+      }
+      
+      const queryString = queryParams.toString();
+      return queryString ? `${url}?${queryString}` : url;
+    },
+    locales: () => join(API_BASE, 'analytics/locales') + '/',
+    channels: () => join(API_BASE, 'analytics/channels') + '/',
+    categories: () => join(API_BASE, 'analytics/categories') + '/',
+    families: () => join(API_BASE, 'analytics/families') + '/',
+  },
+  dashboard: () => join(API_BASE, 'dashboard') + '/',
+}
+
 // Dashboard Configuration
 export const config = {
   api: {
     baseUrl: API_BASE_URL,
     timeout: 30000, // milliseconds
-    retryAttempts: 3
+    retryAttempts: 3,
+    paths: API_PATHS // Add paths to the config object for easier access
   },
   dashboard: {
     cacheTTL: 30 * 1000, // milliseconds

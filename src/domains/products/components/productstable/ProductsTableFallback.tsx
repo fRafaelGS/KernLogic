@@ -14,7 +14,7 @@ import {
   XIcon,
 } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
-import type { Product } from "@/services/productService";
+import type { Product } from "@/domains/products/services/productService";
 
 /* ------------------------------------------------------------------ */
 /*  Small helper type (duplicate for now — we'll centralise later)    */

@@ -13,7 +13,7 @@ import { ChevronRight, FolderIcon, Loader2, PlusIcon, Trash, RefreshCw, Edit, Sa
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/domains/core/components/ui/tooltip';
 import { useAuth } from '@/domains/app/providers/AuthContext';
 import { useCategories } from '@/domains/categories/components/SubcategoryManager/useCategories';
-import { Category } from '@/types/categories';
+import { Category } from '@/domains/products/types/categories';
 import { PermissionGuard } from '@/domains/core/components/PermissionGuard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/domains/core/components/ui/tabs";
 

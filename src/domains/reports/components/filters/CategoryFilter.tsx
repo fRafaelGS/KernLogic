@@ -1,7 +1,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getCategories } from '@/services/categoryService';
-import { Category, normalizeCategory } from '@/types/categories';
+import { getCategories } from '@/domains/categories/services/categoryService';
+import { Category, normalizeCategory } from '@/domains/products/types/categories';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/domains/core/components/ui/select';
 import { Skeleton } from '@/domains/core/components/ui/skeleton';
 

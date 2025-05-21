@@ -42,7 +42,7 @@ import {
   Product, 
   ProductRelation, 
   RelationshipType 
-} from '../../../../services/productService';
+} from '../../services/productService';
 import { 
   Tooltip, 
   TooltipContent, 
@@ -112,7 +112,7 @@ import {
 import { ScrollArea } from '@/domains/core/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/domains/core/components/ui/tabs";
 import { useQueryClient } from '@tanstack/react-query';
-import { pickPrimaryImage } from '@/utils/images';
+import { pickPrimaryImage } from '@/domains/products/utils/images';
 
 // Helper function to format currency
 const formatCurrency = (price: number): string => {

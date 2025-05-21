@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, memo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import axiosInstance from '@/lib/axiosInstance';
-import { paths } from '@/lib/apiPaths';
+import axiosInstance from '@/domains/core/lib/axiosInstance';
+import { API_PATHS } from '@/config/config';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/domains/core/components/ui/card';
 import { DatePickerWithRange } from '@/domains/core/components/ui/date-range-picker';
 import { format } from 'date-fns';
@@ -201,7 +201,7 @@ export function ChangeHistoryReport() {
   const { data, isLoading, error } = useQuery({
     queryKey,
     queryFn: () => axiosInstance.get<ChangeHistoryItem[]>(
-      paths.analytics.changeHistory({
+      API_PATHS.analytics.changeHistory({
         ...serializeDateRange(dateRange),
         users: selectedUsers,
       })

@@ -7,7 +7,7 @@ import { Button } from '@/domains/core/components/ui/button'
 import { Input } from '@/domains/core/components/ui/input'
 import { Label } from '@/domains/core/components/ui/label'
 import { Loader2 } from 'lucide-react'
-import localeService, { Locale } from '@/services/localeService'
+import localeService, { Locale } from '@/domains/organization/services/localeService'
 import { LOCALES } from '@/config/locale'
 import { config } from '@/config/config'
 

@@ -12,8 +12,8 @@ import { toast } from 'sonner';
 import { API_URL } from '@/config/config';
 import { API_ENDPOINTS } from '@/config';
 import { v4 as uuidv4 } from 'uuid';
-import axiosInstance from '@/lib/axiosInstance';
-import { User, InvitationToken } from '@/types/team';
+import axiosInstance from '@/domains/core/lib/axiosInstance';
+import { User, InvitationToken } from '@/domains/organization/types/team';
 
 /* ──────────────────── types ──────────────────── */
 interface AuthError {

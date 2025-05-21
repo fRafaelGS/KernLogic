@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import axiosInstance from '@/lib/axiosInstance'
+import axiosInstance from '@/domains/core/lib/axiosInstance'
 import { useEffect } from 'react'
 
 export function useFamilyAttributeGroups(familyId?: number, locale?: string, channel?: string) {

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { usePriceMetadata } from '@/domains/products/components/hooks/usePriceMetadata'
-import priceService from '@/services/priceService'
-import { PriceFormValues } from '@/domains/products/components/PricingForm'
+import priceService, { PricePayload } from '@/domains/products/services/priceService'
+import type { PriceFormValues } from '@/domains/products/components/PricingForm.tsx'
 
 // Define interfaces for metadata objects
 export interface PriceType {
@@ -43,29 +43,37 @@ interface PriceFilters {
   channel: string
 }
 
+// Format price for display - moved up before it's used
+const formatPrice = (value: number, currencyCode: string): string => {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currencyCode
+  }).format(value)
+}
+
 export function usePricingData(productId: number) {
   const metadataHook = usePriceMetadata()
   
   // Adapt metadata to our expected shape
   const priceTypes: PriceType[] = useMemo(() => {
     return (metadataHook.priceTypes || []).map((pt: any) => ({
-      id: pt.id || pt.value || '',
-      name: pt.name || pt.label || '',
+      id: pt.id?.toString() || pt.code || '',
+      name: pt.label || pt.name || '',
     }))
   }, [metadataHook.priceTypes])
   
   const channels: SalesChannel[] = useMemo(() => {
     return (metadataHook.channels || []).map((ch: any) => ({
-      id: ch.id || ch.value || '',
-      name: ch.name || ch.label || '',
+      id: ch.id?.toString() || '',
+      name: ch.name || '',
     }))
   }, [metadataHook.channels])
   
   const currencies: Currency[] = useMemo(() => {
     return (metadataHook.currencies || []).map((cur: any) => ({
-      id: cur.id || cur.value || cur.code || '',
-      code: cur.code || cur.value || '',
-      name: cur.name || cur.label || '',
+      id: cur.id?.toString() || cur.iso_code || '',
+      code: cur.iso_code || '',
+      name: cur.name || '',
       symbol: cur.symbol || '',
     }))
   }, [metadataHook.currencies])
@@ -87,7 +95,6 @@ export function usePricingData(productId: number) {
     try {
       // Use priceService to fetch prices
       const response = await priceService.getPrices(productId)
-      
       
       // Handle different response formats
       let priceData: any[] = []
@@ -139,14 +146,20 @@ export function usePricingData(productId: number) {
 
   // Function to add a price
   const add = async (values: PriceFormValues) => {
-    const payload = {
+    // Create a payload that matches what the backend expects
+    const payload: PricePayload = {
       price_type: values.priceType,
       currency: values.currencyCode,
       amount: values.value,
       valid_from: values.validFrom
     }
+    
     if (values.validTo) payload.valid_to = values.validTo
-    if (values.channel) payload.channel_id = values.channel
+    
+    // Handle the channel separately since it's not part of PriceFormValues
+    if ('channel' in values) {
+      payload.channel_id = (values as any).channel
+    }
     
     try {
       await priceService.createPrice(productId, payload)
@@ -159,8 +172,9 @@ export function usePricingData(productId: number) {
   }
 
   // Function to update a price
-  const update = async (priceId: number, values: PriceFormValues) => {
+  const update = async (priceId: number, values: PriceFormValues | Record<string, any>) => {
     try {
+      // We can pass values directly now since we've made the service accept flexible payloads
       await priceService.updatePrice(productId, priceId, values)
       await fetchPrices() // Refresh prices after updating
       return true
@@ -225,14 +239,6 @@ export function usePricingData(productId: number) {
   const getPriceTypeLabel = (value: string): string => {
     const priceType = priceTypes.find(pt => pt.id === value)
     return priceType ? priceType.name : value
-  }
-
-  // Format price for display
-  const formatPrice = (value: number, currencyCode: string): string => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currencyCode
-    }).format(value)
   }
 
   return {

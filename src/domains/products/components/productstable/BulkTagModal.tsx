@@ -8,7 +8,7 @@ import {
   DialogFooter,
 } from "@/domains/core/components/ui/dialog";
 import { Button } from "@/domains/core/components/ui/button";
-import { productService } from '@/services/productService';
+import { productService } from '@/domains/products/services/productService';
 import { Loader2 } from "lucide-react";
 import { useToast } from '@/domains/core/components/ui/use-toast';
 import { ActionMeta, OnChangeValue } from 'react-select';

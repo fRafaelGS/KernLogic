@@ -1,5 +1,5 @@
 import React from 'react';
-import { IncompleteProduct } from '@/services/dashboardService';
+import { IncompleteProduct } from '@/domains/dashboard/services/dashboardService';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/domains/core/components/ui/card';
 import { Badge } from '@/domains/core/components/ui/badge';
 import { Skeleton } from '@/domains/core/components/ui/skeleton';

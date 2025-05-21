@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import axiosInstance from '@/lib/axiosInstance'
-import { paths } from '@/lib/apiPaths'
+import axiosInstance from '@/domains/core/lib/axiosInstance'
+import { API_PATHS } from '@/config/config'
 import { ENABLE_CUSTOM_ATTRIBUTES } from '@/config/featureFlags'
 import { useAuth } from '@/domains/app/providers/AuthContext'
 import { usePriceMetadata } from '@/domains/products/components/hooks/usePriceMetadata'
@@ -245,7 +245,7 @@ function AttributesPage() {
   const { data: attributes, isLoading, error, refetch } = useQuery({
     queryKey: ['attributes'],
     queryFn: async () => {
-      const response = await axiosInstance.get(paths.attributes.root(), {
+      const response = await axiosInstance.get(API_PATHS.attributes.root(), {
         headers: {
           'Accept': 'application/json'
         }
@@ -258,7 +258,7 @@ function AttributesPage() {
   // Create attribute mutation
   const createMutation = useMutation({
     mutationFn: async (data: AttributeFormValues) => {
-      const response = await axiosInstance.post(paths.attributes.root(), data, {
+      const response = await axiosInstance.post(API_PATHS.attributes.root(), data, {
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json'
@@ -287,7 +287,7 @@ function AttributesPage() {
   // Update attribute mutation
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: AttributeFormValues }) => {
-      const response = await axiosInstance.patch(paths.attributes.byId(id), data, {
+      const response = await axiosInstance.patch(API_PATHS.attributes.byId(id), data, {
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json'
@@ -322,7 +322,7 @@ function AttributesPage() {
         throw new Error('Permission denied')
       }
       
-      await axiosInstance.delete(paths.attributes.byId(id), {
+      await axiosInstance.delete(API_PATHS.attributes.byId(id), {
         headers: {
           'Accept': 'application/json'
         }

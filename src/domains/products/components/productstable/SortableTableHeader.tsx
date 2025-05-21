@@ -7,7 +7,7 @@ import {
   ArrowUp,
   ArrowDown,
 } from "lucide-react";
-import type { Product } from "@/services/productService";
+import type { Product } from "@/domains/products/services/productService";
 import { config } from "@/config/config";
 
 /**

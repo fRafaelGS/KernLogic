@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import organizationService, { Organization } from '@/services/organizationService'
+import organizationService, { Organization } from '@/domains/organization/services/organizationService'
 
 /**
  * Hook for accessing organization data including default locale and channel settings

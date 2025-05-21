@@ -9,7 +9,7 @@ import { RadioGroup, RadioGroupItem } from '@/domains/core/components/ui/radio-g
 import { Label } from '@/domains/core/components/ui/label';
 import { ImportMode } from '@/domains/imports/components/StepImportMode';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/domains/core/components/ui/tooltip';
-import { DuplicateStrategy } from '@/services/importService';
+import { DuplicateStrategy } from '@/domains/imports/services/importService';
 import { config } from '@/config/config';
 
 // Define the structure type

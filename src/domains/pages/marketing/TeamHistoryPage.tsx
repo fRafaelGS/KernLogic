@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
-import { fetchAuditLogs, AuditLogEntry } from '@/services/teamService';
+import { fetchAuditLogs, AuditLogEntry } from '@/domains/organization/services/teamService';
 import { formatDistanceToNow, format, isToday, isYesterday, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 import { 

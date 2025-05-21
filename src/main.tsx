@@ -1,10 +1,10 @@
 import React, { ErrorInfo } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from '@/domains/app/App'
-import './index.css'
+import './domains/core/styles/index.css'
 
 // Import i18n (must be imported before any component that uses it)
-import './i18n'
+import './domains/core/i18n/i18n'
 
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },

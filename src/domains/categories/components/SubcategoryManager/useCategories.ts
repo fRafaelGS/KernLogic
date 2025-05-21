@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import * as categoryService from '@/services/categoryService';
-import { Category, TreeNode } from '@/types/categories';
+import * as categoryService from '@/domains/categories/services/categoryService';
+import { Category, TreeNode } from '@/domains/products/types/categories';
 import { toast } from 'sonner';
 
 // Constants for query keys

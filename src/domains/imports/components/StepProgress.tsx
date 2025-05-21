@@ -4,7 +4,7 @@ import { Progress } from '@/domains/core/components/ui/progress';
 import { Button } from '@/domains/core/components/ui/button';
 import { useToast } from '@/domains/core/components/ui/use-toast';
 import { CheckCircleIcon, XCircleIcon, FileIcon, AlertTriangleIcon, DownloadIcon } from 'lucide-react';
-import { getImport, ImportTask } from '@/services/importService';
+import { getImport, ImportTask } from '@/domains/imports/services/importService';
 import { useNavigate } from 'react-router-dom';
 import {
   Table,

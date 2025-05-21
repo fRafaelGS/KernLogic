@@ -4,8 +4,8 @@ import { format, formatDistanceToNow } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
 import { toast } from 'sonner';
 
-import { Product } from '@/services/productService';
-import { productService } from '@/services/productService';
+import { Product } from '@/domains/products/services/productService';
+import { productService } from '@/domains/products/services/productService';
 import { useAuth } from '@/domains/app/providers/AuthContext';
 
 import { Card, CardContent } from '@/domains/core/components/ui/card';

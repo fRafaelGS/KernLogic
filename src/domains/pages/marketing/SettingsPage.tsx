@@ -20,8 +20,7 @@ import { useAuth } from "@/domains/app/providers/AuthContext";
 import { toast } from "sonner";
 import { Loader2, AlertCircle, ExternalLink } from 'lucide-react';
 import axios from 'axios';
-import { API_URL } from '@/config/config';
-import { paths } from '@/lib/apiPaths';
+import { API_URL, API_PATHS } from '@/config/config';
 import { ENABLE_CUSTOM_ATTRIBUTES, ENABLE_ATTRIBUTE_GROUPS } from '@/config/featureFlags';
 import { OrganizationSettingsForm } from '@/domains/settings/components/OrganizationSettingsForm';
 import { FamilyListPage } from '@/domains/families/components/FamilyListPage';
@@ -160,7 +159,7 @@ const SettingsPage: React.FC = () => {
     setLoadingAttributes(true);
     try {
       const token = localStorage.getItem('access_token');
-      const response = await axios.get(paths.attributes.root(), {
+      const response = await axios.get(API_PATHS.attributes.root(), {
         headers: { Authorization: `Bearer ${token}` }
       });
       setAttributes(response.data);

@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Product, ProductAttribute } from "@/services/productService";
+import { Product, ProductAttribute } from "@/domains/products/services/productService";
 import { Badge } from "@/domains/core/components/ui/badge";
 import { cn } from "@/domains/core/lib/utils";
 import { TableRow, TableCell } from "@/domains/core/components/ui/table";

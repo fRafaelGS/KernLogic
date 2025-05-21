@@ -5,7 +5,7 @@ import { useAuth } from "@/domains/app/providers/AuthContext";
 import { Button } from "@/domains/core/components/ui/button";
 import { useState, useEffect } from "react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/domains/core/components/ui/tooltip";
-import { productService } from '@/services/productService'
+import { productService } from '@/domains/products/services/productService'
 
 // Define CSS variables for sidebar widths
 const SIDEBAR_CSS = {

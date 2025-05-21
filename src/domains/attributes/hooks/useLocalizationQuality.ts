@@ -1,7 +1,7 @@
 import { useQuery, UseQueryResult } from '@tanstack/react-query'
 import { ReportFiltersState } from '@/domains/reports/components/filters/ReportFilters'
 import { qkLocalizationQuality } from '@/domains/core/lib/query/queryKeys'
-import { getLocalizationQuality, LocalizationCoverageResponse } from '@/services/localizationService'
+import { getLocalizationQuality, LocalizationCoverageResponse } from '@/domains/organization/services/localizationService'
 import logger from '@/domains/core/lib/logger'
 
 /**

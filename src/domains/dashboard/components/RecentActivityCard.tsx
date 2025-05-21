@@ -1,5 +1,5 @@
 import React from 'react'
-import { Activity } from '@/services/dashboardService'
+import { Activity } from '@/domains/dashboard/services/dashboardService'
 import { Card, CardHeader, CardTitle, CardContent } from '@/domains/core/components/ui/card'
 import { Skeleton } from '@/domains/core/components/ui/skeleton'
 import { CalendarClock } from 'lucide-react'

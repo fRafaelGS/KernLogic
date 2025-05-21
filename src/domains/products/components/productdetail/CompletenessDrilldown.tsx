@@ -19,7 +19,7 @@ import {
 import { Progress } from "@/domains/core/components/ui/progress";
 import { Button } from "@/domains/core/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/domains/core/components/ui/tooltip";
-import { FieldCompletenessEntry } from '@/services/dashboardService';
+import { FieldCompletenessEntry } from '@/domains/dashboard/services/dashboardService';
 import { config } from '@/config/config';
 
 // Temporary compatibility layer during migration

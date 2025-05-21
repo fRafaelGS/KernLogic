@@ -7,12 +7,12 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/domains/core/lib/utils';
-import { Product, ProductAsset, productService, AssetBundle, QUERY_KEYS } from '@/services/productService';
-import axiosInstance from '@/lib/axiosInstance';
+import { Product, ProductAsset, productService, AssetBundle, QUERY_KEYS } from '@/domains/products/services/productService';
+import axiosInstance from '@/domains/core/lib/axiosInstance';
 import { useToast } from '@/domains/core/components/ui/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { useProductAssets } from '@/domains/products/components/hooks/useProductAssets';
-import { invalidateProductAndAssets } from '@/utils/queryInvalidation';
+import { invalidateProductAndAssets } from '@/domains/core/utils/query/queryInvalidation';
 import { config, API_ENDPOINTS } from '@/config/config';
 
 // UI Components
@@ -56,7 +56,7 @@ import { AssetCard } from '@/domains/products/components/productdetail/AssetCard
 import { useDownloadAsset } from '@/domains/products/components/hooks/useDownloadAsset'
 import { useBulkDownload } from '@/domains/products/components/hooks/useBulkDownload'
 import { BundleCard } from '@/domains/products/components/productdetail/BundleCard'
-import { assetTypeService } from '@/services/assetTypeService';
+import { assetTypeService } from '@/domains/products/services/assetTypeService';
 import { BulkDownloadToolbar } from '@/domains/products/components/productdetail/BulkDownloadToolbar';
 
 // Get product asset configuration

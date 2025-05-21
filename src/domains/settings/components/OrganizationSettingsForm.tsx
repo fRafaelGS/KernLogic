@@ -13,9 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader2 } from 'lucide-react'
 import { useAuth } from '@/domains/app/providers/AuthContext'
 import { useOrgSettings } from '@/domains/organization/hooks/useOrgSettings'
-import api from '@/services/api'
+import api from '@/domains/core/services/api'
 import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription, DialogClose } from '@/domains/core/components/ui/dialog'
-import channelService from '@/services/channelService'
+import channelService from '@/domains/organization/services/channelService'
 import { AddLocaleModal } from '@/domains/settings/components/AddLocaleModal'
 import { config } from '@/config/config'
 

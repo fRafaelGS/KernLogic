@@ -9,8 +9,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/doma
 import { Alert, AlertDescription, AlertTitle } from '@/domains/core/components/ui/alert';
 import { useImportFieldSchema } from '@/domains/imports/hooks/useImportFieldSchema';
 import { Skeleton } from '@/domains/core/components/ui/skeleton';
-import { Mapping } from '@/types/import';
-import { ImportFieldSchemaEntry, getFamilyAttributes } from '@/services/importService';
+import { Mapping } from '@/domains/imports/types/import';
+import { ImportFieldSchemaEntry, getFamilyAttributes } from '@/domains/imports/services/importService';
 
 interface StepMappingProps {
   sourceHeaders: string[];

@@ -1,7 +1,7 @@
 import { useQuery, UseQueryResult } from '@tanstack/react-query'
 import { ReportFiltersState } from '@/domains/reports/components/filters/ReportFilters'
 import { qkMissingAttributesHeatmap } from '@/domains/core/lib/query/queryKeys'
-import { getMissingAttributesHeatmap, HeatmapData } from '@/services/localizationService'
+import { getMissingAttributesHeatmap, HeatmapData } from '@/domains/organization/services/localizationService'
 import logger from '@/domains/core/lib/logger'
 
 /**

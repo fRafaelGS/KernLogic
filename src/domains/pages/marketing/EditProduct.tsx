@@ -2,7 +2,7 @@ import React from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ProductForm } from '@/domains/products/components/ProductForm';
-import { productService } from '@/services/productService';
+import { productService } from '@/domains/products/services/productService';
 import { toast } from 'sonner';
 import { Skeleton } from "@/domains/core/components/ui/skeleton";
 import { AlertCircle, ChevronRight, ArrowLeft } from 'lucide-react';

@@ -6,7 +6,7 @@ import { FileUpload } from "@/domains/core/components/upload/FileUpload";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/domains/core/components/ui/card";
 import { DatabaseIcon, PackageIcon, TagIcon, FileTextIcon } from "lucide-react";
 import { Button } from "@/domains/core/components/ui/button";
-import { productService } from "@/services/productService";
+import { productService } from "@/domains/products/services/productService";
 import { useNavigate } from "react-router-dom";
 
 const Index = () => {

@@ -6,7 +6,7 @@ import { CardTitle } from '@/domains/core/components/ui/card'
 import { CardContent } from '@/domains/core/components/ui/card'
 import { CardDescription } from '@/domains/core/components/ui/card'
 import { Download, Trash2 } from 'lucide-react'
-import type { AssetBundle, ProductAsset } from '@/services/productService'
+import type { AssetBundle, ProductAsset } from '@/domains/products/services/productService'
 import React from 'react'
 import { config } from '@/config/config'
 

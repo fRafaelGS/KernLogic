@@ -1,11 +1,13 @@
 import { useAuth } from '@/domains/app/providers/AuthContext'
 import { useQuery } from '@tanstack/react-query'
-import api from '@/services/api'
-import { Locale } from '@/services/localeService'
-import localeService from '@/services/localeService'
-import { Channel } from '@/services/channelService'
-import channelService from '@/services/channelService'
-import { paths } from '@/lib/apiPaths'
+import axiosInstance from '@/domains/core/lib/axiosInstance'
+import { toast } from 'sonner'
+import { Organization } from '@/domains/organization/services/organizationService'
+import { Locale } from '@/domains/organization/services/localeService'
+import localeService from '@/domains/organization/services/localeService'
+import { Channel } from '@/domains/organization/services/channelService'
+import channelService from '@/domains/organization/services/channelService'
+import { API_PATHS } from '@/config/config'
 import useOrganization from '@/domains/organization/hooks/useOrganization'
 
 interface OrgSettings {
@@ -31,7 +33,7 @@ export function useOrgSettings() {
     queryKey: ['organization', orgId],
     queryFn: async () => {
       if (!orgId) throw new Error('No organization ID available')
-      const response = await api.get(`/api/organizations/${orgId}/`)
+      const response = await axiosInstance.get(API_PATHS.organizations.byId(Number(orgId)))
       return response.data
     },
     enabled: !!orgId && !orgFromHook, // Only fetch if not already loaded by useOrganization

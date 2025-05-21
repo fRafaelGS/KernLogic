@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { productService } from '@/services/productService'
+import { productService } from '@/domains/products/services/productService'
 import { toast } from 'sonner'
 
 interface SetPrimaryAssetOptions {

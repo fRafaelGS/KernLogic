@@ -1,5 +1,5 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
-import { productService, PaginatedResponse, Product } from '@/services/productService'
+import { productService, PaginatedResponse, Product } from '@/domains/products/services/productService'
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/domains/app/providers/AuthContext'
 

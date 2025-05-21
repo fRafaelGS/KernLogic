@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Product, productService, ProductAttribute, ProductAsset, ProductActivity, PRODUCTS_API_URL as PRODUCTS_PATH, ProductPrice } from '@/services/productService';
-import { IncompleteProduct, dashboardService } from '@/services/dashboardService';
+import { Product, productService, ProductAttribute, ProductAsset, ProductActivity, PRODUCTS_API_URL as PRODUCTS_PATH, ProductPrice } from '@/domains/products/services/productService';
+import { IncompleteProduct, dashboardService } from '@/domains/dashboard/services/dashboardService';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/domains/core/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/domains/core/components/ui/card';
 import { Progress } from '@/domains/core/components/ui/progress';
@@ -14,7 +14,7 @@ import { Alert, AlertDescription } from '@/domains/core/components/ui/alert';
 import { useAuth } from '@/domains/app/providers/AuthContext';
 
 import axios from 'axios';
-import axiosInstance from '@/lib/axiosInstance';
+import axiosInstance from '@/domains/core/lib/axiosInstance';
 import { cn } from '@/domains/core/lib/utils';
 // Import the CompletenessDrilldown component
 import { CompletenessDrilldown } from '@/domains/products/components/productdetail/CompletenessDrilldown';
@@ -31,8 +31,8 @@ import { ProductAttributesPanel } from '@/domains/products/components/ProductAtt
 import { ENABLE_CUSTOM_ATTRIBUTES } from '@/config/featureFlags'
 import { Badge } from '@/domains/core/components/ui/badge'
 import { FieldStatusModal } from '@/domains/products/components/productstable/FieldStatusModal'
-import { normalizeCategory } from '@/types/categories'
-import { getAssetUrl } from '@/utils/isImageAsset'
+import { normalizeCategory } from '@/domains/products/types/categories'
+import { getAssetUrl } from '@/domains/products/utils/isImageAsset'
 import { PriceTab } from '@/domains/products/components/productdetail/PriceTab'
 import { LocaleCode } from '@/services/types'
 import { useOrgSettings } from '@/domains/organization/hooks/useOrgSettings'

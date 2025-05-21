@@ -6,7 +6,7 @@ import {
   getFamilySchemaFields,
   getFamilyAttributes,
   ImportFieldSchemaEntry
-} from '@/services/importService'
+} from '@/domains/imports/services/importService'
 
 // Combined hook to fetch all schema types at once
 export const useImportFieldSchema = () => {

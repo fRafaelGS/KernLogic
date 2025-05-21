@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { Product } from "@/services/productService";
+import type { Product } from "@/domains/products/services/productService";
 
 /** Extract **all** category names (roots + children) for the dropdown */
 export function useUniqueCategories(products: Product[]) {

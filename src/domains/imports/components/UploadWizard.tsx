@@ -15,11 +15,11 @@ import {
   DuplicateStrategy,
   ImportOptions,
   ImportFieldSchemaEntry
-} from '@/services/importService';
+} from '@/domains/imports/services/importService';
 import { 
   useImportFieldSchema, 
 } from '../hooks/useImportFieldSchema';
-import { Mapping } from '@/types/import';
+import { Mapping } from '@/domains/imports/types/import';
 import { config } from '@/config/config';
 
 // Define a type for the current step of the wizard

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import axiosInstance from '@/lib/axiosInstance'
+import axiosInstance from '@/domains/core/lib/axiosInstance'
 import { toast } from 'sonner'
 import type { Attribute, AttributesResponse, UpdateAttributePayload, AttributeGroup } from '@/domains/products/components/ProductAttributesPanel/types'
 import { API_ENDPOINTS } from '@/config/config'

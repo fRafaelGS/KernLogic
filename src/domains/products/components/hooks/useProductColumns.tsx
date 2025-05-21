@@ -27,15 +27,15 @@ import {
 } from "@/domains/core/components/ui/hover-card";
 import type { OnChangeValue } from "react-select";
 
-import { useFamilies } from '@/domains/products/services/familyApi';
-import { normalizeFamily } from '@/utils/familyNormalizer';
+import { useFamilies } from '@/domains/families/services/familyApi';
+import { normalizeFamily } from '@/domains/core/utils/familyNormalizer';
 import { FamilyDisplay } from '@/domains/products/components/FamilyDisplay';
 
 import {
   Product,
   productService,
-} from "@/services/productService";
-import { Category } from '@/types/categories';
+} from "@/domains/products/services/productService";
+import { Category } from '@/domains/products/types/categories';
 import {
   Tooltip,
   TooltipContent,
@@ -43,8 +43,8 @@ import {
 } from "@/domains/core/components/ui/tooltip"
 import { CategoryTreeSelect } from '@/domains/categories/components/CategoryTreeSelect';
 import CreatableSelect from 'react-select/creatable'
-import '@/styles/editable-cell.scss'
-import { pickPrimaryImage } from '@/utils/images';
+import '@/domains/core/styles/editable-cell.scss'
+import { pickPrimaryImage } from '@/domains/products/utils/images';
 
 
 // Helper function to safely format price amounts

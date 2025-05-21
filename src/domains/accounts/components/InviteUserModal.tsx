@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/domains/app/providers/AuthContext';
-import { inviteMember, TeamMember } from '@/services/teamService';
-import { Role } from '@/types/team';
+import { inviteMember, TeamMember } from '@/domains/organization/services/teamService';
+import { Role } from '@/domains/organization/types/team';
 import {
   Dialog,
   DialogContent,

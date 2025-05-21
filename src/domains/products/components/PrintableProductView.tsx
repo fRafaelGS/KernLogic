@@ -1,7 +1,7 @@
 import React from 'react';
 import { CollapsibleSection } from '@/domains/core/components/ui/CollapsibleSection';
 import { format } from 'date-fns';
-import { Product, ProductAsset, ProductAttribute, ProductAttributeGroup } from '@/services/productService';
+import { Product, ProductAsset, ProductAttribute, ProductAttributeGroup } from '@/domains/products/services/productService';
 import { cn } from '@/domains/core/lib/utils';
 
 interface PrintableProductViewProps {

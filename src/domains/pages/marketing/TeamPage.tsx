@@ -32,7 +32,7 @@ import ManageControls from '@/domains/core/components/ManageControls';
 import RoleDescriptionTooltip from '@/domains/accounts/components/RoleDescriptionTooltip';
 import { Link } from 'react-router-dom';
 import { History, Search, UserPlus, Users } from 'lucide-react';
-import { fetchRoles, fetchTeamMembers, fetchUserProductActions } from '@/services/teamService';
+import { fetchRoles, fetchTeamMembers, fetchUserProductActions } from '@/domains/organization/services/teamService';
 import { useDebounce } from '@/domains/core/hooks/useDebounce';
 import { PermissionGuard } from '@/domains/core/components/PermissionGuard';
 

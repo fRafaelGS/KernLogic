@@ -5,7 +5,7 @@ import {
   QueryFunctionContext,
   QueryFunction
 } from '@tanstack/react-query';
-import axiosInstance from '@/lib/axiosInstance';
+import axiosInstance from '@/domains/core/lib/axiosInstance';
 import { useAuth } from '@/domains/app/providers/AuthContext';
 
 /**

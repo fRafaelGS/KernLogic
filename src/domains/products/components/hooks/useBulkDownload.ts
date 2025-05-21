@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import axiosInstance from '@/lib/axiosInstance'
+import axiosInstance from '@/domains/core/lib/axiosInstance'
 import { toast } from '@/domains/core/components/ui/use-toast'
 
 export function useBulkDownload() {

@@ -47,7 +47,7 @@ import {
   TagIcon,
   FolderIcon,
 } from "lucide-react";
-import { Product, productService, ProductAttribute, ProductAsset } from "@/services/productService";
+import { Product, productService, ProductAttribute, ProductAsset } from "@/domains/products/services/productService";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/domains/core/components/ui/select";
 import { cn } from "@/domains/core/lib/utils";
@@ -72,11 +72,11 @@ import { useUniqueTags } from "@/domains/products/components/hooks/useProductDer
 import { useProductColumns } from "@/domains/products/components/hooks/useProductColumns";    
 import ProductRowDetails from "@/domains/products/components/productstable/ProductRowDetails";
 import { AnimatePresence } from 'framer-motion';
-import { Category as CategoryType, Category as ProductCategory } from '@/types/categories';
+import { Category as CategoryType, Category as ProductCategory } from '@/domains/products/types/categories';
 import { SubcategoryManager } from '@/domains/categories/components/SubcategoryManager/SubcategoryManager';
 import { ProductGrid } from '@/domains/products/components/productstable/ProductGrid'
 import { useOrgSettings } from '@/domains/organization/hooks/useOrgSettings'
-import { useFamilies } from "@/domains/products/services/familyApi";
+import { useFamilies } from "@/domains/families/services/familyApi";
 import { useFetchProducts } from "@/domains/products/components/hooks/useFetchProducts";
 import { config } from "@/config/config";
 import { ROUTES } from "@/config/routes";

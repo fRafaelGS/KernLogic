@@ -2,7 +2,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/domains/core/components/ui/select';
 import { Skeleton } from '@/domains/core/components/ui/skeleton';
-import localeService, { Locale } from '@/services/localeService';
+import localeService, { Locale } from '@/domains/organization/services/localeService';
 
 interface LocaleFilterProps {
   value: string | undefined;

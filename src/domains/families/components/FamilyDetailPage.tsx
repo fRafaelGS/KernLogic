@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { useFamily } from '@/domains/products/services/familyApi'
+import { useFamily } from '@/domains/families/services/familyApi'
 import { Button } from '@/domains/core/components/ui/button'
 import { 
   Table, 
@@ -12,7 +12,7 @@ import {
 } from '@/domains/core/components/ui/table'
 import { Skeleton } from '@/domains/core/components/ui/skeleton'
 import { ArrowLeft, PencilIcon, CheckIcon, XIcon } from 'lucide-react'
-import { formatDate } from '@/utils/date'
+import { formatDate } from '@/domains/core/utils/date'
 import ErrorBoundary from '@/domains/core/components/ErrorBoundary'
 
 export function FamilyDetailPage() {

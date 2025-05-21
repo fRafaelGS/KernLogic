@@ -6,7 +6,7 @@ import { Label } from '@/domains/core/components/ui/label';
 import { BeakerIcon, User, Mail, LockKeyhole, ArrowRight, AlertCircle, Building } from 'lucide-react';
 import { useAuth } from "@/domains/app/providers/AuthContext";
 import { toast } from "sonner";
-import api from '@/services/api';
+import api from '@/domains/core/services/api';
 import axios from 'axios';
 import { API_CHECK_USER } from '@/config/config'
 

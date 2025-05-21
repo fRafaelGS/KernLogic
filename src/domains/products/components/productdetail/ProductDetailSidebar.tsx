@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
-import { Product, productService, ProductAsset, ProductPrice, QUERY_KEYS } from '@/services/productService';
+import { Product, productService, ProductAsset, ProductPrice, QUERY_KEYS } from '@/domains/products/services/productService';
 import { Badge } from '@/domains/core/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/domains/core/components/ui/tooltip';
 import { Copy, ImageIcon, AlertCircle, UploadCloud, MoreHorizontal } from 'lucide-react';
@@ -16,15 +16,15 @@ import { CategoryModal } from '@/domains/products/components/productstable/Categ
 import { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbSeparator } from '@/domains/core/components/ui/breadcrumb';
 import { formatCurrency } from '@/domains/core/lib/utils';
 import { CategoryDisplay } from '@/domains/categories/components/CategoryDisplay';
-import { normalizeCategory, Category } from '@/types/categories';
+import { normalizeCategory, Category } from '@/domains/products/types/categories';
 import { CategoryTreeSelect } from '@/domains/categories/components/CategoryTreeSelect';
 import { useQueryClient } from '@tanstack/react-query';
-import { isImageAsset } from '@/utils/isImageAsset';
-import { pickPrimaryImage } from '@/utils/images';
+import { isImageAsset } from '@/domains/products/utils/isImageAsset';
+import { pickPrimaryImage } from '@/domains/products/utils/images';
 import { useNavigate } from 'react-router-dom';
 import { useProductAssets } from '@/domains/products/components/hooks/useProductAssets';
-import { assetTypeService } from '@/services/assetTypeService';
-import { invalidateProductAndAssets } from '@/utils/queryInvalidation';
+import { assetTypeService } from '@/domains/products/services/assetTypeService';
+import { invalidateProductAndAssets } from '@/domains/core/utils/query/queryInvalidation';
 
 // Mock user permissions - in a real app, these would come from auth context
 const hasEditPermission = true;

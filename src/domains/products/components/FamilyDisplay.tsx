@@ -1,9 +1,9 @@
 import React from 'react'
 import { Badge } from '@/domains/core/components/ui/badge'
-import { normalizeFamily, NormalizedFamily } from '@/utils/familyNormalizer'
+import { normalizeFamily, NormalizedFamily } from '@/domains/core/utils/familyNormalizer'
 import { Link } from 'react-router-dom'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/domains/core/components/ui/tooltip'
-import { useFamilies } from '@/domains/products/services/familyApi'
+import { useFamilies } from '@/domains/families/services/familyApi'
 
 interface FamilyDisplayProps {
   family: any // Accept any family data format

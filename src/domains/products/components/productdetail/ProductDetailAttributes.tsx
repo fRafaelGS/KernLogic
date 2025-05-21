@@ -10,7 +10,7 @@ import { Badge } from '@/domains/core/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/domains/core/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/domains/core/components/ui/tooltip';
 import { toast } from 'sonner';
-import { Product } from '@/services/productService';
+import { Product } from '@/domains/products/services/productService';
 
 interface Attribute {
   id: string;

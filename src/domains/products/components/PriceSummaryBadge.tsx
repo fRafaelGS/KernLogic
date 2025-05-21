@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Badge } from '@/domains/core/components/ui/badge'
-import { Product, ProductPrice, productService } from '@/services/productService'
-import { formatPrice } from '@/utils/formatPrice'
+import { Product, ProductPrice, productService } from '@/domains/products/services/productService'
+import { formatPrice } from '@/domains/products/utils/formatPrice'
 import {
   Tooltip,
   TooltipContent,

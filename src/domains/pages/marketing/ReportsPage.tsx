@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import axiosInstance from '@/lib/axiosInstance';
-import { paths } from '@/lib/apiPaths';
+import axiosInstance from '@/domains/core/lib/axiosInstance';
+import { API_PATHS } from '@/config/config';
 import { qkReportThemes, qkCompleteness } from '@/domains/core/lib/query/queryKeys';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/domains/core/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/domains/core/components/ui/tabs';
@@ -37,7 +37,7 @@ import { config } from '@/config/config';
 
 // Helper to fetch dashboard summary (overall completeness & missing fields)
 const fetchDashboardSummary = () =>
-  axiosInstance.get(paths.dashboard() + 'summary/').then(res => res.data);
+  axiosInstance.get(API_PATHS.dashboard() + 'summary/').then(res => res.data);
 
 interface Theme {
   slug: string;
@@ -97,7 +97,7 @@ const CompletenessReport: React.FC = () => {
   // Fetch categories to resolve IDs to names
   const { data: categories } = useQuery({
     queryKey: ['categories'],
-    queryFn: () => axiosInstance.get<Category[]>(paths.categories.root() + '?as_tree=false').then(res => res.data),
+    queryFn: () => axiosInstance.get<Category[]>(API_PATHS.categories.root() + '?as_tree=false').then(res => res.data),
     staleTime: config.reports.staleTimes.themes,
   });
 
@@ -128,8 +128,8 @@ const CompletenessReport: React.FC = () => {
       
       const queryString = queryParams.toString();
       const url = queryString 
-        ? `${paths.analytics.completeness()}?${queryString}`
-        : paths.analytics.completeness();
+        ? `${API_PATHS.analytics.completeness()}?${queryString}`
+        : API_PATHS.analytics.completeness();
       
       if (config.debug.enableLogs) {
         console.log('Fetching completeness data with URL:', url);
@@ -566,7 +566,7 @@ const ReportsPage: React.FC = () => {
   const { data: fetchedThemes = [], isLoading, error } = useQuery({
     queryKey: qkReportThemes(),
     queryFn: () =>
-      axiosInstance.get<Theme[]>(paths.reports.themes()).then(res => res.data),
+      axiosInstance.get<Theme[]>(API_PATHS.reports.themes()).then(res => res.data),
     staleTime: config.reports.staleTimes.themes
   });
 

@@ -11,8 +11,8 @@ import {
 import { Button } from '@/domains/core/components/ui/button';
 import { toast } from 'sonner';
 import { useAuth } from '@/domains/app/providers/AuthContext';
-import { fetchRoles, updateMemberRole } from '@/services/teamService';
-import { Role } from '@/types/team';
+import { fetchRoles, updateMemberRole } from '@/domains/organization/services/teamService';
+import { Role } from '@/domains/organization/types/team';
 
 interface SelectRoleModalProps {
   membershipId: string | number;

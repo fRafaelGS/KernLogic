@@ -18,7 +18,7 @@ import {
   ChevronDown,
   ChevronRight
 } from 'lucide-react';
-import { FieldCompletenessEntry } from '@/services/dashboardService';
+import { FieldCompletenessEntry } from '@/domains/dashboard/services/dashboardService';
 import { useDebounce } from '@/domains/core/hooks/useDebounce';
 
 interface FieldStatusModalProps {

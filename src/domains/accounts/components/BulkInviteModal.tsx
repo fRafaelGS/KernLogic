@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
-import { bulkInviteMembers, TeamMember } from '@/services/teamService';
-import { Role } from '@/types/team';
+import { bulkInviteMembers, TeamMember } from '@/domains/organization/services/teamService';
+import { Role } from '@/domains/organization/types/team';
 import {
   Dialog,
   DialogContent,

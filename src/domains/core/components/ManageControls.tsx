@@ -9,7 +9,7 @@ import {
 } from '@/domains/core/components/ui/dropdown-menu';
 import { Button } from '@/domains/core/components/ui/button';
 import { MoreHorizontal } from 'lucide-react';
-import { removeMember, resendInvite } from '@/services/teamService';
+import { removeMember, resendInvite } from '@/domains/organization/services/teamService';
 import { toast } from 'sonner';
 import SelectRoleModal from '@/domains/accounts/components/SelectRoleModal';
 import { useAuth } from '@/domains/app/providers/AuthContext';

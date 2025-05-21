@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { useFamilies, useDeleteFamily } from '@/domains/products/services/familyApi'
-import { Family } from '@/types/family'
+import { useFamilies, useDeleteFamily } from '@/domains/families/services/familyApi'
+import { Family } from '@/domains/families/types/family'
 import { Button } from '@/domains/core/components/ui/button'
 import { Input } from '@/domains/core/components/ui/input'
 import { 
@@ -35,7 +35,7 @@ import {
   EyeIcon,
   SearchIcon 
 } from 'lucide-react'
-import { formatDate } from '@/utils/date'
+import { formatDate } from '@/domains/core/utils/date'
 import ErrorBoundary from '@/domains/core/components/ErrorBoundary'
 import { config } from '@/config/config'
 

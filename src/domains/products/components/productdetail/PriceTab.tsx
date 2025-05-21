@@ -35,7 +35,7 @@ import { Skeleton } from '@/domains/core/components/ui/skeleton'
 import { useToast } from '@/domains/core/components/ui/use-toast'
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/domains/core/components/ui/alert-dialog'
 import { usePriceMetadata } from '@/domains/products/components/hooks/usePriceMetadata'
-import { productService, ProductPrice } from '@/services/productService'
+import { productService, ProductPrice } from '@/domains/products/services/productService'
 import { useQueryClient } from '@tanstack/react-query'
 
 interface PriceTabProps {

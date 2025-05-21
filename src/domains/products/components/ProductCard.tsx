@@ -1,14 +1,14 @@
 import React from 'react'
-import { Product } from '@/services/productService'
+import { Product } from '@/domains/products/services/productService'
 import { Card, CardContent, CardFooter } from '@/domains/core/components/ui/card'
 import { Badge } from '@/domains/core/components/ui/badge'
 import { useNavigate } from 'react-router-dom'
-import { pickPrimaryImage } from '@/utils/images'
+import { pickPrimaryImage } from '@/domains/products/utils/images'
 import { Avatar, AvatarFallback, AvatarImage } from '@/domains/core/components/ui/avatar'
 import { getCategoryName } from '@/domains/core/lib/utils'
 import { FamilyDisplay } from '@/domains/products/components/FamilyDisplay'
-import { useFamilies } from '@/domains/products/services/familyApi'
-import { normalizeFamily } from '@/utils/familyNormalizer'
+import { useFamilies } from '@/domains/families/services/familyApi'
+import { normalizeFamily } from '@/domains/core/utils/familyNormalizer'
 
 interface ProductCardProps {
   product: Product

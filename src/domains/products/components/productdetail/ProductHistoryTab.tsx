@@ -4,7 +4,7 @@ import { Card } from '@/domains/core/components/ui/card';
 import { Button } from '@/domains/core/components/ui/button';
 import { useToast } from '@/domains/core/components/ui/use-toast';
 import { Skeleton } from '@/domains/core/components/ui/skeleton';
-import { productService, ProductEvent } from '@/services/productService';
+import { productService, ProductEvent } from '@/domains/products/services/productService';
 import { Badge } from '@/domains/core/components/ui/badge';
 import { Select, SelectItem, SelectTrigger, SelectValue, SelectContent } from '@/domains/core/components/ui/select';
 import { DatePickerWithRange } from '@/domains/core/components/ui/date-range-picker';

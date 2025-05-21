@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { Product, ProductAttribute } from "@/services/productService";
 import { Badge } from "@/domains/core/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { cn } from "@/domains/core/lib/utils";
 import { TableRow, TableCell } from "@/domains/core/components/ui/table";
 import { motion } from 'framer-motion';
 import { Check, X } from 'lucide-react'

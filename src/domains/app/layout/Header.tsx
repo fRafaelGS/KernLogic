@@ -1,3 +1,4 @@
+import React from "react";
 import { Button } from "@/domains/core/components/ui/button";
 import { Input } from "@/domains/core/components/ui/input";
 import { 
@@ -21,9 +22,9 @@ import {
   DropdownMenuTrigger,
 } from "@/domains/core/components/ui/dropdown-menu";
 import { useState } from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/domains/core/lib/utils";
 import { formatDistanceToNow } from 'date-fns';
-import Avatar from "@/components/Avatar";
+import { AvatarBadge } from "@/domains/core/components/ui/AvatarBadge";
 
 export function Header() {
   const { user, logout, notifications, unreadCount, markAllAsRead } = useAuth();
@@ -159,11 +160,10 @@ export function Header() {
               className="flex items-center gap-2 text-enterprise-700 hover:bg-enterprise-50 px-2 md:px-3"
             >
               <div className="relative">
-                <Avatar 
+                <AvatarBadge 
                   size="sm"
                   name={user?.name || 'User'}
-                  avatarUrl={user?.avatar_url}
-                  showUploadButton={false}
+                  src={user?.avatar_url}
                 />
               </div>
               <div className="hidden md:block text-left">

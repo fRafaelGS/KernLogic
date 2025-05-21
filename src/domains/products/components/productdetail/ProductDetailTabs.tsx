@@ -15,7 +15,7 @@ import { useAuth } from '@/domains/app/providers/AuthContext';
 
 import axios from 'axios';
 import axiosInstance from '@/lib/axiosInstance';
-import { cn } from '@/lib/utils';
+import { cn } from '@/domains/core/lib/utils';
 // Import the CompletenessDrilldown component
 import { CompletenessDrilldown } from '@/domains/products/components/productdetail/CompletenessDrilldown';
 // Add lodash type declaration at the top
@@ -35,7 +35,7 @@ import { normalizeCategory } from '@/types/categories'
 import { getAssetUrl } from '@/utils/isImageAsset'
 import { PriceTab } from '@/domains/products/components/productdetail/PriceTab'
 import { LocaleCode } from '@/services/types'
-import { useOrgSettings } from '@/hooks/useOrgSettings'
+import { useOrgSettings } from '@/domains/organization/hooks/useOrgSettings'
 import { config, API_ENDPOINTS, API_CURRENCIES } from '@/config/config'
 
 // ====== ATTRIBUTES INTERFACES (EXACT MATCH TO SPEC) ======

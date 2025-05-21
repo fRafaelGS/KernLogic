@@ -6,7 +6,7 @@ import { useToast } from '@/domains/core/components/ui/use-toast';
 import { Button } from '@/domains/core/components/ui/button';
 import { Input } from '@/domains/core/components/ui/input';
 import * as Popover from '@radix-ui/react-popover';
-import { useDebounce } from '@/hooks/useDebounce';
+import { useDebounce } from '@/domains/core/hooks/useDebounce';
 import '@/styles/category-tree-select.css';
 
 interface CategoryTreeSelectProps {

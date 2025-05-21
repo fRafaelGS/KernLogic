@@ -1,5 +1,5 @@
 import React from 'react';
-import { useProductPrice, ProductWithPrice } from '@/hooks/useProductPrice';
+import { useProductPrice, ProductWithPrice } from '@/domains/products/components/hooks/useProductPrice';
 import { Badge } from '@/domains/core/components/ui/badge';
 import { Card, CardContent, CardFooter } from '@/domains/core/components/ui/card';
 

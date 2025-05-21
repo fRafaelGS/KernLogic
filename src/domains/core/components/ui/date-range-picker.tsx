@@ -2,7 +2,7 @@ import * as React from "react";
 import { format } from "date-fns";
 import { Calendar as CalendarIcon } from "lucide-react";
 import * as PopoverPrimitive from "@radix-ui/react-popover";
-import { cn } from "@/lib/utils";
+import { cn } from "@/domains/core/lib/utils";
 import { Button } from "@/domains/core/components/ui/button";
 import { DateRange } from "react-day-picker";
 

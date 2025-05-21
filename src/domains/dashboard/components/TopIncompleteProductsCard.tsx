@@ -19,7 +19,7 @@ import { Button } from '@/domains/core/components/ui/button'
 import { Progress } from '@/domains/core/components/ui/progress'
 import { Skeleton } from '@/domains/core/components/ui/skeleton'
 import { AlertCircle, ArrowUpRight, RefreshCcw } from 'lucide-react'
-import { useTopIncompleteProducts } from '@/hooks/useTopIncompleteProducts'
+import { useTopIncompleteProducts } from '@/domains/dashboard/hooks/useTopIncompleteProducts'
 
 interface TopIncompleteProductsCardProps {
   className?: string

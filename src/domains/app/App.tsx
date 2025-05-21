@@ -5,34 +5,34 @@ import { Toaster } from "@/domains/core/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/domains/app/providers/AuthContext";
 import { QueryClientProvider } from "@/domains/app/providers/QueryClientProvider";
 import { DashboardLayout } from '@/domains/app/layout/DashboardLayout';
-import { DashboardPage } from '@/pages/DashboardPage';
-import { NewProduct } from '@/pages/NewProduct';
-import { EditProduct } from '@/pages/EditProduct';
-import { ProductDetail } from '@/pages/ProductDetail';
+import { DashboardPage } from '@/domains/pages/marketing/DashboardPage';
+import { NewProduct } from '@/domains/pages/marketing/NewProduct';
+import { EditProduct } from '@/domains/pages/marketing/EditProduct';
+import { ProductDetail } from '@/domains/pages/marketing/ProductDetail';
 import LoginPage from '@/domains/accounts/pages/LoginPage';
 import RegisterPage from '@/domains/accounts/pages/RegisterPage';
 import OrganizationRegisterPage from '@/domains/accounts/pages/OrganizationRegisterPage';
-import ProductsPage from "@/pages/ProductsPage";
-import AttributesPage from '@/pages/AttributesPage';
-import AttributeGroupsPage from '@/pages/AttributeGroupsPage';
+import ProductsPage from "@/domains/pages/marketing/ProductsPage";
+import AttributesPage from '@/domains/pages/marketing/AttributesPage';
+import AttributeGroupsPage from '@/domains/pages/marketing/AttributeGroupsPage';
 import { ENABLE_CUSTOM_ATTRIBUTES, ENABLE_ATTRIBUTE_GROUPS } from '@/config/featureFlags';
 import AdminOnly from '@/domains/accounts/components/AdminOnly'
-import { FamilyFormPage } from '@/features/families/FamilyFormPage'
-import { FamilyDetailPage } from '@/features/families/FamilyDetailPage'
+import { FamilyFormPage } from '@/domains/families/components/FamilyFormPage'
+import { FamilyDetailPage } from '@/domains/families/components/FamilyDetailPage'
 
 // Marketing Pages
-import LandingPage from "@/pages/marketing/LandingPage";
-import PricingPage from "@/pages/marketing/PricingPage";
-import ProductPage from "@/pages/marketing/ProductPage";
+import LandingPage from "@/domains/pages/marketing/LandingPage";
+import PricingPage from "@/domains/pages/marketing/PricingPage";
+import ProductPage from "@/domains/pages/marketing/ProductPage";
 
 // App Pages
-import ReportsPage from '@/pages/ReportsPage';
-import UploadPage from '@/pages/UploadPage';
-import DocumentationPage from '@/pages/DocumentationPage';
-import TeamPage from '@/pages/TeamPage';
-import SettingsPage from '@/pages/SettingsPage';
-import TeamHistoryPage from '@/pages/TeamHistoryPage';
-import AcceptInvitePage from '@/pages/AcceptInvitePage';
+import ReportsPage from '@/domains/pages/marketing/ReportsPage';
+import UploadPage from '@/domains/pages/marketing/UploadPage';
+import DocumentationPage from '@/domains/pages/marketing/DocumentationPage';
+import TeamPage from '@/domains/pages/marketing/TeamPage';
+import SettingsPage from '@/domains/pages/marketing/SettingsPage';
+import TeamHistoryPage from '@/domains/pages/marketing/TeamHistoryPage';
+import AcceptInvitePage from '@/domains/pages/marketing/AcceptInvitePage';
 import SetPasswordPage from '@/domains/accounts/pages/SetPasswordPage';
 
 // Protected route component that handles authentication

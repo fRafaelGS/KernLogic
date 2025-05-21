@@ -13,7 +13,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from 'recharts'
-import { useFamilyCompleteness } from '@/hooks/useFamilyCompleteness'
+import { useFamilyCompleteness } from '@/domains/families/hooks/useFamilyCompleteness'
 
 interface MissingField {
   field: string

@@ -6,7 +6,7 @@
     import { Category as ProductCategory } from '@/types/categories';
     import type { AttributeGroup } from '@/domains/products/components/ProductAttributesPanel/types'
     import type { Family } from '@/types/family'
-    import { useOrgSettings } from '@/hooks/useOrgSettings';
+    import { useOrgSettings } from '@/domains/organization/hooks/useOrgSettings';
 
     // PRODUCTS_PATH should be empty string to work with the backend URL structure
     // The backend routes 'api/' to products.urls which registers the viewset at ''

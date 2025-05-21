@@ -18,7 +18,7 @@ import {
   DEFAULT_PAGE_SIZE,
   PRODUCTS_PATH
 } from './config';
-import logger from '@/lib/logger';
+import logger from '@/domains/core/lib/logger';
 
 /**
  * API client for interacting with products endpoints

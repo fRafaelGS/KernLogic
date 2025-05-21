@@ -10,19 +10,19 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/domains/core/co
 import { Dialog, DialogContent, DialogTrigger } from '@/domains/core/components/ui/dialog';
 import { toast } from 'sonner';
 import { Button } from '@/domains/core/components/ui/button';
-import { cn } from '@/lib/utils';
+import { cn } from '@/domains/core/lib/utils';
 import { PricingModal } from '@/domains/products/components/PricingModal';
 import { CategoryModal } from '@/domains/products/components/productstable/CategoryModal';
 import { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbSeparator } from '@/domains/core/components/ui/breadcrumb';
-import { formatCurrency } from '@/lib/utils';
-import { CategoryDisplay } from '@/components/common/CategoryDisplay';
+import { formatCurrency } from '@/domains/core/lib/utils';
+import { CategoryDisplay } from '@/domains/categories/components/CategoryDisplay';
 import { normalizeCategory, Category } from '@/types/categories';
 import { CategoryTreeSelect } from '@/domains/categories/components/CategoryTreeSelect';
 import { useQueryClient } from '@tanstack/react-query';
 import { isImageAsset } from '@/utils/isImageAsset';
 import { pickPrimaryImage } from '@/utils/images';
 import { useNavigate } from 'react-router-dom';
-import { useProductAssets } from '@/hooks/useProductAssets';
+import { useProductAssets } from '@/domains/products/components/hooks/useProductAssets';
 import { assetTypeService } from '@/services/assetTypeService';
 import { invalidateProductAndAssets } from '@/utils/queryInvalidation';
 

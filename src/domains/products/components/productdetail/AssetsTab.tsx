@@ -6,12 +6,12 @@ import {
   Filter, PlusCircle, Package, Loader2
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
+import { cn } from '@/domains/core/lib/utils';
 import { Product, ProductAsset, productService, AssetBundle, QUERY_KEYS } from '@/services/productService';
 import axiosInstance from '@/lib/axiosInstance';
 import { useToast } from '@/domains/core/components/ui/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
-import { useProductAssets } from '@/hooks/useProductAssets';
+import { useProductAssets } from '@/domains/products/components/hooks/useProductAssets';
 import { invalidateProductAndAssets } from '@/utils/queryInvalidation';
 import { config, API_ENDPOINTS } from '@/config/config';
 
@@ -53,8 +53,8 @@ const ENABLE_ASSET_GALLERY = true;
 
 // Add import for AssetCard
 import { AssetCard } from '@/domains/products/components/productdetail/AssetCard'
-import { useDownloadAsset } from '@/hooks/useDownloadAsset'
-import { useBulkDownload } from '@/hooks/useBulkDownload'
+import { useDownloadAsset } from '@/domains/products/components/hooks/useDownloadAsset'
+import { useBulkDownload } from '@/domains/products/components/hooks/useBulkDownload'
 import { BundleCard } from '@/domains/products/components/productdetail/BundleCard'
 import { assetTypeService } from '@/services/assetTypeService';
 import { BulkDownloadToolbar } from '@/domains/products/components/productdetail/BulkDownloadToolbar';

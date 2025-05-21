@@ -7,7 +7,7 @@ import { useAuth } from '@/domains/app/providers/AuthContext';
 import { toast } from 'react-hot-toast';
 import { BeakerIcon, LockKeyhole, Mail, ArrowRight, AlertCircle } from 'lucide-react';
 import { ROUTES } from '@/config/routes';
-import { cn } from '@/lib/utils';
+import { cn } from '@/domains/core/lib/utils';
 import { buttonVariants } from '@/domains/core/components/ui/button';
 
 export default function LoginPage() {

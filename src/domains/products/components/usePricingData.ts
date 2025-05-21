@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { usePriceMetadata } from '@/hooks/usePriceMetadata'
+import { usePriceMetadata } from '@/domains/products/components/hooks/usePriceMetadata'
 import priceService from '@/services/priceService'
 import { PriceFormValues } from '@/domains/products/components/PricingForm'
 

@@ -4,9 +4,9 @@ import { Alert, AlertTitle, AlertDescription } from '@/domains/core/components/u
 import { Button } from '@/domains/core/components/ui/button'
 import { Skeleton } from '@/domains/core/components/ui/skeleton'
 import { AlertCircle, RefreshCw } from 'lucide-react'
-import type { ReportFiltersState } from '@/features/reports/components/filters/ReportFilters'
-import { useMissingAttributesHeatmap } from '@/hooks'
-import logger from '@/lib/logger'
+import type { ReportFiltersState } from '@/domains/reports/components/filters/ReportFilters'
+import { useMissingAttributesHeatmap } from '@/domains/dashboard/hooks/useMissingAttributesHeatmap'
+import logger from '@/domains/core/lib/logger'
 
 interface MissingAttributesHeatmapCardProps {
   filters: ReportFiltersState

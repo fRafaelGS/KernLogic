@@ -14,7 +14,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/doma
 import { useAuth } from '@/domains/app/providers/AuthContext';
 import { useCategories } from '@/domains/categories/components/SubcategoryManager/useCategories';
 import { Category } from '@/types/categories';
-import { PermissionGuard } from '@/components/common/PermissionGuard';
+import { PermissionGuard } from '@/domains/core/components/PermissionGuard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/domains/core/components/ui/tabs";
 
 /**

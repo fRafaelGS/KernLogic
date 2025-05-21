@@ -1,7 +1,7 @@
 import * as React from "react";
 import { ChevronRight, ChevronLast } from "lucide-react";
 import { Slot } from "@radix-ui/react-slot";
-import { cn } from "@/lib/utils";
+import { cn } from "@/domains/core/lib/utils";
 
 export interface BreadcrumbProps extends React.ComponentPropsWithoutRef<"nav"> {
   separator?: React.ReactNode;

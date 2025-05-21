@@ -1,7 +1,7 @@
 import axiosInstance from '@/lib/axiosInstance'
 import { analyticsLocalizationQuality, analyticsLocalizationMissing } from '@/lib/apiPaths'
-import type { ReportFiltersState } from '@/features/reports/components/filters/ReportFilters'
-import logger from '@/lib/logger'
+import type { ReportFiltersState } from '@/domains/reports/components/filters/ReportFilters'
+import logger from '@/domains/core/lib/logger'
 
 /**
  * Interface for the response from the localization quality endpoint

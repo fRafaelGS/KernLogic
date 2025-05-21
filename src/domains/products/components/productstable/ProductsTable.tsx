@@ -50,7 +50,7 @@ import {
 import { Product, productService, ProductAttribute, ProductAsset } from "@/services/productService";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/domains/core/components/ui/select";
-import { cn } from "@/lib/utils";
+import { cn } from "@/domains/core/lib/utils";
 import { Label } from "@/domains/core/components/ui/label";
 import { Checkbox } from "@/domains/core/components/ui/checkbox";
 import { useAuth } from "@/domains/app/providers/AuthContext";
@@ -64,20 +64,20 @@ import {
 } from "@/domains/core/components/ui/popover";
 import { ProductsSearchBox } from '@/domains/products/components/productstable/ProductsSearchBox';
 import { BulkTagModal } from '@/domains/products/components/productstable/BulkTagModal';
-import { useDebounce } from "@/hooks/useDebounce";
+import { useDebounce } from "@/domains/core/hooks/useDebounce";
 import { ProductsTableFallback } from "@/domains/products/components/productstable/ProductsTableFallback";
 import { IconBtn } from "@/domains/products/components/productstable/IconBtn";
 import { SortableTableHeader } from "@/domains/products/components/productstable/SortableTableHeader";
-import { useUniqueTags } from "@/hooks/useProductDerived";
-import { useProductColumns } from "@/hooks/useProductColumns";    
+import { useUniqueTags } from "@/domains/products/components/hooks/useProductDerived";
+import { useProductColumns } from "@/domains/products/components/hooks/useProductColumns";    
 import ProductRowDetails from "@/domains/products/components/productstable/ProductRowDetails";
 import { AnimatePresence } from 'framer-motion';
 import { Category as CategoryType, Category as ProductCategory } from '@/types/categories';
 import { SubcategoryManager } from '@/domains/categories/components/SubcategoryManager/SubcategoryManager';
 import { ProductGrid } from '@/domains/products/components/productstable/ProductGrid'
-import { useOrgSettings } from '@/hooks/useOrgSettings'
-import { useFamilies } from "@/api/familyApi";
-import { useFetchProducts } from "@/hooks/useFetchProducts";
+import { useOrgSettings } from '@/domains/organization/hooks/useOrgSettings'
+import { useFamilies } from "@/domains/products/services/familyApi";
+import { useFetchProducts } from "@/domains/products/components/hooks/useFetchProducts";
 import { config } from "@/config/config";
 import { ROUTES } from "@/config/routes";
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/domains/core/hooks/use-toast";
 import { Button } from "@/domains/core/components/ui/button";
 import {
   Card,
@@ -10,7 +10,7 @@ import {
   CardTitle,
 } from "@/domains/core/components/ui/card";
 import { UploadIcon, FileIcon, XIcon } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/domains/core/lib/utils";
 import { Progress } from "@/domains/core/components/ui/progress";
 
 export function FileUpload() {

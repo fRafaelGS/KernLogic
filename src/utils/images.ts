@@ -1,6 +1,6 @@
 import { Product, ProductAsset } from '@/services/productService'
 import { assetTypeService } from '@/services/assetTypeService'
-import type { ProductWithPrice } from '@/hooks/useProductPrice'
+import type { ProductWithPrice } from '@/domains/products/components/hooks/useProductPrice'
 
 /**
  * Consistently selects the primary image URL from a product using a standard priority order

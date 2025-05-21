@@ -1,4 +1,4 @@
-import { useBundleDownload } from '@/hooks/useBundleDownload'
+import { useBundleDownload } from '@/domains/products/components/hooks/useBundleDownload'
 import { Button } from '@/domains/core/components/ui/button'
 import { Card } from '@/domains/core/components/ui/card'
 import { CardHeader } from '@/domains/core/components/ui/card'

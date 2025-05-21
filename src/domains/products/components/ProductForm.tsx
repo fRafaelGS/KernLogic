@@ -45,7 +45,7 @@ import { Info } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/domains/core/components/ui/tooltip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/domains/core/components/ui/tabs';
 import { Spinner } from "@/domains/core/components/ui/spinner";
-import { CategoryModal } from '@/domains/products/components/productstable/CategoryModal'
+import { CategoryModal } from '@/domains/products/components/productstable/CategoryModal';
 
 // Services
 import { productService, Product, ProductPrice, QUERY_KEYS, PRODUCTS_API_URL } from '@/services/productService';
@@ -57,13 +57,13 @@ import { RichTextEditor } from '@/domains/core/components/ui/RichTextEditor';
 import { PriceSummaryBadge } from '@/domains/products/components/PriceSummaryBadge';
 import { PricingModal } from '@/domains/products/components/PricingModal';
 
-import { useFamilies, useOverrideAttributeGroup } from '@/api/familyApi';
+import { useFamilies, useOverrideAttributeGroup } from '@/domains/products/services/familyApi';
 import { Family } from '@/types/family';
-import { ProductAttributeGroups } from '@/components/product/ProductAttributeGroups'
-import { ProductAttributesPanel } from '@/domains/products/components/ProductAttributesPanel'
-import { useProductAssets } from '@/hooks/useProductAssets'
-import { LocaleCode, ChannelCode } from '@/services/types'
-import { useOrgSettings } from '@/hooks/useOrgSettings'
+import { ProductAttributeGroups } from '@/domains/products/components/ProductAttributeGroups';
+import { ProductAttributesPanel } from '@/domains/products/components/ProductAttributesPanel';
+import { useProductAssets } from '@/domains/products/components/hooks/useProductAssets';
+import { LocaleCode, ChannelCode } from '@/services/types';
+import { useOrgSettings } from '@/domains/organization/hooks/useOrgSettings';
 
 // Update the ProductWithFamily interface to include all required Product fields for compatibility
 interface ProductWithFamily extends Omit<Product, 'family'> {

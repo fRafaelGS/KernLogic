@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/domains/core/components/ui/collapsible';
 import { Button } from '@/domains/core/components/ui/button';
-import { cn } from '@/lib/utils';
+import { cn } from '@/domains/core/lib/utils';
 
 interface CollapsibleSectionProps {
   title: string;

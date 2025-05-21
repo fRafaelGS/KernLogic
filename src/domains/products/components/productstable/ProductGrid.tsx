@@ -3,7 +3,7 @@ import { FixedSizeGrid as Grid } from 'react-window'
 import { Product, PaginatedResponse } from '@/services/productService'
 import { ProductCard } from '@/domains/products/components/ProductCard'
 import { Skeleton } from '@/domains/core/components/ui/skeleton'
-import { useFetchProducts } from '@/hooks/useFetchProducts'
+import { useFetchProducts } from '@/domains/products/components/hooks/useFetchProducts'
 import { config } from '@/config/config'
 
 interface ProductGridProps {

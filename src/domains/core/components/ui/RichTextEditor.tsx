@@ -20,7 +20,7 @@ import {
   TooltipTrigger 
 } from '@/domains/core/components/ui/tooltip';
 import ReactMarkdown from 'react-markdown';
-import { cn } from '@/lib/utils';
+import { cn } from '@/domains/core/lib/utils';
 
 interface RichTextEditorProps {
   value: string;

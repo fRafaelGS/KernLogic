@@ -1,13 +1,13 @@
 import axiosInstance from '@/lib/axiosInstance';
 import { paths } from '@/lib/apiPaths';
-import { Attribute, AttributeValue, AttributeGroup } from '@/features/attributes';
+import { Attribute, AttributeValue, AttributeGroup } from '@/domains/attributes/components';
 import { toast } from "sonner";
 import { 
   makeAttributeKey, 
   normalizeLocaleOrChannel,
   deduplicateAttributes,
   filterUnusedAttributes
-} from '@/lib/attributeUtils';
+} from '@/domains/attributes/lib/attributeUtils';
 import organizationService from '@/services/organizationService';
 import localeService from '@/services/localeService';
 import channelService from '@/services/channelService';

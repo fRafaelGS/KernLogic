@@ -3,7 +3,7 @@ import { Badge } from '@/domains/core/components/ui/badge'
 import { normalizeFamily, NormalizedFamily } from '@/utils/familyNormalizer'
 import { Link } from 'react-router-dom'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/domains/core/components/ui/tooltip'
-import { useFamilies } from '@/api/familyApi'
+import { useFamilies } from '@/domains/products/services/familyApi'
 
 interface FamilyDisplayProps {
   family: any // Accept any family data format

@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "@/domains/core/lib/utils";
 import {   LayoutDashboard,   Package,   Upload,   Settings,   BeakerIcon,   Users,   BarChart2,  FileText,  PanelLeft,  PanelRight,  Pin,  PinOff,  ChevronDown,  ChevronUp} from "lucide-react";
 import { NavLink, useLocation, Link } from "react-router-dom";
 import { useAuth } from "@/domains/app/providers/AuthContext";

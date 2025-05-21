@@ -1,6 +1,6 @@
 import { Button } from '@/domains/core/components/ui/button'
 import { Download } from 'lucide-react'
-import { useDownloadAsset } from '@/hooks/useDownloadAsset'
+import { useDownloadAsset } from '@/domains/products/components/hooks/useDownloadAsset'
 import { useCallback } from 'react'
 
 interface DownloadButtonProps {

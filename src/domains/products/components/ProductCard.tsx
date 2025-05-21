@@ -5,9 +5,9 @@ import { Badge } from '@/domains/core/components/ui/badge'
 import { useNavigate } from 'react-router-dom'
 import { pickPrimaryImage } from '@/utils/images'
 import { Avatar, AvatarFallback, AvatarImage } from '@/domains/core/components/ui/avatar'
-import { getCategoryName } from '@/lib/utils'
+import { getCategoryName } from '@/domains/core/lib/utils'
 import { FamilyDisplay } from '@/domains/products/components/FamilyDisplay'
-import { useFamilies } from '@/api/familyApi'
+import { useFamilies } from '@/domains/products/services/familyApi'
 import { normalizeFamily } from '@/utils/familyNormalizer'
 
 interface ProductCardProps {

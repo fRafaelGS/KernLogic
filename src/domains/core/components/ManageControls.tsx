@@ -13,7 +13,7 @@ import { removeMember, resendInvite } from '@/services/teamService';
 import { toast } from 'sonner';
 import SelectRoleModal from '@/domains/accounts/components/SelectRoleModal';
 import { useAuth } from '@/domains/app/providers/AuthContext';
-import { PermissionGuard } from '@/components/common/PermissionGuard';
+import { PermissionGuard } from '@/domains/core/components/PermissionGuard';
 
 interface ManageControlsProps {
   membershipId: string | number;

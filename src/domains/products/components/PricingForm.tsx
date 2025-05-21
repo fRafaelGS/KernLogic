@@ -1,8 +1,9 @@
+import React from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
-import { usePriceMetadata } from '@/hooks/usePriceMetadata'
-import { useOrgSettings } from '@/hooks/useOrgSettings'
+import { usePriceMetadata } from '@/domains/products/components/hooks/usePriceMetadata'
+import { useOrgSettings } from '@/domains/organization/hooks/useOrgSettings'
 import { useToast } from '@/domains/core/components/ui/use-toast'
 import {
   Form,
@@ -22,7 +23,7 @@ import {
 import { Input } from '@/domains/core/components/ui/input'
 import { Button } from '@/domains/core/components/ui/button'
 import { Loader2 } from 'lucide-react'
-import { PriceType, SalesChannel, Currency } from '@/hooks/usePriceMetadata'
+import { PriceType, SalesChannel, Currency } from '@/domains/products/components/hooks/usePriceMetadata'
 import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 

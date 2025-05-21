@@ -11,7 +11,7 @@ import {
 } from '@/domains/core/components/ui/dropdown-menu'
 import { Button } from '@/domains/core/components/ui/button'
 import { Badge } from '@/domains/core/components/ui/badge'
-import { cn } from '@/lib/utils'
+import { cn } from '@/domains/core/lib/utils'
 import { ProductAsset, productService } from '@/services/productService'
 import { TagInput } from '@/domains/core/components/ui/tag-input'
 import { Input } from '@/domains/core/components/ui/input'

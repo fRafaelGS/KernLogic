@@ -247,11 +247,9 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         
     def list(self, request, *args, **kwargs):
         """
-        Override list method to use the lightweight ProductListSerializer
-        for better performance when listing products.
+        Override list method to use the full ProductSerializer so that the list endpoint returns nested category data.
         """
-        # Use the slim list serializer for better performance
-        self.serializer_class = ProductListSerializer
+        # self.serializer_class = ProductListSerializer  # Removed: use full serializer for category data
         return super().list(request, *args, **kwargs)
 
     def perform_create(self, serializer):

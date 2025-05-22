@@ -173,8 +173,8 @@ export function ProductsTableFilters({
         {/* Category filter - Updated to handle nested categories */}
         <TableHead key="filter-category" className="px-2 py-2">
           <Select
-            value={filters.category ?? 'all'}
-            onValueChange={handleCategoryFilterChange}
+            value={filters.category ? String(filters.category) : 'all'}
+            onValueChange={v => handleCategoryFilterChange(String(v))}
           >
             <SelectTrigger className="h-7 text-xs">
               <SelectValue placeholder={tableConfig.display.selectors.category.placeholder} />

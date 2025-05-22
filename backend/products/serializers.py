@@ -144,14 +144,9 @@ class ProductSerializer(serializers.ModelSerializer):
     missing_fields = serializers.SerializerMethodField(read_only=True)
     assets = serializers.SerializerMethodField(read_only=True)
     primary_asset = serializers.SerializerMethodField(read_only=True)
-    category = serializers.SerializerMethodField()
-    category_id = serializers.PrimaryKeyRelatedField(
-        source='category',
-        queryset=Category.objects.all(),
-        required=False,
-        allow_null=True,
-        write_only=True
-    )
+    category = CategorySerializer(read_only=True)
+    category_id = serializers.IntegerField(source='category.id', read_only=True)
+    category_name = serializers.SerializerMethodField()
     family = serializers.PrimaryKeyRelatedField(
         queryset=Family.objects.all(),
         required=False,
@@ -170,6 +165,7 @@ class ProductSerializer(serializers.ModelSerializer):
             'created_by', 'family',
             'family_overrides',
             'effective_attribute_groups',
+            'category_name',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'completeness_percent', 
                            'missing_fields', 'assets', 'primary_asset', 'organization', 
@@ -347,17 +343,16 @@ class ProductSerializer(serializers.ModelSerializer):
             print(f"ERROR: Failed to get attribute values for product {obj.id}: {str(e)}")
             return []
 
-    def get_category(self, obj):
-        """
-        Return the full hierarchy for this product's category as an
-        ordered list [root, ..., leaf], or [] if none.
-        """
+    def get_category_name(self, obj):
+        """Return the full category path for the product's category if it exists"""
         if not obj.category:
-            return []
+            return None
         
         # Get all ancestors including self, ordered from root to leaf
         ancestors = obj.category.get_ancestors(include_self=True)
-        return CategorySerializer(ancestors, many=True).data
+        
+        # Create a breadcrumb path from all category names
+        return ' > '.join([ancestor.name for ancestor in ancestors])
 
     def validate_family(self, value):
         """

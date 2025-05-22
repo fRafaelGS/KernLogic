@@ -304,10 +304,8 @@ export function ProductsTable({
   // Derive products from the paginated data and add state for products
   const [productsState, setProducts] = useState<Product[]>([]);
   const products = useMemo(() => {
-    if (!data) return [];
-    // Minimal debug: log raw pages
-    // eslint-disable-next-line no-console
-    console.log('Raw data.pages:', data.pages)
+    if (!data) return []
+    // Flatten and normalize
     const newProducts = data.pages.flatMap(page =>
       Array.isArray(page)
         ? page
@@ -315,12 +313,20 @@ export function ProductsTable({
           ? page.results
           : []
     )
-    // Minimal debug: log products after fetch
-    // eslint-disable-next-line no-console
-    console.log('Products returned from API:', newProducts)
-    setProducts(newProducts);
-    return newProducts;
-  }, [data]);
+    // Use the new backend contract: wrap the nested category object in an array
+    const normalizedProducts = newProducts.map(p => ({
+      ...p,
+      category: p.category ? [p.category] : [],
+      category_name: p.category_name ?? '',
+    }))
+    // Debug: log first normalized product
+    if (normalizedProducts.length > 0) {
+      // eslint-disable-next-line no-console
+      console.log('First normalized product:', normalizedProducts[0])
+    }
+    setProducts(normalizedProducts)
+    return normalizedProducts
+  }, [data])
   
   // Set total count based on the first page's count
   useEffect(() => {
@@ -1241,68 +1247,12 @@ export function ProductsTable({
     // Remove getFilteredRowModel here
   });
 
-  // Keep the ref updated so callbacks can access the latest table instance
-  // Add effect to fetch attributes when expanded state changes
-  useEffect(() => {
-    const expandedIds = Object.keys(expanded).filter(id => expanded[id]);
-
-    expandedIds.forEach(async rowId => {
-      const row = table.getRow(rowId);
-      const pid = row?.original?.id;
-      // Always log attempt to fetch or use cached attrGroups
-      console.log('Expander: pid', pid, 'productAttributes[pid]:', pid ? productAttributes[pid] : undefined);
-      if (!pid || productAttributes[pid] !== undefined) return; // already cached
-      if (attrGroupsInFlight.current.has(pid)) return; // already fetching
-
-      try {
-        attrGroupsInFlight.current.add(pid); // mark as in-flight
-
-        const attrs = await productService.getProductAttributes(pid);
-        const attrGroups = await productService.getProductAttributeGroups(
-          pid,
-          defaultLocale,
-          defaultChannel?.code
-        );
-        console.log('attrGroups for pid', pid, '→', attrGroups);
-
-        let mergedAttributes: any[] = [];
-        if (Array.isArray(attrGroups) && attrGroups.length > 0) {
-          // Use all groups and all items, do not filter by value
-          mergedAttributes = attrGroups.map(group => ({
-            ...group,
-            items: (group.items || []).map(item => ({ ...item }))
-          }));
-        } else if (Array.isArray(attrs) && attrs.length > 0) {
-          // Fallback: group all attributes by group name, do not filter by value
-          const groupMap: Record<string, any> = {};
-          attrs.forEach(attr => {
-            const groupName = attr.group || 'General';
-            if (!groupMap[groupName]) {
-              groupMap[groupName] = {
-                id: Math.random(),
-                name: groupName,
-                items: []
-              };
-            }
-            groupMap[groupName].items.push({
-              ...attr,
-              attribute_label: attr.name,
-              value: attr.value
-            });
-          });
-          mergedAttributes = Object.values(groupMap);
-        }
-
-        setProductAttributes(prev => ({ ...prev, [String(pid)]: mergedAttributes }));
-        setProductAttributes(prev => ({ ...prev, [String(pid)]: [] })); // cache failure too
-      } catch (e) {
-        console.error(`[ProductsTable] Attribute loading failed for ${pid}`, e);
-        setProductAttributes(prev => ({ ...prev, [String(pid)]: [] })); // cache failure too
-      } finally {
-        attrGroupsInFlight.current.delete(pid);           // ✅ done
-      }
-    });
-  }, [expanded, productAttributes, table, defaultLocale, defaultChannel?.code]);
+  // Debug: log the first row's original data and its keys after table is defined
+  const firstRow = table.getRowModel().rows[0]?.original
+  // eslint-disable-next-line no-console
+  console.log('Table row[0] original:', firstRow)
+  // eslint-disable-next-line no-console
+  console.log('Row keys:', Object.keys(firstRow || {}))
 
   // Handle search input change
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1547,21 +1497,25 @@ export function ProductsTable({
     return Array.from(brands).sort()
   }, [products])
 
-  // Only show categories that are used by at least one product
-  const usedCategoryIds = new Set<string | number>()
+  // Only show categories that are used by at least one product (leaf category id as string)
+  const usedCategoryIds = new Set<string>()
   products.forEach(product => {
-    if (Array.isArray(product.category)) {
-      product.category.forEach((cat: any) => {
-        if (cat && typeof cat === 'object' && cat.id !== undefined) usedCategoryIds.add(cat.id)
-        else if (typeof cat === 'string' || typeof cat === 'number') usedCategoryIds.add(cat)
-      })
+    if (Array.isArray(product.category) && product.category.length > 0) {
+      const leaf = product.category[product.category.length - 1]
+      if (leaf && typeof leaf === 'object' && leaf.id !== undefined) usedCategoryIds.add(String(leaf.id))
+      else if (typeof leaf === 'string' || typeof leaf === 'number') usedCategoryIds.add(String(leaf))
     } else if (product.category && typeof product.category === 'object' && product.category.id !== undefined) {
-      usedCategoryIds.add(product.category.id)
-    } else if (typeof product.category === 'string' || typeof product.category === 'number') {
-      usedCategoryIds.add(product.category)
+      usedCategoryIds.add(String(product.category.id))
     }
+    // ignore legacy string categories for filter
   })
-  const filteredCategories = categoryOptions.filter(opt => usedCategoryIds.has(opt.value))
+  // Debug logging
+  console.log('categoryOptions:', categoryOptions)
+  console.log('usedCategoryIds:', Array.from(usedCategoryIds))
+  products.forEach(product => {
+    console.log('product.category:', product.category)
+  })
+  const filteredCategories = categoryOptions.filter(opt => usedCategoryIds.has(String(opt.value)))
 
   // Render the component
   return (

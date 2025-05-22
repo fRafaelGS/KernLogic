@@ -374,7 +374,7 @@ function ProductDetailSidebar({ product, prices, isPricesLoading }: ProductDetai
             ) : singleCategory ? (
               <BreadcrumbItem isCurrent>
                 <span>
-                  {singleCategory.name || "Uncategorized"}
+                  {product.category_name || singleCategory.name || 'Uncategorized'}
                 </span>
               </BreadcrumbItem>
             ) : typeof product.category === "string" ? (

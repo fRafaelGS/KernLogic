@@ -15,7 +15,8 @@ import {
   SERVICE_JWT, 
   REQUEST_TIMEOUT, 
   MAX_RETRIES,
-  DEFAULT_PAGE_SIZE 
+  DEFAULT_PAGE_SIZE,
+  PRODUCTS_PATH
 } from './config';
 import logger from '@/lib/logger';
 
@@ -82,7 +83,7 @@ export class ProductsApi {
    */
   async productsList(params: ProductListParams = {}): Promise<PaginatedProductList> {
     try {
-      const response = await this.instance.get<PaginatedProductList>('/products/', {
+      const response = await this.instance.get<PaginatedProductList>(`/products/`, {
         params: {
           page_size: DEFAULT_PAGE_SIZE,
           ...params
@@ -113,7 +114,7 @@ export class ProductsApi {
    */
   async productsCreate(productRequest: ProductRequest): Promise<Product> {
     try {
-      const response = await this.instance.post<Product>('/products/', productRequest);
+      const response = await this.instance.post<Product>(`/products/`, productRequest);
       return response.data;
     } catch (error) {
       logger.error('Error creating product:', error);

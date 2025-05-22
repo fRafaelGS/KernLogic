@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import axiosInstance from '@/lib/axiosInstance'
 import { toast } from 'sonner'
 import type { Attribute, AttributesResponse, UpdateAttributePayload, AttributeGroup } from './types'
+import { API_ENDPOINTS } from '@/config/config'
 
 const ATTRIBUTES_QUERY_KEY = (productId: string, locale?: string, channel?: string) => [
   'productAttributes',
@@ -136,7 +137,7 @@ export function useAllAttributes() {
   return useQuery<Attribute[], Error>({
     queryKey: ['allAttributes'],
     queryFn: async () => {
-      const { data } = await axiosInstance.get('/api/attributes/')
+      const { data } = await axiosInstance.get(API_ENDPOINTS.imports.attributes || '')
       return data
     },
     staleTime: 10 * 60 * 1000,
@@ -148,7 +149,7 @@ export function useAllAttributeGroups() {
   return useQuery<AttributeGroup[], Error>({
     queryKey: ['allAttributeGroups'],
     queryFn: async () => {
-      const { data } = await axiosInstance.get('/api/attribute-groups/')
+      const { data } = await axiosInstance.get(API_ENDPOINTS.imports.attributeGroups || '')
       return Array.isArray(data) ? data : []
     },
     staleTime: 10 * 60 * 1000,

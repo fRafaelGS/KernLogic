@@ -17,7 +17,7 @@ import { ChannelCode, LocaleCode } from '@/services/types'
 import axiosInstance from '@/lib/axiosInstance'
 import { useFamilyAttributeGroups } from '@/hooks/useFamilyAttributeGroups'
 import { useOrgSettings } from '@/hooks/useOrgSettings'
-import { config } from '@/config/config'
+import { config, API_MEDIA_UPLOAD } from '@/config/config'
 
 interface ProductAttributesPanelProps {
   productId: string
@@ -328,8 +328,7 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
   async function uploadMedia(file: File): Promise<number> {
     const formData = new FormData()
     formData.append('file', file)
-    // TODO: Adjust the endpoint to your backend's media upload URL
-    const res = await fetch('/api/media/upload/', {
+    const res = await fetch(API_MEDIA_UPLOAD, {
       method: 'POST',
       body: formData
     })

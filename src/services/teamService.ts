@@ -1,6 +1,6 @@
 import axiosInstance from '@/lib/axiosInstance';
 import { Activity } from '@/services/dashboardService';
-import { API_ENDPOINTS } from '@/config';
+import { API_ENDPOINTS } from '@/config/config';
 import { Role } from '@/types/team';
 
 // Types for team members
@@ -38,8 +38,8 @@ export interface AuditLogEntry {
 
 // Manually define missing team endpoints until API_ENDPOINTS type is updated
 const TEAM_ENDPOINTS = {
-  activity: '/api/dashboard/activity/',
-  history: '/api/team/history/'
+  activity: API_ENDPOINTS.team.activity,
+  history: API_ENDPOINTS.team.history
 };
 
 // Utility function to log in development only

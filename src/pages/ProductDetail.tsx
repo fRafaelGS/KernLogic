@@ -30,6 +30,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
 import { useQueryClient } from '@tanstack/react-query';
 import { normalizeFamily } from '@/utils/familyNormalizer';
+import { ROUTES } from '@/config/routes';
 
 export const ProductDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -129,7 +130,7 @@ export const ProductDetail = () => {
 
   const handleEdit = () => {
     if (id) {
-      navigate(`/app/products/${id}/edit`);
+      navigate(ROUTES.buildProductEditUrl(Number(id)));
     }
   };
 
@@ -149,7 +150,11 @@ export const ProductDetail = () => {
       toast.success('Product duplicated successfully');
       
       // Navigate to the new product
-      navigate(`/app/products/${newProduct.id}`);
+      if (newProduct && newProduct.id) {
+        navigate(ROUTES.buildProductDetailUrl(newProduct.id));
+      } else {
+        navigate(ROUTES.APP.PRODUCTS.ROOT);
+      }
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || 'Failed to duplicate product';
       toast.error(errorMessage);
@@ -169,7 +174,7 @@ export const ProductDetail = () => {
       setSaving(true);
       await productService.deleteProduct(Number(id));
       toast.success(`Product ${product?.is_active ? 'archived' : 'deleted'} successfully`);
-      navigate('/app/products');
+      navigate(ROUTES.APP.PRODUCTS.ROOT);
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || `Failed to ${product?.is_active ? 'archive' : 'delete'} product`;
       toast.error(errorMessage);
@@ -199,29 +204,27 @@ export const ProductDetail = () => {
           <div className="flex items-center gap-2 mb-6">
             <Skeleton className="h-5 w-24" />
             <Skeleton className="h-5 w-5" />
-            <Skeleton className="h-5 w-32" />
+            <Skeleton className="h-5 w-24" />
           </div>
           
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <Skeleton className="h-8 w-48" />
-              <Skeleton className="h-6 w-16 rounded-full" />
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <Skeleton className="h-10 w-48 mb-2" />
+              <Skeleton className="h-6 w-36" />
             </div>
             <div className="flex gap-2">
-              <Skeleton className="h-9 w-20" />
-              <Skeleton className="h-9 w-28" />
-              <Skeleton className="h-9 w-24" />
-              <Skeleton className="h-9 w-24" />
+              <Skeleton className="h-10 w-24" />
+              <Skeleton className="h-10 w-24" />
             </div>
           </div>
           
-          <div className="flex items-center justify-center p-12">
-            <div className="text-center">
-              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
-              <p className="text-muted-foreground">Loading product data...</p>
-              <p className="text-xs text-muted-foreground mt-2">
-                This may take a moment if the product was just created
-              </p>
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <div className="lg:col-span-3">
+              <Skeleton className="h-64 w-full mb-4" />
+              <Skeleton className="h-64 w-full" />
+            </div>
+            <div className="lg:col-span-1">
+              <Skeleton className="h-[450px] w-full" />
             </div>
           </div>
         </div>
@@ -235,42 +238,27 @@ export const ProductDetail = () => {
     return (
       <DashboardLayout>
         <div className="w-full mx-auto py-8 px-6">
-          <div className="flex items-center mb-6">
+          <div className="mb-6">
             <Button 
               variant="outline" 
-              size="sm" 
-              onClick={() => navigate('/app/products')}
-              className="mr-4"
-              aria-label="Back to Products"
+              className="mb-4"
+              onClick={() => navigate(ROUTES.APP.PRODUCTS.ROOT)}
             >
-              <ChevronLeft className="h-4 w-4 mr-2" />
+              <ChevronLeft className="mr-2 h-4 w-4" />
               Back to Products
             </Button>
+            
+            <Alert variant="destructive" className="mb-6">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>
+                {errorMessage}
+                <Button variant="link" className="p-0 h-auto text-sm" onClick={handleRetry}>
+                  Try again
+                </Button>
+              </AlertDescription>
+            </Alert>
           </div>
-          
-          <Alert variant="destructive" className="mb-6">
-            <AlertCircle className="h-5 w-5" />
-            <AlertTitle>Error</AlertTitle>
-            <AlertDescription className="flex flex-col gap-4">
-              <p>{errorMessage}</p>
-              <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
-                  onClick={handleRetry}
-                  aria-label="Try again"
-                >
-                  Try Again
-                </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={() => navigate('/app/products')}
-                  aria-label="Return to Products"
-                >
-                  Return to Products
-                </Button>
-              </div>
-            </AlertDescription>
-          </Alert>
         </div>
       </DashboardLayout>
     );
@@ -279,143 +267,82 @@ export const ProductDetail = () => {
   return (
     <DashboardLayout>
       <div className="w-full mx-auto py-8 px-6">
-        {/* Breadcrumb & Header */}
-        <div className="mb-6">
-          <Breadcrumb className="mb-2">
-            <BreadcrumbList>
-              <BreadcrumbItem>
-                <BreadcrumbLink asChild>
-                  <Link to="/app/products">Products</Link>
-                </BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
-                <span>{product.name || 'Unnamed Product'}</span>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
+        <Breadcrumb className="mb-6">
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink asChild>
+                <Link to={ROUTES.APP.PRODUCTS.ROOT}>Products</Link>
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbLink>{product?.name || 'Product Details'}</BreadcrumbLink>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+        
+        {/* Header with actions */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-semibold text-enterprise-900">{product?.name}</h1>
+              <div className="ml-2">
+                {product?.is_active ? (
+                  <Badge variant="success">Active</Badge>
+                ) : (
+                  <Badge variant="destructive">Inactive</Badge>
+                )}
+              </div>
+            </div>
+            <p className="text-enterprise-600 text-sm mt-1">SKU: {product?.sku}</p>
+          </div>
           
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold truncate max-w-md" title={product.name || 'Unnamed Product'}>
-                {product.name || 'Unnamed Product'}
-              </h1>
-              <Badge
-                className={
-                  product.is_active
-                    ? "bg-success-50 text-success-700 border border-success-200"
-                    : "bg-danger-50 text-danger-700 border border-danger-200"
-                }
-              >
-                {product.is_active ? 'Active' : 'Inactive'}
-              </Badge>
-            </div>
-            
-            <div className="flex flex-wrap gap-2">
-              {/* Primary Actions */}
-              {canEdit && (
-                <Button 
-                  onClick={handleEdit} 
-                  size="sm" 
-                  className="h-9"
-                  aria-label="Edit product"
-                  disabled={saving}
-                >
-                  <Edit className="h-4 w-4 mr-2" />
-                  Edit
-                </Button>
-              )}
-              
-              <Button 
-                onClick={handleDuplicate} 
-                variant="outline" 
-                size="sm" 
-                className="h-9"
-                aria-label="Duplicate product"
-                disabled={saving}
-              >
-                <Copy className="h-4 w-4 mr-2" />
-                {saving ? 'Creating...' : 'Duplicate'}
+          <div className="flex gap-2 mt-4 sm:mt-0">
+            {/* Main action buttons */}
+            {canEdit && (
+              <Button onClick={handleEdit} className="gap-1">
+                <Edit className="h-4 w-4 mr-1" />
+                Edit
               </Button>
-              
-              {canDelete && (
-                <Button 
-                  onClick={handleDelete} 
-                  variant="destructive" 
-                  size="sm" 
-                  className="h-9"
-                  aria-label={`${product.is_active ? 'Archive' : 'Delete'} product`}
-                  disabled={saving}
-                >
-                  <Trash className="h-4 w-4 mr-2" />
-                  {saving ? 'Processing...' : (product.is_active ? 'Archive' : 'Delete')}
+            )}
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  More Actions
                 </Button>
-              )}
-              
-              {/* Export Dropdown */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="h-9"
-                    aria-label="Export options"
-                    disabled={saving}
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    Export
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => handleExport('csv')}>
-                    CSV
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleDuplicate} disabled={saving}>
+                  <Copy className="h-4 w-4 mr-2" />
+                  Duplicate
+                </DropdownMenuItem>
+                {canDelete && (
+                  <DropdownMenuItem onClick={handleDelete} disabled={saving} className="text-red-600">
+                    <Trash className="h-4 w-4 mr-2" />
+                    {product?.is_active ? 'Archive' : 'Delete'}
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleExport('pdf')}>
-                    PDF
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleExport('channel')}>
-                    Channel Feed
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
-        
-        {/* Main Content */}
-        <AnimatePresence mode="wait">
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="mb-6"
-          >
-            <ProductDetailDescription 
-              product={product} 
-              onProductUpdate={handleProductUpdate} 
-            />
-          </motion.div>
-        </AnimatePresence>
-        
+
+        {/* Main layout */}
         <ProductDetailLayout
-          sidebar={
-            <ProductDetailSidebar 
-              product={{
-                ...product,
-                // Ensure family is in the correct format by using our normalizer
-                family: normalizeFamily(product.family, product.family_name)
-              }}
+          content={
+            <ProductDetailTabs 
+              product={product} 
+              onProductUpdate={handleProductUpdate}
               prices={prices || []}
               isPricesLoading={isPricesLoading}
             />
           }
-          content={
-            <ProductDetailTabs 
-              product={product} 
+          sidebar={
+            <ProductDetailSidebar 
+              product={product as any} 
               prices={prices || []}
               isPricesLoading={isPricesLoading}
-              onProductUpdate={handleProductUpdate} 
             />
           }
         />

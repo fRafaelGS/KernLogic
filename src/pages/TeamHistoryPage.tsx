@@ -80,6 +80,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { ROUTES } from '@/config/routes';
 
 // Development only logging helper
 const devLog = (...args: any[]) => {
@@ -878,7 +879,7 @@ export const TeamHistoryPage: React.FC = () => {
             Audit log of all team management activities
           </p>
         </div>
-        <Link to="/app/team">
+        <Link to={ROUTES.APP.TEAM.ROOT}>
           <Button variant="outline" className="flex items-center">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Team

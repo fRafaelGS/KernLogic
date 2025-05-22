@@ -1,5 +1,5 @@
     import axios, { AxiosError, AxiosProgressEvent, AxiosResponse } from 'axios';
-    import { API_URL } from '@/config';
+    import { API_CURRENCIES, API_PRICE_TYPES, API_SALES_CHANNELS, API_ENDPOINTS } from '@/config/config';
     import axiosInstance from '@/lib/axiosInstance';
     import { IncompleteProduct } from './dashboardService';
     import { getCategories as fetchCategories, createCategory as createCategoryService, Category as CategoryFromService } from './categoryService';
@@ -626,7 +626,7 @@
 
         // Create a new product
         createProduct: async (product: Omit<Product, 'id' | 'created_by' | 'created_at' | 'updated_at'> | FormData): Promise<Product> => {
-            const url = `${PRODUCTS_PATH}/`;
+            const url = API_ENDPOINTS.products.create;
             console.log('Creating product at:', url);
             try {
                 // Handle FormData or regular object

@@ -4,6 +4,7 @@ import { isAxiosError } from 'axios'
 import { Family, FamilyInput, FamilyOverride } from '../types/family'
 import { Attribute } from '../types/attribute'
 import { AttributeGroup } from '../types/attributeGroup'
+import { API_ENDPOINTS } from '@/config/config'
 
 // Query keys
 export const familyKeys = {
@@ -34,7 +35,7 @@ const handleApiError = (error: unknown) => {
 // API functions
 export const getFamilies = async (): Promise<Family[]> => {
   try {
-    const { data } = await axiosInstance.get('/api/families/')
+    const { data } = await axiosInstance.get(API_ENDPOINTS.families.list)
     return data
   } catch (error) {
     return handleApiError(error)
@@ -43,7 +44,7 @@ export const getFamilies = async (): Promise<Family[]> => {
 
 export const getFamily = async (id: number): Promise<Family> => {
   try {
-    const { data } = await axiosInstance.get(`/api/families/${id}/`)
+    const { data } = await axiosInstance.get(API_ENDPOINTS.families.update(id))
     return data
   } catch (error) {
     return handleApiError(error)
@@ -52,7 +53,7 @@ export const getFamily = async (id: number): Promise<Family> => {
 
 export const createFamily = async (familyData: Partial<FamilyInput>): Promise<Family> => {
   try {
-    const { data } = await axiosInstance.post('/api/families/', familyData)
+    const { data } = await axiosInstance.post(API_ENDPOINTS.families.create, familyData)
     return data
   } catch (error) {
     return handleApiError(error)
@@ -61,7 +62,7 @@ export const createFamily = async (familyData: Partial<FamilyInput>): Promise<Fa
 
 export const updateFamily = async (id: number, familyData: Partial<FamilyInput>): Promise<Family> => {
   try {
-    const { data } = await axiosInstance.patch(`/api/families/${id}/`, familyData)
+    const { data } = await axiosInstance.patch(API_ENDPOINTS.families.update(id), familyData)
     return data
   } catch (error) {
     return handleApiError(error)
@@ -70,7 +71,7 @@ export const updateFamily = async (id: number, familyData: Partial<FamilyInput>)
 
 export const deleteFamily = async (id: number): Promise<void> => {
   try {
-    await axiosInstance.delete(`/api/families/${id}/`)
+    await axiosInstance.delete(API_ENDPOINTS.families.delete(id))
   } catch (error) {
     return handleApiError(error)
   }

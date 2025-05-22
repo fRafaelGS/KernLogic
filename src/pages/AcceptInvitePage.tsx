@@ -8,6 +8,7 @@ import { AlertCircle, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
+import { ROUTES } from '@/config/routes';
 
 const AcceptInvitePage: React.FC = () => {
   const { membershipId, token } = useParams<{ membershipId: string; token: string }>();
@@ -55,12 +56,12 @@ const AcceptInvitePage: React.FC = () => {
           // If we know the invited email and it doesn't match any existing user
           // redirect to registration instead of login
           if (invitedEmail && membership?.is_new_user) {
-            navigate(`/register/${membership.organization?.id}?token=${token}&email=${invitedEmail}`);
+            navigate(`${ROUTES.AUTH.REGISTER_ORG.replace(':orgId', membership.organization?.id)}?token=${token}&email=${invitedEmail}`);
             return;
           }
           
           // Redirect to login
-          navigate('/login?redirect=invitation');
+          navigate(`${ROUTES.AUTH.LOGIN}?redirect=invitation`);
           return;
         }
         
@@ -75,7 +76,7 @@ const AcceptInvitePage: React.FC = () => {
         if (membership?.user_exists && membership?.needs_password && invitedEmail) {
           console.log("User exists but needs to set a password");
           // Redirect to set-password page with the necessary parameters
-          navigate(`/set-password/${membership.organization?.id}?token=${token}&email=${encodeURIComponent(invitedEmail)}`);
+          navigate(`${ROUTES.AUTH.SET_PASSWORD.replace(':orgId', membership.organization?.id)}?token=${token}&email=${encodeURIComponent(invitedEmail)}`);
           return;
         }
         
@@ -89,7 +90,7 @@ const AcceptInvitePage: React.FC = () => {
         
         // After 3 seconds, redirect to dashboard
         setTimeout(() => {
-          navigate('/app');
+          navigate(ROUTES.APP.ROOT);
         }, 3000);
       } catch (err: any) {
         console.error('Error accepting invitation:', err);
@@ -114,7 +115,7 @@ const AcceptInvitePage: React.FC = () => {
       });
       
       toast.success('Invitation accepted!');
-      navigate('/app');
+      navigate(ROUTES.APP.ROOT);
     } catch (err: any) {
       console.error('Error auto-accepting invitation:', err);
       setError(err.response?.data?.detail || 'Failed to accept invitation');
@@ -125,10 +126,10 @@ const AcceptInvitePage: React.FC = () => {
   const handleRedirect = () => {
     // If the user needs to set a password (new user), redirect to the set password page
     if (membership?.is_new_user) {
-      navigate(`/set-password/${membership.organization?.id}?token=${membershipId}&email=${membership.user?.email}`);
+      navigate(`${ROUTES.AUTH.SET_PASSWORD.replace(':orgId', membership.organization?.id)}?token=${membershipId}&email=${membership.user?.email}`);
     } else {
       // Otherwise, redirect to login
-      navigate(`/login?invitation=${membershipId}`);
+      navigate(`${ROUTES.AUTH.LOGIN}?invitation=${membershipId}`);
     }
   };
 
@@ -155,7 +156,7 @@ const AcceptInvitePage: React.FC = () => {
             <CardDescription className="text-red-600">{error}</CardDescription>
           </CardHeader>
           <CardFooter className="flex justify-center">
-            <Button onClick={() => navigate('/')}>Return to Home</Button>
+            <Button onClick={() => navigate(ROUTES.ROOT)}>Return to Home</Button>
           </CardFooter>
         </Card>
       </div>
@@ -174,7 +175,7 @@ const AcceptInvitePage: React.FC = () => {
             <CardDescription>This invitation has already been accepted</CardDescription>
           </CardHeader>
           <CardFooter className="flex justify-center">
-            <Button onClick={() => navigate('/login')}>Log In</Button>
+            <Button onClick={() => navigate(ROUTES.AUTH.LOGIN)}>Log In</Button>
           </CardFooter>
         </Card>
       </div>
@@ -201,7 +202,7 @@ const AcceptInvitePage: React.FC = () => {
           </div>
         </CardContent>
         <CardFooter className="flex justify-end space-x-4">
-          <Button variant="outline" onClick={() => navigate('/')}>
+          <Button variant="outline" onClick={() => navigate(ROUTES.ROOT)}>
             Cancel
           </Button>
           <Button onClick={handleRedirect}>

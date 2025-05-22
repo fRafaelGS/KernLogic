@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { BeakerIcon, User, Mail, LockKeyhole, ArrowRight, AlertCircle } from 'lucide-react';
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { ROUTES } from '@/config/routes';
 
 export default function RegisterPage() {
   const [name, setName] = useState('');
@@ -54,7 +55,7 @@ export default function RegisterPage() {
             <h2 className="mt-6 text-3xl font-bold text-enterprise-900">Create your account</h2>
             <p className="mt-2 text-sm text-enterprise-600">
               Or{' '}
-              <Link to="/login" className="font-medium text-primary-600 hover:text-primary-500">
+              <Link to={ROUTES.AUTH.LOGIN} className="font-medium text-primary-600 hover:text-primary-500">
                 sign in to your existing account
               </Link>
             </p>
@@ -166,11 +167,11 @@ export default function RegisterPage() {
 
             <div className="text-sm text-center text-enterprise-500">
               By creating an account, you agree to our{' '}
-              <Link to="/terms" className="text-primary-600 hover:text-primary-500">
+              <Link to={ROUTES.AUTH.TERMS} className="text-primary-600 hover:text-primary-500">
                 Terms of Service
               </Link>{' '}
               and{' '}
-              <Link to="/privacy" className="text-primary-600 hover:text-primary-500">
+              <Link to={ROUTES.AUTH.PRIVACY} className="text-primary-600 hover:text-primary-500">
                 Privacy Policy
               </Link>
             </div>

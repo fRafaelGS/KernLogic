@@ -8,6 +8,37 @@ import { Category } from '@/services/categoryService';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { CategoryTreeSelect } from '../categories/CategoryTreeSelect';
+import { config } from '@/config/config';
+
+// Temporary compatibility layer during migration
+const categoryModalConfig = {
+  title: 'Select or Create Category',
+  placeholders: {
+    categorySearch: 'Search or select a category...',
+    newCategory: 'New category name...'
+  },
+  labels: {
+    selectedCategory: 'Selected category:',
+    createNewCategory: 'Create new category',
+    createAtTopLevel: 'Create at top-level (no parent)'
+  },
+  buttons: {
+    create: 'Create',
+    cancel: 'Cancel',
+    save: 'Save',
+    saving: 'Saving...'
+  },
+  messages: {
+    created: (name: string) => `Created category "${name}"`,
+    updated: 'Category updated',
+    removed: 'Category removed',
+    error: {
+      emptyName: 'Please enter a name',
+      createFailed: 'Failed to create category',
+      updateFailed: 'Failed to update category'
+    }
+  }
+};
 
 interface CategoryModalProps {
   open: boolean;
@@ -86,7 +117,7 @@ export function CategoryModal({
   // Create a new category
   const handleCreateCategory = async () => {
     if (!newCategoryName.trim()) {
-      toast.error('Please enter a name');
+      toast.error(categoryModalConfig.messages.error.emptyName);
       return;
     }
     
@@ -96,11 +127,11 @@ export function CategoryModal({
       const parentId = createAtTopLevel ? null : selectedCategoryId;
       await categoryService.createCategory(newCategoryName.trim(), parentId || undefined);
       setTreeKey(k => k + 1);
-      toast.success(`Created category "${newCategoryName.trim()}"`);
+      toast.success(categoryModalConfig.messages.created(newCategoryName.trim()));
       setNewCategoryName("");
     } catch (err) {
       console.error(err);
-      toast.error('Failed to create category');
+      toast.error(categoryModalConfig.messages.error.createFailed);
     } finally {
       setIsSubmitting(false);
     }
@@ -128,13 +159,13 @@ export function CategoryModal({
           : ({ id: 0, name: 'Uncategorized' } as Category);
         onCategoryUpdated(resultCat);
         toast.success(
-          selectedCategoryId ? 'Category updated' : 'Category removed'
+          selectedCategoryId ? categoryModalConfig.messages.updated : categoryModalConfig.messages.removed
         );
         onOpenChange(false);
       }
     } catch (error) {
       console.error('Error updating category:', error);
-      toast.error('Failed to update category');
+      toast.error(categoryModalConfig.messages.error.updateFailed);
     } finally {
       setIsSubmitting(false);
     }
@@ -144,7 +175,7 @@ export function CategoryModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-hidden">
         <DialogHeader>
-          <DialogTitle>Select or Create Category</DialogTitle>
+          <DialogTitle>{categoryModalConfig.title}</DialogTitle>
         </DialogHeader>
         
         <div className="space-y-4 py-4">
@@ -153,14 +184,14 @@ export function CategoryModal({
             selectedValue={selectedCategoryId}
             onChange={handleCategoryChange}
             className="w-full"
-            placeholder="Search or select a category..."
+            placeholder={categoryModalConfig.placeholders.categorySearch}
             disabled={isSubmitting}
           />
           
           {selectedCategory && (
             <div className="p-3 bg-muted/50 rounded-md">
               <p className="text-sm text-muted-foreground">
-                Selected category:
+                {categoryModalConfig.labels.selectedCategory}
               </p>
               <p className="text-base font-semibold">
                 {selectedCategory.name}
@@ -169,12 +200,12 @@ export function CategoryModal({
           )}
           
           <div className="space-y-2 border-t pt-4">
-            <p className="text-sm font-medium">Create new category</p>
+            <p className="text-sm font-medium">{categoryModalConfig.labels.createNewCategory}</p>
             <div className="flex items-center gap-2">
               <Input
                 value={newCategoryName}
                 onChange={(e) => setNewCategoryName(e.target.value)}
-                placeholder="New category name..."
+                placeholder={categoryModalConfig.placeholders.newCategory}
                 disabled={isSubmitting}
                 className="flex-1"
               />
@@ -183,7 +214,7 @@ export function CategoryModal({
                 onClick={handleCreateCategory}
                 disabled={!newCategoryName.trim() || isSubmitting}
               >
-                Create
+                {categoryModalConfig.buttons.create}
               </Button>
             </div>
             
@@ -203,7 +234,7 @@ export function CategoryModal({
                 htmlFor="create-top-level" 
                 className="text-sm cursor-pointer"
               >
-                Create at top-level (no parent)
+                {categoryModalConfig.labels.createAtTopLevel}
               </label>
             </div>
           </div>
@@ -215,7 +246,7 @@ export function CategoryModal({
             onClick={() => onOpenChange(false)}
             disabled={isSubmitting}
           >
-            Cancel
+            {categoryModalConfig.buttons.cancel}
           </Button>
           
           <Button
@@ -225,10 +256,10 @@ export function CategoryModal({
             {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
+                {categoryModalConfig.buttons.saving}
               </>
             ) : (
-              'Save'
+              categoryModalConfig.buttons.save
             )}
           </Button>
         </DialogFooter>

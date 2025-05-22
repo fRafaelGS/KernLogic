@@ -20,6 +20,7 @@ import {
   RefreshCcw,
   Activity as ActivityIcon,
 } from 'lucide-react';
+import { ROUTES } from '@/config/routes';
 
 // Get recent products count from config
 const RECENT_PRODUCTS_COUNT = config.dashboard.display.recentProductsCount;
@@ -104,7 +105,7 @@ export const DashboardPage: React.FC = () => {
 
   // Handle KPI card click (navigate to filtered products)
   const handleKpiClick = (filter: string) => {
-    navigate(`/app/products?${filter}`);
+    navigate(`${ROUTES.APP.PRODUCTS}?${filter}`);
   };
 
   // Refresh dashboard data
@@ -134,7 +135,7 @@ export const DashboardPage: React.FC = () => {
             Refresh Data
           </Button>
           <Button 
-            onClick={() => navigate('/app/products/new')}
+            onClick={() => navigate(ROUTES.APP.NEW)}
             className="bg-primary-600 hover:bg-primary-700 text-white"
           >
             <Plus className="mr-2 h-4 w-4" />
@@ -153,8 +154,8 @@ export const DashboardPage: React.FC = () => {
                   className="h-full bg-card border-enterprise-200 shadow-sm hover:shadow-md hover:translate-y-[-2px] transition-all" 
                   tabIndex={0} 
                   aria-label="Product status donut chart"
-                  onClick={() => navigate('/app/products')}
-                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') navigate('/app/products') }}
+                  onClick={() => navigate(ROUTES.APP.PRODUCTS)}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') navigate(ROUTES.APP.ROOT) }}
                 >
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium uppercase tracking-wider text-gray-700 dark:text-gray-200">Total Products</CardTitle>
@@ -184,12 +185,12 @@ export const DashboardPage: React.FC = () => {
                                 aria-label={`Product ${p.name || p.sku}`}
                                 onClick={e => {
                                   e.stopPropagation()
-                                  navigate(`/app/products/${p.id}`)
+                                  navigate(ROUTES.buildProductDetailUrl(p.id))
                                 }}
                                 onKeyDown={e => {
                                   if (e.key === 'Enter' || e.key === ' ') {
                                     e.stopPropagation()
-                                    navigate(`/app/products/${p.id}`)
+                                    navigate(ROUTES.buildProductDetailUrl(p.id))
                                   }
                                 }}
                               >
@@ -231,8 +232,8 @@ export const DashboardPage: React.FC = () => {
                   tabIndex={0}
                   role="button"
                   aria-label="Show incomplete products"
-                  onClick={() => navigate('/app/products?completeness_lt=100')}
-                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') navigate('/app/products?completeness_lt=100') }}
+                  onClick={() => navigate(ROUTES.getProductsWithLowCompleteness())}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') navigate(ROUTES.getProductsWithLowCompleteness()) }}
                   style={{ outline: 'none' }}
                 >
                   <DataCompletenessCard 

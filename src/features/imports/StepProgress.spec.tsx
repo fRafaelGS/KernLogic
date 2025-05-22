@@ -1,7 +1,7 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import * as router from 'react-router-dom'
-import StepProgress from './StepProgress'
+import StepProgress from '@/features/imports/StepProgress'
 import { getImport, ImportTask } from '@/services/importService'
 import axios from 'axios'
 

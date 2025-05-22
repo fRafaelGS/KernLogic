@@ -65,14 +65,6 @@ export function BulkTagModal({
     }
   };
 
-  // Handle tag selection change
-  const handleTagChange = (
-    newValue: OnChangeValue<TagOption, true>,
-    actionMeta: ActionMeta<TagOption>
-  ) => {
-    setSelectedTags(newValue ? [...newValue] : []);
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">

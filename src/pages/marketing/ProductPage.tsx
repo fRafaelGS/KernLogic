@@ -11,6 +11,7 @@ import {
   ArrowUpRight,
   LucideSettings
 } from "lucide-react";
+import { ROUTES } from "@/config/routes";
 
 export default function ProductPage() {
   const features = [
@@ -42,14 +43,14 @@ export default function ProductPage() {
               <span className="text-xl font-bold text-enterprise-900">KernLogic</span>
             </div>
             <div className="flex items-center space-x-6">
-              <Link to="/marketing" className="text-enterprise-600 hover:text-primary-600 text-sm font-medium">Home</Link>
-              <Link to="/marketing/pricing" className="text-enterprise-600 hover:text-primary-600 text-sm font-medium">Pricing</Link>
-              <Link to="/login" className="text-enterprise-600 hover:text-primary-600 text-sm font-medium">Login</Link>
+              <Link to={ROUTES.MARKETING.HOME} className="text-enterprise-600 hover:text-primary-600 text-sm font-medium">Home</Link>
+              <Link to={ROUTES.MARKETING.PRICING} className="text-enterprise-600 hover:text-primary-600 text-sm font-medium">Pricing</Link>
+              <Link to={ROUTES.AUTH.LOGIN} className="text-enterprise-600 hover:text-primary-600 text-sm font-medium">Login</Link>
               <Button
                 variant="primary"
                 asChild
               >
-                <Link to="/register">Get Started</Link>
+                <Link to={ROUTES.AUTH.REGISTER}>Get Started</Link>
               </Button>
             </div>
           </div>
@@ -74,7 +75,7 @@ export default function ProductPage() {
               size="lg" 
               asChild
             >
-              <Link to="/register">
+              <Link to={ROUTES.AUTH.REGISTER}>
                 Start Free Trial
                 <ArrowRight />
               </Link>
@@ -102,7 +103,7 @@ export default function ProductPage() {
                   </div>
                   <h3 className="text-xl font-semibold text-enterprise-900 mb-3">{feature.title}</h3>
                   <p className="text-enterprise-600 mb-4">{feature.description}</p>
-                  <Link to="/marketing/product" className="inline-flex items-center text-primary-600 hover:text-primary-700 text-sm font-medium">
+                  <Link to={ROUTES.MARKETING.PRODUCT} className="inline-flex items-center text-primary-600 hover:text-primary-700 text-sm font-medium">
                     Learn more
                     <ArrowUpRight className="ml-1 h-3.5 w-3.5" />
                   </Link>
@@ -203,7 +204,7 @@ export default function ProductPage() {
                 size="lg" 
                 asChild
               >
-                <Link to="/register">
+                <Link to={ROUTES.AUTH.REGISTER}>
                   Start Free Trial
                   <ArrowRight />
                 </Link>
@@ -214,7 +215,7 @@ export default function ProductPage() {
                 className="text-white hover:text-white hover:bg-primary-700"
                 asChild
               >
-                <Link to="/marketing/pricing">
+                <Link to={ROUTES.MARKETING.PRICING}>
                   View Pricing
                 </Link>
               </Button>

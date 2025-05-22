@@ -20,7 +20,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { Loader2, AlertCircle, ExternalLink } from 'lucide-react';
 import axios from 'axios';
-import { API_URL } from '@/config';
+import { API_URL } from '@/config/config';
 import { paths } from '@/lib/apiPaths';
 import { ENABLE_CUSTOM_ATTRIBUTES, ENABLE_ATTRIBUTE_GROUPS } from '@/config/featureFlags';
 import { OrganizationSettingsForm } from '@/features/settings/components/settings/OrganizationSettingsForm';
@@ -185,7 +185,7 @@ const SettingsPage: React.FC = () => {
       </div>
 
       <Tabs defaultValue={defaultTab} className="space-y-6">
-        <TabsList className={`grid w-full grid-cols-${config.settings.display.tabs.length} max-w-lg`}>
+        <TabsList className="grid w-full grid-cols-7 max-w-lg">
           {config.settings.display.tabs.map((tab) => (
             <TabsTrigger key={tab.value} value={tab.value}>
               {tab.label}

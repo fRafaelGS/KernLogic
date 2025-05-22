@@ -1,5 +1,5 @@
 import axiosInstance from '../lib/axiosInstance';
-import { API_URL, API_ENDPOINTS } from '../config';
+import { API_URL, API_ENDPOINTS } from '@/config/config';
 import { Category as CategoryType, TreeNode } from '@/types/categories';
 
 // Use the new categories endpoints instead of the legacy one

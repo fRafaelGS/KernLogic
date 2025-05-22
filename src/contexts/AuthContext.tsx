@@ -221,11 +221,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setError(null);
     try {
+      console.log('API_URL:', API_URL);
+      console.log('API_ENDPOINTS.auth.login:', API_ENDPOINTS.auth.login);
+      const loginUrl = `${API_URL}${API_ENDPOINTS.auth.login}`;
+      console.log('loginUrl:', loginUrl);
       console.log('Login attempt for:', email);
-      
-      // Use the full URL for login - no proxy
-      const loginUrl = `${API_URL}${API_ENDPOINTS.auth.login}`; 
-      console.log('Login URL:', loginUrl);
       
       // Try both email and username formats to handle different backend configurations
       const loginData = { 

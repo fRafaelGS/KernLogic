@@ -68,7 +68,7 @@ export function OrganizationSettingsForm() {
       } else {
         payload.default_channel_id = null
       }
-      const response = await api.patch(`/organizations/${orgId}/`, payload)
+      const response = await api.patch(`/api/organizations/${orgId}/`, payload)
       return response.data
     },
     onSuccess: () => {

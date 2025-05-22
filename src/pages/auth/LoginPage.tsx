@@ -6,6 +6,9 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 import { BeakerIcon, LockKeyhole, Mail, ArrowRight, AlertCircle } from 'lucide-react';
+import { ROUTES } from '@/config/routes';
+import { cn } from '@/lib/utils';
+import { buttonVariants } from '@/components/ui/button';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -16,7 +19,7 @@ export default function LoginPage() {
   const location = useLocation();
 
   // Get the redirect path from location state, or default to /app
-  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/app';
+  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || ROUTES.APP.ROOT;
 
   const validateForm = () => {
     const errors: { email?: string; password?: string } = {};
@@ -71,7 +74,7 @@ export default function LoginPage() {
             <h2 className="mt-6 text-3xl font-bold text-enterprise-900">Sign in to your account</h2>
             <p className="mt-2 text-sm text-enterprise-600">
               Or{' '}
-              <Link to="/register" className="font-medium text-primary-600 hover:text-primary-500">
+              <Link to={ROUTES.AUTH.REGISTER} className="font-medium text-primary-600 hover:text-primary-500">
                 create a new account
               </Link>
             </p>
@@ -168,7 +171,7 @@ export default function LoginPage() {
               </div>
 
               <div className="text-sm">
-                <Link to="/forgot-password" className="font-medium text-primary-600 hover:text-primary-500">
+                <Link to={ROUTES.AUTH.FORGOT_PASSWORD} className="font-medium text-primary-600 hover:text-primary-500">
                   Forgot your password?
                 </Link>
               </div>
@@ -202,18 +205,56 @@ export default function LoginPage() {
               </Button>
             </div>
           </form>
+
+          <div className="mt-6">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-enterprise-200" />
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white text-enterprise-500">
+                  New to KernLogic?
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <Link to={ROUTES.AUTH.REGISTER} className={cn(buttonVariants({ variant: "outline", fullWidth: true }))}>
+                Create an account
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
-      
+
       {/* Right Panel - Image */}
-      <div className="hidden lg:block relative flex-1">
-        <div className="absolute inset-0 bg-gradient-to-b from-primary-500 to-primary-700">
-          <div className="absolute inset-0 bg-enterprise-900 opacity-20 mix-blend-multiply"></div>
-          <div className="absolute bottom-0 left-0 right-0 p-8 text-white">
-            <h2 className="text-2xl font-bold mb-4">Transform your product data management</h2>
-            <p className="text-primary-100">
-              Join thousands of businesses using KernLogic to streamline their product data workflow
+      <div className="hidden lg:block relative w-0 flex-1">
+        <div className="absolute inset-0 h-full w-full object-cover bg-primary-700 flex items-center justify-center">
+          <div className="max-w-md p-8 text-white">
+            <h2 className="text-3xl font-bold mb-4">Welcome to KernLogic</h2>
+            <p className="mb-4">
+              The enterprise-grade Product Information Management (PIM) platform designed to help you manage your product data efficiently.
             </p>
+            <ul className="space-y-2">
+              <li className="flex items-center">
+                <svg className="h-5 w-5 mr-2 text-primary-300" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+                Centralized product data management
+              </li>
+              <li className="flex items-center">
+                <svg className="h-5 w-5 mr-2 text-primary-300" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+                Automated data quality controls
+              </li>
+              <li className="flex items-center">
+                <svg className="h-5 w-5 mr-2 text-primary-300" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+                Enterprise-grade security and compliance
+              </li>
+            </ul>
           </div>
         </div>
       </div>

@@ -8,6 +8,7 @@ import {
   Zap,
   Users
 } from "lucide-react";
+import { ROUTES } from "@/config/routes";
 
 export default function PricingPage() {
   const plans = [
@@ -75,14 +76,14 @@ export default function PricingPage() {
               <span className="text-xl font-bold text-enterprise-900">KernLogic</span>
             </div>
             <div className="flex items-center space-x-6">
-              <Link to="/marketing" className="text-enterprise-600 hover:text-primary-600 text-sm font-medium">Home</Link>
-              <Link to="/marketing/product" className="text-enterprise-600 hover:text-primary-600 text-sm font-medium">Product</Link>
-              <Link to="/login" className="text-enterprise-600 hover:text-primary-600 text-sm font-medium">Login</Link>
+              <Link to={ROUTES.MARKETING.HOME} className="text-enterprise-600 hover:text-primary-600 text-sm font-medium">Home</Link>
+              <Link to={ROUTES.MARKETING.PRODUCT} className="text-enterprise-600 hover:text-primary-600 text-sm font-medium">Product</Link>
+              <Link to={ROUTES.AUTH.LOGIN} className="text-enterprise-600 hover:text-primary-600 text-sm font-medium">Login</Link>
               <Button
                 variant="primary"
                 asChild
               >
-                <Link to="/register">Get Started</Link>
+                <Link to={ROUTES.AUTH.REGISTER}>Get Started</Link>
               </Button>
             </div>
           </div>
@@ -147,7 +148,7 @@ export default function PricingPage() {
                   fullWidth={true}
                   asChild
                 >
-                  <Link to={plan.name === "Enterprise" ? "/contact" : "/register"}>
+                  <Link to={plan.name === "Enterprise" ? `${ROUTES.MARKETING.HOME}/contact` : ROUTES.AUTH.REGISTER}>
                     {plan.cta}
                     <ArrowRight />
                   </Link>
@@ -197,9 +198,9 @@ export default function PricingPage() {
               size="lg"
               asChild
             >
-              <Link to="/register">
-                Start Free Trial
-                <ArrowRight />
+              <Link to={ROUTES.AUTH.REGISTER}>
+                Start Your Free Trial
+                <ArrowRight className="ml-2" />
               </Link>
             </Button>
           </div>

@@ -8,6 +8,7 @@ import { CardDescription } from '@/components/ui/card'
 import { Download, Trash2 } from 'lucide-react'
 import type { AssetBundle, ProductAsset } from '@/services/productService'
 import React from 'react'
+import { config } from '@/config/config'
 
 interface BundleCardProps {
   bundle: AssetBundle
@@ -22,6 +23,8 @@ interface BundleCardProps {
 export function BundleCard({ bundle, productId, assets, onDelete, isImageAsset, getAssetIcon, formatDate }: BundleCardProps) {
   const { download: downloadBundle } = useBundleDownload(productId, bundle.id)
   const bundleAssets = assets.filter(asset => bundle.asset_ids.includes(asset.id))
+  const bundleConfig = config.productDetailTabs.assets.bundleCard
+  
   return (
     <Card key={bundle.id} className="overflow-hidden rounded-lg shadow min-w-0">
       <CardHeader className="p-6 pb-3">
@@ -32,7 +35,7 @@ export function BundleCard({ bundle, productId, assets, onDelete, isImageAsset, 
               variant="ghost"
               size="icon"
               onClick={downloadBundle}
-              title="Download bundle"
+              title={bundleConfig.download_title}
             >
               <Download className="h-4 w-4" />
             </Button>
@@ -40,7 +43,7 @@ export function BundleCard({ bundle, productId, assets, onDelete, isImageAsset, 
               variant="ghost"
               size="icon"
               onClick={() => onDelete(bundle.id)}
-              title="Delete bundle"
+              title={bundleConfig.delete_title}
             >
               <Trash2 className="h-4 w-4 text-red-500" />
             </Button>
@@ -51,7 +54,7 @@ export function BundleCard({ bundle, productId, assets, onDelete, isImageAsset, 
             {formatDate(bundle.created_at)}
           </span>
           <span className="text-xs bg-muted px-2 py-0.5 rounded-full">
-            {bundle.asset_ids.length} assets
+            {bundleConfig.assets_count.replace('{{count}}', bundle.asset_ids.length.toString())}
           </span>
         </CardDescription>
       </CardHeader>

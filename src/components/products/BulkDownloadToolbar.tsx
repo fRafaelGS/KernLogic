@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button'
 import { Download } from 'lucide-react'
 import { useCallback } from 'react'
 import { toast } from '@/components/ui/use-toast'
+import { config } from '@/config/config'
 
 interface BulkDownloadToolbarProps {
   productId: number
@@ -11,16 +12,18 @@ interface BulkDownloadToolbarProps {
 }
 
 export function BulkDownloadToolbar({ productId, selectedIds, disabled, onDownload }: BulkDownloadToolbarProps) {
+  const assetConfig = config.productDetailTabs.assets.bulkDownload
+  
   const handleClick = useCallback(() => {
     if (selectedIds.length > 100) {
       toast({
         variant: 'default',
-        title: 'Large download',
-        description: 'You are downloading more than 100 files. This may take a while.'
+        title: assetConfig.large_download.title,
+        description: assetConfig.large_download.description
       })
     }
     if (!disabled) onDownload()
-  }, [onDownload, disabled, selectedIds])
+  }, [onDownload, disabled, selectedIds, assetConfig])
 
   return (
     <Button
@@ -28,11 +31,11 @@ export function BulkDownloadToolbar({ productId, selectedIds, disabled, onDownlo
       size='sm'
       onClick={handleClick}
       disabled={disabled || !selectedIds.length}
-      title='Download selected assets as ZIP'
-      aria-label='Bulk download assets'
+      title={assetConfig.title}
+      aria-label={assetConfig.aria_label}
     >
       <Download className='h-4 w-4' />
-      <span className='ml-2'>Download ZIP</span>
+      <span className='ml-2'>{assetConfig.button_text}</span>
     </Button>
   )
 } 

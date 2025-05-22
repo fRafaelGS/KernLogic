@@ -49,44 +49,25 @@ const channelService = {
   getChannels: async (): Promise<Channel[]> => {
     try {
       const channelsUrl = paths.channels.root();
-      console.log('DEBUG Channels - Using URL:', channelsUrl);
-      
       const response = await axiosInstance.get(channelsUrl);
-      console.log('DEBUG Channels - Raw response:', response);
       const data = response.data;
-      
-      // Log raw response for debugging
-      console.log('DEBUG Channels - Response data:', data);
-      
-      // Normalize the data to ensure consistent format
       let channels: Channel[] = [];
-      
       if (Array.isArray(data)) {
-        console.log('DEBUG Channels - Data is array with length:', data.length);
         channels = data.map(channel => ({
           ...channel,
-          // Ensure both code and label are available for compatibility
           code: channel.code || channel.name,
           label: channel.label || channel.name
         }));
       } else if (data && typeof data === 'object') {
-        // In case the API returns an object with results property
-        console.log('DEBUG Channels - Data is object with keys:', Object.keys(data));
         const results = data.results || data.items || [];
-        console.log('DEBUG Channels - Results array length:', results.length);
         channels = Array.isArray(results) 
           ? results.map(channel => ({
             ...channel,
-            // Ensure both code and label are available for compatibility
             code: channel.code || channel.name,
             label: channel.label || channel.name
           }))
           : [];
-      } else {
-        console.error('Unexpected channels data format:', data);
       }
-      
-      console.log('DEBUG Channels - Final normalized channels:', channels);
       return channels;
     } catch (error) {
       console.error('Error fetching channels:', error);

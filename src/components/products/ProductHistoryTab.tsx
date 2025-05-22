@@ -182,8 +182,6 @@ const debugAPICall = (productId: number, page: number, filters: Record<string, a
   });
   
   const sampleUrl = `${baseUrl}?${queryParams.toString()}`;
-  console.log('🔍 DEBUG - API Call URL would be:', sampleUrl);
-  console.log('🔍 DEBUG - Full filters object:', filters);
 }
 
 const ProductHistoryTab: React.FC<ProductHistoryTabProps> = ({ productId }) => {
@@ -210,8 +208,6 @@ const ProductHistoryTab: React.FC<ProductHistoryTabProps> = ({ productId }) => {
     
     setLoading(true);
     try {
-      console.log(`Fetching history for product ID: ${productId}, page: ${page}`);
-      
       // Use parameter names exactly as expected by Django backend
       const filters: Record<string, any> = {
         page,
@@ -221,21 +217,18 @@ const ProductHistoryTab: React.FC<ProductHistoryTabProps> = ({ productId }) => {
       // Match event_type parameter in backend
       if (changeType !== 'all') {
         filters.event_type = changeType;
-        console.log(`Filtering by event_type=${changeType}`);
       }
       
       // Match date_from parameter in backend
       if (dateRange.from) {
         const fromDate = dateRange.from.toISOString().slice(0, 10);
         filters.date_from = fromDate; // This is what the backend expects
-        console.log(`Filtering by date_from=${fromDate}`);
       }
       
       // Match date_to parameter in backend
       if (dateRange.to) {
         const toDate = dateRange.to.toISOString().slice(0, 10);
         filters.date_to = toDate; // This is what the backend expects
-        console.log(`Filtering by date_to=${toDate}`);
       }
       
       // Match created_by parameter in backend - handle ID 0 special case
@@ -244,30 +237,22 @@ const ProductHistoryTab: React.FC<ProductHistoryTabProps> = ({ productId }) => {
           // For System user (ID 0), send null or undefined as created_by 
           // depending on what your backend expects
           filters.created_by = null;
-          console.log(`Filtering by created_by=null (System user)`);
         } else {
           // For regular users, send their ID as before
           filters.created_by = Number(changedBy);
-          console.log(`Filtering by created_by=${changedBy} (user)`);
         }
       }
       
-      // Log the full params object for debugging
-      console.log('Params for API call:', JSON.stringify(filters, null, 2));
-      
       // Call the service with the filters
       const data = await productService.getProductHistory(productId, page, filters);
-      console.log('Product history API response:', data);
       
       // Process the results
       const results = data && Array.isArray(data.results) ? data.results : [];
-      console.log(`Found ${results.length} events`);
       
       // Update event type options if needed
       if (results.length > 0) {
         const eventTypes = results.map(r => r.event_type);
         const uniqueTypes = [...new Set(eventTypes)];
-        console.log('Available event types from database:', uniqueTypes);
         
         // Update dropdown options based on actual event types
         const newOptions = [
@@ -322,7 +307,6 @@ const ProductHistoryTab: React.FC<ProductHistoryTabProps> = ({ productId }) => {
   // Add a separate effect specifically for filter changes
   useEffect(() => {
     if (productId) {
-      console.log('Filter changed, reloading from page 1');
       // Reset to page 1 and clear existing events when filters change
       setPageInfo({ page: 1, next: true });
       setEvents([]);
@@ -340,12 +324,6 @@ const ProductHistoryTab: React.FC<ProductHistoryTabProps> = ({ productId }) => {
   const users = useMemo(() => {
     const map = new Map<string, string>()
     
-    // Debug the user data we're receiving
-    console.log('Processing user data from events:', events.map(ev => ({
-      id: ev.created_by,
-      name: ev.created_by_name
-    })));
-    
     events.forEach(ev => {
       // Store as string keys for consistency
       // Skip if created_by is null/undefined, use special '0' key for System
@@ -361,7 +339,6 @@ const ProductHistoryTab: React.FC<ProductHistoryTabProps> = ({ productId }) => {
       label: name
     }));
     
-    console.log('Extracted user options:', userOptions);
     return userOptions;
   }, [events]);
 
@@ -377,28 +354,20 @@ const ProductHistoryTab: React.FC<ProductHistoryTabProps> = ({ productId }) => {
   }, [events]);
 
   const handleFilterChange = (filter: string, value: any) => {
-    console.log(`Filter changed: ${filter} = `, value);
     // Reset page to 1 when filters change
     if (filter === 'changeType') {
       setChangeType(value);
-      console.log(`Set event_type filter to: ${value}`);
     } else if (filter === 'changedBy') {
       setChangedBy(value);
-      console.log(`Set created_by filter to: ${value} (${typeof value})`);
       
       // If we get a user ID of 0, we need to handle it specially as some backends
       // might need null or a special value for "System" actions
       if (value === '0') {
-        console.log('This is a System user (ID 0), may need special backend handling');
       }
     } else if (filter === 'dateRange') {
       setDateRange({ 
         from: value?.from || dateRange.from, 
         to: value?.to || dateRange.to 
-      });
-      console.log(`Set date range filters to:`, {
-        date_from: value?.from?.toISOString().slice(0, 10),
-        date_to: value?.to?.toISOString().slice(0, 10)
       });
     }
     // Filters have changed, so we should reset page info
@@ -408,8 +377,6 @@ const ProductHistoryTab: React.FC<ProductHistoryTabProps> = ({ productId }) => {
 
   // Improve the resetAllFilters function to work on first click
   const resetAllFilters = () => {
-    console.log('Resetting all filters to defaults');
-    
     // Define default date range
     const defaultDateRange = { 
       from: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000), 
@@ -429,9 +396,6 @@ const ProductHistoryTab: React.FC<ProductHistoryTabProps> = ({ productId }) => {
     setEvents([]);
     setPageInfo({ page: 1, next: true });
     
-    // Call the API directly with default filters instead of waiting for state updates
-    console.log('Calling API with default filters');
-    
     // Build minimal default filters
     const defaultFilters = {
       page: 1,
@@ -441,9 +405,7 @@ const ProductHistoryTab: React.FC<ProductHistoryTabProps> = ({ productId }) => {
     // Call the API immediately with default filters
     productService.getProductHistory(productId, 1, defaultFilters)
       .then(data => {
-        console.log('Reset filters API response:', data);
         const results = data && Array.isArray(data.results) ? data.results : [];
-        console.log(`Reset found ${results.length} events`);
         setEvents(results);
         setPageInfo({ page: 1, next: !!(data && data.next) });
         setLoading(false);
@@ -507,17 +469,11 @@ const ProductHistoryTab: React.FC<ProductHistoryTabProps> = ({ productId }) => {
               />
               <div className="flex justify-end p-2">
                 <Button size="sm" onClick={() => {
-                  console.log('Apply button clicked!');
-                  console.log('Setting date range from temp:', tempDateRange);
-                  
                   // Update the date range state
                   setDateRange(tempDateRange);
                   
                   // Close the popover
                   setPickerOpen(false);
-                  
-                  // Force a reload with the explicitly built filters
-                  console.log('Building filters for API call...');
                   
                   const filters: Record<string, any> = { 
                     page: 1, 
@@ -532,13 +488,11 @@ const ProductHistoryTab: React.FC<ProductHistoryTabProps> = ({ productId }) => {
                   if (tempDateRange.from) {
                     const fromDate = tempDateRange.from.toISOString().slice(0, 10);
                     filters.date_from = fromDate;
-                    console.log(`Setting date_from filter: ${fromDate}`);
                   }
                   
                   if (tempDateRange.to) {
                     const toDate = tempDateRange.to.toISOString().slice(0, 10);
                     filters.date_to = toDate;
-                    console.log(`Setting date_to filter: ${toDate}`);
                   }
                   
                   // Use the same user handling logic as in loadEvents
@@ -546,11 +500,9 @@ const ProductHistoryTab: React.FC<ProductHistoryTabProps> = ({ productId }) => {
                     if (changedBy === '0') {
                       // For System user (ID 0), send null
                       filters.created_by = null;
-                      console.log(`Filtering by created_by=null (System user)`);
                     } else {
                       // For regular users, send their numeric ID
                       filters.created_by = Number(changedBy);
-                      console.log(`Filtering by created_by=${changedBy} (user)`);
                     }
                   }
                   
@@ -558,13 +510,9 @@ const ProductHistoryTab: React.FC<ProductHistoryTabProps> = ({ productId }) => {
                   setEvents([]);
                   setPageInfo({ page: 1, next: true });
                   
-                  // Call the API with explicit filters
-                  console.log('Calling API with filters:', filters);
                   productService.getProductHistory(productId, 1, filters)
                     .then(data => {
-                      console.log('Product history API response:', data);
                       const results = data && Array.isArray(data.results) ? data.results : [];
-                      console.log(`Found ${results.length} events with date filters`);
                       setEvents(results);
                       setPageInfo({ page: 1, next: !!(data && data.next) });
                       setLoading(false);

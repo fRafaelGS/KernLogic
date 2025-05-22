@@ -8,6 +8,7 @@ import {
   ImageIcon, AlertTriangle, PlusIcon, AlertCircle,
   Check, ChevronDown, ChevronUp, List
 } from 'lucide-react';
+import ProductDetailDescription from '@/components/products/ProductDetailDescription';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -107,11 +108,7 @@ export const ProductDetailTabs = ({
   useEffect(() => {
     // Log rendering info whenever the active tab or product ID changes
     if (activeTab === 'attributes') {
-      console.log('[Debug] Attributes tab selected', {
-        'ENABLE_CUSTOM_ATTRIBUTES': ENABLE_CUSTOM_ATTRIBUTES,
-        'product.id exists': !!product.id,
-        'productId value': String(product.id) 
-      });
+      // Remove this console.log as it's just for debugging
     }
   }, [activeTab, product.id]);
   
@@ -247,7 +244,7 @@ export const ProductDetailTabs = ({
   useEffect(() => {
     // Refresh assets when switching to assets tab
     if (activeTab === 'assets' && product.id) {
-      console.log('Refreshing assets because user navigated to assets tab');
+      // Remove non-essential console log
       fetchAssets();
       
       // Set up a polling interval to check for asset changes while on this tab
@@ -295,12 +292,10 @@ export const ProductDetailTabs = ({
     let fetchedAssets: ProductAsset[] = [];
     try {
       // Attempt to get assets from API
-      console.log(`Attempting to fetch assets for product ${product.id}`);
       fetchedAssets = await productService.getProductAssets(product.id);
       
       // If we got a valid response with at least one asset
       if (Array.isArray(fetchedAssets) && fetchedAssets.length > 0) {
-        console.log('Successfully fetched assets from API:', fetchedAssets.length);
         
         // Normalize asset data structure to ensure consistency
         const normalizedAssets = fetchedAssets.map(asset => ({
@@ -336,7 +331,6 @@ export const ProductDetailTabs = ({
       if (cachedAssetsJSON) {
         const cachedAssets = JSON.parse(cachedAssetsJSON);
         if (Array.isArray(cachedAssets) && cachedAssets.length > 0) {
-          console.log(`Using ${cachedAssets.length} cached assets from localStorage`);
           setAssets(cachedAssets);
           setLoadingAssets(false);
           return;
@@ -347,7 +341,6 @@ export const ProductDetailTabs = ({
     }
     
     // If we got here, both API and cache failed - set empty assets array
-    console.log('No assets from API or cache, setting empty assets array');
     setAssets([]);
     setLoadingAssets(false);
   };
@@ -359,18 +352,15 @@ export const ProductDetailTabs = ({
     setLoadingActivities(true);
     
     try {
-      console.log('Attempting to fetch activities for product ID:', product.id);
       const data = await productService.getProductActivities(product.id);
       
       // Ensure data is always an array
       if (Array.isArray(data) && data.length > 0) {
-        console.log('Successfully fetched activities:', data.length);
         setActivities(data);
       } else {
         console.warn('No activities returned from API or invalid response format');
         // Don't override existing activities if we get an empty response
         if (activities.length === 0) {
-          console.log('Using mock activities as fallback');
           // Fallback to mock data if API fails
           setActivities([
             { id: 1, type: 'create', user: 'John Doe', timestamp: '2023-10-01T09:00:00Z', details: 'Product created' },
@@ -387,7 +377,6 @@ export const ProductDetailTabs = ({
       console.error('Error fetching activities:', error);
       // Only use fallback if no existing data
       if (activities.length === 0) {
-        console.log('Using mock activities due to error');
         // Fallback to mock data if API fails
         setActivities([
           { id: 1, type: 'create', user: 'John Doe', timestamp: '2023-10-01T09:00:00Z', details: 'Product created' },
@@ -410,9 +399,6 @@ export const ProductDetailTabs = ({
     
     setLoadingAttributes(true);
     try {
-      // Log the category to debug
-      console.log('Product category:', product.category);
-      
       // Use the normalizeCategory helper to handle both string and object formats
       const normalizedCategory = normalizeCategory(product.category);
       const categoryName = normalizedCategory.name;
@@ -434,7 +420,6 @@ export const ProductDetailTabs = ({
         setId = 3;
       }
       
-      console.log('Using attribute set ID:', setId);
       setAttributeSetId(setId);
       
       // Fetch attributes for this set
@@ -538,8 +523,6 @@ export const ProductDetailTabs = ({
       
       // If we have a primary asset and it's an image, update the parent component
       if (primaryAsset && isImageAsset(primaryAsset)) {
-        console.log('Primary asset found in assets list:', primaryAsset.id);
-        
         // Notify parent component about updated product with type casting to avoid TS errors
         onProductUpdate({
           ...product,
@@ -570,16 +553,6 @@ export const ProductDetailTabs = ({
             return;
           }
           
-          // Log product structure to help debug category and GTIN issues
-          console.log('Product structure for completeness check:', {
-            id: product.id,
-            hasCategory: !!product.category,
-            categoryType: Array.isArray(product.category) ? 'array' : typeof product.category,
-            categoryLength: Array.isArray(product.category) ? product.category.length : 'N/A',
-            hasBarcode: !!product.barcode,
-            barcode: product.barcode
-          });
-            
           // Use the dashboardService to fetch product completeness with organization_id and product_id
           const completenessData = await dashboardService.getIncompleteProducts({
             organization_id: organizationId,
@@ -590,12 +563,6 @@ export const ProductDetailTabs = ({
           if (Array.isArray(completenessData) && completenessData.length > 0) {
             setProductCompletenessDetails(completenessData[0]);
             
-            // Log the completeness details to debug
-            console.log('Product completeness details:', {
-              completeness: completenessData[0].completeness,
-              missingFieldsCount: completenessData[0].missing_fields_count,
-              missingFields: completenessData[0].missing_fields.map(f => f.field)
-            });
           } else if (completenessData.length === 0) {
             // Handle case where no data is returned
             console.error('No completeness data found for this product');
@@ -666,6 +633,12 @@ export const ProductDetailTabs = ({
       </TabsList>
       
       <TabsContent value="overview" className="space-y-6">
+        {/* Product Description Component */}
+        <ProductDetailDescription 
+          product={product}
+          onProductUpdate={onProductUpdate}
+        />
+        
         {/* Data Completeness Card */}
         <Card className="relative">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -895,19 +868,6 @@ export const ProductDetailTabs = ({
           </CardContent>
         </Card>
         
-        {/* Product Information card */}
-        <Card className="overflow-hidden">
-          <CardHeader>
-            <CardTitle>{detailTabsConfig.overview.productInfo.title}</CardTitle>
-            <CardDescription>
-              {detailTabsConfig.overview.productInfo.description}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {/* Product information content remains unchanged */}
-          </CardContent>
-        </Card>
-        
         {/* Media Section - Reuse asset data from the API */}
         <Card className="overflow-hidden">
           <CardHeader>
@@ -935,8 +895,6 @@ export const ProductDetailTabs = ({
                     }
                     return true;
                   });
-                  
-                  console.log(`[MediaCard] Found ${imageAssets.length} valid image assets`);
                   
                   if (imageAssets.length > 0) {
                     return (

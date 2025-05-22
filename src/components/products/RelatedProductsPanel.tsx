@@ -289,7 +289,7 @@ const RelatedProductsPanel: React.FC<RelatedProductsPanelProps> = ({
               }
             }
           } catch (assetErr) {
-            console.warn('[RelatedProductsPanel] Could not fetch assets for related product', p.id, assetErr);
+            // Removed non-essential console.warn
           }
           return p;
         })
@@ -320,7 +320,7 @@ const RelatedProductsPanel: React.FC<RelatedProductsPanelProps> = ({
       
       setRelatedProducts(enhancedProducts);
     } catch (err) {
-      console.error('Error loading related products:', err);
+      // Removed non-essential console.error
       setError('Failed to load related products');
       setRelatedProducts([]);
     } finally {
@@ -330,8 +330,6 @@ const RelatedProductsPanel: React.FC<RelatedProductsPanelProps> = ({
 
   // Handle adding a new related product - Now with dialog for notes
   const handleAddRelatedProduct = async (product: Product, relType: RelationshipType = 'general', notes: string = '') => {
-    console.log('Adding related product:', product);
-    
     // Get base price from prices array if available
     const basePrice = product.prices?.find(p => p.price_type === 'base')?.amount || 0;
     
@@ -353,19 +351,14 @@ const RelatedProductsPanel: React.FC<RelatedProductsPanelProps> = ({
       }
     };
     
-    console.log('New product object for UI:', newProduct);
-    
     // Update the state with the new product
     setRelatedProducts(prev => {
-      console.log('Previous related products:', prev);
       const updated = [newProduct, ...prev];
-      console.log('Updated related products:', updated);
       return updated;
     });
     
     // Call API to add the relation
     try {
-      console.log('Calling API to add relation');
       const success = await productService.toggleRelatedProduct(
         productId,
         product.id!,
@@ -373,8 +366,6 @@ const RelatedProductsPanel: React.FC<RelatedProductsPanelProps> = ({
         relType, // Pass relationship type directly
         notes // Pass notes
       );
-      
-      console.log('API response success:', success);
       
       if (!success) {
         toast.error("Failed to add related product");
@@ -389,7 +380,7 @@ const RelatedProductsPanel: React.FC<RelatedProductsPanelProps> = ({
         }, 500);
       }
     } catch (err) {
-      console.error('Error adding related product:', err);
+      // Removed non-essential console.error
       toast.error("Failed to add related product");
       fetchRelatedProducts();
     }
@@ -422,7 +413,7 @@ const RelatedProductsPanel: React.FC<RelatedProductsPanelProps> = ({
       
       return result;
     } catch (err) {
-      console.error('Error adding multiple related products:', err);
+      // Removed non-essential console.error
       toast.error("Failed to add related products");
       return { success: false, processed: 0, failed: productIds.length };
     }
@@ -458,7 +449,7 @@ const RelatedProductsPanel: React.FC<RelatedProductsPanelProps> = ({
         fetchRelatedProducts();
       }
     } catch (err) {
-      console.error('Error removing related product:', err);
+      // Removed non-essential console.error
       toast.error("Couldn't remove product");
       fetchRelatedProducts();
     }
@@ -505,7 +496,7 @@ const RelatedProductsPanel: React.FC<RelatedProductsPanelProps> = ({
         toast.error("Failed to update relationship");
       }
     } catch (err) {
-      console.error('Error updating relationship:', err);
+      // Removed non-essential console.error
       toast.error("Failed to update relationship");
     } finally {
       setSaving(false);
@@ -514,7 +505,6 @@ const RelatedProductsPanel: React.FC<RelatedProductsPanelProps> = ({
 
   // Set up edit relation
   const setupEditRelation = (relation: ProductRelation) => {
-    console.log('Setting up edit for relation:', relation);
     setEditingRelation(relation);
     setRelationshipType(relation.relationship_type);
     setNotes(relation.notes || '');
@@ -545,11 +535,6 @@ const RelatedProductsPanel: React.FC<RelatedProductsPanelProps> = ({
     activeIndex + maxProductsPerPage
   );
   
-  console.log('All related products:', relatedProducts);
-  console.log('Visible products:', visibleProducts);
-  console.log('Current page:', currentPage, 'of', totalPages);
-  console.log('Active index:', activeIndex, 'Max per page:', maxProductsPerPage);
-
   // Handle pinning/unpinning a related product
   const handleTogglePin = async (productToUpdate: EnhancedProduct, isPinned: boolean) => {
     if (!productToUpdate.id || !productToUpdate.relation) {
@@ -611,7 +596,7 @@ const RelatedProductsPanel: React.FC<RelatedProductsPanelProps> = ({
         toast.error(isPinned ? "Failed to pin product" : "Failed to unpin product");
       }
     } catch (err) {
-      console.error('Error updating pin status:', err);
+      // Removed non-essential console.error
       toast.error(isPinned ? "Failed to pin product" : "Failed to unpin product");
     }
   };

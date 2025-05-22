@@ -136,7 +136,6 @@ function ProductDetailSidebar({ product, prices, isPricesLoading }: ProductDetai
         file, 
         (progressEvent) => {
           const progress = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 100));
-          console.log(`Upload progress: ${progress}%`);
         }
       );
       

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { dashboardService, DashboardSummary, InventoryTrend, Activity, IncompleteProduct } from '@/services/dashboardService';
+import { getDashboardSummary, getRecentActivity, getIncompleteProducts, DashboardSummary, InventoryTrend, Activity, IncompleteProduct } from '@/services/dashboardService';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { config } from '@/config/config';
@@ -119,7 +119,7 @@ export function useDashboardData() {
     setLoading(prev => ({ ...prev, summary: true }));
     setError(prev => ({ ...prev, summary: null }));
     try {
-      const data = await dashboardService.getDashboardSummary(organizationId);
+      const data = await getDashboardSummary(organizationId);
       setSummary(data);
       updateCache('summary', data);
     } catch (err: any) {
@@ -153,7 +153,7 @@ export function useDashboardData() {
     setError(prev => ({ ...prev, activity: null }));
 
     try {
-      const data = await dashboardService.getRecentActivity(organizationId);
+      const data = await getRecentActivity(organizationId);
       
       // Add validation check for activity data
       if (!Array.isArray(data)) {
@@ -203,7 +203,7 @@ export function useDashboardData() {
     setError(prev => ({ ...prev, incompleteProducts: null }));
 
     try {
-      const data = await dashboardService.getIncompleteProducts(organizationId);
+      const data = await getIncompleteProducts(organizationId);
 
       // Add validation check here
       if (!Array.isArray(data)) {

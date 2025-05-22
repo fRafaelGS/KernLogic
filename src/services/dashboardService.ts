@@ -65,11 +65,6 @@ export interface IncompleteProductsParams {
 // Define path to dashboard endpoints - use the path from config
 const DASHBOARD_URL = API_ENDPOINTS.dashboard;
 
-// Log the dashboard endpoint configuration if debugging is enabled
-if (config.debug.enableLogs) {
-  console.log('Dashboard API endpoints configured at:', DASHBOARD_URL);
-}
-
 /**
  * Build URL with organization ID parameter
  * @param endpoint Base endpoint URL
@@ -169,72 +164,33 @@ export const getIncompleteProducts = async (
 ): Promise<IncompleteProduct[]> => {
   try {
     let url = `${DASHBOARD_URL}/incomplete-products/`;
-    
     // Handle both legacy string parameter and new params object
     if (typeof params === 'string') {
       // Legacy support - organizationId as string parameter
       url = withOrgParam(url, params);
-      
       if (config.debug.enableLogs) {
-        console.log('Incomplete Products API Call (legacy):', {
-          url,
-          organizationId: params || 'not provided'
-        });
+        // Optionally log legacy call
       }
     } else {
       // New parameter object format
       const { organization_id, limit, product_id } = params;
-      
-      // Build URL with query parameters
       url = `${url}?organization_id=${organization_id}`;
-      
       if (limit !== undefined) {
         url += `&limit=${limit}`;
       }
-      
       if (product_id !== undefined) {
         url += `&product_id=${product_id}`;
       }
-      
-      if (config.debug.enableLogs) {
-        console.log('Incomplete Products API Call:', {
-          url,
-          params
-        });
-      }
     }
-    
     const response = await axiosInstance.get(url);
-    
-    // Debug log to check the response structure if logging is enabled
-    if (config.debug.enableLogs) {
-      console.log('Incomplete Products API response:', {
-        status: response.status,
-        isArray: Array.isArray(response.data),
-        dataType: typeof response.data,
-        dataPreview: response.data
-      });
-    }
-    
     // If product_id is provided, the response might be a single object
-    // Convert it to an array for consistent return type
     if (!Array.isArray(response.data) && typeof response.data === 'object') {
       return [response.data];
     }
-    
     // Ensure we always return an array
     return Array.isArray(response.data) ? response.data : [];
   } catch (error) {
     console.error('Error fetching incomplete products:', error);
-    throw error;
+    return [];
   }
 };
-
-/**
- * Dashboard service module
- */
-export const dashboardService = {
-  getDashboardSummary,
-  getRecentActivity,
-  getIncompleteProducts,
-}; 

@@ -135,17 +135,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
       try {
-        console.log('Fetching user profile from:', `${API_URL}${API_ENDPOINTS.auth.user}`);
-        
         // 2) Fetch user profile
         const meRes = await axiosInstance.get(API_ENDPOINTS.auth.user);
-        console.log('User profile response:', meRes.data);
-        
-        if (process.env.NODE_ENV === 'development') {
-          console.log('All keys on user data:', Object.keys(meRes.data));
-          console.log('Data.organizations:', meRes.data.organizations);
-          console.log('Data.memberships:', meRes.data.memberships);
-        }
         
         if (!meRes.data || (Array.isArray(meRes.data) && meRes.data.length === 0)) {
           console.error('Empty user profile response');
@@ -154,7 +145,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         // 3) Normalize user data
         const me = normalizeUserData(meRes.data);
-        console.log('Normalized user data:', me);
 
         // Set the user with available data
         setUser(me);
@@ -335,7 +325,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           
           // Normalize user data
           const me = normalizeUserData(userResponse.data);
-          console.log('Normalized user data:', me);
           
           // If we have an org ID, fetch memberships to determine role
           if (me.id && me.organization_id) {

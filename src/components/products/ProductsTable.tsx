@@ -80,6 +80,7 @@ import { useFamilies } from "@/api/familyApi";
 import { useFetchProducts } from "@/hooks/useFetchProducts";
 import { config } from "@/config/config";
 import { ROUTES } from "@/config/routes";
+import { ProductsTableFilters } from './ProductsTableFilters'
 
 /**
  * ProductsTable - A table for displaying and managing products
@@ -272,19 +273,26 @@ export function ProductsTable({
     }
   }, [columnVisibility.actions]);
   
-  // Create filter state for React Query
-  const [filters, setFilters] = useState<Record<string, any>>({
+  // Create a default filters object to ensure all keys are always present
+  const defaultFilters: Record<string, any> = {
     page_size: pagination.pageSize,
-    page: pagination.pageIndex + 1, // API uses 1-based pagination
-    tags: [], // Ensure tags is initialized with an empty array
+    page: pagination.pageIndex + 1,
+    tags: [],
     category: 'all',
+    family: undefined,
     status: 'all',
     minPrice: '',
     maxPrice: '',
-    ...initialFilters // Override defaults with any provided initial filters
-  });
+    brand: '',
+    barcode: '',
+    created_at: '',
+    updated_at: '',
+    ...initialFilters // this will override defaults if provided
+  }
+
+  const [filters, setFilters] = useState<Record<string, any>>(defaultFilters)
   
-  // Replace existing fetch with React Query
+  // Remove cleanFilters and pass filters directly to useFetchProducts
   const { 
     data, 
     isLoading: loading, 
@@ -297,8 +305,19 @@ export function ProductsTable({
   const [productsState, setProducts] = useState<Product[]>([]);
   const products = useMemo(() => {
     if (!data) return [];
-    const newProducts = data.pages.flatMap(page => page.results);
-    // Update products state when data changes
+    // Minimal debug: log raw pages
+    // eslint-disable-next-line no-console
+    console.log('Raw data.pages:', data.pages)
+    const newProducts = data.pages.flatMap(page =>
+      Array.isArray(page)
+        ? page
+        : Array.isArray(page?.results)
+          ? page.results
+          : []
+    )
+    // Minimal debug: log products after fetch
+    // eslint-disable-next-line no-console
+    console.log('Products returned from API:', newProducts)
     setProducts(newProducts);
     return newProducts;
   }, [data]);
@@ -426,47 +445,34 @@ export function ProductsTable({
     });
   };
   
-  // Enhanced function to extract unique categories from products
+  // Enhanced function to extract unique categories from products (all levels)
   const extractUniqueCategories = useCallback((products: Product[]) => {
-    const uniqueCategories = new Set<string>();
-    
+    const uniqueCategories = new Set<string>()
+
     products.forEach(product => {
-      // Handle complex category objects
-      if (product.category) {
-        if (Array.isArray(product.category)) {
-          // Extract leaf category from array
-          if (product.category.length > 0) {
-            const leaf = product.category[product.category.length - 1];
-            if (typeof leaf === 'object' && leaf !== null && 'name' in leaf) {
-              uniqueCategories.add(leaf.name);
-            } else if (typeof leaf === 'string') {
-              uniqueCategories.add(leaf);
-            }
-          }
-        } else if (typeof product.category === 'object' && product.category !== null && 'name' in product.category) {
-          // Extract name from single category object
-          uniqueCategories.add(product.category.name);
-        } else if (typeof product.category === 'string') {
-          // Handle string category
-          uniqueCategories.add(product.category);
-        }
+      if (!product) return
+
+      const cat = product.category
+
+      if (Array.isArray(cat)) {
+        cat.forEach(c => {
+          if (typeof c === 'object' && c?.name) uniqueCategories.add(c.name)
+          else if (typeof c === 'string') uniqueCategories.add(c)
+        })
+      } else if (typeof cat === 'object' && cat?.name) {
+        uniqueCategories.add(cat.name)
+      } else if (typeof cat === 'string') {
+        uniqueCategories.add(cat)
       }
-      
-      // Always include category_name if available (from API)
-      if (product.category_name && typeof product.category_name === 'string') {
-        uniqueCategories.add(product.category_name);
-      }
-    });
-    
-    // Convert to sorted array
-    return Array.from(uniqueCategories).sort();
-  }, []);
+    })
+
+    return Array.from(uniqueCategories).sort()
+  }, [])
 
   // Extract unique categories using our enhanced function
-  const uniqueCategories = useMemo(() => 
-    extractUniqueCategories(products), 
-    [products, extractUniqueCategories]
-  );
+  const uniqueCategories = useMemo(() => {
+    return categoryOptions.map(opt => opt.label).filter(Boolean)
+  }, [categoryOptions])
   
   // Remove old useUniqueCategories hook usage
   // const uniqueCategories = useUniqueCategories(products);
@@ -519,33 +525,21 @@ export function ProductsTable({
 
   // Handle clear filters
   const handleClearFilters = useCallback(() => {
-    setFilters({
-      category: 'all',
-      family: 'all',
-      status: 'all',
-      minPrice: '',
-      maxPrice: '',
-      tags: [], // Clear tags array
-      brand: undefined,
-      barcode: undefined,
-      created_at: undefined,
-      updated_at: undefined,
-    });
-    
+    setFilters({ ...defaultFilters })
     // Update URL params without the cleared filters
-    const params = new URLSearchParams(searchParams);
-    params.delete('category');
-    params.delete('family');
-    params.delete('status');
-    params.delete('minPrice');
-    params.delete('maxPrice');
-    params.delete('tags'); // Remove tags parameter if it exists
-    params.delete('brand');
-    params.delete('barcode');
-    params.delete('created_at');
-    params.delete('updated_at'); // Remove any other filter parameters
-    setSearchParams(params);
-  }, [searchParams, setSearchParams]);
+    const params = new URLSearchParams(searchParams)
+    params.delete('category')
+    params.delete('family')
+    params.delete('status')
+    params.delete('minPrice')
+    params.delete('maxPrice')
+    params.delete('tags')
+    params.delete('brand')
+    params.delete('barcode')
+    params.delete('created_at')
+    params.delete('updated_at')
+    setSearchParams(params)
+  }, [searchParams, setSearchParams, defaultFilters])
 
   // --- ADD Bulk Action Handlers (Placeholder/Assumed API) ---
   const handleBulkDelete = async () => {
@@ -1384,14 +1378,11 @@ export function ProductsTable({
     key: K,
     value: FilterState[K]
   ) => {
-    // Debug logging for category
-    if (key === 'category') {
-      console.log("handleFilterChange - Category value:", value);
+    if (key === 'family') {
+      setFilters(prev => ({ ...prev, family: value === 'all' ? undefined : value }))
+      return
     }
-    
-    // Update the filters state
-    setFilters(prev => ({ ...prev, [key]: value }));
-    
+    setFilters(prev => ({ ...prev, [key]: value }))
     // Special handling for category filter
     if (key === 'category') {
       const categoryColumn = table.getColumn('category');
@@ -1540,6 +1531,37 @@ export function ProductsTable({
       document.removeEventListener('mousedown', handleClickWithDelay);
     };
   }, [editingCell, handleCancelEdit]);
+
+  // Minimal debug: log filters before fetch
+  useEffect(() => {
+    // eslint-disable-next-line no-console
+    console.log('Filters before fetch:', filters)
+  }, [filters])
+
+  // Add uniqueBrands derived from products
+  const uniqueBrands = useMemo(() => {
+    const brands = new Set<string>()
+    products.forEach(p => {
+      if (p && typeof p.brand === 'string' && p.brand.trim()) brands.add(p.brand.trim())
+    })
+    return Array.from(brands).sort()
+  }, [products])
+
+  // Only show categories that are used by at least one product
+  const usedCategoryIds = new Set<string | number>()
+  products.forEach(product => {
+    if (Array.isArray(product.category)) {
+      product.category.forEach((cat: any) => {
+        if (cat && typeof cat === 'object' && cat.id !== undefined) usedCategoryIds.add(cat.id)
+        else if (typeof cat === 'string' || typeof cat === 'number') usedCategoryIds.add(cat)
+      })
+    } else if (product.category && typeof product.category === 'object' && product.category.id !== undefined) {
+      usedCategoryIds.add(product.category.id)
+    } else if (typeof product.category === 'string' || typeof product.category === 'number') {
+      usedCategoryIds.add(product.category)
+    }
+  })
+  const filteredCategories = categoryOptions.filter(opt => usedCategoryIds.has(opt.value))
 
   // Render the component
   return (
@@ -1701,362 +1723,19 @@ export function ProductsTable({
                               )}
                             </TableRow>
 
-                            {/* 2) Filter inputs - Always visible now */}
-                            <TableRow className="sticky top-9 z-20 bg-slate-50 h-6 border-b border-slate-200">
-                              {headerGroup.headers.map((header) => {
-                                const column = header.column;
-                                const columnId = column.id;
-                                
-                                // Skip filter UI for select column
-                                if (columnId === 'select') {
-                                  return <TableHead key={`filter-${columnId}`} className="px-1 py-1" />;
-                                }
-                                
-                                // Add Clear Filters button to thumbnail column 
-                                // thumbnail column ➜ filter row
-                                if (columnId === "thumbnail") {
-                                  return (
-                                    <TableHead key={`filter-${columnId}`} className="px-1 py-1">
-                                      <Button
-                                        variant="outline"       // keeps the shadcn outline styling
-                                        size="sm"
-                                        onClick={() => {
-                                          table.resetColumnFilters();
-                                          setColumnFilterValues({});
-                                          handleClearFilters();
-                                        }}
-                                        /* prettier, compact pill-style */
-                                        className="
-                                          h-6 px-3                   /* slimmer height & horizontal padding  */
-                                          rounded-full               /* fully rounded pill                  */
-                                          border-slate-300           /* subtle 1-px border                  */
-                                          bg-white/90                /* soft white with a hint of opacity   */
-                                          text-slate-600             /* medium-gray label                   */
-                                          hover:bg-slate-100         /* light gray hover                    */
-                                          hover:border-slate-400
-                                          shadow-sm                  /* faint drop-shadow                   */
-                                          transition-colors
-                                        "
-                                      >
-                                        Reset
-                                      </Button>
-                                    </TableHead>
-                                  );
-                                }
-
-                                
-                                // Use tailwind classes for mobile responsiveness
-                                const hideOnMobileClass = ['brand', 'barcode', 'created_at', 'tags'].includes(columnId) ? 'hidden md:table-cell' : '';
-                                
-                                return (
-                                  <TableHead key={`filter-${columnId}`} className={`px-2 py-2 ${hideOnMobileClass}`}>
-                                    {/* Using React.Fragment to properly wrap the IIFE result as a ReactNode */}
-                                    <React.Fragment>
-                                    {(() => {
-                                      // Text input filter for text columns
-                                      if (['name','sku','brand','barcode'].includes(columnId)) {
-                                        return (
-                                          <Input
-                                            placeholder="Filter…"
-                                            value={filters[columnId] ?? ''}
-                                            onChange={(e) => {
-                                              handleColumnFilterChange(columnId, e.target.value);
-                                            }}
-                                            className="h-7 text-xs"
-                                            onClick={(e) => e.stopPropagation()}
-                                          />
-                                        );
-                                      }
-
-                                      // Dropdown filter for category
-                                      if (columnId === 'category') {
-                                        return (
-                                          <Select
-                                            value={filters.category ?? "all"}
-                                            onValueChange={(value) => {
-                                              // Debug logging
-                                              console.log("Category filter selected:", value);
-                                              
-                                              // Update filters state with server-side filtering
-                                              handleColumnFilterChange("category", value === 'all' ? undefined : value);
-                                            }}
-                                          >
-                                            <SelectTrigger className="h-7 text-xs">
-                                              <SelectValue placeholder={tableConfig.display.selectors.category.placeholder} />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                              <SelectItem value="all">{tableConfig.display.selectors.category.allCategories}</SelectItem>
-                                              <SelectItem value="uncategorized">{tableConfig.display.selectors.category.uncategorized}</SelectItem>
-                                              {uniqueCategories.length > 0 ? (
-                                                uniqueCategories.map((category) => (
-                                                  <SelectItem key={category} value={category}>
-                                                    {category}
-                                                  </SelectItem>
-                                                ))
-                                              ) : (
-                                                <SelectItem value="no-categories" disabled>
-                                                  {tableConfig.display.selectors.category.noCategories}
-                                                </SelectItem>
-                                              )}
-                                            </SelectContent>
-                                          </Select>
-                                        );
-                                      }
-
-                                      // Status filter for is_active
-                                      if (columnId === 'is_active') {
-                                        return (
-                                          <Select
-                                            value={filters[columnId] ?? ''}
-                                            onValueChange={(value) => {
-                                              handleColumnFilterChange(columnId, value === 'all' ? undefined : value);
-                                            }}
-                                          >
-                                            <SelectTrigger className="h-7 text-xs">
-                                              <SelectValue placeholder={tableConfig.display.selectors.status.placeholder} />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                              <SelectItem value="all">{tableConfig.display.selectors.status.all}</SelectItem>
-                                              <SelectItem value="true">{tableConfig.display.selectors.status.active}</SelectItem>
-                                              <SelectItem value="false">{tableConfig.display.selectors.status.inactive}</SelectItem>
-                                            </SelectContent>
-                                          </Select>
-                                        );
-                                      }
-
-                                      // Price range filter
-                                      if (columnId === 'price') {
-                                        return (
-                                          <Popover>
-                                            <PopoverTrigger asChild>
-                                              <Button 
-                                                variant="outline" 
-                                                className="h-7 text-xs w-full justify-start font-normal"
-                                                onClick={(e) => e.stopPropagation()}
-                                              >
-                                                <span>{tableConfig.display.selectors.price.buttonLabel}</span>
-                                              </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-60 p-3" align="start">
-                                              <div className="space-y-2">
-                                                <div className="grid grid-cols-2 gap-2">
-                                                  <div>
-                                                    <Label htmlFor="price-min">{tableConfig.display.selectors.price.minLabel}</Label>
-                                                    <Input
-                                                      id="price-min"
-                                                      type="number"
-                                                      placeholder={tableConfig.display.selectors.price.minLabel}
-                                                      className="h-8"
-                                                      value={filters.minPrice || ''}
-                                                      onChange={(e) => {
-                                                        handleColumnFilterChange('minPrice', e.target.value);
-                                                      }}
-                                                    />
-                                                  </div>
-                                                  <div>
-                                                    <Label htmlFor="price-max">{tableConfig.display.selectors.price.maxLabel}</Label>
-                                                    <Input
-                                                      id="price-max"
-                                                      type="number"
-                                                      placeholder={tableConfig.display.selectors.price.maxLabel}
-                                                      className="h-8"
-                                                      value={filters.maxPrice || ''}
-                                                      onChange={(e) => {
-                                                        handleColumnFilterChange('maxPrice', e.target.value);
-                                                      }}
-                                                    />
-                                                  </div>
-                                                </div>
-                                                <Button 
-                                                  size="sm" 
-                                                  variant="outline" 
-                                                  className="w-full text-xs"
-                                                  onClick={() => {
-                                                    handleColumnFilterChange('minPrice', undefined);
-                                                    handleColumnFilterChange('maxPrice', undefined);
-                                                  }}
-                                                >
-                                                  {tableConfig.display.selectors.price.resetButton}
-                                                </Button>
-                                              </div>
-                                            </PopoverContent>
-                                          </Popover>
-                                        );
-                                      }
-
-                                      // Date filters
-                                      if (['created_at', 'updated_at'].includes(columnId)) {
-                                        return (
-                                          <Popover>
-                                            <PopoverTrigger asChild>
-                                              <Button 
-                                                variant="outline" 
-                                                className="h-7 text-xs w-full justify-start font-normal"
-                                                onClick={(e) => e.stopPropagation()}
-                                              >
-                                                <span>Date Range</span>
-                                              </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-auto p-3" align="start">
-                                              <div className="space-y-2">
-                                                <div className="grid gap-2">
-                                                  <div>
-                                                    <Label htmlFor={`${columnId}-from`}>From</Label>
-                                                    <Input
-                                                      id={`${columnId}-from`}
-                                                      type="date"
-                                                      className="h-8"
-                                                      value={filters[`${columnId}_from`] || ''}
-                                                      onChange={(e) => {
-                                                        handleColumnFilterChange(`${columnId}_from`, e.target.value);
-                                                      }}
-                                                    />
-                                                  </div>
-                                                  <div>
-                                                    <Label htmlFor={`${columnId}-to`}>To</Label>
-                                                    <Input
-                                                      id={`${columnId}-to`}
-                                                      type="date"
-                                                      className="h-8"
-                                                      value={filters[`${columnId}_to`] || ''}
-                                                      onChange={(e) => {
-                                                        handleColumnFilterChange(`${columnId}_to`, e.target.value);
-                                                      }}
-                                                    />
-                                                  </div>
-                                                </div>
-                                                <Button 
-                                                  size="sm" 
-                                                  variant="outline" 
-                                                  className="w-full text-xs"
-                                                  onClick={() => {
-                                                    handleColumnFilterChange(`${columnId}_from`, undefined);
-                                                    handleColumnFilterChange(`${columnId}_to`, undefined);
-                                                  }}
-                                                >
-                                                  Reset
-                                                </Button>
-                                              </div>
-                                            </PopoverContent>
-                                          </Popover>
-                                        );
-                                      }
-
-                                      // Tags filter 
-                                      if (columnId === 'tags') {
-                                        return (
-                                          <Popover>
-                                            <PopoverTrigger asChild>
-                                              <Button 
-                                                variant="outline" 
-                                                className="h-7 text-xs w-full justify-start font-normal"
-                                                onClick={(e) => e.stopPropagation()}
-                                              >
-                                                <TagIcon className="mr-1 h-3 w-3" />
-                                                <span>
-                                                  {Array.isArray(filters.tags) && filters.tags.length > 0 
-                                                    ? tableConfig.display.selectors.tags.selectedCount.replace('{{count}}', filters.tags.length.toString()) 
-                                                    : tableConfig.display.selectors.tags.buttonLabel}
-                                                </span>
-                                              </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-64 p-3" align="start">
-                                              <div className="space-y-2">
-                                                <div className="max-h-60 pr-2">
-                                                  {uniqueTags.length > 0 ? (
-                                                    <div className="space-y-1">
-                                                      {uniqueTags.map((tag) => (
-                                                        <div key={tag} className="flex items-center">
-                                                          <Checkbox 
-                                                            id={`tag-${tag}`}
-                                                            checked={Array.isArray(filters.tags) && filters.tags.includes(tag)}
-                                                            onCheckedChange={(checked) => {
-                                                              // Create new tags array
-                                                              const newTags = checked 
-                                                                ? [...(Array.isArray(filters.tags) ? filters.tags : []), tag] 
-                                                                : (Array.isArray(filters.tags) ? filters.tags.filter((t: string) => t !== tag) : []);
-                                                              
-                                                              // Update the filters state directly
-                                                              setFilters(prev => ({ ...prev, tags: newTags }));
-                                                              
-                                                              // Force refresh of filtered data via a direct table update
-                                                              const tagsColumn = table.getColumn('tags');
-                                                              if (tagsColumn) {
-                                                                if (newTags.length > 0) {
-                                                                  // Important: create a new array reference to ensure React detects the change
-                                                                  tagsColumn.setFilterValue([...newTags]);
-                                                                } else {
-                                                                  tagsColumn.setFilterValue(undefined);
-                                                                }
-                                                              }
-                                                            }}
-                                                          />
-                                                          <Label 
-                                                            htmlFor={`tag-${tag}`}
-                                                            className="ml-2 text-sm cursor-pointer"
-                                                          >
-                                                            {tag}
-                                                          </Label>
-                                                        </div>
-                                                      ))}
-                                                    </div>
-                                                  ) : (
-                                                    <div className="text-sm text-muted-foreground text-center py-2">
-                                                      {tableConfig.display.selectors.tags.noTags}
-                                                    </div>
-                                                  )}
-                                                </div>
-                                              </div>
-                                            </PopoverContent>
-                                          </Popover>
-                                        );
-                                      }
-
-                                      // In the filter row rendering, add this case:
-                                      if (columnId === 'family') {
-                                        return (
-                                          <Select
-                                            value={(table.getColumn('family')?.getFilterValue() as string) ?? 'all'}
-                                            onValueChange={value => {
-                                              handleFilterChange('family', value)
-                                              // Also update the table's column filter
-                                              const familyColumn = table.getColumn('family')
-                                              if (familyColumn) {
-                                                if (value === 'all') {
-                                                  familyColumn.setFilterValue(null)
-                                                } else {
-                                                  familyColumn.setFilterValue(value)
-                                                }
-                                              }
-                                            }}
-                                          >
-                                            <SelectTrigger className='h-7 text-xs'>
-                                              <SelectValue placeholder='All Families' />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                              <SelectItem value='all'>All Families</SelectItem>
-                                              {isFamiliesLoading && <SelectItem value='loading' disabled>Loading...</SelectItem>}
-                                              {!isFamiliesLoading && families.length === 0 && (
-                                                <SelectItem value='none' disabled>No families available</SelectItem>
-                                              )}
-                                              {!isFamiliesLoading && families.map((family: any) => (
-                                                <SelectItem key={family.id} value={String(family.id)}>
-                                                  {family.label || family.code || `Family ${family.id}`}
-                                                </SelectItem>
-                                              ))}
-                                            </SelectContent>
-                                          </Select>
-                                        )
-                                      }
-
-                                      // Default: no filter
-                                      return null;
-                                    })()}
-                                    </React.Fragment>
-                                  </TableHead>
-                                );
-                              })}
-                            </TableRow>
+                            {/* 2) Filter inputs - replaced with ProductsTableFilters */}
+                            <ProductsTableFilters
+                              columns={columns}
+                              filters={filters}
+                              onFilterChange={(columnId, value) => handleFilterChange(columnId as keyof FilterState, value)}
+                              onClearFilters={handleClearFilters}
+                              table={table}
+                              uniqueCategories={filteredCategories}
+                              uniqueTags={uniqueTags}
+                              uniqueBrands={uniqueBrands}
+                              families={families}
+                              isFamiliesLoading={isFamiliesLoading}
+                            />
                           </React.Fragment>
                         ))}
                     </TableHeader>

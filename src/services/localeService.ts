@@ -52,26 +52,18 @@ const localeService = {
   getLocales: async (): Promise<Locale[]> => {
     try {
       const localesUrl = paths.locales.root();
-      console.log('DEBUG Locales - Using URL:', localesUrl);
       
       const response = await axiosInstance.get(localesUrl);
-      console.log('DEBUG Locales - Raw response:', response);
       const data = response.data;
-      
-      // Log raw response for debugging
-      console.log('DEBUG Locales - Response data:', data);
       
       // Normalize the data to ensure consistent format
       let locales: Locale[] = [];
       
       if (Array.isArray(data)) {
-        console.log('DEBUG Locales - Data is array with length:', data.length);
         locales = data.map(locale => normalizeLocale(locale));
       } else if (data && typeof data === 'object') {
         // In case the API returns an object with results property
-        console.log('DEBUG Locales - Data is object with keys:', Object.keys(data));
         const results = data.results || data.items || [];
-        console.log('DEBUG Locales - Results array length:', results.length);
         locales = Array.isArray(results) 
           ? results.map(locale => normalizeLocale(locale))
           : [];
@@ -79,7 +71,6 @@ const localeService = {
         console.error('Unexpected locales data format:', data);
       }
       
-      console.log('DEBUG Locales - Final normalized locales:', locales);
       return locales;
     } catch (error) {
       console.error('Error fetching locales:', error);

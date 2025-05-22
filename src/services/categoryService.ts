@@ -6,10 +6,6 @@ import { Category as CategoryType, TreeNode } from '@/types/categories';
 const CATEGORIES_URL = API_ENDPOINTS.categories.list;
 const CATEGORIES_TREE_URL = API_ENDPOINTS.categories.tree;
 
-// Log the constructed URL for debugging
-console.log('Categories URL:', CATEGORIES_URL);
-console.log('Categories Tree URL:', CATEGORIES_TREE_URL);
-
 // Type definitions
 export interface Category {
   id: number;

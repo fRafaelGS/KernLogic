@@ -7,6 +7,7 @@
     import type { AttributeGroup } from '@/components/ProductAttributesPanel/types'
     import type { Family } from '@/types/family'
     import { useOrgSettings } from '@/hooks/useOrgSettings';
+    import { paths } from '@/lib/apiPaths'
 
     // PRODUCTS_PATH should be empty string to work with the backend URL structure
     // The backend routes 'api/' to products.urls which registers the viewset at ''
@@ -458,8 +459,6 @@
                 ? `${PRODUCTS_PATH}/?${qs.toString()}`
                 : `${PRODUCTS_PATH}/`;
 
-            console.log('[getProducts] first request →', nextPageUrl);
-
             let allProducts: Product[] = [];
             
             try {
@@ -467,10 +466,7 @@
                  * 2️⃣ fetch one page (or all pages if fetchAll=true)
                  * ------------------------------------------------------------------ */
                 while (nextPageUrl && (fetchAll || allProducts.length === 0)) {
-                    console.log(`[getProducts] GET ${nextPageUrl}`);
                     const response: AxiosResponse<any> = await axiosInstance.get(nextPageUrl);
-                    
-                    console.log(`[productService.getProducts] Response from: ${nextPageUrl}`, response.data);
                     
                     // Check for HTML response
                     if (isHtmlResponse(response.data)) {
@@ -506,13 +502,6 @@
                         
                         // Handle paginated response format
                         if ('results' in response.data) {
-                            console.log('[productService.getProducts] Detected paginated response, processing results');
-                            
-                            // For single page requests, return the full paginated response with count, next, etc.
-                            if (!fetchAll) {
-                                return response.data;
-                            }
-                            
                             // For fetch all, accumulate results
                             allProducts = [...allProducts, ...response.data.results];
                             nextPageUrl = response.data.next;
@@ -528,8 +517,6 @@
                     // Break the loop if we've processed this page but couldn't determine the next page
                     break;
                 }
-                
-                console.log(`[productService.getProducts] Total products fetched: ${allProducts.length}`);
                 
                 // Enrich with assets only when the caller asks for it
                 if (includeAssets) {
@@ -562,7 +549,6 @@
                 return allProducts;
             } catch (error) {
                 console.error('Error fetching products:', error);
-                // Type checking for AxiosError can still be useful
                 if (axios.isAxiosError(error)) { 
                     console.error('Response status:', error.response?.status);
                     console.error('Response data:', error.response?.data);
@@ -834,7 +820,6 @@
             try {
                 // Use more consistent URL path
                 const url = `${PRODUCTS_API_URL}/${productId}/attributes/`;
-                console.log(`[getProductAttributes] Fetching attributes from ${url}`);
                 
                 const response = await axiosInstance.get(url);
                 
@@ -848,15 +833,11 @@
                 let attributes: ProductAttribute[] = [];
                 
                 if (Array.isArray(response.data)) {
-                    console.log(`[getProductAttributes] Successfully fetched ${response.data.length} attributes in array format`);
-                    console.log(`[getProductAttributes] Attribute data structure for product ${productId}:`, JSON.stringify(response.data, null, 2));
                     attributes = response.data;
                 } else if (response.data && response.data.results && Array.isArray(response.data.results)) {
-                    console.log(`[getProductAttributes] Successfully fetched ${response.data.results.length} attributes in paginated format`);
                     attributes = response.data.results;
                 } else if (response.data && typeof response.data === 'object') {
                     // If response is an object with attribute data, transform it to an array
-                    console.log(`[getProductAttributes] Received object format, converting to attributes array`);
                     attributes = Object.entries(response.data).map(([key, value]) => {
                         // Handle if value is a string
                         if (typeof value === 'string') {
@@ -922,7 +903,6 @@
                     if (!attr.updated_at) attr.updated_at = new Date().toISOString();
                 }
                 
-                console.log(`[getProductAttributes] Processed ${attributes.length} attributes for product ${productId}`);
                 return attributes;
             } catch (error) {
                 console.error('[getProductAttributes] Error fetching product attributes:', error);
@@ -1008,7 +988,6 @@
         // Get product assets
         getProductAssets: async (productId: number): Promise<ProductAsset[]> => {
             const url = `${PRODUCTS_API_URL}/${productId}/assets/`;
-            console.log(`[getProductAssets] Fetching product assets from ${url}`);
             
             try {
                 const response = await axiosInstance.get(url);
@@ -1030,8 +1009,6 @@
                         typeof response.data === 'object' ? JSON.stringify(response.data).substring(0, 100) : response.data);
                     return [];
                 }
-                
-                console.log(`[getProductAssets] Successfully fetched ${data.length} assets`);
                 
                 // Helper function to ensure URL is absolute
                 const ensureAbsoluteUrl = (fileUrl: string | null | undefined): string => {
@@ -1114,7 +1091,6 @@
         getProductActivities: async (productId: number): Promise<ProductActivity[]> => {
             try {
                 const url = `/api/products/${productId}/activities/`;
-                console.log('[getProductActivities] Requesting activities from URL:', url);
                 
                 const response = await axiosInstance.get(url);
                 
@@ -1145,7 +1121,6 @@
         getProductVersions: async (productId: number): Promise<ProductVersion[]> => {
             try {
                 const url = `/api/products/${productId}/versions/`;
-                console.log('[getProductVersions] Requesting versions from URL:', url);
                 
                 const response = await axiosInstance.get(url);
                 
@@ -1200,7 +1175,6 @@
         getPriceHistory: async (productId: number): Promise<PriceHistory[]> => {
             try {
                 const url = `/api/products/${productId}/price-history/`;
-                console.log('[getPriceHistory] Requesting price history from URL:', url);
                 
                 const response = await axiosInstance.get(url);
                 
@@ -1433,7 +1407,6 @@
             onUploadProgress?: (progressEvent: AxiosProgressEvent) => void
         ): Promise<ProductAsset> => {
             const url = `${PRODUCTS_API_URL}/${productId}/assets/`;
-            console.log(`[uploadAsset] Uploading asset to ${url}`, { fileName: file.name, fileType: file.type, fileSize: file.size });
             
             // Create FormData object for multipart upload
             const formData = new FormData();
@@ -1453,7 +1426,6 @@
             else if (mime.match(/(doc|docx|text|word)/))  assetType = 'document';
 
             formData.append('asset_type', assetType);
-            console.log(`[uploadAsset] Determined asset_type: ${assetType} for file type: ${mime}`);
             
             try {
                 // Let Axios set the correct boundary in the Content-Type header automatically
@@ -1469,7 +1441,6 @@
                 }
                 
                 const data = response.data;
-                console.log('[uploadAsset] Successful upload response:', data);
                 
                 // Ensure URL is absolute
                 let fileUrl = data.file || '';
@@ -1539,7 +1510,6 @@
         // Delete an asset
         deleteAsset: async (productId: number, assetId: number): Promise<void> => {
             const url = `${PRODUCTS_API_URL}/${productId}/assets/${assetId}/`;
-            console.log('[deleteAsset] Deleting asset at:', url);
             
             try {
                 await axiosInstance.delete(url);
@@ -1600,13 +1570,6 @@
                     ...filters
                 };
                 
-                // Log the exact parameters being sent to the API for debugging
-                console.log(`[productService] Calling history API with params:`, JSON.stringify(params, null, 2));
-                console.log(`[productService] URL will be: /api/products/${productId}/history/?` + 
-                            Object.entries(params)
-                                .map(([key, value]) => `${key}=${encodeURIComponent(String(value))}`)
-                                .join('&'));
-                
                 const res = await axiosInstance.get(
                     `${PRODUCTS_API_URL}/${productId}/history/`,
                     { params }
@@ -1635,20 +1598,8 @@
                     };
                 }
                 
-                // If response is array but not paginated (backend didn't format properly)
-                if (Array.isArray(data) && !('results' in data)) {
-                    console.log('[productService] Non-paginated array response, formatting to paginated structure');
-                    return {
-                        count: data.length,
-                        next: null,
-                        previous: null,
-                        results: data
-                    };
-                }
-                
                 // Normal paginated response
                 if (data && typeof data === 'object' && 'results' in data) {
-                    console.log(`[productService] Received ${data.results.length} history events`);
                     return data;
                 }
                 
@@ -1841,7 +1792,7 @@
         // Get all sales channels
         getSalesChannels: async (): Promise<{ id: number; name: string }[]> => {
             try {
-                const { data } = await axiosInstance.get('/api/sales-channels/');
+                const { data } = await axiosInstance.get(paths.channels.root());
                 return data;
             } catch (error) {
                 console.error('Error fetching sales channels:', error);

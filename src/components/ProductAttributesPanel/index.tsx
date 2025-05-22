@@ -82,7 +82,6 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
   // Refetch family groups when props.familyId changes
   useEffect(() => {
     if (propFamilyId !== undefined) {
-      console.log('▶️ propFamilyId changed, refetching family groups:', propFamilyId);
       queryClient.invalidateQueries({ 
         queryKey: ['familyAttributeGroups', propFamilyId, String(selectedLocale || 'all'), String(selectedChannel || 'all')] 
       });
@@ -101,10 +100,6 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
 
   // Compute sourceGroups: prefer familyGroups if hasFamily, else attributeGroups
   const sourceGroups = (hasFamily ? familyGroups : attributeGroups) as AttributeGroup[]
-
-  console.log('▶️ hasFamily:', hasFamily)
-  console.log('▶️ sourceGroups:', sourceGroups)
-  console.log('▶️ data.attributes:', productData?.attributes)
 
   // Add additional fallback for empty groups
   const hasNoGroups = !sourceGroups || sourceGroups.length === 0
@@ -127,7 +122,6 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
 
   // Build grouped data from sourceGroups, then add any data attributes
   const grouped: Record<string, Attribute[]> = useMemo(() => {
-    console.log('▶️ Recomputing grouped with', sourceGroups?.length ?? 0, 'groups')
     const map: Record<string, Attribute[]> = {}
     
     // Handle the case where sourceGroups is undefined or empty
@@ -164,20 +158,6 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
       })
     }
 
-    console.log('▶️ grouped keys:', Object.keys(map))
-    
-    // Add debug information
-    if (productId) {
-      console.log('▶️ Debug attribute loading:', {
-        hasFamily,
-        familyId,
-        hasNoGroups,
-        sourceGroupsLength: sourceGroups?.length,
-        attributesLength: attributeValues?.length,
-        attributeValues: map
-      })
-    }
-    
     return map
   }, [sourceGroups, attributesHook.data, productId, hasFamily, familyId, hasNoGroups])
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Product, productService, ProductAttribute, ProductAsset, ProductActivity, PRODUCTS_API_URL as PRODUCTS_PATH, ProductPrice } from '@/services/productService';
-import { IncompleteProduct, dashboardService } from '@/services/dashboardService';
+import { IncompleteProduct, getDashboardSummary, getRecentActivity, getIncompleteProducts } from '@/services/dashboardService';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -554,7 +554,7 @@ export const ProductDetailTabs = ({
           }
           
           // Use the dashboardService to fetch product completeness with organization_id and product_id
-          const completenessData = await dashboardService.getIncompleteProducts({
+          const completenessData = await getIncompleteProducts({
             organization_id: organizationId,
             product_id: product.id
           });

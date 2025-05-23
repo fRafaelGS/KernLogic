@@ -56,6 +56,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from '@/components/ui/use-toast';
+import { useQueryClient } from '@tanstack/react-query';
 import { DndContext, useSensor, useSensors, PointerSensor, DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { 
@@ -192,6 +193,7 @@ export function ProductsTable({
   const tableConfig = config.productsTable;
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
+  const queryClient = useQueryClient();
   // Add organization settings hook
   const { defaultLocale, defaultChannel } = useOrgSettings();
   const [error, setError] = useState<string | null>(null);
@@ -289,6 +291,7 @@ export function ProductsTable({
     barcode: '',
     created_at: '',
     updated_at: '',
+    is_archived: false, // Exclude archived products by default
     ...initialFilters // this will override defaults if provided
   }
 
@@ -545,7 +548,7 @@ export function ProductsTable({
     const selectedCount = Object.keys(rowSelection).length;
     if (selectedCount === 0) return;
 
-    // Confirm the deletion with the user
+    // Confirm the archiving with the user (rename delete to archive)
     if (!window.confirm(tableConfig.messages.confirmation.bulkDelete.replace('{{count}}', selectedCount.toString()))) {
       return;
     }
@@ -554,9 +557,13 @@ export function ProductsTable({
     const productIds = getSelectedProductIds();
     if (productIds.length === 0) return;
 
+    console.log('[handleBulkDelete] Attempting to archive products:', productIds);
+
     try {
-      // Delete each product
-      await Promise.all(productIds.map(id => productService.deleteProduct(id)));
+      // Archive products (set is_archived = true) instead of deleting
+      await productService.bulkArchive(productIds);
+      
+      console.log('[handleBulkDelete] Successfully archived products');
       
       // Show success toast
       toast({
@@ -564,15 +571,23 @@ export function ProductsTable({
         variant: 'default'
       });
       
-      // Clear row selection after successful deletion
+      // Clear row selection after successful archiving
       setRowSelection({});
       
-      // Refresh the data
-      fetchData();
+      // Invalidate React Query cache to refresh the table immediately
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      
+      console.log('[handleBulkDelete] Cache invalidated, table should refresh');
     } catch (error) {
-      console.error('Failed to bulk delete products:', error);
+      console.error('[handleBulkDelete] Failed to bulk archive products:', error);
+      
+      let errorMessage = tableConfig.messages.error.bulkDelete;
+      if (error instanceof Error) {
+        errorMessage += `: ${error.message}`;
+      }
+      
       toast({
-        title: tableConfig.messages.error.bulkDelete,
+        title: errorMessage,
         variant: 'destructive'
       });
     }
@@ -596,12 +611,8 @@ export function ProductsTable({
     if (productIds.length === 0) return;
 
     try {
-      // Update each product
-      await Promise.all(
-        productIds.map(id => 
-          productService.updateProduct(id, { is_active: isActive })
-        )
-      );
+      // Use the bulk status update API
+      await productService.bulkSetStatus(productIds, isActive);
       
       // Show success toast
       const successMsg = isActive
@@ -616,8 +627,8 @@ export function ProductsTable({
       // Clear row selection after successful update
       setRowSelection({});
       
-      // Refresh the data
-      fetchData();
+      // Invalidate React Query cache to refresh the table immediately
+      queryClient.invalidateQueries({ queryKey: ['products'] });
     } catch (error) {
       console.error(`Failed to bulk ${isActive ? 'activate' : 'deactivate'} products:`, error);
       

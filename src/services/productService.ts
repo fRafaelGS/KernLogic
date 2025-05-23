@@ -613,7 +613,6 @@
         // Create a new product
         createProduct: async (product: Omit<Product, 'id' | 'created_by' | 'created_at' | 'updated_at'> | FormData): Promise<Product> => {
             const url = API_ENDPOINTS.products.create;
-            console.log('Creating product at:', url);
             try {
                 // Handle FormData or regular object
                 let response;
@@ -626,8 +625,6 @@
                             'Accept': 'application/json'
                         },
                     });
-                    
-                    console.log('FormData sent with multipart/form-data Content-Type');
                 } else {
                     const productData = { ...product } as any; // Use type assertion to handle property assignments
                     
@@ -648,7 +645,6 @@
         // Update a product
         updateProduct: async (id: number, product: Partial<Product> | FormData): Promise<Product> => {
             const url = `${PRODUCTS_PATH}/${id}/`;
-            console.log('🔧 updateProduct called:', { id, url, product });
             
             // For regular objects, check if core fields are being modified
             if (!(product instanceof FormData)) {
@@ -663,9 +659,7 @@
                 _activity_type: 'PRODUCT_CORE_EDIT'
                 };
                 
-                console.log('📤 Sending PATCH request with core field changes:', productWithFlag);
                 const response = await axiosInstance.patch(url, productWithFlag);
-                console.log('📥 Response from core field update:', response.data);
                 return response.data;
             }
             }
@@ -680,20 +674,16 @@
                 product.append('_activity_type', 'PRODUCT_CORE_EDIT');
             }
             
-            console.log('📤 Sending PATCH request with FormData');
             const response = await axiosInstance.patch(url, product, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
                 },
             });
-            console.log('📥 Response from FormData update:', response.data);
             return response.data;
             }
             
             // For regular objects with no core field changes
-            console.log('📤 Sending PATCH request:', product);
             const response = await axiosInstance.patch(url, product);
-            console.log('📥 Response:', response.data);
             return response.data;
         },
 
@@ -705,7 +695,6 @@
 
         // Get all categories (Delegating to categoryService)
         getCategories: async (): Promise<CategoryFromService[]> => {
-            console.log('Fetching categories using categoryService...');
             try {
                 return await fetchCategories();
             } catch (error) {
@@ -717,7 +706,6 @@
 
         // Search categories (Should be updated to use categoryService's search or filter mechanism)
         searchCategories: async (inputValue: string): Promise<CategoryOption[]> => {
-            console.log(`Searching categories for: "${inputValue}"`);
             try {
                 // Fetch all categories from the categoryService
                 const categories = await fetchCategories();
@@ -738,7 +726,6 @@
 
         // Create a new category (Delegating to categoryService)
         createCategory: async (data: { name: string, parentId?: number }): Promise<CategoryFromService> => {
-            console.log('Creating category using categoryService:', data);
             try {
                 return await createCategoryService(data.name, data.parentId);
             } catch (error) {
@@ -749,14 +736,11 @@
 
         // Search tags - Updated to use real API
         searchTags: async (inputValue: string): Promise<{ label: string; value: string }[]> => {
-            console.log(`[searchTags] Searching tags for: "${inputValue}"`);
             try {
                 // Call API endpoint for tags
                 const response = await axiosInstance.get(`${PRODUCTS_PATH}/tags/`, {
                     params: inputValue ? { search: inputValue } : {}
                 });
-                
-                console.log(`[searchTags] Raw API response:`, response.data);
                 
                 // Transform the response to the expected format for react-select
                 // The API should return an array of tag names (strings)
@@ -769,7 +753,6 @@
                         value: String(tagName)
                     }));
                     
-                    console.log(`[searchTags] Transformed ${transformedTags.length} tags:`, transformedTags);
                     return transformedTags;
                 } else {
                     console.warn(`[searchTags] API returned non-array:`, typeof tags, tags);
@@ -789,12 +772,9 @@
 
         // Create a new tag - Updated to use real API
         createTag: async (data: { name: string }): Promise<{ id: string; name: string }> => {
-            console.log('[createTag] Creating tag:', data);
             try {
                 // Call API to create tag
                 const response = await axiosInstance.post(`${PRODUCTS_PATH}/tags/`, data);
-                
-                console.log('[createTag] API response:', response.data);
                 
                 // The backend returns just the tag name as a string
                 const tagName = response.data;
@@ -1741,6 +1721,47 @@
                     console.error('[bulkRemoveTags] Request config:', error.config);
                 }
                 throw error;
+            }
+        },
+        
+        // Bulk operation: Archive multiple products (set is_archived to true)
+        bulkArchive: async (ids: number[]): Promise<void> => {
+            try {
+                console.log('[bulkArchive] Starting bulk archive operation...');
+                console.log('[bulkArchive] Product IDs:', ids);
+                
+                const url = `${PRODUCTS_API_URL}/bulk_update/`;
+                const payload = { ids, field: 'is_archived', value: true };
+                
+                console.log('[bulkArchive] API URL:', url);
+                console.log('[bulkArchive] API Payload:', payload);
+                
+                const response = await axiosInstance.post(url, payload);
+                
+                console.log('[bulkArchive] API Response Status:', response.status);
+                console.log('[bulkArchive] API Response Data:', response.data);
+                
+                if (response.status !== 200) {
+                    throw new Error(`Unexpected response status: ${response.status}`);
+                }
+                
+                console.log('[bulkArchive] Products archived successfully via bulk endpoint');
+            } catch (error) {
+                console.error('[bulkArchive] Bulk endpoint failed, trying individual updates...', error);
+                
+                // Fallback: Try individual product updates
+                try {
+                    console.log('[bulkArchive] Using fallback: individual product updates');
+                    await Promise.all(
+                        ids.map(id => 
+                            productService.updateProduct(id, { is_archived: true })
+                        )
+                    );
+                    console.log('[bulkArchive] Products archived successfully via individual updates');
+                } catch (fallbackError) {
+                    console.error('[bulkArchive] Both bulk and individual updates failed:', fallbackError);
+                    throw fallbackError;
+                }
             }
         },
         

@@ -661,7 +661,7 @@ export const config = {
         expandAll: 'Expand All',
         collapseAll: 'Collapse All',
         bulkActions: 'Bulk Actions',
-        bulkDelete: 'Delete Selected',
+        bulkDelete: 'Archive Selected',
         bulkActivate: 'Activate Selected',
         bulkDeactivate: 'Deactivate Selected',
         bulkExport: 'Export Selected',
@@ -721,15 +721,15 @@ export const config = {
     },
     messages: {
       success: {
-        delete: 'Product deleted successfully',
-        bulkDelete: '{{count}} products deleted successfully',
+        delete: 'Product archived successfully',
+        bulkDelete: '{{count}} products archived successfully',
         bulkActivate: '{{count}} products activated successfully',
         bulkDeactivate: '{{count}} products deactivated successfully',
         tagCreated: 'Tag "{{name}}" created'
       },
       error: {
-        delete: 'Failed to delete product',
-        bulkDelete: 'Failed to delete products',
+        delete: 'Failed to archive product',
+        bulkDelete: 'Failed to archive products',
         bulkActivate: 'Failed to activate products',
         bulkDeactivate: 'Failed to deactivate products',
         loadProducts: 'Could not load products',
@@ -739,8 +739,8 @@ export const config = {
         invalidValue: 'Invalid value'
       },
       confirmation: {
-        delete: 'Are you sure you want to delete this product?',
-        bulkDelete: 'Are you sure you want to delete these {{count}} products?',
+        delete: 'Are you sure you want to archive this product?',
+        bulkDelete: 'Are you sure you want to archive these {{count}} products?',
         activate: 'Are you sure you want to activate these {{count}} products?',
         deactivate: 'Are you sure you want to deactivate these {{count}} products?'
       },

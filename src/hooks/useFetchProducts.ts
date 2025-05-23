@@ -56,6 +56,10 @@ function buildQueryParams(ui: Record<string, any>) {
   else if (ui.is_active !== undefined)
     qp.is_active = ui.is_active;
 
+  // archived filter
+  if (ui.is_archived !== undefined)
+    qp.is_archived = ui.is_archived;
+
   // price range
   if (ui.minPrice) qp.min_price = ui.minPrice;
   if (ui.maxPrice) qp.max_price = ui.maxPrice;

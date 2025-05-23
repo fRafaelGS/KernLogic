@@ -99,20 +99,19 @@ export function ProductCard({ product, onSelect }: ProductCardProps) {
       <CardContent className="flex-grow p-3 pt-3">
         <h3 className="font-medium text-sm line-clamp-2 mb-1">{product.name}</h3>
         <p className="text-xs text-muted-foreground mb-1">SKU: {product.sku}</p>
-        {categoryName && (
-          <p className="text-xs text-muted-foreground truncate">
-            {categoryName}
-          </p>
-        )}
       </CardContent>
       
       <CardFooter className="pt-0 pb-3 px-3">
         <div className="w-full flex items-center justify-between">
-          <p className="font-medium">
-            {product.price ? `$${Number(product.price).toFixed(2)}` : 'No price'}
-          </p>
+          <div className="flex-1 min-w-0">
+            {categoryName && (
+              <p className="text-xs text-muted-foreground truncate">
+                {categoryName}
+              </p>
+            )}
+          </div>
           
-          <div className="flex justify-center">
+          <div className="flex-shrink-0 ml-2">
             <FamilyDisplay 
               family={processedFamily}
               badgeVariant="secondary"

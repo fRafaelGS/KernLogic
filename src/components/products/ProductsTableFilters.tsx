@@ -20,6 +20,11 @@ import { TagIcon } from 'lucide-react'
 import { config } from '@/config/config'
 import { type Table } from '@tanstack/react-table'
 import { type Product } from '@/services/productService'
+import { cn } from '@/lib/utils'
+import { Search, Loader2, X } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { Badge } from '@/components/ui/badge'
+import { formatDisplayDate, getDateFormatPattern } from '@/utils/dateFormat'
 
 interface ProductsTableFiltersProps {
   columns: any[]
@@ -315,10 +320,19 @@ export function ProductsTableFilters({
             <PopoverTrigger asChild>
               <Button 
                 variant="outline" 
-                className="h-7 text-xs w-full justify-start font-normal"
+                className={cn(
+                  "h-7 text-xs w-full justify-start font-normal",
+                  // Show active state when price filters are applied
+                  (filters.minPrice || filters.maxPrice) && "border-blue-500 bg-blue-50 text-blue-700"
+                )}
                 onClick={(e) => e.stopPropagation()}
               >
-                <span>{tableConfig.display.selectors.price.buttonLabel}</span>
+                <span>
+                  {filters.minPrice || filters.maxPrice
+                    ? `Price: ${filters.minPrice || '∞'} - ${filters.maxPrice || '∞'}`
+                    : tableConfig.display.selectors.price.buttonLabel
+                  }
+                </span>
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-60 p-3" align="start">
@@ -329,12 +343,19 @@ export function ProductsTableFilters({
                     <Input
                       id="price-min"
                       type="number"
-                      placeholder={tableConfig.display.selectors.price.minLabel}
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
                       className="h-8"
                       value={filters.minPrice || ''}
                       onChange={(e) => {
-                        onFilterChange('minPrice', e.target.value)
+                        const value = e.target.value
+                        // Only allow positive numbers
+                        if (value === '' || (!isNaN(Number(value)) && Number(value) >= 0)) {
+                          onFilterChange('minPrice', value === '' ? undefined : value)
+                        }
                       }}
+                      onClick={(e) => e.stopPropagation()}
                     />
                   </div>
                   <div>
@@ -342,15 +363,34 @@ export function ProductsTableFilters({
                     <Input
                       id="price-max"
                       type="number"
-                      placeholder={tableConfig.display.selectors.price.maxLabel}
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
                       className="h-8"
                       value={filters.maxPrice || ''}
                       onChange={(e) => {
-                        onFilterChange('maxPrice', e.target.value)
+                        const value = e.target.value
+                        // Only allow positive numbers and validate min <= max
+                        if (value === '' || (!isNaN(Number(value)) && Number(value) >= 0)) {
+                          // Optional: validate that max >= min
+                          if (filters.minPrice && value && Number(value) < Number(filters.minPrice)) {
+                            // Could show validation error here, but for now just allow it
+                          }
+                          onFilterChange('maxPrice', value === '' ? undefined : value)
+                        }
                       }}
+                      onClick={(e) => e.stopPropagation()}
                     />
                   </div>
                 </div>
+                
+                {/* Show validation message if max < min */}
+                {filters.minPrice && filters.maxPrice && Number(filters.maxPrice) < Number(filters.minPrice) && (
+                  <div className="text-xs text-red-600 mt-1">
+                    Maximum price should be greater than minimum price
+                  </div>
+                )}
+                
                 <Button 
                   size="sm" 
                   variant="outline" 
@@ -390,36 +430,47 @@ export function ProductsTableFilters({
             <PopoverTrigger asChild>
               <Button 
                 variant="outline" 
-                className="h-7 text-xs w-full justify-start font-normal"
+                className={cn(
+                  "h-7 text-xs w-full justify-start font-normal",
+                  // Show active state when date filters are applied
+                  (filters.created_at_from || filters.created_at_to) && "border-blue-500 bg-blue-50 text-blue-700"
+                )}
                 onClick={(e) => e.stopPropagation()}
               >
-                <span>Created Date</span>
+                <span>
+                  {filters.created_at_from || filters.created_at_to
+                    ? `Created: ${formatDisplayDate(filters.created_at_from) || '∞'} - ${formatDisplayDate(filters.created_at_to) || '∞'}`
+                    : "Created Date"
+                  }
+                </span>
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-3" align="start">
               <div className="space-y-2">
                 <div className="grid gap-2">
                   <div>
-                    <Label htmlFor="created_at-from">From</Label>
+                    <Label htmlFor="created_at-from">From ({getDateFormatPattern()})</Label>
                     <Input
                       id="created_at-from"
                       type="date"
                       className="h-8"
                       value={filters.created_at_from || ''}
                       onChange={(e) => {
-                        onFilterChange('created_at_from', e.target.value)
+                        const value = e.target.value || undefined
+                        onFilterChange('created_at_from', value)
                       }}
                     />
                   </div>
                   <div>
-                    <Label htmlFor="created_at-to">To</Label>
+                    <Label htmlFor="created_at-to">To ({getDateFormatPattern()})</Label>
                     <Input
                       id="created_at-to"
                       type="date"
                       className="h-8"
                       value={filters.created_at_to || ''}
                       onChange={(e) => {
-                        onFilterChange('created_at_to', e.target.value)
+                        const value = e.target.value || undefined
+                        onFilterChange('created_at_to', value)
                       }}
                     />
                   </div>
@@ -429,8 +480,8 @@ export function ProductsTableFilters({
                   variant="outline" 
                   className="w-full text-xs"
                   onClick={() => {
-                    onFilterChange('created_at_from', undefined)
-                    onFilterChange('created_at_to', undefined)
+                    onFilterChange('created_at_from', '')
+                    onFilterChange('created_at_to', '')
                   }}
                 >
                   Reset
@@ -446,36 +497,47 @@ export function ProductsTableFilters({
             <PopoverTrigger asChild>
               <Button 
                 variant="outline" 
-                className="h-7 text-xs w-full justify-start font-normal"
+                className={cn(
+                  "h-7 text-xs w-full justify-start font-normal",
+                  // Show active state when date filters are applied
+                  (filters.updated_at_from || filters.updated_at_to) && "border-blue-500 bg-blue-50 text-blue-700"
+                )}
                 onClick={(e) => e.stopPropagation()}
               >
-                <span>Updated Date</span>
+                <span>
+                  {filters.updated_at_from || filters.updated_at_to
+                    ? `Updated: ${formatDisplayDate(filters.updated_at_from) || '∞'} - ${formatDisplayDate(filters.updated_at_to) || '∞'}`
+                    : "Updated Date"
+                  }
+                </span>
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-3" align="start">
               <div className="space-y-2">
                 <div className="grid gap-2">
                   <div>
-                    <Label htmlFor="updated_at-from">From</Label>
+                    <Label htmlFor="updated_at-from">From ({getDateFormatPattern()})</Label>
                     <Input
                       id="updated_at-from"
                       type="date"
                       className="h-8"
                       value={filters.updated_at_from || ''}
                       onChange={(e) => {
-                        onFilterChange('updated_at_from', e.target.value)
+                        const value = e.target.value || undefined
+                        onFilterChange('updated_at_from', value)
                       }}
                     />
                   </div>
                   <div>
-                    <Label htmlFor="updated_at-to">To</Label>
+                    <Label htmlFor="updated_at-to">To ({getDateFormatPattern()})</Label>
                     <Input
                       id="updated_at-to"
                       type="date"
                       className="h-8"
                       value={filters.updated_at_to || ''}
                       onChange={(e) => {
-                        onFilterChange('updated_at_to', e.target.value)
+                        const value = e.target.value || undefined
+                        onFilterChange('updated_at_to', value)
                       }}
                     />
                   </div>
@@ -485,8 +547,8 @@ export function ProductsTableFilters({
                   variant="outline" 
                   className="w-full text-xs"
                   onClick={() => {
-                    onFilterChange('updated_at_from', undefined)
-                    onFilterChange('updated_at_to', undefined)
+                    onFilterChange('updated_at_from', '')
+                    onFilterChange('updated_at_to', '')
                   }}
                 >
                   Reset

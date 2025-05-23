@@ -16,12 +16,34 @@ class ProductFilter(filters.FilterSet):
     # bool
     is_active = filters.BooleanFilter(field_name="is_active")
 
-    # price range
-    min_price = filters.NumberFilter(field_name="price", lookup_expr="gte")
-    max_price = filters.NumberFilter(field_name="price", lookup_expr="lte")
+    # price range - updated to use ProductPrice relationship
+    min_price = filters.NumberFilter(method='filter_min_price')
+    max_price = filters.NumberFilter(method='filter_max_price')
+
+    # date range filters
+    created_at_from = filters.DateFilter(field_name="created_at", lookup_expr="gte")
+    created_at_to = filters.DateFilter(field_name="created_at", lookup_expr="lte") 
+    updated_at_from = filters.DateFilter(field_name="updated_at", lookup_expr="gte")
+    updated_at_to = filters.DateFilter(field_name="updated_at", lookup_expr="lte")
 
     # tags filter (handles JSON field)
     tags = filters.CharFilter(method='filter_tags')
+    
+    def filter_min_price(self, queryset, name, value):
+        """
+        Filter products by minimum price using the ProductPrice relationship
+        """
+        if value is not None:
+            return queryset.filter(prices__amount__gte=value).distinct()
+        return queryset
+    
+    def filter_max_price(self, queryset, name, value):
+        """
+        Filter products by maximum price using the ProductPrice relationship
+        """
+        if value is not None:
+            return queryset.filter(prices__amount__lte=value).distinct()
+        return queryset
     
     def filter_tags(self, queryset, name, value):
         """
@@ -57,5 +79,9 @@ class ProductFilter(filters.FilterSet):
             "is_active",
             "min_price",
             "max_price",
+            "created_at_from",
+            "created_at_to",
+            "updated_at_from",
+            "updated_at_to",
             "tags",
         ] 

@@ -59,12 +59,43 @@ export function ProductGrid({
   
   const productsToRender = React.useMemo(() => {
     // If products are passed directly, use them
-    if (passedProducts) return passedProducts
+    if (passedProducts !== undefined) return passedProducts
     
     // Otherwise use data from useFetchProducts
     if (!data) return []
-    return data.pages.flatMap((page: PaginatedResponse<Product>) => page.results)
+    return data.pages.flatMap((page: any) =>
+      // if the page is an array of products, use it directly
+      Array.isArray(page) ? page : page.results || []
+    )
   }, [data, passedProducts])
+
+  // 🔍 DEBUGGING: Log all the critical values
+  React.useEffect(() => {
+    console.log('🔍 ProductGrid Debug Report:', {
+      // Input props
+      'passedProducts': passedProducts,
+      'passedProducts?.length': passedProducts?.length,
+      'passedLoading': passedLoading,
+      'passedError': passedError,
+      'filters': filters,
+      
+      // Hook results
+      'data': data,
+      'data?.pages': data?.pages,
+      'data?.pages?.length': data?.pages?.length,
+      'isLoading': isLoading,
+      'error': error,
+      
+      // Computed values
+      'isLoadingData': isLoadingData,
+      'errorMessage': errorMessage,
+      'productsToRender': productsToRender,
+      'productsToRender.length': productsToRender.length,
+      
+      // First few products for inspection
+      'first3Products': productsToRender.slice(0, 3).map(p => ({ id: p?.id, name: p?.name, sku: p?.sku }))
+    })
+  }, [passedProducts, passedLoading, passedError, filters, data, isLoading, error, isLoadingData, errorMessage, productsToRender])
 
   // Grid container ref and dimensions
   const containerRef = useRef<HTMLDivElement>(null)
@@ -170,7 +201,11 @@ export function ProductGrid({
         {({ columnIndex, rowIndex, style }) => {
           const idx = rowIndex * columnCount + columnIndex
           if (idx >= productsToRender.length) return null
-          return <MemoizedProductCard style={style} product={productsToRender[idx]} />
+          
+          const product = productsToRender[idx]
+          if (!product) return null
+          
+          return <MemoizedProductCard style={style} product={product} />
         }}
       </Grid>
     </div>

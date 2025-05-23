@@ -46,6 +46,7 @@ import { CategoryTreeSelect } from '@/components/categories/CategoryTreeSelect';
 import CreatableSelect from 'react-select/creatable'
 import '@/styles/editable-cell.scss'
 import { pickPrimaryImage } from '@/utils/images';
+import { formatDisplayDate } from '@/utils/dateFormat';
 
 
 // Helper function to safely format price amounts
@@ -1143,8 +1144,7 @@ export function useProductColumns({
         if (!dateString) return "—";
         
         // Parse and format date
-        const date = new Date(dateString);
-        const formattedDate = `${date.toLocaleDateString()}`;
+        const formattedDate = formatDisplayDate(dateString);
         
         return <div>{formattedDate}</div>;
       },
@@ -1178,8 +1178,7 @@ export function useProductColumns({
         if (!dateString) return "—";
         
         // Parse and format date
-        const date = new Date(dateString);
-        const formattedDate = `${date.toLocaleDateString()}`;
+        const formattedDate = formatDisplayDate(dateString);
         
         return <div>{formattedDate}</div>;
       },

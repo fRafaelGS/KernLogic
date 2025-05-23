@@ -45,10 +45,25 @@ export default function ProductsPage() {
   // Fetch products with React Query
   const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } = useFetchProducts(filters)
   
+  // 🔍 TEMPORARY DEBUG - Remove after investigation
+  console.log('🔍 Raw data from useFetchProducts:', {
+    'data': data,
+    'data?.pages': data?.pages,
+    'data?.pages?.length': data?.pages?.length,
+    'first page': data?.pages?.[0],
+    'first page keys': data?.pages?.[0] ? Object.keys(data.pages[0]) : 'no first page',
+    'first page.results': data?.pages?.[0]?.results,
+    'first page.results type': typeof data?.pages?.[0]?.results,
+    'first page.results length': data?.pages?.[0]?.results?.length
+  })
+  
   // Extract products from paginated data
   const products = React.useMemo(() => {
     if (!data) return []
-    return data.pages.flatMap((page: PaginatedResponse<Product>) => page.results)
+    return data.pages.flatMap((page: any) =>
+      // if the page is an array of products, use it directly
+      Array.isArray(page) ? page : page.results || []
+    )
   }, [data])
   
   // Extract total count
@@ -132,7 +147,12 @@ export default function ProductsPage() {
         {/* ONE self-contained scroll region */}
         <div className="flex-1 min-h-0 min-w-0 overflow-hidden">
           {viewMode === 'grid' ? (
-            <ProductGrid filters={filters} />
+            <ProductGrid 
+              filters={filters}
+              products={products}
+              loading={isLoading}
+              error={error?.message || null}
+            />
           ) : (
             <ProductsTableAdapter 
               viewMode="list"

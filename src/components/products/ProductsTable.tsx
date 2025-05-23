@@ -65,6 +65,7 @@ import {
 } from "@/components/ui/popover";
 import { ProductsSearchBox } from './ProductsSearchBox';
 import { BulkTagModal } from './BulkTagModal';
+import { BulkCategoryModal } from './BulkCategoryModal';
 import { useDebounce } from "@/hooks/useDebounce";
 import { ProductsTableFallback } from "@/components/products/productstable/ProductsTableFallback";
 import { IconBtn } from "@/components/products/productstable/IconBtn";
@@ -1482,7 +1483,7 @@ export function ProductsTable({
   // Render the component
   return (
     <React.Fragment>
-      <div className="flex flex-col flex-1 px-2 lg:px-4 min-h-0 overflow-x-hidden">
+      <div className="flex flex-col flex-1 h-full px-2 lg:px-4 min-h-0 overflow-x-hidden">
         {/* Table Toolbar */}
         <div className="flex items-center justify-between py-2 border-b bg-card z-10">
           <div className="flex items-center space-x-2 w-full sm:w-auto">
@@ -1608,212 +1609,255 @@ export function ProductsTable({
         </div>
 
         {/* Section containing scroll area and footer */}
-        <section className="flex-1 overflow-hidden min-h-0 min-w-0 relative">
+        <section className="flex flex-col flex-1 min-h-0 overflow-visible min-w-0">
           {viewMode === 'list' ? (
-            <div
-              ref={scrollRef}
-              className={cn(
-                "flex-1 min-h-0",
-                "h-[calc(100%-3rem)]",
-                "overflow-auto",
-                columnVisibility.actions !== false && `pr-[112px]`,
-              )}
-              id="products-scroll-area"
-            >
-              <DndContext
-                sensors={sensors}
-                onDragEnd={handleDragEnd}
+            <>
+              <div
+                ref={scrollRef}
+                className={cn(
+                  "flex-1 min-h-0 overflow-auto",
+                  columnVisibility.actions !== false && `pr-[112px]`,
+                )}
+                id="products-scroll-area"
               >
-                <SortableContext
-                  items={columnOrder.filter(Boolean)}
-                  strategy={horizontalListSortingStrategy}
+                <DndContext
+                  sensors={sensors}
+                  onDragEnd={handleDragEnd}
                 >
-                  <Table className="w-full table-fixed border-collapse">
-                    <TableHeader className="sticky top-0 bg-white z-20">
-                        {table.getHeaderGroups().map(headerGroup => (
-                          <React.Fragment key={headerGroup.id}>
-                            {/* 1) Column titles */}
-                            <TableRow className="sticky top-0 z-30 bg-slate-100 h-4 border-b border-slate-200">
-                              {headerGroup.headers.map(header =>
-                                <SortableTableHeader key={header.id} id={header.column.id} header={header}/>
-                              )}
-                            </TableRow>
-
-                            {/* 2) Filter inputs - replaced with ProductsTableFilters */}
-                            <ProductsTableFilters
-                              columns={columns}
-                              filters={filters}
-                              onFilterChange={(columnId, value) => handleFilterChange(columnId as keyof FilterState, value)}
-                              onClearFilters={handleClearFilters}
-                              table={table}
-                              uniqueCategories={categoryOptions}
-                              uniqueTags={uniqueTags}
-                              uniqueBrands={uniqueBrands}
-                              families={families}
-                              isFamiliesLoading={isFamiliesLoading}
-                            />
-                          </React.Fragment>
-                        ))}
-                    </TableHeader>
-                    <TableBody>
-                      <ProductsTableFallback 
-                        columns={columns}
-                        loading={loading}
-                        filteredData={filteredData}
-                        filters={filters}
-                        handleClearFilters={handleClearFilters}
-                        handleRefresh={handleRefresh}
-                      />
-                      
-                      {!loading && filteredData.length > 0 && 
-                        table.getRowModel().rows.map((row, index: number) => {
-                          // Add a safety check to ensure row.original exists
-                          if (!row?.original) return null;
-                          
-                          const productId = row.original.id;
-                          // Skip this row if productId is undefined
-                          if (productId === undefined) return null;
-                          
-                          return (
-                            <React.Fragment key={row.id || `row-${index}`}>
-                              <TableRow 
-                                data-state={row.getIsSelected() && "selected"}
-                                className={cn(
-                                  "border-b border-gray-200 transition-colors hover:bg-slate-950/15",
-                                  row.getIsSelected() ? "bg-slate-950/18" : index % 2 === 0 ? "bg-slate-950/5" : "bg-slate-950/11",
-                                  "cursor-pointer",
-                                  "h-0 leading-tight"
+                  <SortableContext
+                    items={columnOrder.filter(Boolean)}
+                    strategy={horizontalListSortingStrategy}
+                  >
+                    <Table className="w-full table-fixed border-collapse">
+                      <TableHeader className="sticky top-0 bg-white z-20">
+                          {table.getHeaderGroups().map(headerGroup => (
+                            <React.Fragment key={headerGroup.id}>
+                              {/* 1) Column titles */}
+                              <TableRow className="sticky top-0 z-30 bg-slate-100 h-4 border-b border-slate-200">
+                                {headerGroup.headers.map(header =>
+                                  <SortableTableHeader key={header.id} id={header.column.id} header={header}/>
                                 )}
-                                onClick={(e) => {
-                                  const target = e.target as HTMLElement;
-                                  const isActionClick = !!target.closest('button, input, [role="combobox"], [data-editable="true"], [data-editing="true"], [data-component="category-tree-select-container"]');
-                                  
-                                  // Don't do anything if clicking on an action element
-                                  if (isActionClick) return;
-                                  
-                                  // If there's an active edit in any cell, just cancel it - prevent navigation
-                                  if (editingCell && productId) {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    handleCancelEdit();
-                                    return;
-                                  }
-                                  
-                                  // Only navigate if not editing
-                                  if (productId) {
-                                    handleRowClick(productId);
-                                  }
-                                }}
-                              >
-                                {row.getVisibleCells().map((cell: any) => {
-                                  const columnId = cell.column.id;
-                                  const hideOnMobileClass = ['brand', 'barcode', 'created_at', 'tags'].includes(columnId) ? 'hidden md:table-cell' : '';
-                                  
-                                  // Special styling for expander column
-                                  if (columnId === 'expander') {
-                                    return (
-                                      <TableCell 
-                                        key={cell.id} 
-                                        className="p-0 w-9 relative"
-                                        data-column-id={columnId}
-                                      >
-                                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                      </TableCell>
-                                    );
-                                  }
-                                  
-                                  const isActionsColumn = columnId === 'actions';
-                                  const actionsClass = isActionsColumn ? 'sticky right-0 z-20 border-l border-slate-300/40' : '';
-                                  const cellBgClass = isActionsColumn ? (row.getIsSelected() ? 'bg-slate-950/18' : index % 2 === 0 ? 'bg-slate-950/5' : 'bg-slate-950/11') : '';
-                                  
-                                  // Special cell rendering for specific column types
-                                  if (columnId === 'brand' && row.getValue('brand')) {
-                                    return (
-                                      <TableCell 
-                                        key={cell.id} 
-                                        className={`px-2 py-0 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
-                                        data-column-id={columnId}
-                                      >
-                                        <div className="flex items-center gap-1">
-                                          <span className="text-gray-500"><TagIcon className="h-3.5 w-3.5" /></span>
+                              </TableRow>
+
+                              {/* 2) Filter inputs - replaced with ProductsTableFilters */}
+                              <ProductsTableFilters
+                                columns={columns}
+                                filters={filters}
+                                onFilterChange={(columnId, value) => handleFilterChange(columnId as keyof FilterState, value)}
+                                onClearFilters={handleClearFilters}
+                                table={table}
+                                uniqueCategories={categoryOptions}
+                                uniqueTags={uniqueTags}
+                                uniqueBrands={uniqueBrands}
+                                families={families}
+                                isFamiliesLoading={isFamiliesLoading}
+                              />
+                            </React.Fragment>
+                          ))}
+                      </TableHeader>
+                      <TableBody>
+                        <ProductsTableFallback 
+                          columns={columns}
+                          loading={loading}
+                          filteredData={filteredData}
+                          filters={filters}
+                          handleClearFilters={handleClearFilters}
+                          handleRefresh={handleRefresh}
+                        />
+                        
+                        {!loading && filteredData.length > 0 && 
+                          table.getRowModel().rows.map((row, index: number) => {
+                            // Add a safety check to ensure row.original exists
+                            if (!row?.original) return null;
+                            
+                            const productId = row.original.id;
+                            // Skip this row if productId is undefined
+                            if (productId === undefined) return null;
+                            
+                            return (
+                              <React.Fragment key={row.id || `row-${index}`}>
+                                <TableRow 
+                                  data-state={row.getIsSelected() && "selected"}
+                                  className={cn(
+                                    "border-b border-gray-200 transition-colors hover:bg-slate-950/15",
+                                    row.getIsSelected() ? "bg-slate-950/18" : index % 2 === 0 ? "bg-slate-950/5" : "bg-slate-950/11",
+                                    "cursor-pointer",
+                                    "h-0 leading-tight"
+                                  )}
+                                  onClick={(e) => {
+                                    const target = e.target as HTMLElement;
+                                    const isActionClick = !!target.closest('button, input, [role="combobox"], [data-editable="true"], [data-editing="true"], [data-component="category-tree-select-container"]');
+                                    
+                                    // Don't do anything if clicking on an action element
+                                    if (isActionClick) return;
+                                    
+                                    // If there's an active edit in any cell, just cancel it - prevent navigation
+                                    if (editingCell && productId) {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      handleCancelEdit();
+                                      return;
+                                    }
+                                    
+                                    // Only navigate if not editing
+                                    if (productId) {
+                                      handleRowClick(productId);
+                                    }
+                                  }}
+                                >
+                                  {row.getVisibleCells().map((cell: any) => {
+                                    const columnId = cell.column.id;
+                                    const hideOnMobileClass = ['brand', 'barcode', 'created_at', 'tags'].includes(columnId) ? 'hidden md:table-cell' : '';
+                                    
+                                    // Special styling for expander column
+                                    if (columnId === 'expander') {
+                                      return (
+                                        <TableCell 
+                                          key={cell.id} 
+                                          className="p-0 w-9 relative"
+                                          data-column-id={columnId}
+                                        >
                                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                        </div>
-                                      </TableCell>
-                                    );
-                                  }
-                                  
-                                  // Add special treatment for family column
-                                  if (columnId === 'family') {
-                                    return (
-                                      <TableCell 
-                                        key={cell.id} 
-                                        className={`px-2 py-1 min-w-[180px] ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
-                                        data-column-id={columnId}
-                                      >
-                                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                      </TableCell>
-                                    );
-                                  }
-                                  
-                                  if (columnId === 'category_name') {
-                                    const categoryValue = row.getValue('category_name') as string;
-                                    return (
-                                      <TableCell 
-                                        key={cell.id} 
-                                        className={`px-2 py-1 overflow-visible relative z-50 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
-                                        data-column-id={columnId}
-                                        style={{ position: 'relative' }}
-                                      >
-                                        <div className="flex items-center gap-1">
-                                          <span className="text-gray-500"><FolderIcon className="h-3.5 w-3.5" /></span>
+                                        </TableCell>
+                                      );
+                                    }
+                                    
+                                    const isActionsColumn = columnId === 'actions';
+                                    const actionsClass = isActionsColumn ? 'sticky right-0 z-20 border-l border-slate-300/40' : '';
+                                    const cellBgClass = isActionsColumn ? (row.getIsSelected() ? 'bg-slate-950/18' : index % 2 === 0 ? 'bg-slate-950/5' : 'bg-slate-950/11') : '';
+                                    
+                                    // Special cell rendering for specific column types
+                                    if (columnId === 'brand' && row.getValue('brand')) {
+                                      return (
+                                        <TableCell 
+                                          key={cell.id} 
+                                          className={`px-2 py-0 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
+                                          data-column-id={columnId}
+                                        >
+                                          <div className="flex items-center gap-1">
+                                            <span className="text-gray-500"><TagIcon className="h-3.5 w-3.5" /></span>
+                                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                          </div>
+                                        </TableCell>
+                                      );
+                                    }
+                                    
+                                    // Add special treatment for family column
+                                    if (columnId === 'family') {
+                                      return (
+                                        <TableCell 
+                                          key={cell.id} 
+                                          className={`px-2 py-1 min-w-[180px] ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
+                                          data-column-id={columnId}
+                                        >
                                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                        </div>
-                                      </TableCell>
-                                    );
-                                  }
-                                  
-                                  if (columnId === 'is_active') {
-                                    const isActive = row.getValue('is_active') as boolean;
+                                        </TableCell>
+                                      );
+                                    }
+                                    
+                                    if (columnId === 'category_name') {
+                                      const categoryValue = row.getValue('category_name') as string;
+                                      return (
+                                        <TableCell 
+                                          key={cell.id} 
+                                          className={`px-2 py-1 overflow-visible relative z-50 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
+                                          data-column-id={columnId}
+                                          style={{ position: 'relative' }}
+                                        >
+                                          <div className="flex items-center gap-1">
+                                            <span className="text-gray-500"><FolderIcon className="h-3.5 w-3.5" /></span>
+                                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                          </div>
+                                        </TableCell>
+                                      );
+                                    }
+                                    
+                                    if (columnId === 'is_active') {
+                                      const isActive = row.getValue('is_active') as boolean;
+                                      return (
+                                        <TableCell 
+                                          key={cell.id} 
+                                          className={`px-2 py-1 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
+                                          data-column-id={columnId}
+                                        >
+                                          <div className="flex items-center gap-1">
+                                            {isActive ? <CheckCircle className="h-4 w-4 text-green-600" /> : <XCircle className="h-4 w-4 text-red-600" />}
+                                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                          </div>
+                                        </TableCell>
+                                      );
+                                    }
+                                    
+                                    // Default cell rendering
                                     return (
                                       <TableCell 
                                         key={cell.id} 
                                         className={`px-2 py-1 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
                                         data-column-id={columnId}
                                       >
-                                        <div className="flex items-center gap-1">
-                                          {isActive ? <CheckCircle className="h-4 w-4 text-green-600" /> : <XCircle className="h-4 w-4 text-red-600" />}
-                                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                        </div>
+                                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                       </TableCell>
                                     );
-                                  }
-                                  
-                                  // Default cell rendering
-                                  return (
-                                    <TableCell 
-                                      key={cell.id} 
-                                      className={`px-2 py-1 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
-                                      data-column-id={columnId}
-                                    >
-                                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                    </TableCell>
-                                  );
-                                })}
-                              </TableRow>
-                              
-                              {/* Render expanded row content */}
-                              <AnimatePresence initial={false}>
-                                {row.getIsExpanded() && renderExpandedRow(row, index)}
-                              </AnimatePresence>
-                            </React.Fragment>
-                          );
-                        })
-                      }
-                    </TableBody>
-                  </Table>
-                </SortableContext>
-              </DndContext>
-            </div>
+                                  })}
+                                </TableRow>
+                                
+                                {/* Render expanded row content */}
+                                <AnimatePresence initial={false}>
+                                  {row.getIsExpanded() && renderExpandedRow(row, index)}
+                                </AnimatePresence>
+                              </React.Fragment>
+                            );
+                          })
+                        }
+                      </TableBody>
+                    </Table>
+                  </SortableContext>
+                </DndContext>
+              </div>
+              
+              {/* Pagination footer for list view */}
+              <div className="flex-shrink-0 h-12 bg-slate-100 border-t border-slate-300/40 flex items-center justify-between px-4">
+                <div className="flex space-x-2">
+                  <Button 
+                    size="sm" 
+                    onClick={() => table.previousPage()} 
+                    disabled={!table.getCanPreviousPage()}
+                  >
+                    <ChevronLeft />
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    onClick={() => table.nextPage()} 
+                    disabled={!table.getCanNextPage()}
+                  >
+                    <ChevronRight />
+                  </Button>
+                </div>
+
+                <span className="text-sm text-slate-600">
+                  {renderPaginationInfo()}
+                </span>
+
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm">Show</span>
+                  <Select
+                    value={String(table.getState().pagination.pageSize)}
+                    onValueChange={e => {
+                      const newSize = Math.min(+e, 50);
+                      setPagination({ pageIndex: 0, pageSize: newSize });
+                      setFilters(f => ({ ...f, page_size: newSize, page: 1 }));
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-[70px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {[10, 25, 50].map((n) => (
+                        <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </>
           ) : (
             <div className="flex flex-col flex-1 overflow-hidden hide-x-scrollbar">
               <div className="w-full overflow-hidden">
@@ -1840,51 +1884,6 @@ export function ProductsTable({
             </div>
           )}
         </section>
-        
-        {/* Pagination, only show for list view */}
-        {viewMode === 'list' && (
-          <div className='sticky bottom-0 z-50 h-12 bg-slate-100 border-t border-slate-300/40 flex items-center justify-between px-4'>
-            <div className="flex space-x-2">
-              <Button 
-                size="sm" 
-                onClick={() => table.previousPage()} 
-                disabled={!table.getCanPreviousPage()}
-              >
-                <ChevronLeft />
-              </Button>
-              <Button 
-                size="sm" 
-                onClick={() => table.nextPage()} 
-                disabled={!table.getCanNextPage()}
-              >
-                <ChevronRight />
-              </Button>
-            </div>
-
-            <span className="text-sm text-slate-600">
-              {renderPaginationInfo()}
-            </span>
-
-            <div className="flex items-center space-x-2">
-              <span className="text-sm">Show</span>
-              <Select
-                value={String(table.getState().pagination.pageSize)}
-                onValueChange={e => {
-                  const newSize = Math.min(+e, 50);
-                  setPagination({ pageIndex: 0, pageSize: newSize });
-                  setFilters(f => ({ ...f, page_size: newSize, page: 1 }));
-                }}
-              >
-                <SelectTrigger className="h-8 w-[70px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {[10, 25, 50].map((n) => (
-                    <SelectItem key={n} value={String(n)}>{n}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        )}
       </div>
     
 
@@ -1892,6 +1891,15 @@ export function ProductsTable({
       <BulkTagModal
         open={showTagModal}
         onOpenChange={setShowTagModal}
+        selectedIds={getSelectedProductIds()}
+        onSuccess={() => {
+          setRowSelection({});
+          forceReload();
+        }}
+      />
+      <BulkCategoryModal
+        open={showCategoryModal}
+        onOpenChange={setShowCategoryModal}
         selectedIds={getSelectedProductIds()}
         onSuccess={() => {
           setRowSelection({});

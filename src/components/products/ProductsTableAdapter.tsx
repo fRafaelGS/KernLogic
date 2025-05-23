@@ -39,13 +39,21 @@ export function ProductsTableAdapter({
 
   // Switch between ProductsTable and ProductGrid based on viewMode
   if (viewMode === 'grid') {
-    return <ProductGrid filters={normalizedFilters} />
+    return (
+      <div className="flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden">
+        <ProductGrid filters={normalizedFilters} />
+      </div>
+    )
   }
   
   // Default to list view
-  return <ProductsTable 
-    hideTopSearch={hideTopSearch} 
-    hideTopControls={hideTopControls}
-    filters={normalizedFilters}
-  />
+  return (
+    <div className="flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden">
+      <ProductsTable 
+        hideTopSearch={hideTopSearch} 
+        hideTopControls={hideTopControls}
+        filters={normalizedFilters}
+      />
+    </div>
+  )
 } 

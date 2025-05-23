@@ -32,7 +32,7 @@ export function SortableTableHeader({
   // Don't show sort arrow on the checkbox column
   if (id === "select") {
     return (
-      <TableHead key={header.id} className="p-2 w-10 bg-gray-100 font-semibold">
+      <TableHead key={header.id} className="w-10 bg-gray-100 font-semibold">
         {header.isPlaceholder
           ? null
           : flexRender(header.column.columnDef.header, header.getContext())}
@@ -62,7 +62,7 @@ export function SortableTableHeader({
     <TableHead
       key={header.id}
       style={{ width: header.getSize() }}
-      className={`px-2 py-2 ${hideMobile} bg-slate-950/12 text-gray-700 font-semibold text-sm tracking-wide border-b border-gray-200 text-left whitespace-nowrap`}
+      className={`px-2 ${hideMobile} bg-slate-950/12 text-gray-700 font-semibold text-sm tracking-wide border-b border-gray-200 text-left whitespace-nowrap`}
       onClick={column.getCanSort() ? column.getToggleSortingHandler() : undefined}
       aria-label={column.getCanSort() ? (isSorted ? tableConfig.display.tableView.sortDescending : tableConfig.display.tableView.sortAscending) : undefined}
       role={column.getCanSort() ? "button" : undefined}

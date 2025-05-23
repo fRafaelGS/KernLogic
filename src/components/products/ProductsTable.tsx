@@ -1788,7 +1788,7 @@ export function ProductsTable({
                           {table.getHeaderGroups().map(headerGroup => (
                             <React.Fragment key={headerGroup.id}>
                               {/* 1) Column titles */}
-                              <TableRow className="sticky top-0 z-30 bg-slate-100 h-4 border-b border-slate-200">
+                              <TableRow className="sticky top-0 z-30 bg-slate-100 border-b border-slate-200">
                                 {headerGroup.headers.map(header =>
                                   <SortableTableHeader key={header.id} id={header.column.id} header={header}/>
                                 )}

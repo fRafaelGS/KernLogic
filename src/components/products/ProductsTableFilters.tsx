@@ -31,7 +31,7 @@ interface ProductsTableFiltersProps {
   filters: Record<string, any>
   onFilterChange: (columnId: string, value: any) => void
   onClearFilters: () => void
-  table: Table<Product>
+  table: Table<Product> | null
   uniqueCategories: { label: string, value: string | number }[]
   uniqueTags: string[]
   uniqueBrands: string[]
@@ -56,8 +56,11 @@ export function ProductsTableFilters({
 }: ProductsTableFiltersProps) {
   const tableConfig = config.productsTable
   
-  // Add state for tag search
+  // Add state for search inputs in all dropdowns
   const [tagSearch, setTagSearch] = React.useState('')
+  const [brandSearch, setBrandSearch] = React.useState('')
+  const [familySearch, setFamilySearch] = React.useState('')
+  const [categorySearch, setCategorySearch] = React.useState('')
 
   // Safely get the value for the category filter
   const getCategoryFilterValue = () => {
@@ -77,15 +80,18 @@ export function ProductsTableFilters({
       // Convert undefined and null values to 'all'
       const normalizedValue = value === undefined || value === null ? 'all' : value
       onFilterChange('category', normalizedValue === 'all' ? undefined : normalizedValue)
-      // Also update the TanStack table's internal filter
-      const categoryColumn = table.getColumn('category')
-      if (categoryColumn) {
-        if (normalizedValue === 'all') {
-          categoryColumn.setFilterValue(undefined)
-        } else if (normalizedValue === 'uncategorized') {
-          categoryColumn.setFilterValue('')
-        } else {
-          categoryColumn.setFilterValue(normalizedValue)
+      
+      // Also update the TanStack table's internal filter (only if table exists)
+      if (table) {
+        const categoryColumn = table.getColumn('category')
+        if (categoryColumn) {
+          if (normalizedValue === 'all') {
+            categoryColumn.setFilterValue(undefined)
+          } else if (normalizedValue === 'uncategorized') {
+            categoryColumn.setFilterValue('')
+          } else {
+            categoryColumn.setFilterValue(normalizedValue)
+          }
         }
       }
     } catch (error) {
@@ -156,73 +162,309 @@ export function ProductsTableFilters({
 
         {/* Family filter */}
         <TableHead key="filter-family" className="px-2 py-2">
-          <Select
-            value={filters.family === undefined ? 'all' : String(filters.family)}
-            onValueChange={value => onFilterChange('family', value === 'all' ? undefined : value)}
-          >
-            <SelectTrigger className='h-7 text-xs'>
-              <SelectValue placeholder='All Families' />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value='all'>All Families</SelectItem>
-              {isFamiliesLoading && <SelectItem value='loading' disabled>Loading...</SelectItem>}
-              {!isFamiliesLoading && families.length === 0 && (
-                <SelectItem value='none' disabled>No families available</SelectItem>
-              )}
-              {!isFamiliesLoading && families.map((family: any) => (
-                <SelectItem key={family.id} value={String(family.id)}>
-                  {family.label || family.code || `Family ${family.id}`}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button 
+                variant="outline" 
+                className="h-7 text-xs w-full justify-start font-normal"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <span>
+                  {filters.family && filters.family !== 'all'
+                    ? families.find(f => String(f.id) === String(filters.family))?.label || families.find(f => String(f.id) === String(filters.family))?.code || `Family ${filters.family}`
+                    : 'All Families'}
+                </span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-3" align="start">
+              <div className="space-y-2">
+                {/* Search input for families */}
+                <Input
+                  placeholder="Search families..."
+                  className="h-8 text-xs"
+                  value={familySearch}
+                  onChange={(e) => setFamilySearch(e.target.value)}
+                />
+                
+                <div className="max-h-48 pr-2 overflow-y-auto">
+                  {isFamiliesLoading ? (
+                    <div className="text-xs text-muted-foreground text-center py-2">
+                      <Loader2 className="h-4 w-4 animate-spin mx-auto mb-1" />
+                      Loading families...
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      {/* All Families option */}
+                      <div className="flex items-center">
+                        <Checkbox 
+                          id="family-all"
+                          checked={!filters.family || filters.family === 'all'}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              onFilterChange('family', undefined)
+                            }
+                          }}
+                        />
+                        <Label 
+                          htmlFor="family-all"
+                          className="ml-2 text-sm cursor-pointer font-medium"
+                        >
+                          All Families
+                        </Label>
+                      </div>
+                      
+                      {/* Filter families based on search */}
+                      {families
+                        .filter(family => {
+                          const searchTerm = familySearch.toLowerCase()
+                          return (family.label && family.label.toLowerCase().includes(searchTerm)) ||
+                                 (family.code && family.code.toLowerCase().includes(searchTerm))
+                        })
+                        .slice(0, 100)
+                        .map((family) => (
+                          <div key={family.id} className="flex items-center">
+                            <Checkbox 
+                              id={`family-${family.id}`}
+                              checked={String(filters.family) === String(family.id)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  onFilterChange('family', String(family.id))
+                                } else {
+                                  onFilterChange('family', undefined)
+                                }
+                              }}
+                            />
+                            <Label 
+                              htmlFor={`family-${family.id}`}
+                              className="ml-2 text-sm cursor-pointer"
+                            >
+                              {family.label || family.code || `Family ${family.id}`}
+                            </Label>
+                          </div>
+                        ))}
+                        
+                      {families.filter(family => {
+                        const searchTerm = familySearch.toLowerCase()
+                        return (family.label && family.label.toLowerCase().includes(searchTerm)) ||
+                               (family.code && family.code.toLowerCase().includes(searchTerm))
+                      }).length === 0 && familySearch && (
+                        <div className="text-xs text-muted-foreground text-center py-2">
+                          No families found matching "{familySearch}"
+                        </div>
+                      )}
+                      
+                      {families.length === 0 && !isFamiliesLoading && (
+                        <div className="text-xs text-muted-foreground text-center py-2">
+                          No families available
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
         </TableHead>
 
         {/* Category filter - Updated to handle nested categories */}
         <TableHead key="filter-category" className="px-2 py-2">
-          <Select
-            value={filters.category ? String(filters.category) : 'all'}
-            onValueChange={v => handleCategoryFilterChange(String(v))}
-          >
-            <SelectTrigger className="h-7 text-xs">
-              <SelectValue placeholder={tableConfig.display.selectors.category.placeholder} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{tableConfig.display.selectors.category.allCategories}</SelectItem>
-              <SelectItem value="uncategorized">{tableConfig.display.selectors.category.uncategorized}</SelectItem>
-              {Array.isArray(uniqueCategories) && uniqueCategories.length > 0 ? (
-                uniqueCategories.map((cat, index) => (
-                  cat && (
-                    <SelectItem key={`cat-${index}-${cat.value}`} value={String(cat.value)}>
-                      {cat.label}
-                    </SelectItem>
-                  )
-                ))
-              ) : (
-                <SelectItem value="no-categories" disabled>
-                  {tableConfig.display.selectors.category.noCategories}
-                </SelectItem>
-              )}
-            </SelectContent>
-          </Select>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button 
+                variant="outline" 
+                className="h-7 text-xs w-full justify-start font-normal"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <span>
+                  {filters.category && filters.category !== 'all'
+                    ? uniqueCategories.find(cat => String(cat.value) === String(filters.category))?.label || `Category ${filters.category}`
+                    : tableConfig.display.selectors.category.allCategories}
+                </span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-3" align="start">
+              <div className="space-y-2">
+                {/* Search input for categories */}
+                <Input
+                  placeholder="Search categories..."
+                  className="h-8 text-xs"
+                  value={categorySearch}
+                  onChange={(e) => setCategorySearch(e.target.value)}
+                />
+                
+                <div className="max-h-48 pr-2 overflow-y-auto">
+                  <div className="space-y-1">
+                    {/* All Categories option */}
+                    <div className="flex items-center">
+                      <Checkbox 
+                        id="category-all"
+                        checked={!filters.category || filters.category === 'all'}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            handleCategoryFilterChange('all')
+                          }
+                        }}
+                      />
+                      <Label 
+                        htmlFor="category-all"
+                        className="ml-2 text-sm cursor-pointer font-medium"
+                      >
+                        {tableConfig.display.selectors.category.allCategories}
+                      </Label>
+                    </div>
+                    
+                    {/* Uncategorized option */}
+                    <div className="flex items-center">
+                      <Checkbox 
+                        id="category-uncategorized"
+                        checked={String(filters.category) === 'uncategorized'}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            handleCategoryFilterChange('uncategorized')
+                          }
+                        }}
+                      />
+                      <Label 
+                        htmlFor="category-uncategorized"
+                        className="ml-2 text-sm cursor-pointer"
+                      >
+                        {tableConfig.display.selectors.category.uncategorized}
+                      </Label>
+                    </div>
+                    
+                    {/* Filter categories based on search */}
+                    {Array.isArray(uniqueCategories) && uniqueCategories.length > 0 ? (
+                      uniqueCategories
+                        .filter(cat => cat && cat.label.toLowerCase().includes(categorySearch.toLowerCase()))
+                        .slice(0, 100)
+                        .map((cat, index) => (
+                          <div key={`cat-${index}-${cat.value}`} className="flex items-center">
+                            <Checkbox 
+                              id={`category-${cat.value}`}
+                              checked={String(filters.category) === String(cat.value)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  handleCategoryFilterChange(String(cat.value))
+                                } else {
+                                  handleCategoryFilterChange('all')
+                                }
+                              }}
+                            />
+                            <Label 
+                              htmlFor={`category-${cat.value}`}
+                              className="ml-2 text-sm cursor-pointer"
+                            >
+                              {cat.label}
+                            </Label>
+                          </div>
+                        ))
+                    ) : (
+                      <div className="text-xs text-muted-foreground text-center py-2">
+                        {tableConfig.display.selectors.category.noCategories}
+                      </div>
+                    )}
+                    
+                    {uniqueCategories.filter(cat => cat && cat.label.toLowerCase().includes(categorySearch.toLowerCase())).length === 0 && categorySearch && (
+                      <div className="text-xs text-muted-foreground text-center py-2">
+                        No categories found matching "{categorySearch}"
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
         </TableHead>
 
         {/* Brand filter */}
         <TableHead key="filter-brand" className="px-2 py-2 hidden md:table-cell">
-          <Select
-            value={filters.brand ?? 'all'}
-            onValueChange={value => onFilterChange('brand', value === 'all' ? undefined : value)}
-          >
-            <SelectTrigger className="h-7 text-xs">
-              <SelectValue placeholder="All Brands" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Brands</SelectItem>
-              {uniqueBrands.map((brand, idx) => (
-                <SelectItem key={brand || idx} value={brand}>{brand}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button 
+                variant="outline" 
+                className="h-7 text-xs w-full justify-start font-normal"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <span>
+                  {filters.brand && filters.brand !== 'all'
+                    ? filters.brand
+                    : 'All Brands'}
+                </span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-3" align="start">
+              <div className="space-y-2">
+                {/* Search input for brands */}
+                <Input
+                  placeholder="Search brands..."
+                  className="h-8 text-xs"
+                  value={brandSearch}
+                  onChange={(e) => setBrandSearch(e.target.value)}
+                />
+                
+                <div className="max-h-48 pr-2 overflow-y-auto">
+                  <div className="space-y-1">
+                    {/* All Brands option */}
+                    <div className="flex items-center">
+                      <Checkbox 
+                        id="brand-all"
+                        checked={!filters.brand || filters.brand === 'all'}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            onFilterChange('brand', undefined)
+                          }
+                        }}
+                      />
+                      <Label 
+                        htmlFor="brand-all"
+                        className="ml-2 text-sm cursor-pointer font-medium"
+                      >
+                        All Brands
+                      </Label>
+                    </div>
+                    
+                    {/* Filter brands based on search */}
+                    {uniqueBrands
+                      .filter(brand => brand && brand.toLowerCase().includes(brandSearch.toLowerCase()))
+                      .slice(0, 100)
+                      .map((brand, idx) => (
+                        <div key={brand || idx} className="flex items-center">
+                          <Checkbox 
+                            id={`brand-${brand}`}
+                            checked={String(filters.brand) === String(brand)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                onFilterChange('brand', brand)
+                              } else {
+                                onFilterChange('brand', undefined)
+                              }
+                            }}
+                          />
+                          <Label 
+                            htmlFor={`brand-${brand}`}
+                            className="ml-2 text-sm cursor-pointer"
+                          >
+                            {brand}
+                          </Label>
+                        </div>
+                      ))}
+                      
+                    {uniqueBrands.filter(brand => brand && brand.toLowerCase().includes(brandSearch.toLowerCase())).length === 0 && brandSearch && (
+                      <div className="text-xs text-muted-foreground text-center py-2">
+                        No brands found matching "{brandSearch}"
+                      </div>
+                    )}
+                    
+                    {uniqueBrands.length === 0 && (
+                      <div className="text-xs text-muted-foreground text-center py-2">
+                        No brands available
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
         </TableHead>
         
         {/* Tags filter */}
@@ -449,11 +691,12 @@ export function ProductsTableFilters({
               <div className="space-y-2">
                 <div className="grid gap-2">
                   <div>
-                    <Label htmlFor="created_at-from">From ({getDateFormatPattern()})</Label>
+                    <Label htmlFor="created_at-from">From</Label>
                     <Input
                       id="created_at-from"
                       type="date"
                       className="h-8"
+                      placeholder={getDateFormatPattern()}
                       value={filters.created_at_from || ''}
                       onChange={(e) => {
                         const value = e.target.value || undefined
@@ -462,11 +705,12 @@ export function ProductsTableFilters({
                     />
                   </div>
                   <div>
-                    <Label htmlFor="created_at-to">To ({getDateFormatPattern()})</Label>
+                    <Label htmlFor="created_at-to">To</Label>
                     <Input
                       id="created_at-to"
                       type="date"
                       className="h-8"
+                      placeholder={getDateFormatPattern()}
                       value={filters.created_at_to || ''}
                       onChange={(e) => {
                         const value = e.target.value || undefined
@@ -516,11 +760,12 @@ export function ProductsTableFilters({
               <div className="space-y-2">
                 <div className="grid gap-2">
                   <div>
-                    <Label htmlFor="updated_at-from">From ({getDateFormatPattern()})</Label>
+                    <Label htmlFor="updated_at-from">From</Label>
                     <Input
                       id="updated_at-from"
                       type="date"
                       className="h-8"
+                      placeholder={getDateFormatPattern()}
                       value={filters.updated_at_from || ''}
                       onChange={(e) => {
                         const value = e.target.value || undefined
@@ -529,11 +774,12 @@ export function ProductsTableFilters({
                     />
                   </div>
                   <div>
-                    <Label htmlFor="updated_at-to">To ({getDateFormatPattern()})</Label>
+                    <Label htmlFor="updated_at-to">To</Label>
                     <Input
                       id="updated_at-to"
                       type="date"
                       className="h-8"
+                      placeholder={getDateFormatPattern()}
                       value={filters.updated_at_to || ''}
                       onChange={(e) => {
                         const value = e.target.value || undefined

@@ -7,10 +7,19 @@ import { useFetchProducts } from '@/hooks/useFetchProducts'
 import { config } from '@/config/config'
 
 interface ProductGridProps {
-  filters?: Record<string, any>
-  products?: Product[]
-  loading?: boolean
-  error?: string | null
+  products: Product[]
+  loading: boolean
+  error: string | null
+  filters: Record<string, any>
+  onFilterChange: (columnId: string, value: any) => void
+  onClearFilters: () => void
+  table: any
+  columns: any[]
+  uniqueCategories: any[]
+  uniqueTags: string[]
+  uniqueBrands: string[]
+  families: any[]
+  isFamiliesLoading: boolean
 }
 
 // Memoized product card component with proper spacing
@@ -36,11 +45,28 @@ const MemoizedProductCard = memo(({
 })
 
 export function ProductGrid({ 
-  filters = {}, 
+  filters, 
   products: passedProducts, 
   loading: passedLoading, 
-  error: passedError 
+  error: passedError,
+  onFilterChange,
+  onClearFilters,
+  table,
+  columns,
+  uniqueCategories,
+  uniqueTags,
+  uniqueBrands,
+  families,
+  isFamiliesLoading
 }: ProductGridProps) {
+  // DEBUG: Log props immediately on render
+  console.log('🔍 ProductGrid IMMEDIATE Props Debug:', {
+    'onFilterChange type': typeof onFilterChange,
+    'onFilterChange value': onFilterChange,
+    'onClearFilters type': typeof onClearFilters,
+    'onClearFilters value': onClearFilters
+  });
+
   // Get reference to the productsTable config section
   const tableConfig = config.productsTable
   
@@ -69,6 +95,167 @@ export function ProductGrid({
     )
   }, [data, passedProducts])
 
+  // Apply client-side filtering to the products for grid view
+  const filteredProducts = React.useMemo(() => {
+    if (!filters || Object.keys(filters).length === 0) {
+      return productsToRender
+    }
+
+    return productsToRender.filter(product => {
+      // Category filter
+      if (filters.category && filters.category !== 'all') {
+        if (filters.category === 'uncategorized') {
+          // For uncategorized, check if product has no category
+          const hasCategory = product.category?.id || product.category_id
+          if (hasCategory) return false
+        } else {
+          // For specific categories, compare IDs
+          const productCategoryId = product.category?.id || product.category_id
+          if (String(productCategoryId) !== String(filters.category)) {
+            return false
+          }
+        }
+      }
+
+      // Family filter
+      if (filters.family && filters.family !== 'all') {
+        const productFamily = product.family
+        let familyId = null
+        
+        if (typeof productFamily === 'object' && productFamily?.id) {
+          familyId = productFamily.id
+        } else if (typeof productFamily === 'number') {
+          familyId = productFamily
+        }
+        
+        if (String(familyId) !== String(filters.family)) {
+          return false
+        }
+      }
+
+      // Status filter
+      if (filters.is_active && filters.is_active !== 'all') {
+        const isActive = product.is_active
+        if (filters.is_active === 'active' && !isActive) return false
+        if (filters.is_active === 'inactive' && isActive) return false
+      }
+
+      // Brand filter
+      if (filters.brand && filters.brand.trim()) {
+        const productBrand = product.brand || ''
+        if (!productBrand.toLowerCase().includes(filters.brand.toLowerCase())) {
+          return false
+        }
+      }
+
+      // Tags filter (AND logic - all selected tags must be present)
+      if (filters.tags && Array.isArray(filters.tags) && filters.tags.length > 0) {
+        const productTags = product.tags || []
+        let normalizedProductTags: string[] = []
+        
+        if (Array.isArray(productTags)) {
+          normalizedProductTags = productTags.map(tag => 
+            typeof tag === 'object' && tag?.name ? tag.name : String(tag)
+          )
+        } else if (typeof productTags === 'string') {
+          try {
+            const parsed = JSON.parse(productTags)
+            normalizedProductTags = Array.isArray(parsed) ? parsed : [productTags]
+          } catch (e) {
+            normalizedProductTags = [productTags]
+          }
+        }
+        
+        const hasAllTags = filters.tags.every((filterTag: string) => 
+          normalizedProductTags.some(productTag => 
+            String(productTag).toLowerCase().includes(String(filterTag).toLowerCase())
+          )
+        )
+        
+        if (!hasAllTags) return false
+      }
+
+      // Price filters
+      if (filters.minPrice) {
+        const minPrice = parseFloat(filters.minPrice)
+        if (!isNaN(minPrice)) {
+          let productPrice = 0
+          if (product.prices && Array.isArray(product.prices) && product.prices.length > 0) {
+            productPrice = parseFloat(product.prices[0].amount) || 0
+          } else if ((product as any).price) {
+            productPrice = parseFloat((product as any).price) || 0
+          }
+          if (productPrice < minPrice) return false
+        }
+      }
+
+      if (filters.maxPrice) {
+        const maxPrice = parseFloat(filters.maxPrice)
+        if (!isNaN(maxPrice)) {
+          let productPrice = 0
+          if (product.prices && Array.isArray(product.prices) && product.prices.length > 0) {
+            productPrice = parseFloat(product.prices[0].amount) || 0
+          } else if ((product as any).price) {
+            productPrice = parseFloat((product as any).price) || 0
+          }
+          if (productPrice > maxPrice) return false
+        }
+      }
+
+      // GTIN/Barcode filter
+      if (filters.barcode && filters.barcode.trim()) {
+        const productBarcode = product.barcode || ''
+        if (!productBarcode.toLowerCase().includes(filters.barcode.toLowerCase())) {
+          return false
+        }
+      }
+
+      // SKU filter
+      if (filters.sku && filters.sku.trim()) {
+        const productSku = product.sku || ''
+        if (!productSku.toLowerCase().includes(filters.sku.toLowerCase())) {
+          return false
+        }
+      }
+
+      // Name filter
+      if (filters.name && filters.name.trim()) {
+        const productName = product.name || ''
+        if (!productName.toLowerCase().includes(filters.name.toLowerCase())) {
+          return false
+        }
+      }
+
+      // Date filters (created_at)
+      if (filters.created_at_from) {
+        const createdDate = new Date(product.created_at)
+        const fromDate = new Date(filters.created_at_from)
+        if (createdDate < fromDate) return false
+      }
+
+      if (filters.created_at_to) {
+        const createdDate = new Date(product.created_at)
+        const toDate = new Date(filters.created_at_to)
+        if (createdDate > toDate) return false
+      }
+
+      // Date filters (updated_at)
+      if (filters.updated_at_from) {
+        const updatedDate = new Date(product.updated_at)
+        const fromDate = new Date(filters.updated_at_from)
+        if (updatedDate < fromDate) return false
+      }
+
+      if (filters.updated_at_to) {
+        const updatedDate = new Date(product.updated_at)
+        const toDate = new Date(filters.updated_at_to)
+        if (updatedDate > toDate) return false
+      }
+
+      return true
+    })
+  }, [productsToRender, filters])
+
   // 🔍 DEBUGGING: Log all the critical values
   React.useEffect(() => {
     console.log('🔍 ProductGrid Debug Report:', {
@@ -91,11 +278,30 @@ export function ProductGrid({
       'errorMessage': errorMessage,
       'productsToRender': productsToRender,
       'productsToRender.length': productsToRender.length,
+      'filteredProducts': filteredProducts,
+      'filteredProducts.length': filteredProducts.length,
       
       // First few products for inspection
-      'first3Products': productsToRender.slice(0, 3).map(p => ({ id: p?.id, name: p?.name, sku: p?.sku }))
+      'first3Products': filteredProducts.slice(0, 3).map(p => ({ id: p?.id, name: p?.name, sku: p?.sku }))
     })
-  }, [passedProducts, passedLoading, passedError, filters, data, isLoading, error, isLoadingData, errorMessage, productsToRender])
+  }, [passedProducts, passedLoading, passedError, filters, data, isLoading, error, isLoadingData, errorMessage, productsToRender, filteredProducts])
+
+  // Debug logging for filter changes
+  React.useEffect(() => {
+    try {
+      console.log('🔍 ProductGrid Filter Debug:', {
+        filters,
+        'onFilterChange': !!onFilterChange,
+        'onClearFilters': !!onClearFilters,
+        'uniqueCategories.length': uniqueCategories?.length || 0,
+        'uniqueTags.length': uniqueTags?.length || 0,
+        'uniqueBrands.length': uniqueBrands?.length || 0,
+        'families.length': families?.length || 0
+      });
+    } catch (error) {
+      console.log('🔍 ProductGrid Filter Debug - ERROR:', error);
+    }
+  }, [filters, onFilterChange, onClearFilters, uniqueCategories, uniqueTags, uniqueBrands, families]);
 
   // Grid container ref and dimensions
   const containerRef = useRef<HTMLDivElement>(null)
@@ -110,7 +316,7 @@ export function ProductGrid({
         const width = containerRef.current.offsetWidth
         // Calculate height based on visible rows needed (avoid partial rows)
         const columnCount = getColumnCount(width)
-        const rowCount = Math.ceil(productsToRender.length / columnCount)
+        const rowCount = Math.ceil(filteredProducts.length / columnCount)
         // Height calculation - 2 rows visible initially, more as needed
         const visibleRows = Math.min(rowCount, 12)
         const height = visibleRows * rowHeight
@@ -128,7 +334,7 @@ export function ProductGrid({
     
     // Cleanup
     return () => window.removeEventListener('resize', updateDimensions)
-  }, [productsToRender.length])
+  }, [filteredProducts.length])
 
   // Calculate columns based on container width - more conservative to prevent overflow
   const getColumnCount = (width: number) => {
@@ -142,7 +348,7 @@ export function ProductGrid({
   const columnCount = getColumnCount(containerWidth)
   // Calculate column width with safety margin
   const columnWidth = Math.floor((containerWidth - 16) / columnCount)
-  const rowCount = Math.ceil(productsToRender.length / columnCount)
+  const rowCount = Math.ceil(filteredProducts.length / columnCount)
 
   if (isLoadingData) {
     return (
@@ -172,7 +378,7 @@ export function ProductGrid({
     )
   }
 
-  if (productsToRender.length === 0) {
+  if (filteredProducts.length === 0) {
     return (
       <div className="flex items-center justify-center p-8 text-center">
         <div className="max-w-md">
@@ -200,9 +406,9 @@ export function ProductGrid({
       >
         {({ columnIndex, rowIndex, style }) => {
           const idx = rowIndex * columnCount + columnIndex
-          if (idx >= productsToRender.length) return null
+          if (idx >= filteredProducts.length) return null
           
-          const product = productsToRender[idx]
+          const product = filteredProducts[idx]
           if (!product) return null
           
           return <MemoizedProductCard style={style} product={product} />

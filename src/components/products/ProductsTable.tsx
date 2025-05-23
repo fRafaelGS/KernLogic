@@ -1450,7 +1450,7 @@ export function ProductsTable({
   const openBulkTagModal = useCallback(() => {
     setShowTagModal(true);
   }, []);
-  
+
   // Add this function to extract unique tags from products for the filter dropdown
   const uniqueTags = useUniqueTags(products);
 

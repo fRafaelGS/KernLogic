@@ -648,6 +648,7 @@
         // Update a product
         updateProduct: async (id: number, product: Partial<Product> | FormData): Promise<Product> => {
             const url = `${PRODUCTS_PATH}/${id}/`;
+            console.log('🔧 updateProduct called:', { id, url, product });
             
             // For regular objects, check if core fields are being modified
             if (!(product instanceof FormData)) {
@@ -662,7 +663,9 @@
                 _activity_type: 'PRODUCT_CORE_EDIT'
                 };
                 
+                console.log('📤 Sending PATCH request with core field changes:', productWithFlag);
                 const response = await axiosInstance.patch(url, productWithFlag);
+                console.log('📥 Response from core field update:', response.data);
                 return response.data;
             }
             }
@@ -677,16 +680,20 @@
                 product.append('_activity_type', 'PRODUCT_CORE_EDIT');
             }
             
+            console.log('📤 Sending PATCH request with FormData');
             const response = await axiosInstance.patch(url, product, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
                 },
             });
+            console.log('📥 Response from FormData update:', response.data);
             return response.data;
             }
             
             // For regular objects with no core field changes
+            console.log('📤 Sending PATCH request:', product);
             const response = await axiosInstance.patch(url, product);
+            console.log('📥 Response:', response.data);
             return response.data;
         },
 

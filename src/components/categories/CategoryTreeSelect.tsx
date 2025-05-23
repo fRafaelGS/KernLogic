@@ -57,7 +57,11 @@ const TreeNodeRow: React.FC<TreeNodeRowProps> = ({
         {hasChildren ? (
           <button 
             type="button"
-            onClick={e => { e.stopPropagation(); onToggle(node); }}
+            onClick={e => { 
+              console.log('🔽 Chevron clicked for:', node.label);
+              e.stopPropagation(); 
+              onToggle(node); 
+            }}
             className="p-0.5 mr-1.5 rounded-sm hover:bg-muted flex items-center justify-center"
             aria-label={node.expanded ? "Collapse" : "Expand"}
           >
@@ -71,7 +75,11 @@ const TreeNodeRow: React.FC<TreeNodeRowProps> = ({
         
         <button
           className="flex-1 text-left flex items-center"
-          onClick={e => { e.stopPropagation(); onSelect(node); }}
+          onClick={e => { 
+            console.log('📁 Category clicked:', node.label);
+            e.stopPropagation(); 
+            onSelect(node); 
+          }}
           disabled={!allowSelectParent && hasChildren}
           aria-disabled={!allowSelectParent && hasChildren}
         >
@@ -94,7 +102,7 @@ const TreeNodeRow: React.FC<TreeNodeRowProps> = ({
       
       {hasChildren && node.expanded && (
         <ul className="list-none">
-          {node.children.map(childNode => (
+          {node.children?.map(childNode => (
             <TreeNodeRow
               key={childNode.value}
               node={childNode}
@@ -219,6 +227,7 @@ export const CategoryTreeSelect: React.FC<CategoryTreeSelectProps> = ({
 
   // Toggle node expanded state
   const toggleNode = (targetNode: TreeNode) => {
+    console.log('🔄 Toggle node:', targetNode.label);
     const toggleNodeInTree = (nodes: TreeNode[]): TreeNode[] => {
       return nodes.map(node => {
         if (node.value === targetNode.value) {
@@ -243,10 +252,12 @@ export const CategoryTreeSelect: React.FC<CategoryTreeSelectProps> = ({
 
   // Handle node selection
   const handleSelect = (node: TreeNode) => {
+    console.log('📌 Node selected:', node.label, 'value:', node.value);
     setSelectedLabel(node.label);
     const numericValue = !isNaN(Number(node.value)) 
       ? Number(node.value) 
       : node.value;
+    console.log('🔢 Calling onChange with:', numericValue);
     onChange(numericValue);
     setIsOpen(false);
   };
@@ -311,6 +322,9 @@ export const CategoryTreeSelect: React.FC<CategoryTreeSelectProps> = ({
       className={`relative ${className}`}
       data-component="category-tree-select-container"
       data-testid="category-tree-select"
+      onClick={stopPropagation}
+      onMouseDown={stopPropagation}
+      onMouseUp={stopPropagation}
     >
       <Popover.Root open={isOpen} onOpenChange={setIsOpen}>
         <Popover.Trigger asChild>
@@ -319,7 +333,10 @@ export const CategoryTreeSelect: React.FC<CategoryTreeSelectProps> = ({
             role="combobox" 
             className={`w-full justify-between ${isOpen ? 'ring-2 ring-ring' : ''}`}
             disabled={disabled}
-            onClick={stopPropagation}
+            onClick={(e) => {
+              console.log('🎯 Popover trigger clicked, isOpen:', isOpen);
+              stopPropagation(e);
+            }}
             onMouseDown={stopPropagation}
             aria-expanded={isOpen}
             data-testid="category-select-trigger"
@@ -340,12 +357,28 @@ export const CategoryTreeSelect: React.FC<CategoryTreeSelectProps> = ({
             collisionPadding={16}
             avoidCollisions
             className="
-              bg-white rounded-lg shadow-lg z-[1000]
+              bg-white rounded-lg shadow-lg z-[9999]
               min-w-[300px] max-w-[90vw]
               max-h-[var(--radix-popper-available-height)] overflow-auto
               flex flex-col
+              border border-gray-200
             "
+            style={{
+              position: 'relative',
+              zIndex: 9999,
+              pointerEvents: 'auto'
+            }}
             data-testid="category-popover"
+            onClick={stopPropagation}
+            onMouseDown={stopPropagation}
+            onMouseUp={stopPropagation}
+            onPointerDownOutside={(e) => {
+              // Prevent closing when clicking inside the popover
+              const target = e.target as HTMLElement;
+              if (target.closest('[data-component="category-tree-select-container"]')) {
+                e.preventDefault();
+              }
+            }}
           >
             <div className="flex flex-col h-full">
               {/* 1) Sticky search header */}

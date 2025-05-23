@@ -35,6 +35,7 @@ import {
   Product,
   productService,
 } from "@/services/productService";
+import { updateProductCategory } from "@/services/categoryService";
 import { Category } from '@/types/categories';
 import {
   Tooltip,
@@ -106,7 +107,7 @@ export interface UseProductColumnsOpts {
   handleCancelEdit(): void;
   handleCellEdit(row: number, col: string, v: string): void;
   handleCreateTagOption(input: string): Promise<TagOption | null>;
-  updateData(row: number, col: string, v: any): void;
+  updateData(row: number, col: string, v: any): Promise<void>;
 
   /* --- navigation / actions --- */
   navigate(path: string): void;
@@ -295,7 +296,7 @@ export function useProductColumns({
 
         return isEditing ? (
           <div
-            className="flex space-x-2 w-full p-1"
+            className="flex space-x-2 w-full p-1 relative z-50"
             onClick={(e) => e.stopPropagation()}
             data-editing="true"
           >
@@ -305,12 +306,12 @@ export function useProductColumns({
               onChange={(e) => setEditValue(e.target.value)}
               onKeyDown={handleKeyDown}
               onBlur={handleSaveCellEdit}
-              className="h-8 w-full"
+              className="h-8 w-full min-w-[120px]"
             />
-            <Button size="sm" variant="ghost" onClick={handleSaveCellEdit}>
+            <Button size="sm" variant="outline" onClick={handleSaveCellEdit} className="bg-green-50 hover:bg-green-100 border-green-200 text-green-700">
               <CheckIcon className="h-4 w-4" />
             </Button>
-            <Button size="sm" variant="ghost" onClick={handleCancelEdit}>
+            <Button size="sm" variant="outline" onClick={handleCancelEdit} className="bg-red-50 hover:bg-red-100 border-red-200 text-red-700">
               <XIcon className="h-4 w-4" />
             </Button>
           </div>
@@ -358,7 +359,7 @@ export function useProductColumns({
 
         return isEditing ? (
           <div
-            className="flex space-x-2 w-full p-1"
+            className="flex space-x-2 w-full p-1 relative z-50"
             onClick={(e) => e.stopPropagation()}
             data-editing="true"
           >
@@ -370,10 +371,10 @@ export function useProductColumns({
               onBlur={handleSaveCellEdit}
               className="h-8 w-full"
             />
-            <Button size="sm" variant="ghost" onClick={handleSaveCellEdit}>
+            <Button size="sm" variant="outline" onClick={handleSaveCellEdit} className="bg-green-50 hover:bg-green-100 border-green-200 text-green-700">
               <CheckIcon className="h-4 w-4" />
             </Button>
-            <Button size="sm" variant="ghost" onClick={handleCancelEdit}>
+            <Button size="sm" variant="outline" onClick={handleCancelEdit} className="bg-red-50 hover:bg-red-100 border-red-200 text-red-700">
               <XIcon className="h-4 w-4" />
             </Button>
           </div>
@@ -547,7 +548,100 @@ export function useProductColumns({
           </Button>
         );
       },
-      cell: info => info.getValue<string>() || 'Uncategorized',
+      cell: ({ row }) => {
+        const rowIndex = row.index;
+        const categoryName = row.getValue("category_name") as string || "";
+        const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.columnId === 'category';
+        
+        // Extract current category ID from the product's category array
+        const currentCategoryId = row.original.category && Array.isArray(row.original.category) && row.original.category.length > 0
+          ? row.original.category[row.original.category.length - 1]?.id // Get the leaf category ID
+          : null;
+        
+        // When editing, don't attach any click handlers to the wrapper
+        if (isEditing) {
+          console.log("🎨 Rendering CategoryTreeSelect for editing, rowIndex:", rowIndex);
+          return (
+            <div 
+              className="relative z-50 overflow-visible"
+              data-component="category-tree-select-container"
+              data-editing="true"
+            >
+              <CategoryTreeSelect
+                selectedValue={currentCategoryId}
+                onChange={async (newId) => {
+                  try {
+                    // Call updateProductCategory directly instead of updateData
+                    const productId = row.original.id;
+                    if (!productId) {
+                      throw new Error("Product ID is missing");
+                    }
+                    
+                    const success = await updateProductCategory(productId, typeof newId === 'string' ? parseInt(newId, 10) : newId);
+                    if (success) {
+                      // Optimistically update local state
+                      if (setProducts) {
+                        // Find the selected category from categoryOptions to get the name
+                        const selectedCategory = categoryOptions.find(cat => 
+                          String(cat.value) === String(newId)
+                        );
+                        
+                        setProducts(prev => prev.map(p => 
+                          p.id === productId 
+                            ? { 
+                                ...p, 
+                                category: selectedCategory ? [{ 
+                                  id: typeof newId === 'string' ? parseInt(newId, 10) : newId, 
+                                  name: selectedCategory.label 
+                                }] : [],
+                                category_name: selectedCategory?.label || ''
+                              }
+                            : p
+                        ));
+                      }
+                      
+                      // Also fetch fresh data if available
+                      if (fetchData) fetchData();
+                    }
+                  } catch (err) {
+                    console.error("❌ Category update failed:", err);
+                    toast({ 
+                      title: "Failed to update category", 
+                      variant: "destructive" 
+                    });
+                  } finally {
+                    // Exit editing mode
+                    handleCancelEdit();
+                  }
+                }}
+                className="w-full min-w-[240px]"
+                placeholder="Select category..."
+              />
+            </div>
+          );
+        }
+        
+        // Non-editing mode
+        console.log("📝 Rendering non-editing category cell, rowIndex:", rowIndex);
+        return (
+          <div 
+            className="relative z-50 overflow-visible cursor-pointer hover:text-primary transition-colors p-1"
+            data-component="category-tree-select-container"
+            onClick={(e) => {
+              console.log("▶️ Enter edit mode for row", rowIndex);
+              e.stopPropagation();
+              handleCellEdit(rowIndex, 'category', String(currentCategoryId || ""));
+            }}
+          >
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="editable-cell">{categoryName || 'Uncategorized'}</span>
+              </TooltipTrigger>
+              <TooltipContent>Click to edit</TooltipContent>
+            </Tooltip>
+          </div>
+        );
+      },
       filterFn: 'equals',
     },
 
@@ -580,7 +674,11 @@ export function useProductColumns({
         
         if (isEditing) {
           return (
-            <div className="flex space-x-2 w-full p-1" onClick={(e) => e.stopPropagation()}>
+            <div
+              className="flex space-x-2 w-full p-1 relative z-50"
+              onClick={(e) => e.stopPropagation()}
+              data-editing="true"
+            >
               <Input
                 className="h-8 w-full min-w-[120px]"
                 autoFocus
@@ -589,10 +687,10 @@ export function useProductColumns({
                 onKeyDown={handleKeyDown}
                 onBlur={handleSaveCellEdit}
               />
-              <Button size="sm" variant="ghost" onClick={handleSaveCellEdit}>
+              <Button size="sm" variant="outline" onClick={handleSaveCellEdit} className="bg-green-50 hover:bg-green-100 border-green-200 text-green-700">
                 <CheckIcon className="h-4 w-4" />
               </Button>
-              <Button size="sm" variant="ghost" onClick={handleCancelEdit}>
+              <Button size="sm" variant="outline" onClick={handleCancelEdit} className="bg-red-50 hover:bg-red-100 border-red-200 text-red-700">
                 <XIcon className="h-4 w-4" />
               </Button>
             </div>
@@ -662,47 +760,54 @@ export function useProductColumns({
         }
         
         const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.columnId === 'tags';
-        // Map editValue (array of tag strings) to tag option objects for the select's value
-        const editTagOptions: TagOption[] = Array.isArray(editValue)
-          ? editValue.map(tag => {
-              const existingOption = tagOptions.find(opt => opt.value === tag || opt.label === tag)
-              if (existingOption) return existingOption
-              return { label: tag, value: tag }
-            })
-          : []
+        // Map editValue to tag option objects for the select's value
+        let editTagOptions: TagOption[] = [];
+        
+        if (isEditing && editValue) {
+          // Handle editValue which could be a JSON string or array
+          let parsedTags: string[] = [];
+          if (typeof editValue === 'string') {
+            try {
+              parsedTags = JSON.parse(editValue);
+            } catch (e) {
+              parsedTags = [editValue];
+            }
+          } else if (Array.isArray(editValue)) {
+            parsedTags = editValue;
+          }
+          
+          editTagOptions = parsedTags.map(tag => {
+            const existingOption = tagOptions.find(opt => opt.value === tag || opt.label === tag);
+            if (existingOption) return existingOption;
+            return { label: String(tag), value: String(tag) };
+          });
+        }
+        
         if (isEditing) {
           return (
-            <div className="min-w-[240px] p-2 bg-white rounded shadow border" onClick={e => e.stopPropagation()} data-editing="true">
+            <div className="min-w-[240px] p-2 rounded relative z-50" onClick={e => e.stopPropagation()} data-editing="true">
               <CreatableSelect
                 isMulti
                 autoFocus
                 value={editTagOptions}
                 options={tagOptions}
                 onChange={(options: OnChangeValue<TagOption, true>) => {
-                  // Handle options based on whether we need string or array format
-                  const values = Array.isArray(options) ? options.map(opt => String(opt.value)) : []
-                  
-                  // Determine if we need JSON string or direct array based on current editValue type
-                  if (typeof editValue === 'string') {
-                    setEditValue(JSON.stringify(values))
-                  } else {
-                    setEditValue(values)
-                  }
+                  // Convert selected options to array of tag strings
+                  const values = Array.isArray(options) ? options.map(opt => String(opt.value)) : [];
+                  setEditValue(values);
                 }}
                 onCreateOption={async (inputValue: string) => {
-                  // Call handleCreateTagOption which now returns TagOption or null
+                  // Call handleCreateTagOption which returns TagOption or null
                   const newOption = await handleCreateTagOption(inputValue);
                   
                   // Only proceed if we got a valid tag option back
                   if (newOption && newOption.value) {
-                    // Parse current value from JSON string if it exists
-                    const currentValues = editValue ? 
-                      (typeof editValue === 'string' ? JSON.parse(editValue) : editValue) as string[] : 
-                      [];
+                    // Get current values as array
+                    const currentValues = Array.isArray(editValue) ? editValue : [];
                     
-                    // Update with new value and convert back to JSON string if needed
+                    // Update with new value
                     const newValues = [...currentValues, String(newOption.value)];
-                    setEditValue(typeof editValue === 'string' ? JSON.stringify(newValues) : newValues);
+                    setEditValue(newValues);
                   }
                 }}
                 isClearable
@@ -714,10 +819,10 @@ export function useProductColumns({
                 formatCreateLabel={(inputValue: string) => `Create tag "${inputValue}"`}
               />
               <div className="flex gap-2 mt-3 justify-end">
-                <Button size="sm" variant="outline" onClick={handleCancelEdit}>
+                <Button size="sm" variant="outline" onClick={handleCancelEdit} className="bg-red-50 hover:bg-red-100 border-red-200 text-red-700">
                   Cancel
                 </Button>
-                <Button size="sm" variant="secondary" onClick={handleSaveCellEdit}>
+                <Button size="sm" variant="outline" onClick={handleSaveCellEdit} className="bg-green-50 hover:bg-green-100 border-green-200 text-green-700">
                   Save
                 </Button>
               </div>
@@ -746,8 +851,8 @@ export function useProductColumns({
               aria-label="Edit tags"
               onClick={e => {
                 e.stopPropagation();
-                // Pass the actual array of tags instead of converting to a comma-separated string
-                handleCellEdit(rowIndex, 'tags', JSON.stringify(tags));
+                // Pass the actual array of tags directly
+                handleCellEdit(rowIndex, 'tags', tags as any);
               }}
             >
               <PlusIcon className="h-3 w-3" />
@@ -814,7 +919,11 @@ export function useProductColumns({
         
         if (isEditing) {
           return (
-            <div className="flex space-x-2 w-full p-1" onClick={(e) => e.stopPropagation()} data-editing="true">
+            <div
+              className="flex space-x-2 w-full p-1 relative z-50"
+              onClick={(e) => e.stopPropagation()}
+              data-editing="true"
+            >
               <Input
                 className="h-8 w-full min-w-[120px]"
                 autoFocus
@@ -823,10 +932,10 @@ export function useProductColumns({
                 onKeyDown={handleKeyDown}
                 onBlur={handleSaveCellEdit}
               />
-              <Button size="sm" variant="ghost" onClick={handleSaveCellEdit}>
+              <Button size="sm" variant="outline" onClick={handleSaveCellEdit} className="bg-green-50 hover:bg-green-100 border-green-200 text-green-700">
                 <CheckIcon className="h-4 w-4" />
               </Button>
-              <Button size="sm" variant="ghost" onClick={handleCancelEdit}>
+              <Button size="sm" variant="outline" onClick={handleCancelEdit} className="bg-red-50 hover:bg-red-100 border-red-200 text-red-700">
                 <XIcon className="h-4 w-4" />
               </Button>
             </div>

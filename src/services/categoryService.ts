@@ -192,29 +192,51 @@ export const getCategoryTree = async (): Promise<TreeNode[]> => {
 };
 
 /**
- * Updates a product's category
+ * Updates a product's category using the bulk_update endpoint
  * @param productId The product ID to update
  * @param categoryId The category ID to assign to the product
  */
 export const updateProductCategory = async (productId: number, categoryId: number | null): Promise<boolean> => {
   try {
-    const url = `/api/products/${productId}/`;
-    // Use category_id as that's the write-only field in the ProductSerializer
-    // Make sure categoryId is properly formatted - use null if undefined or 0
+    const url = `/api/products/bulk_update/`;
+    
+    // Ensure categoryId is properly formatted as integer or null
+    let categoryValue: number | null = null;
+    if (categoryId !== null && categoryId !== undefined && categoryId !== 0) {
+      categoryValue = typeof categoryId === 'string' ? parseInt(categoryId, 10) : Number(categoryId);
+      // Validate that we got a valid number
+      if (isNaN(categoryValue)) {
+        console.error('Invalid category ID provided:', categoryId);
+        throw new Error('Invalid category ID');
+      }
+    }
+    
+    // Use the bulk_update endpoint which accepts category field writes
     const payload = {
-      category_id: categoryId === 0 ? null : categoryId
+      ids: [Number(productId)], // Backend expects 'ids', not 'product_ids'
+      field: 'category',
+      category: categoryValue // Use the properly formatted category value
     };
     
-    console.log('Updating product category with payload:', payload);
+    console.log('Updating product category via bulk_update with payload:', payload);
     
-    const response = await axiosInstance.patch(url, payload);
+    const response = await axiosInstance.post(url, payload);
+    
     if (response.status >= 200 && response.status < 300) {
-      console.log('Category update successful', response.data);
+      console.log('Category update successful via bulk_update:', response.data);
       return true;
     }
     return false;
-  } catch (error) {
-    console.error('Error updating product category:', error);
+  } catch (error: any) {
+    console.error('Error updating product category via bulk_update:', error);
+    
+    // Log more detailed error information
+    if (error.response) {
+      console.error('Error response data:', error.response.data);
+      console.error('Error response status:', error.response.status);
+      console.error('Error response headers:', error.response.headers);
+    }
+    
     throw error;
   }
 };

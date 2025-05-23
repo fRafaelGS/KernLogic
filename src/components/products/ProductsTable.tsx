@@ -48,6 +48,7 @@ import {
   FolderIcon,
 } from "lucide-react";
 import { Product, productService, ProductAttribute, ProductAsset } from "@/services/productService";
+import { updateProductCategory } from "@/services/categoryService";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
@@ -672,11 +673,10 @@ export function ProductsTable({
       let apiPayload: Record<string, any>;
       
       if (columnId === 'category') {
-        // Backend expects category_id, not category
-        apiPayload = { 
-          category_id: formattedValue === 0 ? null : formattedValue 
-        };
-        console.log('Sending category update with payload:', apiPayload);
+        // This is now handled directly in the CategoryTreeSelect onChange
+        // The column renderer calls updateProductCategory directly
+        console.log('Category update handled by CategoryTreeSelect component');
+        return;
       } else {
         // For all other fields, use the column ID as the key
         apiPayload = { 
@@ -684,52 +684,12 @@ export function ProductsTable({
         };
       }
 
-            // Prepare for optimistic update
-
       // Special handling for category updates to maintain correct data structure in UI
       if (columnId === 'category') {
-        // Find the selected category in our options
-        const selectedCat = categoryOptions.find(c => c.value === formattedValue);
-        
-        if (selectedCat) {
-          // Create a proper category object
-          const categoryObj = {
-            id: typeof selectedCat.value === 'string' ? parseInt(selectedCat.value, 10) : selectedCat.value,
-            name: selectedCat.label
-          };
-          
-          // For proper breadcrumb handling, we need an array with the selected category
-          // If the backend sends category path later, this will be updated on refetch
-          const categoryArray = [categoryObj];
-          
-          // Optimistic update for UI
-          setProducts(prev =>
-            prev.map(p => {
-              if (p.id === productId) {
-                return { 
-                  ...p, 
-                  category: categoryArray,
-                  category_name: selectedCat.label // Also update category_name for consistent display
-                };
-              }
-              return p;
-            })
-          );
-        } else {
-          // If category not found, default to empty array (uncategorized)
-          setProducts(prev =>
-            prev.map(p => {
-              if (p.id === productId) {
-                return { 
-                  ...p, 
-                  category: [],
-                  category_name: '' // Clear category_name as well
-                };
-              }
-              return p;
-            })
-          );
-        }
+        // This is now handled directly in the CategoryTreeSelect onChange
+        // The column renderer calls updateProductCategory directly
+        console.log('Category update handled by CategoryTreeSelect component');
+        return;
       } else {
         // Normal optimistic update for non-category fields
         setProducts(prev =>
@@ -746,7 +706,14 @@ export function ProductsTable({
       }
 
       // Save to API with the correct payload
-      await productService.updateProduct(productId, apiPayload);
+      console.log('📤 Calling productService.updateProduct with:', {
+        productId,
+        apiPayload,
+        columnId
+      });
+      
+      const response = await productService.updateProduct(productId, apiPayload);
+      console.log('📥 Update response:', response);
       
       // Show success notification immediately without refetching
       toast({ 
@@ -1454,7 +1421,11 @@ export function ProductsTable({
         // Role-based selection for dropdown components
         target.closest('[role="listbox"], [role="option"], [role="combobox"]') ||
         // Check for data attribute we'll add to the AsyncCreatableSelect container
-        target.closest('[data-component="async-select"]')
+        target.closest('[data-component="async-select"]') ||
+        // Check for category tree select popover
+        target.closest('[data-testid="category-popover"]') ||
+        // Check for any radix popover content
+        target.closest('[data-radix-popper-content-wrapper]')
       ) {
         return;
       }
@@ -1516,6 +1487,32 @@ export function ProductsTable({
     console.log('product.category:', product.category)
   })
   const filteredCategories = categoryOptions.filter(opt => usedCategoryIds.has(String(opt.value)))
+
+  // Filter families to only show those assigned to at least one product
+  const usedFamilies = useMemo(() => {
+    if (!products || products.length === 0) {
+      return [];
+    }
+    
+    // Get unique family IDs from products
+    const usedFamilyIds = new Set(
+      products
+        .map(product => {
+          // Handle both family object and family ID
+          if (typeof product.family === 'object' && product.family?.id) {
+            return product.family.id;
+          }
+          if (typeof product.family === 'number') {
+            return product.family;
+          }
+          return null;
+        })
+        .filter(id => id !== null)
+    );
+    
+    // Filter families to only include those that are used
+    return families.filter(family => usedFamilyIds.has(family.id));
+  }, [families, products]);
 
   // Render the component
   return (
@@ -1687,7 +1684,7 @@ export function ProductsTable({
                               uniqueCategories={filteredCategories}
                               uniqueTags={uniqueTags}
                               uniqueBrands={uniqueBrands}
-                              families={families}
+                              families={usedFamilies}
                               isFamiliesLoading={isFamiliesLoading}
                             />
                           </React.Fragment>
@@ -1793,12 +1790,14 @@ export function ProductsTable({
                                     );
                                   }
                                   
-                                  if (columnId === 'category' && row.getValue('category')) {
+                                  if (columnId === 'category_name') {
+                                    const categoryValue = row.getValue('category_name') as string;
                                     return (
                                       <TableCell 
                                         key={cell.id} 
-                                        className={`px-2 py-1 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
+                                        className={`px-2 py-1 overflow-visible relative z-50 ${hideOnMobileClass} ${actionsClass} ${cellBgClass}`}
                                         data-column-id={columnId}
+                                        style={{ position: 'relative' }}
                                       >
                                         <div className="flex items-center gap-1">
                                           <span className="text-gray-500"><FolderIcon className="h-3.5 w-3.5" /></span>

@@ -1452,7 +1452,10 @@ export function ProductsTable({
   }, []);
 
   // Add this function to extract unique tags from products for the filter dropdown
-  const uniqueTags = useUniqueTags(products);
+  // Use all available tags from API, not just from current products
+  const uniqueTags = useMemo(() => {
+    return tagOptions.map(tag => tag.label).sort()
+  }, [tagOptions])
 
   // Now update the handleFilterChange function to ensure tags are properly handled
   const handleFilterChange = useCallback(<K extends keyof FilterState>(
@@ -2014,28 +2017,8 @@ export function ProductsTable({
               </div>
             </>
           ) : (
-            <div className="flex flex-col flex-1 overflow-hidden hide-x-scrollbar">
-              <div className="w-full overflow-hidden">
-                <ProductGrid 
-                  products={filteredData}
-                  loading={loading}
-                  error={error}
-                />
-              </div>
-              
-              {/* Grid view pagination - built into the main view */}
-              {!loading && hasNextPage && (
-                <div className="mt-4 mb-4 flex justify-center static border-t pt-3">
-                  <Button 
-                    variant="outline" 
-                    onClick={() => fetchNextPage()} 
-                    disabled={isFetchingNextPage}
-                    className="static"
-                  >
-                    {isFetchingNextPage ? 'Loading more...' : 'Load more products'}
-                  </Button>
-                </div>
-              )}
+            <div className="flex items-center justify-center h-64">
+              <p className="text-gray-500">Grid view is not available in this context</p>
             </div>
           )}
         </section>

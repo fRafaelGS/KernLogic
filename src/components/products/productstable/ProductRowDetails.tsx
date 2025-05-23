@@ -73,17 +73,11 @@ function formatAttributeValue(value: any): React.ReactNode {
 }
 
 const ProductRowDetails: React.FC<ProductRowDetailsProps> = ({ product, zebra, locale, channel }) => {
-  // Debug: log the raw attributes prop for this product
-  console.log('[ProductRowDetails] attributes for product', product.id, product.attributes)
-
   // Process and organize attributes into groups
   const attributeGroups = useMemo(() => {
     if (!product.attributes || !Array.isArray(product.attributes) || product.attributes.length === 0) {
-      console.log("No attributes to display for product:", product.id);
       return [];
     }
-
-    console.log("Processing attributes for product:", product.id, product.attributes);
     
     // Check if we have a nested group structure from the API
     // The API returns: [{ id: 1, name: "tech", items: [{...attributes}] }]
@@ -91,8 +85,6 @@ const ProductRowDetails: React.FC<ProductRowDetailsProps> = ({ product, zebra, l
         typeof product.attributes[0] === 'object' && 
         'name' in product.attributes[0] && 
         'items' in product.attributes[0]) {
-      
-      console.log("Detected nested group structure in attributes");
       
       // We have groups directly from the API
       return product.attributes.map((group: any) => {
@@ -119,17 +111,13 @@ const ProductRowDetails: React.FC<ProductRowDetailsProps> = ({ product, zebra, l
     }
     
     // If we don't have a nested structure, fall back to the previous approach
-    console.log("Falling back to attribute-level group extraction");
-
     // First, normalize attributes to handle different possible formats
     const normalizedAttributes: Attribute[] = product.attributes
-      // 1️⃣ ignore items without a usable value
+      // ignore items without a usable value
       .filter((attr: any) =>
         typeof attr === 'string' ? attr.trim() !== '' : attr?.value !== undefined && attr?.value !== null && attr?.value !== '' || attr?.display_value
       )
       .map((attr: any, index: number) => {
-        console.log(`[ProductRowDetails] Processing attribute for product ${product.id}:`, attr);
-        
         if (typeof attr === 'string') {
           return { id: `str-attr-${index}`, name: attr, value: attr, group: '' };
         } else {
@@ -214,8 +202,6 @@ const ProductRowDetails: React.FC<ProductRowDetailsProps> = ({ product, zebra, l
         }
       });
     
-    console.log(`[ProductRowDetails] Normalized attributes for product ${product.id}:`, normalizedAttributes);
-
     // Group attributes by their group property
     const groups: Record<string, Attribute[]> = {};
     
@@ -276,11 +262,11 @@ const ProductRowDetails: React.FC<ProductRowDetailsProps> = ({ product, zebra, l
           <div className="p-3">
             <h3 className="text-sm font-medium mb-2">Product Attributes</h3>
             
-            <div className="grid gap-2 grid-cols-[repeat(auto-fit,minmax(240px,1fr))]">
+            <div className="flex flex-wrap gap-2">
               {attributeGroups.map((group) => (
                 <div
                   key={group.name}
-                  className="rounded-md border border-slate-200 p-2 bg-white hover:bg-slate-50 transition-colors"
+                  className="flex-shrink-0 min-w-[240px] max-w-[320px] rounded-md border border-slate-200 p-2 bg-white hover:bg-slate-50 transition-colors"
                 >
                   {/* group name + locale / channel badges */}
                   {(() => {
@@ -307,7 +293,7 @@ const ProductRowDetails: React.FC<ProductRowDetailsProps> = ({ product, zebra, l
 
                   <dl className="space-y-1">
                     {group.attributes
-                      .map(attr => (
+                      .map((attr: Attribute) => (
                         <div key={attr.id} className="grid grid-cols-2 text-xs">
                           <dt className="text-slate-700 font-medium truncate">{attr.name}:</dt>
                           <dd className="text-slate-900 truncate pl-1">
@@ -317,7 +303,6 @@ const ProductRowDetails: React.FC<ProductRowDetailsProps> = ({ product, zebra, l
                       ))}
                   </dl>
                 </div>
-
               ))}
             </div>
           </div>

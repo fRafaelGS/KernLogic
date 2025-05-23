@@ -53,7 +53,9 @@ export default defineConfig(({ mode }) => ({
       'react', 
       'react-dom', 
       'react-router-dom',
-      '@reduxjs/toolkit'
+      '@tanstack/react-virtual',
+      '@tanstack/react-table',
+      '@tanstack/react-query'
     ]
   }
 }));

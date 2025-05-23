@@ -321,11 +321,6 @@ export function ProductsTable({
       category: p.category ? [p.category] : [],
       category_name: p.category_name ?? '',
     }))
-    // Debug: log first normalized product
-    if (normalizedProducts.length > 0) {
-      // eslint-disable-next-line no-console
-      console.log('First normalized product:', normalizedProducts[0])
-    }
     setProducts(normalizedProducts)
     return normalizedProducts
   }, [data])
@@ -375,9 +370,6 @@ export function ProductsTable({
 
   // Function to fetch products and categories
   const fetchData = useCallback(async () => {
-    // eslint-disable-next-line no-console
-    console.log('fetchData called - initializing product data load');
-    
     if (!isAuthenticated) return;
     
     // Guard against double-firing on mount
@@ -390,7 +382,6 @@ export function ProductsTable({
     try {
       // This function is no longer needed since we're using React Query
       // Just keeping it as a placeholder until fully migrated
-      console.log('Using React Query for data fetching');
       
       // Load categories directly
       try {
@@ -643,9 +634,6 @@ export function ProductsTable({
   // --- End Bulk Action Handlers ---
 
   // --- Derived Data ---
-  // eslint-disable-next-line no-console
-  console.log('uniqueCategories derived from products:', uniqueCategories);
-  
   // Update the updateData function to use the productRowMap instead of the table reference
   const updateData = useCallback(async (rowIndex: number, columnId: string, value: any) => {
     const productId = productRowMap[String(rowIndex)];
@@ -676,7 +664,6 @@ export function ProductsTable({
       if (columnId === 'category') {
         // This is now handled directly in the CategoryTreeSelect onChange
         // The column renderer calls updateProductCategory directly
-        console.log('Category update handled by CategoryTreeSelect component');
         return;
       } else {
         // For all other fields, use the column ID as the key
@@ -688,8 +675,6 @@ export function ProductsTable({
       // Special handling for category updates to maintain correct data structure in UI
       if (columnId === 'category') {
         // This is now handled directly in the CategoryTreeSelect onChange
-        // The column renderer calls updateProductCategory directly
-        console.log('Category update handled by CategoryTreeSelect component');
         return;
       } else {
         // Normal optimistic update for non-category fields
@@ -698,7 +683,6 @@ export function ProductsTable({
             if (p.id === productId) {
               // Create a new product object with updated field
               const updatedProduct = { ...p, [columnId]: formattedValue };
-              console.log(`Optimistic update for product ${productId}, ${columnId}:`, updatedProduct);
               return updatedProduct;
             }
             return p;
@@ -707,14 +691,7 @@ export function ProductsTable({
       }
 
       // Save to API with the correct payload
-      console.log('📤 Calling productService.updateProduct with:', {
-        productId,
-        apiPayload,
-        columnId
-      });
-      
       const response = await productService.updateProduct(productId, apiPayload);
-      console.log('📥 Update response:', response);
       
       // Show success notification immediately without refetching
       toast({ 
@@ -1215,13 +1192,6 @@ export function ProductsTable({
     // Remove getFilteredRowModel here
   });
 
-  // Debug: log the first row's original data and its keys after table is defined
-  const firstRow = table.getRowModel().rows[0]?.original
-  // eslint-disable-next-line no-console
-  console.log('Table row[0] original:', firstRow)
-  // eslint-disable-next-line no-console
-  console.log('Row keys:', Object.keys(firstRow || {}))
-
   // Handle search input change
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
@@ -1261,11 +1231,6 @@ export function ProductsTable({
     // Save page size
     localStorage.setItem('productTablePageSize', JSON.stringify(pagination.pageSize));
   }, [pagination.pageSize]);
-
-  // This useEffect will log when row selection changes
-  useEffect(() => {
-    console.log("Row selection changed:", Object.keys(rowSelection).length, "rows selected");
-  }, [rowSelection]);
 
   // Add these new state variables for modals
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -1307,7 +1272,6 @@ export function ProductsTable({
       // Convert empty strings to undefined, keep valid numbers as strings
       const processedValue = stringValue === '' ? undefined : stringValue
       setFilters(prev => ({ ...prev, [key]: processedValue }))
-      console.log(`Price filter ${key} set to:`, processedValue)
       return
     }
     
@@ -1317,7 +1281,6 @@ export function ProductsTable({
       const categoryColumn = table.getColumn('category');
       if (categoryColumn) {
         const categoryValue = value as string;
-        console.log("Setting category column filter to:", categoryValue === 'uncategorized' ? '""' : categoryValue);
         
         if (categoryValue === 'all') {
           categoryColumn.setFilterValue(undefined);
@@ -1395,18 +1358,6 @@ export function ProductsTable({
       .replace('{{total}}', totalItems.toString());
   }, [table, totalCount, tableConfig.display.tableView.paginationInfo]);
 
-  // Add effect to log pagination state for debugging
-  useEffect(() => {
-    console.log("Pagination state:", {
-      pageIndex: pagination.pageIndex,
-      pageSize: pagination.pageSize,
-      totalCount,
-      pageCount: Math.max(1, Math.ceil(totalCount / pagination.pageSize)),
-      canPreviousPage: table.getCanPreviousPage(),
-      canNextPage: table.getCanNextPage()
-    });
-  }, [pagination.pageIndex, pagination.pageSize, totalCount, table]);
-
   // Add click outside handler to cancel editing
   useEffect(() => {
     // Only add the handler if we're in edit mode
@@ -1464,12 +1415,6 @@ export function ProductsTable({
       document.removeEventListener('mousedown', handleClickWithDelay);
     };
   }, [editingCell, handleCancelEdit]);
-
-  // Minimal debug: log filters before fetch
-  useEffect(() => {
-    // eslint-disable-next-line no-console
-    console.log('Filters before fetch:', filters)
-  }, [filters])
 
   // Add uniqueBrands derived from products
   const uniqueBrands = useMemo(() => {

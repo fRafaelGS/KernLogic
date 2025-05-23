@@ -682,6 +682,7 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         if field == 'tags':
             # For tags field, expect an array of tags
             tags = request.data.get('tags', [])
+            operation = request.data.get('operation', 'add')  # Default to 'add' for backward compatibility
             
             if not tags:
                 return Response(
@@ -700,10 +701,20 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                     # Clean new tags
                     clean_tags = [str(tag).strip() for tag in tags if tag]
                     
-                    # Add new tags (avoid duplicates)
-                    for tag in clean_tags:
-                        if tag not in existing_tags:
-                            existing_tags.append(tag)
+                    if operation == 'remove':
+                        # Remove tags from existing tags
+                        for tag in clean_tags:
+                            if tag in existing_tags:
+                                existing_tags.remove(tag)
+                        action_text = "removed from"
+                        log_field = "removed_tags"
+                    else:
+                        # Add new tags (avoid duplicates) - default behavior
+                        for tag in clean_tags:
+                            if tag not in existing_tags:
+                                existing_tags.append(tag)
+                        action_text = "added to"
+                        log_field = "added_tags"
                     
                     # Update the product using the set_tags method
                     product.set_tags(existing_tags)
@@ -715,10 +726,11 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                         product=product,
                         user=request.user,
                         event_type="bulk_updated",
-                        summary=f"Tags were added to product '{product.name}' in bulk",
+                        summary=f"Tags were {action_text} product '{product.name}' in bulk",
                         payload={
                             "field": field,
-                            "added_tags": clean_tags,
+                            log_field: clean_tags,
+                            "operation": operation,
                             "bulk_operation": True
                         }
                     )
@@ -728,7 +740,7 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             return Response({
                 "success": True,
                 "updated_count": updated_count,
-                "message": f"Added tags to {updated_count} products"
+                "message": f"{'Removed' if operation == 'remove' else 'Added'} tags {'from' if operation == 'remove' else 'to'} {updated_count} products"
             })
         elif field == 'is_active':
             value = request.data.get('value')

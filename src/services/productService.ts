@@ -749,38 +749,39 @@
 
         // Search tags - Updated to use real API
         searchTags: async (inputValue: string): Promise<{ label: string; value: string }[]> => {
-            console.log(`Searching tags for: "${inputValue}"`);
+            console.log(`[searchTags] Searching tags for: "${inputValue}"`);
             try {
                 // Call API endpoint for tags
                 const response = await axiosInstance.get(`${PRODUCTS_PATH}/tags/`, {
-                    params: { search: inputValue }
+                    params: inputValue ? { search: inputValue } : {}
                 });
                 
+                console.log(`[searchTags] Raw API response:`, response.data);
+                
                 // Transform the response to the expected format for react-select
-                // The API should return an array of tag names or objects
+                // The API should return an array of tag names (strings)
                 const tags = response.data;
                 
                 if (Array.isArray(tags)) {
-                    // If API returns array of strings (tag names)
-                    if (typeof tags[0] === 'string') {
-                        return tags.map(tagName => ({ 
-                            label: tagName, 
-                            value: tagName 
-                        }));
-                    } 
-                    // If API returns array of objects with id and name props
-                    else if (tags[0] && typeof tags[0] === 'object') {
-                        return tags.map((tag: any) => ({ 
-                            label: tag.name, 
-                            value: tag.id || tag.name 
-                        }));
-                    }
+                    // The backend returns an array of strings (tag names)
+                    const transformedTags = tags.map(tagName => ({ 
+                        label: String(tagName), 
+                        value: String(tagName)
+                    }));
+                    
+                    console.log(`[searchTags] Transformed ${transformedTags.length} tags:`, transformedTags);
+                    return transformedTags;
+                } else {
+                    console.warn(`[searchTags] API returned non-array:`, typeof tags, tags);
+                    return [];
                 }
                 
-                // Fallback to empty array if response format is unexpected
-                return [];
             } catch (error) {
-                console.error('Error searching tags:', error);
+                console.error('[searchTags] Error searching tags:', error);
+                if (axios.isAxiosError(error)) {
+                    console.error('[searchTags] Response status:', error.response?.status);
+                    console.error('[searchTags] Response data:', error.response?.data);
+                }
                 // Return empty array as fallback
                 return [];
             }
@@ -788,26 +789,22 @@
 
         // Create a new tag - Updated to use real API
         createTag: async (data: { name: string }): Promise<{ id: string; name: string }> => {
-            console.log('Creating tag:', data);
+            console.log('[createTag] Creating tag:', data);
             try {
                 // Call API to create tag
                 const response = await axiosInstance.post(`${PRODUCTS_PATH}/tags/`, data);
                 
-                // Return the created tag - format depends on backend response
-                if (response.data.id) {
-                    return {
-                        id: response.data.id,
-                        name: response.data.name
-                    };
-                } else {
-                    // If the API returns just the tag name
-                    return {
-                        id: response.data,  // Use the returned value as ID
-                        name: data.name
-                    };
-                }
+                console.log('[createTag] API response:', response.data);
+                
+                // The backend returns just the tag name as a string
+                const tagName = response.data;
+                
+                return {
+                    id: tagName,  // Use the tag name as the ID
+                    name: tagName
+                };
             } catch (error) {
-                console.error('Error creating tag:', error);
+                console.error('[createTag] Error creating tag:', error);
                 throw error; // Propagate error to be handled by the caller
             }
         },
@@ -1682,10 +1679,67 @@
         // Bulk operation: Add tags to multiple products
         bulkAddTags: async (ids: number[], tags: string[]): Promise<void> => {
             try {
+                console.log('[bulkAddTags] Starting API call...');
+                console.log('[bulkAddTags] Product IDs:', ids);
+                console.log('[bulkAddTags] Tags to add:', tags);
+                
                 const url = `${PRODUCTS_API_URL}/bulk_update/`;
-                await axiosInstance.post(url, { ids, field: 'tags', tags });
+                const payload = { ids, field: 'tags', tags };
+                
+                console.log('[bulkAddTags] API URL:', url);
+                console.log('[bulkAddTags] API Payload:', payload);
+                
+                const response = await axiosInstance.post(url, payload);
+                
+                console.log('[bulkAddTags] API Response Status:', response.status);
+                console.log('[bulkAddTags] API Response Data:', response.data);
+                
+                if (response.status !== 200) {
+                    throw new Error(`Unexpected response status: ${response.status}`);
+                }
+                
+                console.log('[bulkAddTags] Tags added successfully');
             } catch (error) {
-                console.error('Error in bulk tag addition:', error);
+                console.error('[bulkAddTags] Error in bulk tag addition:', error);
+                if (axios.isAxiosError(error)) {
+                    console.error('[bulkAddTags] Response status:', error.response?.status);
+                    console.error('[bulkAddTags] Response data:', error.response?.data);
+                    console.error('[bulkAddTags] Request config:', error.config);
+                }
+                throw error;
+            }
+        },
+        
+        // Bulk operation: Remove tags from multiple products
+        bulkRemoveTags: async (ids: number[], tags: string[]): Promise<void> => {
+            try {
+                console.log('[bulkRemoveTags] Starting API call...');
+                console.log('[bulkRemoveTags] Product IDs:', ids);
+                console.log('[bulkRemoveTags] Tags to remove:', tags);
+                
+                const url = `${PRODUCTS_API_URL}/bulk_update/`;
+                const payload = { ids, field: 'tags', tags, operation: 'remove' };
+                
+                console.log('[bulkRemoveTags] API URL:', url);
+                console.log('[bulkRemoveTags] API Payload:', payload);
+                
+                const response = await axiosInstance.post(url, payload);
+                
+                console.log('[bulkRemoveTags] API Response Status:', response.status);
+                console.log('[bulkRemoveTags] API Response Data:', response.data);
+                
+                if (response.status !== 200) {
+                    throw new Error(`Unexpected response status: ${response.status}`);
+                }
+                
+                console.log('[bulkRemoveTags] Tags removed successfully');
+            } catch (error) {
+                console.error('[bulkRemoveTags] Error in bulk tag removal:', error);
+                if (axios.isAxiosError(error)) {
+                    console.error('[bulkRemoveTags] Response status:', error.response?.status);
+                    console.error('[bulkRemoveTags] Response data:', error.response?.data);
+                    console.error('[bulkRemoveTags] Request config:', error.config);
+                }
                 throw error;
             }
         },

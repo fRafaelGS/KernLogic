@@ -45,18 +45,6 @@ export default function ProductsPage() {
   // Fetch products with React Query
   const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } = useFetchProducts(filters)
   
-  // 🔍 TEMPORARY DEBUG - Remove after investigation
-  console.log('🔍 Raw data from useFetchProducts:', {
-    'data': data,
-    'data?.pages': data?.pages,
-    'data?.pages?.length': data?.pages?.length,
-    'first page': data?.pages?.[0],
-    'first page keys': data?.pages?.[0] ? Object.keys(data.pages[0]) : 'no first page',
-    'first page.results': data?.pages?.[0]?.results,
-    'first page.results type': typeof data?.pages?.[0]?.results,
-    'first page.results length': data?.pages?.[0]?.results?.length
-  })
-  
   // Extract products from paginated data
   const products = React.useMemo(() => {
     if (!data) return []

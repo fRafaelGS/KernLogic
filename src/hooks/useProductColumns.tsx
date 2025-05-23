@@ -171,8 +171,6 @@ export function useProductColumns({
   fetchData,
   IconBtn,
 }: UseProductColumnsOpts) {
-  console.log('[useProductColumns] Hook initialized');
-
   /* -------- 1. main data columns -------------------------- */
   const columns = useMemo<ColumnDef<Product>[]>(() => [
     /* ------------------------------------------------------------------
@@ -228,13 +226,6 @@ export function useProductColumns({
         // Use the centralized pickPrimaryImage utility for consistent image selection
         const primaryImageUrl = pickPrimaryImage(row.original);
         
-        console.log("Product thumbnail:", {
-          id: row.original.id,
-          sku: row.original.sku, 
-          primary_asset_url: row.original.primary_asset_url,
-          selected_image: primaryImageUrl,
-        });
-
         return (
           <div className="flex items-center space-x-2">
             {primaryImageUrl ? (
@@ -422,14 +413,6 @@ export function useProductColumns({
         const family = row.original.family;
         const familyName = row.original.family_name;
         
-        // Debug log to help diagnose family data
-        console.log("Family rendering:", { 
-          id: row.original.id, 
-          sku: row.original.sku,
-          family, 
-          familyName 
-        });
-        
         // First try using family object or ID if available
         if (family) {
           // Get families data using the hook imported at the top
@@ -561,7 +544,6 @@ export function useProductColumns({
         
         // When editing, don't attach any click handlers to the wrapper
         if (isEditing) {
-          console.log("🎨 Rendering CategoryTreeSelect for editing, rowIndex:", rowIndex);
           return (
             <div 
               className="relative z-50 overflow-visible"
@@ -623,13 +605,11 @@ export function useProductColumns({
         }
         
         // Non-editing mode
-        console.log("📝 Rendering non-editing category cell, rowIndex:", rowIndex);
         return (
           <div 
             className="relative z-50 overflow-visible cursor-pointer hover:text-primary transition-colors p-1"
             data-component="category-tree-select-container"
             onClick={(e) => {
-              console.log("▶️ Enter edit mode for row", rowIndex);
               e.stopPropagation();
               handleCellEdit(rowIndex, 'category', String(currentCategoryId || ""));
             }}

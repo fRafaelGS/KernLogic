@@ -506,24 +506,29 @@ export function ProductsTable({
   }, []);
 
   const handleDelete = useCallback(async (productId: number) => {
-    // Confirm deletion with user
+    // Confirm archiving with user (changed from delete to archive)
     if (window.confirm(tableConfig.messages.confirmation.delete)) {
       try {
-        await productService.deleteProduct(productId);
+        // Archive the product instead of deleting it
+        await productService.updateProduct(productId, { is_archived: true });
+        
         toast({ 
           title: tableConfig.messages.success.delete, 
           variant: 'default' 
         });
-        fetchData(); // Refresh the products list
+        
+        // Invalidate React Query cache to refresh the table immediately
+        queryClient.invalidateQueries({ queryKey: ['products'] });
+        
       } catch (error) {
-        console.error('Failed to delete product:', error);
+        console.error('Failed to archive product:', error);
         toast({ 
           title: tableConfig.messages.error.delete, 
           variant: 'destructive' 
         });
       }
     }
-  }, [fetchData, toast, tableConfig.messages]);
+  }, [toast, tableConfig.messages, queryClient]);
 
   // Handle clear filters
   const handleClearFilters = useCallback(() => {

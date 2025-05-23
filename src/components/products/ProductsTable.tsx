@@ -1468,52 +1468,6 @@ export function ProductsTable({
     return Array.from(brands).sort()
   }, [products])
 
-  // Only show categories that are used by at least one product (leaf category id as string)
-  const usedCategoryIds = new Set<string>()
-  products.forEach(product => {
-    if (Array.isArray(product.category) && product.category.length > 0) {
-      const leaf = product.category[product.category.length - 1]
-      if (leaf && typeof leaf === 'object' && leaf.id !== undefined) usedCategoryIds.add(String(leaf.id))
-      else if (typeof leaf === 'string' || typeof leaf === 'number') usedCategoryIds.add(String(leaf))
-    } else if (product.category && typeof product.category === 'object' && product.category.id !== undefined) {
-      usedCategoryIds.add(String(product.category.id))
-    }
-    // ignore legacy string categories for filter
-  })
-  // Debug logging
-  console.log('categoryOptions:', categoryOptions)
-  console.log('usedCategoryIds:', Array.from(usedCategoryIds))
-  products.forEach(product => {
-    console.log('product.category:', product.category)
-  })
-  const filteredCategories = categoryOptions.filter(opt => usedCategoryIds.has(String(opt.value)))
-
-  // Filter families to only show those assigned to at least one product
-  const usedFamilies = useMemo(() => {
-    if (!products || products.length === 0) {
-      return [];
-    }
-    
-    // Get unique family IDs from products
-    const usedFamilyIds = new Set(
-      products
-        .map(product => {
-          // Handle both family object and family ID
-          if (typeof product.family === 'object' && product.family?.id) {
-            return product.family.id;
-          }
-          if (typeof product.family === 'number') {
-            return product.family;
-          }
-          return null;
-        })
-        .filter(id => id !== null)
-    );
-    
-    // Filter families to only include those that are used
-    return families.filter(family => usedFamilyIds.has(family.id));
-  }, [families, products]);
-
   // Render the component
   return (
     <React.Fragment>
@@ -1681,10 +1635,10 @@ export function ProductsTable({
                               onFilterChange={(columnId, value) => handleFilterChange(columnId as keyof FilterState, value)}
                               onClearFilters={handleClearFilters}
                               table={table}
-                              uniqueCategories={filteredCategories}
+                              uniqueCategories={categoryOptions}
                               uniqueTags={uniqueTags}
                               uniqueBrands={uniqueBrands}
-                              families={usedFamilies}
+                              families={families}
                               isFamiliesLoading={isFamiliesLoading}
                             />
                           </React.Fragment>

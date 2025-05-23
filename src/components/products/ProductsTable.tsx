@@ -46,6 +46,7 @@ import {
   XCircle,
   TagIcon,
   FolderIcon,
+  Download,
 } from "lucide-react";
 import { Product, productService, ProductAttribute, ProductAsset } from "@/services/productService";
 import { updateProductCategory } from "@/services/categoryService";
@@ -84,6 +85,7 @@ import { useFetchProducts } from "@/hooks/useFetchProducts";
 import { config } from "@/config/config";
 import { ROUTES } from "@/config/routes";
 import { ProductsTableFilters } from './ProductsTableFilters'
+import * as XLSX from 'xlsx';
 
 /**
  * ProductsTable - A table for displaying and managing products
@@ -647,7 +649,194 @@ export function ProductsTable({
       });
     }
   };
-  // --- End Bulk Action Handlers ---
+
+  // Get selected product IDs helper
+  const getSelectedProductIds = useCallback(() => {
+    return Object.keys(rowSelection)
+      .map(index => productRowMap[String(index)])
+      .filter((id): id is number => typeof id === 'number');
+  }, [rowSelection, productRowMap]);
+
+  // Handle exporting selected products to XLSX
+  const handleExportSelected = useCallback(async () => {
+    const selectedIds = getSelectedProductIds();
+    if (selectedIds.length === 0) return;
+
+    // Confirm the export with the user
+    if (!window.confirm('Download selected products as XLSX?')) {
+      return;
+    }
+
+    try {
+      // Fetch full product data for each selected ID
+      const fullProducts = await Promise.all(
+        selectedIds.map(async (id) => {
+          try {
+            // Try to get full product data from API to ensure we have all fields
+            return await productService.getProduct(id);
+          } catch (error) {
+            console.warn(`Failed to fetch full data for product ${id}, using cached data`);
+            // Fallback to the product from our current products array
+            return products.find(p => p.id === id);
+          }
+        })
+      );
+
+      // Filter out any failed fetches
+      const validProducts = fullProducts.filter(Boolean) as Product[];
+
+      if (validProducts.length === 0) {
+        toast({
+          title: 'No product data available for export',
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      // Define the exact fields and order requested by user
+      const exportFields = [
+        { field: 'sku', header: 'SKU' },
+        { field: 'name', header: 'Name' },
+        { field: 'description', header: 'Description' },
+        { field: 'category_name', header: 'Category' },
+        { field: 'family', header: 'Family' },
+        { field: 'brand', header: 'Brand' },
+        { field: 'tags', header: 'Tags' },
+        { field: 'barcode', header: 'GTIN' },
+        { field: 'prices', header: 'Price' },
+        { field: 'is_active', header: 'Status' },
+        { field: 'created_at', header: 'Created' },
+        { field: 'updated_at', header: 'Last Modify' }
+      ];
+
+      // Create header row
+      const headers = exportFields.map(f => f.header);
+      
+      // Create data rows with formatted values
+      const dataRows = validProducts.map(product => 
+        exportFields.map(({ field }) => {
+          const value = (product as any)[field];
+          
+          // Handle null/undefined values
+          if (value === null || value === undefined) {
+            return '';
+          }
+          
+          // Special formatting for specific fields
+          switch (field) {
+            case 'category_name':
+              // For category, extract just the name/label
+              if (Array.isArray(value)) {
+                return value.map(cat => 
+                  typeof cat === 'object' && cat?.name ? cat.name : String(cat)
+                ).join(', ');
+              } else if (typeof value === 'object' && value?.name) {
+                return value.name;
+              } else {
+                return String(value);
+              }
+              
+            case 'family':
+              // Handle family ID - look up family name from families array
+              if (typeof value === 'number') {
+                const family = families.find(f => f.id === value);
+                return family ? family.label : String(value);
+              } else if (typeof value === 'object' && value?.label) {
+                return value.label;
+              } else {
+                return String(value);
+              }
+              
+            case 'prices':
+              // Extract price amount from prices array
+              if (Array.isArray(value) && value.length > 0) {
+                // Get the first price or find list price
+                const listPrice = value.find(p => p.price_type === 'list') || value[0];
+                return listPrice?.amount || '';
+              } else {
+                return '';
+              }
+              
+            case 'tags':
+              // Format tags as comma-separated string
+              if (Array.isArray(value)) {
+                return value.map(tag => 
+                  typeof tag === 'object' && tag?.name ? tag.name : String(tag)
+                ).join(', ');
+              } else {
+                return String(value);
+              }
+              
+            case 'is_active':
+              // Convert boolean to human-readable text
+              return value ? 'Active' : 'Inactive';
+              
+            case 'created_at':
+            case 'updated_at':
+              // Format dates to be more readable
+              try {
+                const date = new Date(value);
+                return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+              } catch (e) {
+                return String(value);
+              }
+              
+            default:
+              // Default string conversion
+              return String(value);
+          }
+        })
+      );
+
+      // Create worksheet
+      const worksheetData = [headers, ...dataRows];
+      const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+      
+      // Set column widths for better readability
+      const columnWidths = [
+        { wch: 15 }, // SKU
+        { wch: 30 }, // Name
+        { wch: 50 }, // Description
+        { wch: 20 }, // Category
+        { wch: 20 }, // Family
+        { wch: 15 }, // Brand
+        { wch: 25 }, // Tags
+        { wch: 15 }, // GTIN
+        { wch: 12 }, // Price
+        { wch: 10 }, // Status
+        { wch: 18 }, // Created
+        { wch: 18 }  // Last Modify
+      ];
+      
+      worksheet['!cols'] = columnWidths;
+      
+      // Create workbook and add worksheet
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Products');
+
+      // Generate filename with current date
+      const now = new Date();
+      const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD format
+      const filename = `products-export-${dateStr}.xlsx`;
+
+      // Write and download the file
+      XLSX.writeFile(workbook, filename);
+
+      // Show success message
+      toast({
+        title: `Successfully exported ${validProducts.length} products`,
+        variant: 'default'
+      });
+
+    } catch (error) {
+      console.error('Failed to export products:', error);
+      toast({
+        title: 'Failed to export products',
+        description: 'Please try again or contact support if the issue persists.',
+        variant: 'destructive'
+      });
+    }
+  }, [getSelectedProductIds, products, families, toast]);
 
   // --- Derived Data ---
   // Update the updateData function to use the productRowMap instead of the table reference
@@ -1262,13 +1451,6 @@ export function ProductsTable({
     setShowTagModal(true);
   }, []);
   
-  // Get selected product IDs helper
-  const getSelectedProductIds = useCallback(() => {
-    return Object.keys(rowSelection)
-      .map(index => productRowMap[String(index)])
-      .filter((id): id is number => typeof id === 'number');
-  }, [rowSelection, productRowMap]);
-
   // Add this function to extract unique tags from products for the filter dropdown
   const uniqueTags = useUniqueTags(products);
 
@@ -1462,6 +1644,18 @@ export function ProductsTable({
           </div>
           
           <div className="flex items-center space-x-2">
+            {/* Export Selected button - positioned at far left */}
+            <Button
+              size="sm"
+              variant="outline"
+              className="mr-2 h-9"
+              disabled={Object.keys(rowSelection).length === 0}
+              onClick={handleExportSelected}
+            >
+              <Download className="mr-1 h-3.5 w-3.5" />
+              Export Selected
+            </Button>
+
             {/* Only show refresh button if hideTopControls is false */}
             {!hideTopControls && (
               <Button

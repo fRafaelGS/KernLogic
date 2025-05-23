@@ -885,10 +885,16 @@ export function useProductColumns({
         
         if (!tags || tags.length === 0) return false;
         
-        // Check if all filter tags are present in this product's tags
-        return filterValue.every((filterTag: string) => 
-          tags.some((tag: string) => String(tag).toLowerCase() === String(filterTag).toLowerCase())
+        // Normalize tags for comparison (trim and lowercase)
+        const normalizedProductTags = tags.map(tag => String(tag).trim().toLowerCase());
+        const normalizedFilterTags = filterValue.map((tag: string) => String(tag).trim().toLowerCase());
+        
+        // AND logic: ALL filter tags must be present in this product's tags
+        const hasAllTags = normalizedFilterTags.every(filterTag => 
+          normalizedProductTags.includes(filterTag)
         );
+        
+        return hasAllTags;
       }
     },
     /**********  BARCODE **************************************************/

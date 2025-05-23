@@ -1299,6 +1299,17 @@ export function ProductsTable({
       setFilters(prev => ({ ...prev, family: value === 'all' ? undefined : value }))
       return
     }
+    
+    // Special handling for price filters
+    if (key === 'minPrice' || key === 'maxPrice') {
+      const stringValue = value as string
+      // Convert empty strings to undefined, keep valid numbers as strings
+      const processedValue = stringValue === '' ? undefined : stringValue
+      setFilters(prev => ({ ...prev, [key]: processedValue }))
+      console.log(`Price filter ${key} set to:`, processedValue)
+      return
+    }
+    
     setFilters(prev => ({ ...prev, [key]: value }))
     // Special handling for category filter
     if (key === 'category') {

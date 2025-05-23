@@ -50,6 +50,9 @@ export function ProductsTableFilters({
   isFamiliesLoading
 }: ProductsTableFiltersProps) {
   const tableConfig = config.productsTable
+  
+  // Add state for tag search
+  const [tagSearch, setTagSearch] = React.useState('')
 
   // Safely get the value for the category filter
   const getCategoryFilterValue = () => {
@@ -236,12 +239,23 @@ export function ProductsTableFilters({
             </PopoverTrigger>
             <PopoverContent className="w-64 p-3" align="start">
               <div className="space-y-2">
-                <div className="max-h-60 pr-2 overflow-y-auto">
+                {/* Search input for tags */}
+                <Input
+                  placeholder="Search tags..."
+                  className="h-8 text-xs"
+                  value={tagSearch}
+                  onChange={(e) => setTagSearch(e.target.value)}
+                />
+                
+                <div className="max-h-48 pr-2 overflow-y-auto tag-list">
                   {Array.isArray(uniqueTags) && uniqueTags.length > 0 ? (
                     <div className="space-y-1">
-                      {uniqueTags.map((tag) => (
-                        tag && (
-                          <div key={tag} className="flex items-center">
+                      {/* Filter tags based on search and limit for performance */}
+                      {uniqueTags
+                        .filter(tag => tag && tag.toLowerCase().includes(tagSearch.toLowerCase()))
+                        .slice(0, 100)
+                        .map((tag) => (
+                          <div key={tag} className="flex items-center tag-item">
                             <Checkbox 
                               id={`tag-${tag}`}
                               checked={Array.isArray(filters.tags) && filters.tags.includes(tag)}
@@ -261,8 +275,17 @@ export function ProductsTableFilters({
                               {tag}
                             </Label>
                           </div>
-                        )
-                      ))}
+                        ))}
+                      {uniqueTags.filter(tag => tag && tag.toLowerCase().includes(tagSearch.toLowerCase())).length === 0 && tagSearch && (
+                        <div className="text-xs text-muted-foreground text-center py-2">
+                          No tags found matching "{tagSearch}"
+                        </div>
+                      )}
+                      {uniqueTags.filter(tag => tag && tag.toLowerCase().includes(tagSearch.toLowerCase())).length > 100 && (
+                        <div className="text-xs text-muted-foreground text-center py-2 border-t">
+                          Showing first 100 results. Refine your search to see more specific tags.
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="text-sm text-muted-foreground text-center py-2">

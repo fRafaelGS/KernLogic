@@ -302,11 +302,15 @@ export function ProductsTable({
   // Remove cleanFilters and pass filters directly to useFetchProducts
   const { 
     data, 
-    isLoading: loading, 
+    isLoading, 
+    isFetching,
     fetchNextPage, 
     hasNextPage, 
     isFetchingNextPage 
   } = useFetchProducts(filters);
+  
+  // Use both isLoading and isFetching for complete loading state
+  const loading = isLoading || isFetching;
   
   // Derive products from the paginated data and add state for products
   const [productsState, setProducts] = useState<Product[]>([]);
@@ -503,8 +507,17 @@ export function ProductsTable({
 
   // Update handleRefresh function
   const handleRefresh = useCallback(() => {
-    // Invalidate React Query cache to trigger a fresh fetch
-    queryClient.invalidateQueries({ queryKey: ['products'] });
+    console.log('Refresh button clicked - invalidating queries');
+    // Invalidate all products queries to trigger a fresh fetch
+    queryClient.invalidateQueries({ 
+      queryKey: ['products'],
+      exact: false // This will invalidate all queries that start with ['products']
+    });
+    // Also refetch immediately
+    queryClient.refetchQueries({ 
+      queryKey: ['products'],
+      exact: false 
+    });
   }, [queryClient]);
 
   const handleDelete = useCallback(async (productId: number) => {

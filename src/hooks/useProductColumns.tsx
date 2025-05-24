@@ -43,6 +43,7 @@ import {
 } from "@/services/productService";
 import { updateProductCategory } from "@/services/categoryService";
 import { Category } from '@/types/categories';
+import { buildCategoryBreadcrumb } from '@/types/categories';
 import {
   Tooltip,
   TooltipContent,
@@ -97,6 +98,7 @@ export interface UseProductColumnsOpts {
   editValue: string | any; // Allow any to accommodate different types for tags
   tagOptions: TagOption[];
   categoryOptions: CategoryOption[];
+  categoryTree: Category[]; // Full hierarchical category tree for breadcrumbs
 
   /* --- setters that columns mutate --- */
   setEditValue(v: string | any): void; // Allow any to accommodate different types for tags
@@ -160,6 +162,7 @@ export function useProductColumns({
   editValue,
   tagOptions,
   categoryOptions,
+  categoryTree,
   setEditValue,
   setCategoryOptions,
   setProducts,
@@ -542,8 +545,37 @@ export function useProductColumns({
         const rowIndex = row.index;
         const product = row.original;
         
-        // Simple category display - just use category_name from the API
-        const displayText = product.category_name || 'Uncategorized';
+        // Get category ID for breadcrumb lookup
+        const categoryId = product.category_id as number;
+        
+        // Find the matching category node in the hierarchical tree
+        const findCategoryNode = (nodes: Category[], targetId: number): Category | null => {
+          for (const node of nodes) {
+            if (node.id === targetId) return node;
+            if (node.children?.length) {
+              const found = findCategoryNode(node.children, targetId);
+              if (found) return found;
+            }
+          }
+          return null;
+        };
+        
+        // Build breadcrumb path
+        let displayText = 'Uncategorized';
+        if (categoryId && categoryTree?.length > 0) {
+          const categoryNode = findCategoryNode(categoryTree, categoryId);
+          if (categoryNode) {
+            // Use buildCategoryBreadcrumb to get the full path
+            const breadcrumbCategories = buildCategoryBreadcrumb(categoryNode, categoryTree);
+            displayText = breadcrumbCategories.map(cat => cat.name).join(' > ');
+          } else {
+            // Fallback to category_name if node not found in tree
+            displayText = product.category_name || 'Uncategorized';
+          }
+        } else if (product.category_name) {
+          // Fallback when no ID but have name
+          displayText = product.category_name;
+        }
         
         const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.columnId === 'category';
         
@@ -1165,6 +1197,7 @@ export function useProductColumns({
     editValue,
     tagOptions,
     categoryOptions,
+    categoryTree,
     /* every handler/prop you reference inside the column cells */
     handleKeyDown,
     handlePriceCellChange,

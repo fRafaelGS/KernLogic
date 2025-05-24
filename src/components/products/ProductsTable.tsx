@@ -257,6 +257,7 @@ export function ProductsTable({
   const { defaultLocale, defaultChannel } = useOrgSettings();
   const [error, setError] = useState<string | null>(null);
   const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]); // State for formatted options
+  const [categoryTreeState, setCategoryTreeState] = useState<any[]>([]); // State for raw hierarchical tree
   const [editingCell, setEditingCell] = useState<{ rowIndex: number; columnId: string } | null>(null);
   const [editValue, setEditValue] = useState<string | string[]>('');
   const [originalEditValue, setOriginalEditValue] = useState<string | string[]>('');
@@ -474,6 +475,7 @@ export function ProductsTable({
         const categoryOpts: CategoryOption[] = flatCategories.map(toCategoryOption);
         
         setCategoryOptions(categoryOpts);
+        setCategoryTreeState(fetchedCategories);
       } catch (categoriesError) {
         console.error('Error fetching categories:', categoriesError);
       }
@@ -1233,6 +1235,7 @@ export function ProductsTable({
     editValue,
     tagOptions,
     categoryOptions,
+    categoryTree: categoryTreeState,
 
     /* setters */
     setEditValue,

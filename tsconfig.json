@@ -12,10 +12,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "react-jsx",
-
-    /* Linting */
-    "strict": true,
+        "jsx": "react-jsx",    /* Module Interoperability */    "esModuleInterop": true,    "allowSyntheticDefaultImports": true,    /* Linting */    "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,

@@ -2,8 +2,15 @@ import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
 import type { Category } from '@/types/categories';
 
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
+export function cn(...inputs: ClassValue[]): string {
+  // First merge using clsx, then split into individual classes
+  const merged = clsx(inputs)
+  const classes = merged.split(/\s+/).filter(Boolean)
+  
+  // Remove duplicates while preserving insertion order
+  const uniqueClasses = Array.from(new Set(classes)).join(' ')
+  
+  return twMerge(uniqueClasses)
 }
 
 /**
@@ -12,7 +19,7 @@ export function cn(...inputs: ClassValue[]) {
  * For multiple names, returns the first letter of the first and last name
  */
 export function nameToInitials(name: string): string {
-  if (!name) return 'U';
+  if (!name || name.trim() === '') return 'U';
   
   // Split the name by spaces and get the first letter of each part
   const parts = name.trim().split(/\s+/);
@@ -27,6 +34,11 @@ export function nameToInitials(name: string): string {
 export function formatCurrency(amount: number | string, currency = 'USD'): string {
   // Convert the amount to a number if it's a string
   const numericAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+  
+  // Check for NaN explicitly
+  if (isNaN(numericAmount)) {
+    return `${currency} NaN`;
+  }
   
   // Format the amount based on the currency
   try {
@@ -134,48 +146,43 @@ export function getCategoryName(raw: unknown): string {
  * @param filterValue - The category value to filter by
  * @returns boolean indicating if the category matches the filter
  */
-export function matchesCategoryFilter(raw: unknown, filterValue: string): boolean {
-  console.log("matchesCategoryFilter called with:", { raw, filterValue });
+export function matchesCategoryFilter(raw: unknown, filterValue: string | undefined): boolean {
+  // Handle undefined filterValue
+  if (filterValue === undefined) {
+    return false;
+  }
   
   // UNCATEGORIZED: no category whatsoever
   if (filterValue === "") {
-    console.log("Checking for uncategorized");
-    
     // raw null/undefined
     if (raw == null) {
-      console.log("raw is null/undefined -> true");
       return true;
     }
     // raw empty string
     if (typeof raw === "string" && raw.trim() === "") {
-      console.log("raw is empty string -> true");
       return true;
     }
     // raw empty array
     if (Array.isArray(raw) && raw.length === 0) {
-      console.log("raw is empty array -> true");
       return true;
     }
     // raw object but no name
     if (typeof raw === "object" && raw !== null && !("name" in raw)) {
-      console.log("raw is object without name property -> true");
       return true;
     }
     
     // Check if we have a product object - if it has category_name
     if (typeof raw === "object" && raw !== null && "category_name" in raw) {
       const categoryName = (raw as any).category_name;
-      if (!categoryName || typeof categoryName === "string" && categoryName.trim() === "") {
-        console.log("Product with empty category_name -> true");
+      if (!categoryName || (typeof categoryName === "string" && categoryName.trim() === "")) {
         return true;
       }
     }
     
-    console.log("Not uncategorized -> false");
     return false;
   }
 
-  // ANY OTHER CATEGORY: gather all names
+  // ANY OTHER CATEGORY: gather all names for strict case-sensitive matching
   const names: string[] = [];
   
   // Extract category names from complex category structures
@@ -206,19 +213,6 @@ export function matchesCategoryFilter(raw: unknown, filterValue: string): boolea
     names.push(raw);
   }
   
-  console.log("Category names found:", names, "Looking for:", filterValue);
-  
-  // Check for exact match or substring match (more flexible)
-  const exactMatch = names.some(name => 
-    name.toLowerCase() === filterValue.toLowerCase()
-  );
-  
-  const substringMatch = names.some(name => 
-    name.toLowerCase().includes(filterValue.toLowerCase()) || 
-    filterValue.toLowerCase().includes(name.toLowerCase())
-  );
-  
-  const result = exactMatch || substringMatch;
-  console.log("Match result:", result);
-  return result;
+  // Strict case-sensitive exact match only
+  return names.some(name => name === filterValue);
 }

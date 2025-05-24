@@ -3,14 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "build:dev": "vite build --mode development",
-    "lint": "eslint .",
-    "preview": "vite preview",
-    "restructure": "ts-node scripts/restructure.ts"
-  },
+    "scripts": {    "dev": "vite",    "build": "vite build",    "build:dev": "vite build --mode development",    "lint": "eslint .",    "preview": "vite preview",    "restructure": "ts-node scripts/restructure.ts",    "test": "jest",    "test:watch": "jest --watch",    "test:coverage": "jest --coverage"  },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
@@ -117,6 +110,7 @@
     "postcss": "^8.4.47",
     "sass-embedded": "^1.88.0",
     "tailwindcss": "^3.4.11",
+    "ts-jest": "^29.3.4",
     "ts-node": "^10.9.2",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.0.1",

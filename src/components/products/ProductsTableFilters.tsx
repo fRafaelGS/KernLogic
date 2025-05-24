@@ -105,7 +105,7 @@ export function ProductsTableFilters({
       
       // Also update the TanStack table's internal filter (only if table exists)
       if (table) {
-        const categoryColumn = table.getColumn('category')
+        const categoryColumn = table.getColumn('category_name')
         if (categoryColumn) {
           if (normalizedValue === 'all') {
             categoryColumn.setFilterValue(undefined)

@@ -1479,7 +1479,7 @@ export function ProductsTable({
     setFilters(prev => ({ ...prev, [key]: value }))
     // Special handling for category filter
     if (key === 'category') {
-      const categoryColumn = table.getColumn('category');
+      const categoryColumn = table.getColumn('category_name');
       if (categoryColumn) {
         const categoryValue = value as string;
         

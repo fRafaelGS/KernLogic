@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useInfiniteQuery } from '@tanstack/react-query'
 import { productService, PaginatedResponse, Product } from '@/services/productService'
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
@@ -139,7 +139,7 @@ function buildQueryParams(filters: FilterParams): Record<string, any> {
   return params
 }
 
-export function useFetchProducts(filters: FilterParams = {}) {
+export function useFetchProducts(filters: FilterParams = {}, enabled: boolean = true) {
   const effectivePageSize = 
     Math.min(filters.page_size ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE)
     
@@ -156,6 +156,7 @@ export function useFetchProducts(filters: FilterParams = {}) {
       // Ensure we return a properly typed response
       return response as PaginatedResponse<Product>
     },
+    enabled: enabled,
     staleTime: 60000, // 1 minute
     refetchOnWindowFocus: false,
     gcTime: 5 * 60 * 1000, // 5 minutes cache time
@@ -349,6 +350,82 @@ export function useFetchProductDetail(productId: number | undefined, options?: {
     enabled: !!productId,
     staleTime: 2 * 60 * 1000, // 2 minutes for detail data
     gcTime: 10 * 60 * 1000, // 10 minutes cache time for detail data
+    retry: (failureCount, error) => {
+      // Don't retry on 4xx errors (client errors)
+      if (error && typeof error === 'object' && 'status' in error) {
+        const status = (error as any).status
+        if (status >= 400 && status < 500) {
+          return false
+        }
+      }
+      // Retry up to 3 times for other errors
+      return failureCount < 3
+    }
+  })
+}
+
+// New infinite scroll hook specifically for grid view
+export function useFetchProductsInfinite(filters: FilterParams = {}, enabled: boolean = true) {
+  const effectivePageSize = 
+    Math.min(filters.page_size ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE)
+    
+  // Build query params but remove the page parameter since infinite query handles pagination
+  const { page, ...filtersWithoutPage } = filters
+  const queryParams = buildQueryParams(filtersWithoutPage)
+
+  return useInfiniteQuery({
+    queryKey: ['products-infinite', queryParams],
+    queryFn: async ({ pageParam = 1 }) => {
+      const response = await productService.getProducts(
+        { ...queryParams, page: pageParam },
+        false, // fetchAll = false to ensure we get paginated response
+        false  // includeAssets = false for performance (handled by fields optimization)
+      )
+      // Ensure we return a properly typed response
+      return response as PaginatedResponse<Product>
+    },
+    getNextPageParam: (lastPage, allPages) => {
+      console.log('🔍 getNextPageParam Debug:', {
+        lastPage,
+        'Array.isArray(lastPage)': Array.isArray(lastPage),
+        'lastPage.count': lastPage?.count,
+        'lastPage.results': lastPage?.results,
+        'allPages.length': allPages.length,
+        effectivePageSize
+      })
+      
+      // Check if there are more pages
+      if (!lastPage) return undefined
+      
+      // Handle array response (no pagination)
+      if (Array.isArray(lastPage)) {
+        // If we got less than the page size, no more pages
+        return lastPage.length >= effectivePageSize ? allPages.length + 1 : undefined
+      }
+      
+      // Handle paginated response object
+      if (typeof lastPage === 'object' && 'count' in lastPage && 'results' in lastPage) {
+        const currentPage = allPages.length // Current page is the number of pages loaded
+        const totalPages = Math.ceil(lastPage.count / effectivePageSize)
+        console.log('🔍 Infinite Pagination Debug:', {
+          currentPage,
+          totalPages,
+          count: lastPage.count,
+          effectivePageSize,
+          hasNextPage: currentPage < totalPages
+        })
+        return currentPage < totalPages ? currentPage + 1 : undefined
+      }
+      
+      // Unknown format, no more pages
+      console.warn('Unknown page format:', lastPage)
+      return undefined
+    },
+    initialPageParam: 1,
+    enabled: enabled && Object.keys(queryParams).length > 0, // Only enable when filters are provided
+    staleTime: 60000, // 1 minute
+    refetchOnWindowFocus: false,
+    gcTime: 5 * 60 * 1000, // 5 minutes cache time
     retry: (failureCount, error) => {
       // Don't retry on 4xx errors (client errors)
       if (error && typeof error === 'object' && 'status' in error) {

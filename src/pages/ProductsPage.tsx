@@ -3,7 +3,7 @@ import { ProductsTableAdapter } from '@/components/products/ProductsTableAdapter
 import { ProductGrid } from '@/components/products/ProductGrid'
 import { ViewToggle } from '@/components/products/ViewToggle'
 import { ProductsTableFilters } from '@/components/products/ProductsTableFilters'
-import { useFetchProducts } from '@/hooks/useFetchProducts'
+import { useFetchProducts, useFetchProductsInfinite } from '@/hooks/useFetchProducts'
 import { getCategories } from '@/services/categoryService'
 import { useFamilies } from '@/api/familyApi'
 import { productService } from '@/services/productService'
@@ -12,6 +12,7 @@ import { useDebounce } from '@/hooks/useDebounce'
 import { config } from '@/config/config'
 import { useQuery } from '@tanstack/react-query'
 import axiosInstance from '@/lib/axiosInstance'
+import { useSearchParams } from 'react-router-dom'
 
 type ViewMode = 'list' | 'grid'
 
@@ -110,25 +111,44 @@ export default function ProductsPage() {
     })
   }, [viewMode, debouncedSearchTerm])
   
-  // Fetch products with React Query
-  const { data, isLoading, error } = useFetchProducts({
+  // Conditionally fetch products based on view mode
+  const listViewQuery = useFetchProducts({
     ...filters,
     // Convert string prices to numbers for the API
     minPrice: filters.minPrice ? parseFloat(filters.minPrice) : undefined,
     maxPrice: filters.maxPrice ? parseFloat(filters.maxPrice) : undefined,
-  })
+  }, viewMode === 'list') // Only enable when in list mode
   
-  // Extract products from regular query response
+  const gridViewQuery = useFetchProductsInfinite({
+    ...filters,
+    // Convert string prices to numbers for the API
+    minPrice: filters.minPrice ? parseFloat(filters.minPrice) : undefined,
+    maxPrice: filters.maxPrice ? parseFloat(filters.maxPrice) : undefined,
+  }, viewMode === 'grid') // Only enable when in grid mode
+  
+  // Use the appropriate query result based on view mode
+  const { data, isLoading, error } = viewMode === 'list' ? listViewQuery : gridViewQuery
+  
+  // Extract products from query response
   const products = React.useMemo(() => {
     if (!data) return []
     
-    // For regular query, data is the direct response
-    return Array.isArray(data) 
-      ? data 
-      : Array.isArray(data?.results) 
-        ? data.results 
-        : []
-  }, [data])
+    if (viewMode === 'list') {
+      // For list view (regular query), data is PaginatedResponse<Product>
+      const listData = data as any
+      return Array.isArray(listData) 
+        ? listData 
+        : Array.isArray(listData?.results) 
+          ? listData.results 
+          : []
+    } else {
+      // For grid view (infinite query), data is InfiniteData<PaginatedResponse<Product>>
+      const gridData = data as any
+      return gridData.pages ? gridData.pages.flatMap((page: any) =>
+        Array.isArray(page) ? page : page.results || []
+      ) : []
+    }
+  }, [data, viewMode])
   
   // Get ALL categories from API (not filtered by current products)
   const { data: allCategories = [] } = useQuery({
@@ -230,13 +250,13 @@ export default function ProductsPage() {
           {viewMode === 'grid' ? (
             <ProductGrid 
               filters={filters}
-              products={products}
-              loading={isLoading}
-              error={error?.message || null}
+              products={[]}
+              loading={false}
+              error={null}
               onFilterChange={handleFilterChange}
               onClearFilters={handleClearFilters}
               table={undefined}
-              columns={[]} // Empty for now
+              columns={[]}
               uniqueCategories={gridCategoryOptions}
               uniqueTags={gridTagOptions}
               uniqueBrands={gridBrandOptions}

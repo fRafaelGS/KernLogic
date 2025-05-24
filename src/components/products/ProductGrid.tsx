@@ -3,7 +3,7 @@ import { FixedSizeGrid as Grid } from 'react-window'
 import { Product, PaginatedResponse } from '@/services/productService'
 import { ProductCard } from './ProductCard'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useFetchProducts } from '@/hooks/useFetchProducts'
+import { useFetchProductsInfinite } from '@/hooks/useFetchProducts'
 import { config } from '@/config/config'
 
 interface ProductGridProps {
@@ -20,6 +20,10 @@ interface ProductGridProps {
   uniqueBrands: string[]
   families: any[]
   isFamiliesLoading: boolean
+  // Optional infinite scroll functions
+  fetchNextPage?: () => void
+  hasNextPage?: boolean
+  isFetchingNextPage?: boolean
 }
 
 // Memoized product card component with proper spacing
@@ -57,7 +61,10 @@ export function ProductGrid({
   uniqueTags,
   uniqueBrands,
   families,
-  isFamiliesLoading
+  isFamiliesLoading,
+  fetchNextPage,
+  hasNextPage,
+  isFetchingNextPage
 }: ProductGridProps) {
   // DEBUG: Log props immediately on render
   console.log('🔍 ProductGrid IMMEDIATE Props Debug:', {
@@ -74,25 +81,63 @@ export function ProductGrid({
     data, 
     isLoading, 
     error, 
-    fetchNextPage, 
-    hasNextPage,
-    isFetchingNextPage 
-  } = useFetchProducts(filters)
+    fetchNextPage: useFetchProductsInfiniteFetchNextPage, 
+    hasNextPage: useFetchProductsInfiniteHasNextPage,
+    isFetchingNextPage: useFetchProductsInfiniteIsFetchingNextPage 
+  } = useFetchProductsInfinite(
+    filters,
+    // Only fetch when products are not passed as props (standalone mode) or when empty array is passed
+    passedProducts === undefined || passedProducts.length === 0
+  )
   
-  // Use passed props if they exist, otherwise use values from useFetchProducts
-  const isLoadingData = passedLoading !== undefined ? passedLoading : isLoading
-  const errorMessage = passedError !== undefined ? passedError : error
+  // Use passed props if they exist and are not empty, otherwise use values from useFetchProductsInfinite
+  const isLoadingData = passedLoading !== undefined && passedProducts && passedProducts.length > 0 ? passedLoading : isLoading
+  const errorMessage = passedError !== undefined && passedProducts && passedProducts.length > 0 ? passedError : error
+  
+  // Use passed infinite scroll functions if available, otherwise use internal ones
+  const finalFetchNextPage = fetchNextPage || useFetchProductsInfiniteFetchNextPage
+  const finalHasNextPage = hasNextPage !== undefined ? hasNextPage : useFetchProductsInfiniteHasNextPage
+  const finalIsFetchingNextPage = isFetchingNextPage !== undefined ? isFetchingNextPage : useFetchProductsInfiniteIsFetchingNextPage
   
   const productsToRender = React.useMemo(() => {
-    // If products are passed directly, use them
-    if (passedProducts !== undefined) return passedProducts
+    console.log('🔍 productsToRender Debug:', {
+      passedProducts,
+      'passedProducts?.length': passedProducts?.length,
+      data,
+      'data?.pages': data?.pages,
+      'data?.pages?.[0]': data?.pages?.[0],
+      'Array.isArray(data?.pages?.[0])': Array.isArray(data?.pages?.[0]),
+      'data?.pages?.[0]?.results': data?.pages?.[0]?.results
+    })
     
-    // Otherwise use data from useFetchProducts
-    if (!data) return []
-    return data.pages.flatMap((page: any) =>
+    // If products are passed directly and not empty, use them (standalone ProductGrid scenario)
+    if (passedProducts !== undefined && passedProducts.length > 0) {
+      console.log('Using passed products')
+      return passedProducts
+    }
+    
+    // Otherwise use data from useFetchProductsInfinite (ProductsPage grid scenario or standalone)
+    if (!data) {
+      console.log('No data available')
+      return []
+    }
+    
+    const result = data.pages.flatMap((page: any) => {
+      console.log('Processing page:', { page, 'Array.isArray(page)': Array.isArray(page), 'page.results': page.results })
       // if the page is an array of products, use it directly
-      Array.isArray(page) ? page : page.results || []
-    )
+      // if the page is a paginated response object, use page.results
+      if (Array.isArray(page)) {
+        return page
+      } else if (page && page.results && Array.isArray(page.results)) {
+        return page.results
+      } else {
+        console.warn('Unexpected page structure:', page)
+        return []
+      }
+    })
+    
+    console.log('Final productsToRender result:', result.length, 'products')
+    return result
   }, [data, passedProducts])
 
   // Apply client-side filtering to the products for grid view
@@ -281,10 +326,17 @@ export function ProductGrid({
       'filteredProducts': filteredProducts,
       'filteredProducts.length': filteredProducts.length,
       
+      // Load More button debug
+      'finalHasNextPage': finalHasNextPage,
+      'hasNextPage (props)': hasNextPage,
+      'useFetchProductsInfiniteHasNextPage': useFetchProductsInfiniteHasNextPage,
+      'finalFetchNextPage': !!finalFetchNextPage,
+      'finalIsFetchingNextPage': finalIsFetchingNextPage,
+      
       // First few products for inspection
       'first3Products': filteredProducts.slice(0, 3).map(p => ({ id: p?.id, name: p?.name, sku: p?.sku }))
     })
-  }, [passedProducts, passedLoading, passedError, filters, data, isLoading, error, isLoadingData, errorMessage, productsToRender, filteredProducts])
+  }, [passedProducts, passedLoading, passedError, filters, data, isLoading, error, isLoadingData, errorMessage, productsToRender, filteredProducts, finalHasNextPage, hasNextPage, useFetchProductsInfiniteHasNextPage, finalFetchNextPage, finalIsFetchingNextPage])
 
   // Debug logging for filter changes
   React.useEffect(() => {
@@ -414,6 +466,19 @@ export function ProductGrid({
           return <MemoizedProductCard style={style} product={product} />
         }}
       </Grid>
+      
+      {/* Load More Button */}
+      {finalHasNextPage && (
+        <div className="flex justify-center mt-6 mb-4">
+          <button
+            onClick={() => finalFetchNextPage()}
+            disabled={finalIsFetchingNextPage}
+            className="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {finalIsFetchingNextPage ? 'Loading...' : 'Load More'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

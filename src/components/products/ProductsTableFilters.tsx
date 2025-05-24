@@ -128,12 +128,12 @@ export function ProductsTableFilters({
       // Convert undefined and null values to 'all'
       const normalizedValue = value === undefined || value === null ? 'all' : value
       
-      // Only pass the value to API when it's not 'all'
-      onFilterChange('is_active', normalizedValue === 'all' ? undefined : normalizedValue)
+      // Use 'status' key to match FilterState interface in ProductsTable
+      onFilterChange('status', normalizedValue === 'all' ? 'all' : normalizedValue)
     } catch (error) {
       console.error('Error setting status filter:', error)
       // In case of error, reset to 'all'
-      onFilterChange('is_active', undefined)
+      onFilterChange('status', 'all')
     }
   }
 
@@ -148,7 +148,7 @@ export function ProductsTableFilters({
     if (filters.tags && Array.isArray(filters.tags) && filters.tags.length > 0) count++
     if (filters.barcode) count++
     if (filters.minPrice || filters.maxPrice) count++
-    if (filters.is_active && filters.is_active !== 'all') count++
+    if (filters.status && filters.status !== 'all') count++
     if (filters.created_at_from || filters.created_at_to) count++
     if (filters.updated_at_from || filters.updated_at_to) count++
     return count
@@ -788,7 +788,7 @@ export function ProductsTableFilters({
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-gray-700">Status</Label>
                 <Select
-                  value={filters.is_active ?? 'all'}
+                  value={filters.status ?? 'all'}
                   onValueChange={handleStatusFilterChange}
                 >
                   <SelectTrigger className="h-10 border-gray-300 focus:border-primary">
@@ -1486,7 +1486,7 @@ export function ProductsTableFilters({
         {/* Status filter */}
         <TableHead key="filter-status" className="px-2 py-2">
           <Select
-            value={filters.is_active ?? 'all'}
+            value={filters.status ?? 'all'}
             onValueChange={handleStatusFilterChange}
           >
             <SelectTrigger className="h-7 text-xs">

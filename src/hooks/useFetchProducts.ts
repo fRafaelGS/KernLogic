@@ -36,6 +36,13 @@ export interface FilterParams {
   page?: number  // Add page parameter for pagination
   family?: string
   useFieldsOptimization?: boolean // Flag to enable/disable optimization
+  // Add new filter parameters
+  barcode?: string
+  is_active?: boolean
+  created_at_from?: string
+  created_at_to?: string
+  updated_at_from?: string
+  updated_at_to?: string
 }
 
 export interface PaginationState {
@@ -69,8 +76,18 @@ function buildQueryParams(filters: FilterParams): Record<string, any> {
     params.is_active = filters.status === 'active'
   }
   
+  // Handle is_active boolean directly (from status mapping in handleFilterChange)
+  if (filters.is_active !== undefined) {
+    params.is_active = filters.is_active
+  }
+  
   if (filters.brand && filters.brand !== 'all') {
     params.brand = filters.brand
+  }
+  
+  // Handle barcode filter
+  if (filters.barcode) {
+    params.barcode = filters.barcode
   }
   
   if (filters.minPrice !== undefined) {
@@ -79,6 +96,23 @@ function buildQueryParams(filters: FilterParams): Record<string, any> {
   
   if (filters.maxPrice !== undefined) {
     params.max_price = filters.maxPrice
+  }
+  
+  // Handle date filters
+  if (filters.created_at_from) {
+    params.created_at_from = filters.created_at_from
+  }
+  
+  if (filters.created_at_to) {
+    params.created_at_to = filters.created_at_to
+  }
+  
+  if (filters.updated_at_from) {
+    params.updated_at_from = filters.updated_at_from
+  }
+  
+  if (filters.updated_at_to) {
+    params.updated_at_to = filters.updated_at_to
   }
   
   if (filters.tags && filters.tags.length > 0) {

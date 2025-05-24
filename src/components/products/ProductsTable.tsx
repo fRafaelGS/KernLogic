@@ -111,6 +111,12 @@ interface FilterState {
   barcode?: string;
   created_at?: string;
   updated_at?: string;
+  // Add new filter state fields
+  is_active?: boolean | string;
+  created_at_from?: string;
+  created_at_to?: string;
+  updated_at_from?: string;
+  updated_at_to?: string;
 }
 
 // Add type for category options
@@ -1497,6 +1503,39 @@ export function ProductsTable({
       return
     }
     
+    // Handle status filter coming as 'status' from ProductsTableFilters
+    if (key === 'status') {
+      const statusValue = value as 'all' | 'active' | 'inactive' | 'true' | 'false'
+      if (statusValue === 'all' || statusValue === undefined || statusValue === null) {
+        // Remove is_active filter to show all products
+        setFilters(prev => {
+          const { is_active, ...rest } = prev
+          return { ...rest, page: 1 }
+        })
+      } else {
+        // Convert status values to boolean for backend
+        const booleanValue = statusValue === 'active' || statusValue === 'true'
+        setFilters(prev => ({ ...prev, is_active: booleanValue, page: 1 }))
+      }
+      return
+    }
+    
+    // Handle date filters directly (they come with the exact keys from ProductsTableFilters)
+    if (key === 'created_at_from' || key === 'created_at_to' || key === 'updated_at_from' || key === 'updated_at_to') {
+      const dateValue = value as string
+      if (dateValue === '') {
+        // Remove this specific date filter
+        setFilters(prev => {
+          const { [key]: removed, ...rest } = prev
+          return { ...rest, page: 1 }
+        })
+      } else {
+        // Set the date filter value
+        setFilters(prev => ({ ...prev, [key]: dateValue, page: 1 }))
+      }
+      return
+    }
+    
     // Special handling for price filters
     if (key === 'minPrice' || key === 'maxPrice') {
       const stringValue = value as string
@@ -1506,8 +1545,16 @@ export function ProductsTable({
       return
     }
     
+    // Special handling for barcode filter
+    if (key === 'barcode') {
+      const barcodeValue = value as string
+      const processedValue = barcodeValue === '' ? undefined : barcodeValue
+      setFilters(prev => ({ ...prev, barcode: processedValue, page: 1 }))
+      return
+    }
+    
+    // Default handling for all other filters
     setFilters(prev => ({ ...prev, [key]: value, page: 1 }))
-    // Note: Removed React Table client-side filter calls since we use manualFiltering: true
   }, [setPagination]);
 
   // Add a function to calculate pagination display info

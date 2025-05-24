@@ -1088,6 +1088,7 @@ export function ProductsTable({
 
   // Add state for tag options
   const [tagOptions, setTagOptions] = useState<TagOption[]>([]);
+  const [allBrands, setAllBrands] = useState<string[]>([]); // State for all available brands
 
   // Fetch tags on component mount
   useEffect(() => {
@@ -1099,7 +1100,29 @@ export function ProductsTable({
         console.error("Failed to load tags:", error);
       }
     };
+    
+    const loadBrands = async () => {
+      try {
+        // Fetch a sample of products to get all unique brands
+        const brandsResponse = await productService.getProducts({ page_size: 1000, fields: 'brand' });
+        const brandsProducts = Array.isArray(brandsResponse) ? brandsResponse : brandsResponse.results || [];
+        const uniqueBrands = new Set<string>();
+        
+        brandsProducts.forEach(p => {
+          if (p && typeof p.brand === 'string' && p.brand.trim()) {
+            uniqueBrands.add(p.brand.trim());
+          }
+        });
+        
+        setAllBrands(Array.from(uniqueBrands).sort());
+      } catch (error) {
+        console.error("Failed to load brands:", error);
+        // Fallback: if API call fails, we'll keep the old behavior
+      }
+    };
+    
     loadTags();
+    loadBrands();
   }, []);
 
   // Improve the function to handle tag creation for inline editing
@@ -1383,6 +1406,7 @@ export function ProductsTable({
       expanded,
     },
     manualPagination: true,
+    manualFiltering: true, // Disable client-side filtering - we use server-side filtering
     pageCount: Math.ceil(totalCount / pagination.pageSize),
     enableColumnResizing: true,
     columnResizeMode: 'onChange',
@@ -1423,22 +1447,6 @@ export function ProductsTable({
 
   // Add column filter state and handlers
   const [columnFilterValues, setColumnFilterValues] = useState<Record<string, any>>({});
-
-  // New utility function for server-side column filtering
-  const handleColumnFilterChange = (columnId: string, value: unknown) => {
-    setPagination({ ...pagination, pageIndex: 0 });       // jump to first page
-    setFilters((f: Record<string, any>) => {
-      const next: Record<string, any> = { ...f, page: 1 };
-      if (value === '' || value === undefined || value === null ||
-          (Array.isArray(value) && value.length === 0) ||
-          value === 'all') {
-        delete next[columnId];
-      } else {
-        next[columnId] = value;
-      }
-      return next;
-    });
-  };
 
   // Save user preferences when they change
   useEffect(() => {
@@ -1481,8 +1489,11 @@ export function ProductsTable({
     key: K,
     value: FilterState[K]
   ) => {
+    // Always reset to first page when any filter changes
+    setPagination(prev => ({ ...prev, pageIndex: 0 }));
+    
     if (key === 'family') {
-      setFilters(prev => ({ ...prev, family: value === 'all' ? undefined : value }))
+      setFilters(prev => ({ ...prev, family: value === 'all' ? undefined : value, page: 1 }))
       return
     }
     
@@ -1491,43 +1502,13 @@ export function ProductsTable({
       const stringValue = value as string
       // Convert empty strings to undefined, keep valid numbers as strings
       const processedValue = stringValue === '' ? undefined : stringValue
-      setFilters(prev => ({ ...prev, [key]: processedValue }))
+      setFilters(prev => ({ ...prev, [key]: processedValue, page: 1 }))
       return
     }
     
-    setFilters(prev => ({ ...prev, [key]: value }))
-    // Special handling for category filter
-    if (key === 'category') {
-      const categoryColumn = table.getColumn('category_name');
-      if (categoryColumn) {
-        const categoryValue = value as string;
-        
-        if (categoryValue === 'all') {
-          categoryColumn.setFilterValue(undefined);
-        } else if (categoryValue === 'uncategorized') {
-          categoryColumn.setFilterValue("");
-        } else {
-          categoryColumn.setFilterValue(categoryValue);
-        }
-      }
-    }
-    
-    // Special handling for tags filter
-    if (key === 'tags') {
-      const tagsColumn = table.getColumn('tags');
-      if (tagsColumn) {
-        const tags = value as string[];
-        
-        // Set the column filter correctly based on whether there are tags or not
-        if (tags.length > 0) {
-          // Create a new array reference to ensure React detects the change
-          tagsColumn.setFilterValue([...tags]);
-        } else {
-          tagsColumn.setFilterValue(undefined);
-        }
-      }
-    }
-  }, [table]);
+    setFilters(prev => ({ ...prev, [key]: value, page: 1 }))
+    // Note: Removed React Table client-side filter calls since we use manualFiltering: true
+  }, [setPagination]);
 
   // Add a function to calculate pagination display info
   const renderPaginationInfo = useCallback(() => {
@@ -1603,12 +1584,18 @@ export function ProductsTable({
 
   // Add uniqueBrands derived from products
   const uniqueBrands = useMemo(() => {
+    // Use allBrands state if available, otherwise fall back to current products
+    if (allBrands.length > 0) {
+      return allBrands;
+    }
+    
+    // Fallback to old behavior if allBrands not loaded yet
     const brands = new Set<string>()
     products.forEach(p => {
       if (p && typeof p.brand === 'string' && p.brand.trim()) brands.add(p.brand.trim())
     })
     return Array.from(brands).sort()
-  }, [products])
+  }, [allBrands, products])
 
   // Render the component
   return (

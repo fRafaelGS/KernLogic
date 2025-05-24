@@ -50,8 +50,8 @@ export interface PaginationState {
   pageSize: number
 }
 
-const DEFAULT_PAGE_SIZE = 20
-const MAX_PAGE_SIZE = 100
+const DEFAULT_PAGE_SIZE = 50
+const MAX_PAGE_SIZE = 500
 
 function buildQueryParams(filters: FilterParams): Record<string, any> {
   const params: Record<string, any> = {}

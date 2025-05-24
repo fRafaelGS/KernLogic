@@ -19,5 +19,5 @@ export const REQUEST_TIMEOUT = 30000;
 // Maximum number of retries for failed requests
 export const MAX_RETRIES = 3;
 
-// Default page size for paginated requests
+// Default page size for paginated requests - optimized for PIM workflows
 export const DEFAULT_PAGE_SIZE = 50; 

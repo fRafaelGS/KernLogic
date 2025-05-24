@@ -330,7 +330,7 @@ export function ProductsTable({
   // Use prop pagination if provided, otherwise use internal state
   const [paginationState, setPaginationState] = useState<PaginationState>({
     pageIndex: 0,
-    pageSize: 10,
+    pageSize: 50,  // Changed from 10 to 50 to match PIM defaults
   });
   
   // Create computed pagination property that uses props if available
@@ -345,7 +345,7 @@ export function ProductsTable({
   };
   
   // Use prop totalCount if provided, otherwise use internal state
-  const [totalCountState, setTotalCountState] = useState<number>(100);
+  const [totalCountState, setTotalCountState] = useState<number>(0);  // Changed from 100 to 0 to avoid misleading initial count
   // Create a computed totalCount property that uses props if available
   const totalCount = totalCountState;
   
@@ -363,7 +363,7 @@ export function ProductsTable({
   
   // Create a default filters object to ensure all keys are always present
   const defaultFilters: Record<string, any> = {
-    page_size: pagination.pageSize,
+    page_size: pagination.pageSize,  // Use current pagination.pageSize (50)
     page: pagination.pageIndex + 1,
     tags: [],
     category: 'all',
@@ -381,12 +381,31 @@ export function ProductsTable({
 
   const [filters, setFilters] = useState<Record<string, any>>(defaultFilters)
 
+  // Debug logging
+  console.log('ProductsTable Debug:', {
+    filters,
+    defaultFilters,
+    'pagination.pageSize': pagination.pageSize,
+    'pagination.pageIndex': pagination.pageIndex
+  });
+
   // Remove cleanFilters and pass filters directly to useFetchProducts
   const { 
     data, 
     isLoading, 
-    isFetching
+    isFetching,
+    error: queryError
   } = useFetchProducts(filters);
+
+  // Debug logging for data
+  console.log('useFetchProducts Result:', {
+    data,
+    isLoading,
+    isFetching,
+    queryError,
+    'data?.count': data?.count,
+    'data?.results?.length': data?.results?.length
+  });
 
   // Use both isLoading and isFetching for complete loading state
   const loading = isLoading || isFetching;
@@ -413,9 +432,23 @@ export function ProductsTable({
   // Set total count based on the response count
   useEffect(() => {
     if (data?.count !== undefined) {
+      // Paginated response: {count: X, results: [...]}
       setTotalCountState(data.count);
+    } else if (Array.isArray(data)) {
+      // Direct array response: [{...}, {...}, ...]
+      // For direct arrays, we need to estimate total count
+      // If we got exactly the page size, there might be more pages
+      const currentPageSize = pagination.pageSize;
+      if (data.length === currentPageSize) {
+        // Estimate: if we got a full page, assume there are more
+        // Set total to show "at least" this many items
+        setTotalCountState(currentPageSize * (pagination.pageIndex + 2));
+      } else {
+        // If we got less than page size, this is probably the last page
+        setTotalCountState(currentPageSize * pagination.pageIndex + data.length);
+      }
     }
-  }, [data]);
+  }, [data, pagination.pageSize, pagination.pageIndex]);
   
   // Update filters when pagination or search changes
   useEffect(() => {
@@ -1351,9 +1384,14 @@ export function ProductsTable({
         // Load page size
         const savedPageSize = localStorage.getItem('productTablePageSize');
         if (savedPageSize) {
+          const parsedPageSize = parseInt(savedPageSize, 10);
+          // Validate that the saved page size is one of our valid options
+          const validPageSizes = [25, 50, 100, 250];
+          const validatedPageSize = validPageSizes.includes(parsedPageSize) ? parsedPageSize : 50;
+          
           setPagination({
             ...pagination,
-            pageSize: parseInt(savedPageSize, 10)
+            pageSize: validatedPageSize
           });
         }
       } catch (e) {
@@ -2019,14 +2057,14 @@ export function ProductsTable({
                   <Select
                     value={String(table.getState().pagination.pageSize)}
                     onValueChange={e => {
-                      const newSize = Math.min(+e, 50);
+                      const newSize = Math.min(+e, 250); // Increased limit for PIM usage
                       setPagination({ pageIndex: 0, pageSize: newSize });
                       setFilters(f => ({ ...f, page_size: newSize, page: 1 }));
                     }}
                   >
                     <SelectTrigger className="h-8 w-[70px]"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {[10, 25, 50].map((n) => (
+                      {[25, 50, 100, 250].map((n) => ( // PIM-appropriate page sizes
                         <SelectItem key={n} value={String(n)}>{n}</SelectItem>
                       ))}
                     </SelectContent>

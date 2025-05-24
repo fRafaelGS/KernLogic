@@ -40,6 +40,23 @@ export function SortableTableHeader({
     );
   }
 
+  // Special styling for action column
+  if (id === "actions") {
+    return (
+      <TableHead
+        key={header.id}
+        style={{ width: header.getSize() }}
+        className="px-2 bg-slate-950/12 text-gray-700 font-semibold text-sm tracking-wide border-b border-gray-200 text-center whitespace-nowrap sticky right-0 z-30 min-w-[90px]"
+      >
+        <div className="flex items-center justify-center border-l border-slate-300/40 pl-2">
+          {header.isPlaceholder
+            ? null
+            : flexRender(header.column.columnDef.header, header.getContext())}
+        </div>
+      </TableHead>
+    );
+  }
+
   // which arrow?
   const sortIcon = isSorted === "asc" ? (
     <React.Fragment>

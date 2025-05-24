@@ -503,9 +503,9 @@ export function ProductsTable({
 
   // Update handleRefresh function
   const handleRefresh = useCallback(() => {
-    // Simply update filters to trigger a refetch
-    setFilters(prev => ({ ...prev }));
-  }, []);
+    // Invalidate React Query cache to trigger a fresh fetch
+    queryClient.invalidateQueries({ queryKey: ['products'] });
+  }, [queryClient]);
 
   const handleDelete = useCallback(async (productId: number) => {
     // Confirm archiving with user (changed from delete to archive)
@@ -1881,7 +1881,7 @@ export function ProductsTable({
                                     }
                                     
                                     const isActionsColumn = columnId === 'actions';
-                                    const actionsClass = isActionsColumn ? 'sticky right-0 z-20 border-l border-slate-300/40' : '';
+                                    const actionsClass = isActionsColumn ? 'sticky right-0 z-20 min-w-[90px]' : '';
                                     const cellBgClass = isActionsColumn ? (row.getIsSelected() ? 'bg-slate-950/18' : index % 2 === 0 ? 'bg-slate-950/5' : 'bg-slate-950/11') : '';
                                     
                                     // Special cell rendering for specific column types

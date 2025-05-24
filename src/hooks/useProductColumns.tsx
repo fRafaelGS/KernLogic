@@ -1187,38 +1187,42 @@ export function useProductColumns({
   ]);
 
   /* -------- 2. sticky action column ----------------------- */
-  const ACTION_W = 112;
+  const ACTION_W = 90;
   const actionColumn: ColumnDef<Product> = {
     id: "actions",
     size: ACTION_W,
     enableHiding: false,
     enableSorting: false,
     header: () => (
-      <div className="sticky right-0 z-30 w-12 text-center py-1 text-xs font-medium bg-slate-100 border-l">
-        Actions
+      <div className="sticky right-0 z-30 w-full text-center py-1 text-xs font-medium bg-slate-100 min-w-[90px]">
+        <div className="border-l border-slate-300/40 pl-2">
+          Actions
+        </div>
       </div>
     ),
     cell: ({ row }) => {
       const id = row.original.id;
       if (!id) return null;
       return (
-        <div className="sticky right-0 z-20 w-12 flex justify-center border-l bg-transparent">
-          <div className="flex flex-col items-center gap-1 rounded-lg bg-white shadow-sm py-1 px-0.5">
-            <IconBtn
-              tooltip="View"
-              icon={EyeIcon}
-              onClick={() => handleRowClick(id)}
-            />
-            <IconBtn
-              tooltip="Edit"
-              icon={PencilIcon}
-              onClick={() => navigate(`/app/products/${id}/edit`)}
-            />
-            <IconBtn
-              tooltip="Archive"
-              icon={TrashIcon}
-              onClick={() => handleDelete(id)}
-            />
+        <div className="sticky right-0 z-20 w-full flex justify-center bg-transparent min-w-[90px]">
+          <div className="border-l border-slate-300/40 pl-2 w-full flex justify-center">
+            <div className="flex flex-col items-center gap-1 rounded-lg bg-white shadow-sm py-1 px-1">
+              <IconBtn
+                tooltip="View"
+                icon={EyeIcon}
+                onClick={() => handleRowClick(id)}
+              />
+              <IconBtn
+                tooltip="Edit"
+                icon={PencilIcon}
+                onClick={() => navigate(`/app/products/${id}/edit`)}
+              />
+              <IconBtn
+                tooltip="Archive"
+                icon={TrashIcon}
+                onClick={() => handleDelete(id)}
+              />
+            </div>
           </div>
         </div>
       );

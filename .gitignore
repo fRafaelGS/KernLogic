@@ -26,6 +26,7 @@ dist-ssr
 .vscode/*
 !.vscode/extensions.json
 .venv/
+coverage/
 .idea
 .DS_Store
 *.suo

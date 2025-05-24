@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { PlusIcon, PencilIcon, Save, X, Trash2, Sparkles, Layers } from 'lucide-react'
 import { useAttributes, useUpdateAttribute, useDeleteAttribute, useCreateAttribute, useAllAttributes, useAllAttributeGroups, useAttributeGroups, GROUPS_QUERY_KEY } from './api'
+import { useGlobalAttributes } from '@/hooks/useGlobalAttributes'
 import type { Attribute, AttributeGroup } from './types'
 import LocaleChannelSelector from '@/features/attributes/LocaleChannelSelector'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
@@ -18,12 +19,14 @@ import axiosInstance from '@/lib/axiosInstance'
 import { useFamilyAttributeGroups } from '@/hooks/useFamilyAttributeGroups'
 import { useOrgSettings } from '@/hooks/useOrgSettings'
 import { config, API_MEDIA_UPLOAD } from '@/config/config'
+import { useAuth } from '@/contexts/AuthContext'
 
 interface ProductAttributesPanelProps {
   productId: string
   locale?: string
   channel?: string
   familyId?: number // can be undefined but not null
+  enabled?: boolean // Add enabled prop to control when to fetch data
 }
 
 // Static fallback: currency list (replace with API-driven if available)
@@ -37,9 +40,9 @@ const currencies = [
 // Static fallback: measurement units (replace with API-driven if available)
 const units = ['mm','cm','m','in','ft','kg','g','lb','oz','l','ml']
 
-export function ProductAttributesPanel({ productId, locale, channel, familyId: propFamilyId }: ProductAttributesPanelProps) {
-  // Initialize query client
-  const queryClient = useQueryClient()
+export function ProductAttributesPanel({ productId, locale, channel, familyId: propFamilyId, enabled }: ProductAttributesPanelProps) {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   
   // IMPORTANT NOTE FOR PRODUCT FAMILY UPDATES:
   // When updating a product's family in other components (like Basic Info tab),
@@ -95,7 +98,7 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
   const familyError = familyGroupsRaw.error
 
   // Fetch product attribute groups (overrides)
-  const attributeGroupsRaw = useAttributeGroups(productId, selectedLocale, selectedChannel)
+  const attributeGroupsRaw = useAttributeGroups(productId, selectedLocale, selectedChannel, enabled)
   const attributeGroups: AttributeGroup[] = attributeGroupsRaw.data ?? []
 
   // Compute sourceGroups: prefer familyGroups if hasFamily, else attributeGroups
@@ -118,7 +121,8 @@ export function ProductAttributesPanel({ productId, locale, channel, familyId: p
   const deleteMutation = useDeleteAttribute(productId, selectedLocale, selectedChannel)
   const deleteGlobalMutation = useDeleteAttribute(productId, undefined, undefined)
   const createMutation = useCreateAttribute(productId, selectedLocale, selectedChannel)
-  const { data: allAttributes = [] } = useAllAttributes()
+  const { data: globalAttrData } = useGlobalAttributes()
+  const allAttributes = globalAttrData?.attributes || []
 
   // Build grouped data from sourceGroups, then add any data attributes
   const grouped: Record<string, Attribute[]> = useMemo(() => {

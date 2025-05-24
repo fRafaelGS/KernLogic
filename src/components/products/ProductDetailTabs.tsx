@@ -988,6 +988,7 @@ export const ProductDetailTabs = ({
             locale={selectedLocale || defaultLocale}
             channel={defaultChannel?.code || ''}
             familyId={typeof product.family === 'object' && product.family !== null ? product.family.id : undefined}
+            enabled={activeTab === 'attributes'}
           />
         )}
       </TabsContent>

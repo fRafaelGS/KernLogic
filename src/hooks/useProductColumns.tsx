@@ -25,6 +25,12 @@ import {
   HoverCardTrigger,
   HoverCardContent,
 } from "@/components/ui/hover-card";
+import {
+  Breadcrumb,
+  BreadcrumbList,
+  BreadcrumbItem,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 import type { OnChangeValue } from "react-select";
 
 import { useFamilies } from '@/api/familyApi';
@@ -534,15 +540,16 @@ export function useProductColumns({
       },
       cell: ({ row }) => {
         const rowIndex = row.index;
-        const categoryName = row.getValue("category_name") as string || "";
+        const product = row.original;
+        
+        // Simple category display - just use category_name from the API
+        const displayText = product.category_name || 'Uncategorized';
+        
         const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.columnId === 'category';
         
-        // Extract current category ID from the product's category array
-        const currentCategoryId = row.original.category && Array.isArray(row.original.category) && row.original.category.length > 0
-          ? row.original.category[row.original.category.length - 1]?.id // Get the leaf category ID
-          : null;
+        // Extract current category ID from the product for editing
+        const currentCategoryId = product.category_id || null;
         
-        // When editing, don't attach any click handlers to the wrapper
         if (isEditing) {
           return (
             <div 
@@ -562,28 +569,12 @@ export function useProductColumns({
                     
                     const success = await updateProductCategory(productId, typeof newId === 'string' ? parseInt(newId, 10) : newId);
                     if (success) {
-                      // Optimistically update local state
-                      if (setProducts) {
-                        // Find the selected category from categoryOptions to get the name
-                        const selectedCategory = categoryOptions.find(cat => 
-                          String(cat.value) === String(newId)
-                        );
-                        
-                        setProducts(prev => prev.map(p => 
-                          p.id === productId 
-                            ? { 
-                                ...p, 
-                                category: selectedCategory ? [{ 
-                                  id: typeof newId === 'string' ? parseInt(newId, 10) : newId, 
-                                  name: selectedCategory.label 
-                                }] : [],
-                                category_name: selectedCategory?.label || ''
-                              }
-                            : p
-                        ));
-                      }
+                      toast({ 
+                        title: "Category updated successfully", 
+                        variant: "default" 
+                      });
                       
-                      // Also fetch fresh data if available
+                      // Refresh data if available
                       if (fetchData) fetchData();
                     }
                   } catch (err) {
@@ -604,7 +595,7 @@ export function useProductColumns({
           );
         }
         
-        // Non-editing mode
+        // Non-editing mode: Simple text display
         return (
           <div 
             className="relative z-50 overflow-visible cursor-pointer hover:text-primary transition-colors p-1"
@@ -616,7 +607,11 @@ export function useProductColumns({
           >
             <Tooltip>
               <TooltipTrigger asChild>
-                <span className="editable-cell">{categoryName || 'Uncategorized'}</span>
+                <div className="editable-cell">
+                  <span className="font-medium text-slate-900">
+                    {displayText}
+                  </span>
+                </div>
               </TooltipTrigger>
               <TooltipContent>Click to edit</TooltipContent>
             </Tooltip>

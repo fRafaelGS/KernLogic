@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { useDebounce } from '@/hooks/useDebounce'
 import { config } from '@/config/config'
 import { useQuery } from '@tanstack/react-query'
+import axiosInstance from '@/lib/axiosInstance'
 
 type ViewMode = 'list' | 'grid'
 
@@ -110,15 +111,23 @@ export default function ProductsPage() {
   }, [viewMode, debouncedSearchTerm])
   
   // Fetch products with React Query
-  const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } = useFetchProducts(filters)
+  const { data, isLoading, error } = useFetchProducts({
+    ...filters,
+    // Convert string prices to numbers for the API
+    minPrice: filters.minPrice ? parseFloat(filters.minPrice) : undefined,
+    maxPrice: filters.maxPrice ? parseFloat(filters.maxPrice) : undefined,
+  })
   
-  // Extract products from paginated data
+  // Extract products from regular query response
   const products = React.useMemo(() => {
     if (!data) return []
-    return data.pages.flatMap((page: any) =>
-      // if the page is an array of products, use it directly
-      Array.isArray(page) ? page : page.results || []
-    )
+    
+    // For regular query, data is the direct response
+    return Array.isArray(data) 
+      ? data 
+      : Array.isArray(data?.results) 
+        ? data.results 
+        : []
   }, [data])
   
   // Get ALL categories from API (not filtered by current products)
@@ -138,24 +147,16 @@ export default function ProductsPage() {
     staleTime: 5 * 60 * 1000, // 5 minutes
   })
   
-  // For brands, we need to get unique brands from ALL products (not just current page)
-  // This requires fetching all products briefly to extract brands
-  const { data: allProductsForBrands = [] } = useQuery({
-    queryKey: ['all-products-brands'],
-    queryFn: () => productService.getProducts({}, true, false), // fetchAll=true, no assets
-    staleTime: 10 * 60 * 1000, // 10 minutes
-    select: (data: any) => {
-      // Extract unique brands from all products
-      const products = Array.isArray(data) ? data : data.results || []
-      const brandSet = new Set<string>()
-      products.forEach((product: any) => {
-        if (product?.brand && typeof product.brand === 'string') {
-          brandSet.add(product.brand)
-        }
-      })
-      return Array.from(brandSet).sort()
-    }
-  })
+  // Extract unique brands from current products
+  const brandsFromProducts = React.useMemo(() => {
+    const brandSet = new Set<string>()
+    products.forEach((product: any) => {
+      if (product?.brand && typeof product.brand === 'string') {
+        brandSet.add(product.brand)
+      }
+    })
+    return Array.from(brandSet).sort()
+  }, [products])
   
   // Create category options with IDs as values for grid view (all available categories)
   const gridCategoryOptions = React.useMemo(() => {
@@ -167,8 +168,8 @@ export default function ProductsPage() {
   
   // Create brand options for grid view (all available brands)
   const gridBrandOptions = React.useMemo(() => {
-    return allProductsForBrands
-  }, [allProductsForBrands])
+    return brandsFromProducts
+  }, [brandsFromProducts])
   
   // Create tag options for grid view (all available tags)
   const gridTagOptions = React.useMemo(() => {
@@ -252,23 +253,6 @@ export default function ProductsPage() {
           )}
         </div>
       </section>
-
-      {/* Shared Pagination Controls - Only show in grid view for React Query's fetchNextPage */}
-      {viewMode === 'grid' && hasNextPage && (
-        <div className="load-more-container border-t">
-          <Button 
-            variant="outline" 
-            onClick={() => fetchNextPage()} 
-            disabled={isFetchingNextPage}
-            className="static"
-          >
-            {isFetchingNextPage 
-              ? tableConfig.display.buttons.loadingMore 
-              : tableConfig.display.buttons.loadMore
-            }
-          </Button>
-        </div>
-      )}
     </div>
   )
 }

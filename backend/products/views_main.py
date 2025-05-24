@@ -103,10 +103,24 @@ from rest_framework.exceptions import NotFound
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.db.models.fields.files import FieldFile
 from django.db.models import Model
+from django.core.exceptions import ValidationError as DjangoValidationError
+from rest_framework.exceptions import ValidationError
+from django.db.models import F
 
 User = get_user_model()
 
 # Create your views here.
+
+# Define the allowed fields for the fields parameter
+ALLOWED_FIELDS = {
+    'id', 'name', 'sku',
+    'category_id', 'category_name', 
+    'brand', 'tags', 'barcode',
+    'is_active', 'created_at', 'updated_at',
+    'family_id', 'family_name',
+    'price', 'created_by', 'is_archived',
+    'primary_image_thumb'
+}
 
 @method_decorator(csrf_exempt, name='dispatch')
 class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
@@ -159,6 +173,182 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         # Default to requiring view permission
         return [HasProductViewPermission()]
 
+    def _validate_fields_param(self, fields_str):
+        """
+        Validate the fields query parameter and return the list of valid fields.
+        """
+        if not fields_str:
+            return None
+            
+        requested_fields = [field.strip() for field in fields_str.split(',') if field.strip()]
+        invalid_fields = [field for field in requested_fields if field not in ALLOWED_FIELDS]
+        
+        if invalid_fields:
+            raise ValidationError({
+                'fields': f"Invalid fields: {', '.join(invalid_fields)}. "
+                         f"Allowed fields are: {', '.join(sorted(ALLOWED_FIELDS))}"
+            })
+            
+        return requested_fields
+
+    def _get_optimized_queryset_for_fields(self, queryset, fields):
+        """
+        Optimize queryset based on requested fields.
+        """
+        # Map frontend field names to model field names
+        field_mapping = {
+            'id': 'id',
+            'name': 'name', 
+            'sku': 'sku',
+            'category_id': 'category__id',
+            'category_name': 'category__name',
+            'brand': 'brand',
+            'tags': 'tags',
+            'barcode': 'barcode',
+            'is_active': 'is_active',
+            'created_at': 'created_at',
+            'updated_at': 'updated_at',
+            'family_id': 'family__id',
+            'family_name': 'family__label',
+            'price': 'prices__amount',  # Will need special handling
+            'created_by': 'created_by__email',
+            'is_archived': 'is_archived',
+            'primary_image_thumb': 'assets__file'  # Will need special handling
+        }
+        
+        # Determine which model fields to select
+        select_fields = set(['id'])  # Always include id
+        
+        # Add all requested display fields
+        for field in fields:
+            if field in field_mapping:
+                model_field = field_mapping[field]
+                if '__' not in model_field:  # Direct fields
+                    select_fields.add(model_field)
+                else:  # Related fields need special handling
+                    if field in ['category_id', 'category_name']:
+                        select_fields.add('category_id')
+                    elif field in ['family_id', 'family_name']:
+                        select_fields.add('family_id')
+                    elif field == 'created_by':
+                        select_fields.add('created_by_id')
+        
+        # CRITICAL FIX: Always include fields needed for filtering and searching
+        # These fields are required by ProductFilter and SearchFilter to work properly
+        essential_fields = {
+            # ProductFilter text fields (icontains lookups)
+            'name', 'sku', 'brand', 'barcode', 'description',
+            # ProductFilter foreign key fields  
+            'category_id', 'family_id',
+            # ProductFilter boolean/status fields
+            'is_active', 'is_archived',
+            # ProductFilter JSON field
+            'tags',
+            # ProductFilter date fields
+            'created_at', 'updated_at',
+            # Organization/user filtering (required by OrganizationQuerySetMixin)
+            'created_by_id',
+            # SearchFilter fields - all fields from search_fields must be available
+            # search_fields = ['name', 'sku', 'description', 'brand', 'tags', 'barcode']
+        }
+        select_fields.update(essential_fields)
+        
+        # Optimize with only() and select_related()
+        queryset = queryset.only(*select_fields)
+        
+        # Add select_related for foreign keys if needed
+        if any(field in fields for field in ['category_id', 'category_name']) or 'category_id' in select_fields:
+            queryset = queryset.select_related('category')
+        if any(field in fields for field in ['family_id', 'family_name']) or 'family_id' in select_fields:
+            queryset = queryset.select_related('family')
+        if 'created_by' in fields or 'created_by_id' in select_fields:
+            queryset = queryset.select_related('created_by')
+            
+        # Add prefetch_related for complex fields
+        # Always prefetch prices if price field is requested OR if price filtering is likely
+        # (min_price/max_price parameters are commonly used for filtering)
+        if 'price' in fields or any(param in self.request.query_params for param in ['min_price', 'max_price']):
+            from prices.models import ProductPrice
+            queryset = queryset.prefetch_related(
+                Prefetch(
+                    'prices',
+                    queryset=ProductPrice.objects.all()[:1],
+                    to_attr='first_price'
+                )
+            )
+        
+        if 'primary_image_thumb' in fields:
+            queryset = queryset.prefetch_related(
+                Prefetch(
+                    'assets',
+                    queryset=ProductAsset.objects.filter(is_primary=True)[:1],
+                    to_attr='primary_assets'
+                )
+            )
+        
+        return queryset
+
+    def _build_fields_response(self, obj, fields):
+        """
+        Build a response dictionary with only the requested fields.
+        """
+        response = {}
+        
+        for field in fields:
+            if field == 'id':
+                response['id'] = obj.id
+            elif field == 'name':
+                response['name'] = obj.name
+            elif field == 'sku':
+                response['sku'] = obj.sku
+            elif field == 'category_id':
+                response['category_id'] = obj.category_id
+            elif field == 'category_name':
+                response['category_name'] = obj.category.name if obj.category else None
+            elif field == 'brand':
+                response['brand'] = obj.brand
+            elif field == 'tags':
+                response['tags'] = obj.get_tags()
+            elif field == 'barcode':
+                response['barcode'] = obj.barcode
+            elif field == 'is_active':
+                response['is_active'] = obj.is_active
+            elif field == 'created_at':
+                response['created_at'] = obj.created_at.isoformat() if obj.created_at else None
+            elif field == 'updated_at':
+                response['updated_at'] = obj.updated_at.isoformat() if obj.updated_at else None
+            elif field == 'family_id':
+                response['family_id'] = obj.family_id
+            elif field == 'family_name':
+                response['family_name'] = obj.family.label if obj.family else None
+            elif field == 'price':
+                # Get price from prefetched first_price
+                if hasattr(obj, 'first_price') and obj.first_price:
+                    response['price'] = float(obj.first_price[0].amount)
+                else:
+                    response['price'] = None
+            elif field == 'created_by':
+                response['created_by'] = obj.created_by.email if obj.created_by else None
+            elif field == 'is_archived':
+                response['is_archived'] = obj.is_archived
+            elif field == 'primary_image_thumb':
+                # Get primary image from prefetched primary_assets
+                if hasattr(obj, 'primary_assets') and obj.primary_assets:
+                    asset = obj.primary_assets[0]
+                    if asset.file:
+                        # Ensure we return a proper URL
+                        try:
+                            response['primary_image_thumb'] = asset.file.url
+                        except ValueError:
+                            # Handle case where file field has no file
+                            response['primary_image_thumb'] = None
+                    else:
+                        response['primary_image_thumb'] = None
+                else:
+                    response['primary_image_thumb'] = None
+        
+        return response
+
     def get_queryset(self):
         """
         Filter products to return only those created by the current user.
@@ -178,8 +368,19 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             # Regular users only see their own products
             qs = Product.objects.filter(created_by=user)
         
-        # For list view: Optimize by selecting only the needed fields
-        if self.action == 'list':
+        # Check for fields parameter optimization
+        fields_param = self.request.query_params.get('fields')
+        if fields_param and self.action == 'list':
+            try:
+                validated_fields = self._validate_fields_param(fields_param)
+                if validated_fields:
+                    qs = self._get_optimized_queryset_for_fields(qs, validated_fields)
+            except ValidationError:
+                # Let the validation error bubble up
+                raise
+        
+        # For list view: Optimize by selecting only the needed fields (if not using fields param)
+        elif self.action == 'list' and not fields_param:
             qs = qs.only(
                 'id', 'name', 'sku', 'is_active', 'created_at', 'updated_at',
                 'category_id', 'description', 'brand', 'barcode', 'is_archived',
@@ -212,44 +413,34 @@ class ProductViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 )
             )
             
-        # Additional filters from query parameters
-        category_id = self.request.query_params.get('category_id')
-        category_name = self.request.query_params.get('category')  # For backwards compatibility
-        brand = self.request.query_params.get('brand')
-        is_active = self.request.query_params.get('is_active')
-        
-        if category_id:
-            # Direct filter by category ID
-            qs = qs.filter(category_id=category_id)
-        elif category_name:
-            # For backwards compatibility - find category by name
-            from .models import Category
-            try:
-                category = Category.objects.filter(
-                    name=category_name,
-                    organization=get_user_organization(user)
-                ).first()
-                
-                if category:
-                    qs = qs.filter(category=category)
-            except Exception:
-                # If there's an error, just continue without this filter
-                pass
-                
-        if brand:
-            qs = qs.filter(brand=brand)
-        if is_active is not None:
-            is_active_bool = is_active.lower() == 'true'
-            qs = qs.filter(is_active=is_active_bool)
-        
-        # Filter out archived products
+        # Filter out archived products (this is the only manual filter we keep)
         return qs.filter(is_archived=False)
-        
+
     def list(self, request, *args, **kwargs):
         """
-        Override list method to use the full ProductSerializer so that the list endpoint returns nested category data.
+        Override list method to support fields parameter optimization.
         """
-        # self.serializer_class = ProductListSerializer  # Removed: use full serializer for category data
+        fields_param = request.query_params.get('fields')
+        
+        if fields_param:
+            # Validate fields parameter first
+            validated_fields = self._validate_fields_param(fields_param)
+            
+            # Get optimized queryset AND apply all filters
+            queryset = self.filter_queryset(self.get_queryset())
+            
+            # Paginate
+            page = self.paginate_queryset(queryset)
+            if page is not None:
+                # Build custom response with only requested fields
+                results = [self._build_fields_response(obj, validated_fields) for obj in page]
+                return self.get_paginated_response(results)
+            
+            # Non-paginated response
+            results = [self._build_fields_response(obj, validated_fields) for obj in queryset]
+            return Response(results)
+        
+        # Default behavior for no fields parameter
         return super().list(request, *args, **kwargs)
 
     def perform_create(self, serializer):

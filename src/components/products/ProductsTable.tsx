@@ -50,6 +50,8 @@ import {
 } from "lucide-react";
 import { Product, productService, ProductAttribute, ProductAsset } from "@/services/productService";
 import { updateProductCategory } from "@/services/categoryService";
+import { useCategories } from "@/components/categories/SubcategoryManager/useCategories";
+import { getBreadcrumbPath } from "@/services/categoryService";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
@@ -82,6 +84,8 @@ import { ProductGrid } from './ProductGrid'
 import { useOrgSettings } from '@/hooks/useOrgSettings'
 import { useFamilies } from "@/api/familyApi";
 import { useFetchProducts } from "@/hooks/useFetchProducts";
+import { useProductExpansion, useProductAttributeGroups } from "@/hooks/useOptimizedProducts";
+import { useGlobalAttributes } from "@/hooks/useGlobalAttributes";
 import { config } from "@/config/config";
 import { ROUTES } from "@/config/routes";
 import { ProductsTableFilters } from './ProductsTableFilters'
@@ -185,6 +189,59 @@ interface ProductsTableProps {
   filters?: Record<string, any>;
 }
 
+// Component for expanded row content with on-demand attribute loading
+const ExpandedRowContent = React.memo(({ product, zebra, locale, channel, isExpanded }: {
+  product: Product;
+  zebra: boolean;
+  locale: string;
+  channel: string;
+  isExpanded: boolean;
+}) => {
+  // Early return if not expanded to avoid any hook calls
+  if (!isExpanded || !product?.id) {
+    return null;
+  }
+
+  // Get global attributes cache - this is shared across all components
+  const { data: globalAttrData } = useGlobalAttributes();
+
+  // Only fetch attributes when row is expanded AND we have valid, non-empty product data
+  const shouldFetch = isExpanded && 
+                     !!product.id && 
+                     !!locale && 
+                     !!channel && 
+                     locale !== '' && 
+                     channel !== '';
+
+  const { data: attributeGroups, isLoading: isLoadingAttributes } = useProductAttributeGroups(
+    product.id,
+    shouldFetch, // More strict enabled condition
+    { locale, channel }
+  );
+
+  if (isLoadingAttributes) {
+    return (
+      <div className="flex items-center justify-center p-4">
+        <div className="text-sm text-muted-foreground">Loading attributes...</div>
+      </div>
+    );
+  }
+
+  const productWithAttributes: ProductWithAttributeArray = {
+    ...product,
+    attributes: attributeGroups || []
+  };
+
+  return (
+    <ProductRowDetails 
+      product={productWithAttributes as any} 
+      zebra={zebra}
+      locale={locale}
+      channel={channel}
+    />
+  );
+});
+
 // Update the function signature to accept props
 export function ProductsTable({ 
   hideTopControls = false,
@@ -204,8 +261,26 @@ export function ProductsTable({
   const [editValue, setEditValue] = useState<string | string[]>('');
   const [originalEditValue, setOriginalEditValue] = useState<string | string[]>('');
 
+  // Use React Query to fetch families
   const { data: families = [], isLoading: isFamiliesLoading } = useFamilies();
-
+  
+  // Get the full category tree for breadcrumb building
+  const { categories: categoryTree } = useCategories();
+  
+  // Convert category tree to TreeNodes for getBreadcrumbPath function
+  // Commenting out for now since it's causing issues with basic category display
+  /*
+  const categoryTreeNodes = useMemo(() => {
+    const convertToTreeNode = (cats: any[]): any[] => {
+      return cats.map(cat => ({
+        label: cat.name,
+        value: cat.id.toString(),
+        children: cat.children ? convertToTreeNode(cat.children) : undefined
+      }));
+    };
+    return convertToTreeNode(categoryTree);
+  }, [categoryTree]);
+  */
   
   // Add viewMode state
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
@@ -298,46 +373,40 @@ export function ProductsTable({
   }
 
   const [filters, setFilters] = useState<Record<string, any>>(defaultFilters)
-  
+
   // Remove cleanFilters and pass filters directly to useFetchProducts
   const { 
     data, 
     isLoading, 
-    isFetching,
-    fetchNextPage, 
-    hasNextPage, 
-    isFetchingNextPage 
+    isFetching
   } = useFetchProducts(filters);
-  
+
   // Use both isLoading and isFetching for complete loading state
   const loading = isLoading || isFetching;
-  
-  // Derive products from the paginated data and add state for products
-  const [productsState, setProducts] = useState<Product[]>([]);
+
+  // Derive products from the paginated data (remove the state variable that was causing infinite re-renders)
   const products = useMemo(() => {
     if (!data) return []
-    // Flatten and normalize
-    const newProducts = data.pages.flatMap(page =>
-      Array.isArray(page)
-        ? page
-        : Array.isArray(page?.results)
-          ? page.results
-          : []
-    )
-    // Use the new backend contract: wrap the nested category object in an array
-    const normalizedProducts = newProducts.map(p => ({
+    
+    // For regular query, data is the direct response
+    const currentPageProducts = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.results)
+        ? data.results
+        : []
+    
+    // Keep the original simple category structure - don't over-complicate it
+    return currentPageProducts.map(p => ({
       ...p,
-      category: p.category ? [p.category] : [],
-      category_name: p.category_name ?? '',
+      // Just use the category_name as-is from the API, no complex processing
+      category_name: p.category_name || 'Uncategorized',
     }))
-    setProducts(normalizedProducts)
-    return normalizedProducts
   }, [data])
   
-  // Set total count based on the first page's count
+  // Set total count based on the response count
   useEffect(() => {
-    if (data?.pages?.[0]?.count !== undefined) {
-      setTotalCountState(data.pages[0].count);
+    if (data?.count !== undefined) {
+      setTotalCountState(data.count);
     }
   }, [data]);
   
@@ -347,10 +416,8 @@ export function ProductsTable({
       ...prev,
       page: pagination.pageIndex + 1,
       page_size: pagination.pageSize,
-      search: debouncedSearchTerm || undefined,
-      // Add other filters as needed
     }));
-  }, [pagination.pageIndex, pagination.pageSize, debouncedSearchTerm]);
+  }, [pagination.pageIndex, pagination.pageSize]);
   
   const [columnOrder, setColumnOrder] = useState<string[]>([]);
   const [filtersVisible, setFiltersVisible] = useState(false);
@@ -486,7 +553,7 @@ export function ProductsTable({
   // const uniqueCategories = useUniqueCategories(products);
 
   // Update the filteredData tag filtering logic with proper type casting
-  const filteredData = productsState;
+  const filteredData = products;
 
   // Update the productRowMap whenever the filtered products change
   useEffect(() => {
@@ -894,38 +961,30 @@ export function ProductsTable({
       if (columnId === 'category') {
         // This is now handled directly in the CategoryTreeSelect onChange
         return;
-      } else {
-        // Normal optimistic update for non-category fields
-        setProducts(prev =>
-          prev.map(p => {
-            if (p.id === productId) {
-              // Create a new product object with updated field
-              const updatedProduct = { ...p, [columnId]: formattedValue };
-              return updatedProduct;
-            }
-            return p;
-          })
-        );
       }
+      // Note: Removed optimistic update since products are now derived from React Query
+      // The cache invalidation will handle the update
 
       // Save to API with the correct payload
       const response = await productService.updateProduct(productId, apiPayload);
       
-      // Show success notification immediately without refetching
+      // Show success notification and invalidate cache
       toast({ 
         title: `${columnId.charAt(0).toUpperCase() + columnId.slice(1)} updated`, 
         variant: 'default' 
       });
+      
+      // Invalidate React Query cache to refresh the data
+      queryClient.invalidateQueries({ queryKey: ['products'] });
       
       setEditingCell(null); // Clear editing state
     } catch (error) {
       console.error('Error updating product:', error);
       toast({ title: 'Failed to update product', variant: 'destructive' });
       
-      // Revert optimistic update
-      fetchData();
+      // Note: No need to revert since we're not doing optimistic updates
     }
-  }, [fetchData, productRowMap, toast, categoryOptions, setProducts]);
+  }, [fetchData, productRowMap, toast, categoryOptions, queryClient]);
 
   // Move the price cell input handler to avoid recreating it on each render
   const handlePriceCellChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1106,20 +1165,15 @@ export function ProductsTable({
         />
       );
     }
-    
-    // Create product with attributes if they've been loaded
-    const productWithAttributes: ProductWithAttributeArray = {
-      ...row.original,
-      attributes: productAttributes[productId] || []
-    };
-    
+
     return (
-      <ProductRowDetails 
+      <ExpandedRowContent
         key={`expanded-${row.id}-product-${productId}`}
-        product={productWithAttributes as any} 
+        product={row.original}
         zebra={index % 2 === 0}
         locale={defaultLocale || ''}
         channel={defaultChannel?.code || ''}
+        isExpanded={row.getIsExpanded()}
       />
     );
   };
@@ -1183,7 +1237,6 @@ export function ProductsTable({
     /* setters */
     setEditValue,
     setCategoryOptions,
-    setProducts,
 
     /* handlers */
     handleKeyDown,
@@ -1302,58 +1355,17 @@ export function ProductsTable({
 
   // Update the handleExpandedChange function to load assets when a row is expanded
   type ExpandedState = Record<string, boolean>
-  const handleExpandedChange = useCallback((updater: Updater<ExpandedState>) => {
-    setExpanded(prev => {
-      const next = typeof updater === 'function' ? updater(prev) : updater
-      const openKeys = Object.keys(next).filter(k => next[k])
-      if (openKeys.length === 0) return {}
+  const handleExpandedChange = useCallback((updater: (prev: ExpandedState) => ExpandedState) => {
+    setExpanded((prev) => {
+      const next = updater(prev)
       
-      // Process all newly expanded rows to load their assets
-      openKeys.forEach(key => {
-        const tableInstance = tableRef.current
-        if (!tableInstance) return
-        const row = tableInstance.getRow(key)
-        // Skip if row doesn't exist or has no original data
-        if (!row?.original) return
-        
-        const productId = row.original.id
-        // Skip processing if productId is undefined
-        if (productId === undefined) return
-        
-        // Only fetch assets if they're not already cached and not currently being fetched
-        if (productId && !productAssetsCache[productId] && !attrGroupsInFlight.current.has(productId)) {
-          productService.getProductAssets(productId)
-            .then(assets => {
-              setProductAssetsCache(prev => ({ ...prev, [productId]: assets }))
-              setProducts(prevProducts => 
-                prevProducts.map(prod => {
-                  if (prod.id === productId) {
-                    const primaryAsset =
-                      assets.find(a => (a.is_primary && ((a.type || a.asset_type) || '').toLowerCase().includes('image')))
-                      || assets.find(a => ((a.type || a.asset_type) || '').toLowerCase().includes('image'))
-                    if (primaryAsset?.url) {
-                      return {
-                        ...prod,
-                        assets,
-                        primary_image_thumb: primaryAsset.url,
-                        primary_image_large: primaryAsset.url,
-                      } as Product
-                    }
-                  }
-                  return prod
-                })
-              )
-            })
-            .catch(err => {
-              console.error(`Error loading assets for product ${productId}:`, err)
-            })
-        }
-      })
+      // Note: Removed asset fetching logic since products are now read-only from React Query
+      // Asset fetching should be handled at the API level or in a separate hook
       
       // Return the full next state to preserve all expanded rows
       return next
     })
-  }, [productAssetsCache, productService])
+  }, [])
 
   // Configure the table with useReactTable
   const table = useReactTable<Product>({
@@ -1385,19 +1397,10 @@ export function ProductsTable({
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
     onPaginationChange: (updater) => {
-      // Simplify the function to avoid TypeScript errors while preserving behavior
-      const newPagination = typeof updater === 'function'
+      const newState = typeof updater === 'function'
         ? updater(pagination)
         : updater;
-      
-      // Check if anything actually changed before updating
-      if (newPagination.pageIndex !== pagination.pageIndex || 
-          newPagination.pageSize !== pagination.pageSize) {
-        // Mark as new pagination state so fetchData may run once
-        fetchedOnceRef.current = false;
-        // Use the setPagination function we defined
-        setPagination(newPagination);
-      }
+      setPagination(newState);
     },
     onColumnOrderChange: setColumnOrder,
     onExpandedChange: handleExpandedChange as Parameters<typeof useReactTable>[0]['onExpandedChange'],
@@ -1522,41 +1525,6 @@ export function ProductsTable({
       }
     }
   }, [table]);
-
-  // 🚀 Pre-fetch attribute groups for the first visible rows
-  useEffect(() => {
-    if (pagination.pageIndex !== 0) return;                // only first page
-
-    // Filter out any products without valid ids first
-    const validProducts = filteredData.filter(p => p && p.id !== undefined);
-
-    validProducts.slice(0, pagination.pageSize).forEach(async (p) => {
-      if (!p.id) return;                                   // safety
-      if (productAttributes[p.id] !== undefined) return;   // already cached
-      if (attrGroupsInFlight.current.has(p.id)) return;    // already fetching
-
-      attrGroupsInFlight.current.add(p.id);
-      try {
-        // Pass default locale and channel
-        const groups = await productService.getProductAttributeGroups(
-          p.id, 
-          defaultLocale, 
-          defaultChannel?.code
-        );
-        if (groups?.length) {
-          setProductAttributes(prev => ({ ...prev, [String(p.id)]: groups }));
-        } else {
-          setProductAttributes(prev => ({ ...prev, [String(p.id)]: [] }));
-        }
-      } catch (err) {
-        console.error(`prefetch groups failed for product ${p.id}`, err);
-        setProductAttributes(prev => ({ ...prev, [String(p.id)]: [] }));
-      } finally {
-        attrGroupsInFlight.current.delete(p.id);           // ✅ done
-      }
-    });
-  // Add defaultLocale and defaultChannel to dependencies
-  }, [pagination.pageIndex, pagination.pageSize, filteredData, defaultLocale, defaultChannel?.code]);
 
   // Add a function to calculate pagination display info
   const renderPaginationInfo = useCallback(() => {
@@ -2054,7 +2022,7 @@ export function ProductsTable({
         selectedIds={getSelectedProductIds()}
         onSuccess={() => {
           setRowSelection({});
-          forceReload();
+          queryClient.invalidateQueries({ queryKey: ['products'] });
         }}
       />
     </React.Fragment>

@@ -742,9 +742,16 @@
                     params: inputValue ? { search: inputValue } : {}
                 });
                 
-                // Transform the response to the expected format for react-select
-                // The API should return an array of tag names (strings)
-                const tags = response.data;
+                // Handle both paginated and direct array responses
+                let tags: any;
+                
+                if (response.data && typeof response.data === 'object' && 'results' in response.data) {
+                    // Handle paginated response
+                    tags = response.data.results;
+                } else {
+                    // Handle direct array response
+                    tags = response.data;
+                }
                 
                 if (Array.isArray(tags)) {
                     // The backend returns an array of strings (tag names)
@@ -917,28 +924,19 @@
             }
         },
 
-        // Get product attribute groups (NEW FUNCTION)
+        // Get product attribute groups (OPTIMIZED - no longer calls /api/attributes/)
         getProductAttributeGroups: async (
             productId: number,
             locale?: string,
-            channel?: string
+            channel?: string,
+            attributeMap?: Record<number, { label: string; code: string; type?: string }>
           ): Promise<AttributeGroup[]> => {
             try {
-              /* 1. build { id: { label, code } } map */
-              const { data: attrDefs } = await axiosInstance.get('/api/attributes/');
-              const attrMap = Array.isArray(attrDefs)
-                ? attrDefs.reduce<Record<number, { label: string; code: string }>>(
-                    (acc, a: any) => {
-                      acc[a.id] = { label: a.label, code: a.code };
-                      return acc;
-                    },
-                    {}
-                  )
-                : {};
+              // No longer fetch attributes globally - use provided map or skip enrichment
+              const attrMap = attributeMap || {};
           
-              /* 2. fetch groups for the product */
+              /* Fetch groups for the product */
               const url = `${PRODUCTS_API_URL}/${productId}/attribute-groups/`;
-              // Use the provided locale and channel or let the backend fall back to defaults
               const params: Record<string, string> = {};
               if (locale) params.locale = locale;
               if (channel) params.channel = channel;
@@ -946,7 +944,7 @@
           
               if (isHtmlResponse(data) || !Array.isArray(data)) return [];
           
-              /* 3. inject missing label/code into each item */
+              /* Inject missing label/code from provided map */
               return data.map((g: any) => ({
                 id: g.id,
                 name: g.name,
@@ -958,9 +956,10 @@
                   value_id: it.value_id,
                   locale: it.locale,
                   channel: it.channel,
-                  // Optionally include label/code if needed for UI
+                  // Use provided attribute map for enrichment
                   attribute_label: it.attribute_label ?? attrMap[it.attribute]?.label ?? '',
-                  attribute_code:  it.attribute_code  ?? attrMap[it.attribute]?.code  ?? ''
+                  attribute_code:  it.attribute_code  ?? attrMap[it.attribute]?.code  ?? '',
+                  attribute_type:  it.attribute_type  ?? attrMap[it.attribute]?.type  ?? ''
                 }))
               }));
             } catch (err) {
@@ -1972,5 +1971,46 @@
         deleteAssetBundle: async (productId: number, bundleId: number): Promise<void> => {
             const url = `${PRODUCTS_API_URL}/${productId}/asset-bundles/${bundleId}/`
             await axiosInstance.delete(url)
+        },
+
+        // Get product assets with on-demand loading
+        getProductAssetsOnDemand: async (
+            productId: number, 
+            options: { includeAssets?: boolean } = {}
+        ): Promise<ProductAsset[]> => {
+            if (!options.includeAssets) return []
+            
+            try {
+                const url = `${PRODUCTS_PATH}/${productId}/?fields=assets`
+                const response: AxiosResponse<{ assets?: ProductAsset[] }> = await axiosInstance.get(url)
+                return response.data.assets || []
+            } catch (error) {
+                console.error('Error fetching product assets on demand:', error)
+                return []
+            }
+        },
+
+        // Get product attribute groups with on-demand loading  
+        getProductAttributeGroupsOnDemand: async (
+            productId: number,
+            options: { locale?: string; channel?: string } = {}
+        ): Promise<ProductAttributeGroup[]> => {
+            try {
+                let url = `${PRODUCTS_PATH}/${productId}/attribute-groups/`
+                
+                const params = new URLSearchParams()
+                if (options.locale) params.append('locale', options.locale)
+                if (options.channel) params.append('channel', options.channel)
+                
+                if (params.toString()) {
+                    url += `?${params.toString()}`
+                }
+                
+                const response: AxiosResponse<ProductAttributeGroup[]> = await axiosInstance.get(url)
+                return response.data || []
+            } catch (error) {
+                console.error('Error fetching product attribute groups on demand:', error)
+                return []
+            }
         },
     }; 

@@ -91,7 +91,7 @@ export function useDeleteAttribute(productId: string, locale?: string, channel?:
   })
 }
 
-export function useAttributeGroups(productId: string, locale?: string, channel?: string) {
+export function useAttributeGroups(productId: string, locale?: string, channel?: string, enabled?: boolean) {
   return useQuery<AttributeGroup[], Error>({
     queryKey: [...GROUPS_QUERY_KEY(productId), String(locale || 'all'), String(channel || 'all')],
     queryFn: async () => {
@@ -103,7 +103,7 @@ export function useAttributeGroups(productId: string, locale?: string, channel?:
       const { data } = await axiosInstance.get(`/api/products/${productId}/attribute-groups/`, { params })
       return Array.isArray(data) ? data : []
     },
-    enabled: Boolean(productId),
+    enabled: enabled !== false && Boolean(productId),
     staleTime: 5 * 60 * 1000
   })
 }
@@ -113,8 +113,12 @@ export function useCreateAttribute(productId: string, locale?: string, channel?:
   return useMutation<Attribute, Error, { attributeId: number; value: string; locale?: string; channel?: string }>({
     mutationFn: async ({ attributeId, value, locale: attributeLocale, channel: attributeChannel }) => {
       const params: Record<string,string> = {}
-      if (attributeLocale || locale) params.locale = attributeLocale || locale
-      if (attributeChannel || channel) params.channel = attributeChannel || channel
+      if (attributeLocale || locale) {
+        params.locale = attributeLocale || locale || ''
+      }
+      if (attributeChannel || channel) {
+        params.channel = attributeChannel || channel || ''
+      }
       const payload = {
         attribute: attributeId,
         product: Number(productId),
@@ -133,15 +137,15 @@ export function useCreateAttribute(productId: string, locale?: string, channel?:
   })
 }
 
-export function useAllAttributes() {
+export function useAllAttributes(enabled: boolean = false) {
   return useQuery<Attribute[], Error>({
     queryKey: ['allAttributes'],
     queryFn: async () => {
       const { data } = await axiosInstance.get(API_ENDPOINTS.imports.attributes || '')
       return data
     },
+    enabled: enabled, // Only load when explicitly enabled
     staleTime: 10 * 60 * 1000,
-    // No enabled condition - always load regardless of productId
   })
 }
 

@@ -1,7 +1,18 @@
-import { useInfiniteQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { productService, PaginatedResponse, Product } from '@/services/productService'
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+
+// Define the allowed fields for table optimization
+const ALLOWED_FIELDS = [
+  "id", "name", "sku",
+  "category_id", "category_name",
+  "brand", "tags", "barcode",
+  "is_active", "created_at", "updated_at",
+  "family_id", "family_name",
+  "price", "created_by", "is_archived",
+  "primary_image_thumb"
+] as const
 
 export interface ProductsState {
   products: Product[]
@@ -11,74 +22,87 @@ export interface ProductsState {
   error: string | null
 }
 
+export interface FilterParams {
+  searchTerm?: string
+  name?: string
+  sku?: string
+  category?: string
+  status?: string
+  brand?: string
+  minPrice?: number
+  maxPrice?: number
+  tags?: string[]
+  page_size?: number
+  page?: number  // Add page parameter for pagination
+  family?: string
+  useFieldsOptimization?: boolean // Flag to enable/disable optimization
+}
+
 export interface PaginationState {
   pageIndex: number
   pageSize: number
 }
 
-export interface FilterParams {
-  searchTerm?: string
-  category?: string
-  status?: 'all' | 'active' | 'inactive'
-  minPrice?: string
-  maxPrice?: string
-  tags?: string[]
-  page_size?: number
-  page?: number
-  search?: string
-}
+const DEFAULT_PAGE_SIZE = 20
+const MAX_PAGE_SIZE = 100
 
-const PAGE_SIZE = 25
-const MAX_PAGE_SIZE = 50
-const DEFAULT_PAGE_SIZE = PAGE_SIZE
-
-function buildQueryParams(ui: Record<string, any>) {
-  const qp: Record<string, any> = {
-    page_size: Math.min(ui.page_size ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE),
-  };
-
-  // text search
-  if (ui.search)  qp.search = ui.search;
+function buildQueryParams(filters: FilterParams): Record<string, any> {
+  const params: Record<string, any> = {}
   
-  // name, sku, and other direct matches
-  if (ui.name) qp.name = ui.name;
-  if (ui.sku) qp.sku = ui.sku;
-  if (ui.brand) qp.brand = ui.brand;
-  if (ui.barcode) qp.barcode = ui.barcode;
-  if (ui.family) qp.family = ui.family;
-
-  // category
-  if (ui.category && ui.category !== 'all') qp.category = ui.category;
-
-  // status → is_active (bool)
-  if (ui.status && ui.status !== 'all')
-    qp.is_active = ui.status === 'active';
-  else if (ui.is_active !== undefined)
-    qp.is_active = ui.is_active;
-
-  // archived filter
-  if (ui.is_archived !== undefined)
-    qp.is_archived = ui.is_archived;
-
-  // price range
-  if (ui.minPrice) qp.min_price = ui.minPrice;
-  if (ui.maxPrice) qp.max_price = ui.maxPrice;
-
-  // tags array → comma-separated
-  if (Array.isArray(ui.tags) && ui.tags.length)
-    qp.tags = ui.tags.join(',');
-    
-  // date filters
-  if (ui.created_at_from) qp.created_at_from = ui.created_at_from;
-  if (ui.created_at_to) qp.created_at_to = ui.created_at_to;
-  if (ui.updated_at_from) qp.updated_at_from = ui.updated_at_from;
-  if (ui.updated_at_to) qp.updated_at_to = ui.updated_at_to;
-
-  // strip empty / undefined values
-  Object.keys(qp).forEach(k => {
-    if (qp[k] === '' || qp[k] === undefined) delete qp[k];
-  });
-  return qp;
+  if (filters.searchTerm) {
+    params.search = filters.searchTerm
+  }
+  
+  if (filters.name) {
+    params.name = filters.name
+  }
+  
+  if (filters.sku) {
+    params.sku = filters.sku
+  }
+  
+  if (filters.category && filters.category !== 'all') {
+    params.category = filters.category
+  }
+  
+  if (filters.status && filters.status !== 'all') {
+    params.is_active = filters.status === 'active'
+  }
+  
+  if (filters.brand && filters.brand !== 'all') {
+    params.brand = filters.brand
+  }
+  
+  if (filters.minPrice !== undefined) {
+    params.min_price = filters.minPrice
+  }
+  
+  if (filters.maxPrice !== undefined) {
+    params.max_price = filters.maxPrice
+  }
+  
+  if (filters.tags && filters.tags.length > 0) {
+    params.tags = filters.tags.join(',')
+  }
+  
+  if (filters.family && filters.family !== 'all') {
+    params.family = filters.family
+  }
+  
+  // Add page parameter from filters
+  if (filters.page) {
+    params.page = filters.page
+  }
+  
+  // Add fields optimization parameter if enabled (default: true)
+  if (filters.useFieldsOptimization !== false) {
+    params.fields = ALLOWED_FIELDS.join(',')
+  }
+  
+  // Set page size with validation
+  params.page_size = Math.min(filters.page_size ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE)
+  
+  return params
 }
 
 export function useFetchProducts(filters: FilterParams = {}) {
@@ -87,33 +111,31 @@ export function useFetchProducts(filters: FilterParams = {}) {
     
   const queryParams = buildQueryParams(filters)
 
-  return useInfiniteQuery({
+  return useQuery({
     queryKey: ['products', queryParams],
-    queryFn: async ({ pageParam = 1 }) => {
+    queryFn: async () => {
       const response = await productService.getProducts(
-        { ...queryParams, page: pageParam },
+        queryParams,
         false, // fetchAll = false to ensure we get paginated response
-        false  // includeAssets = false for performance
+        false  // includeAssets = false for performance (handled by fields optimization)
       )
       // Ensure we return a properly typed response
       return response as PaginatedResponse<Product>
     },
-    getNextPageParam: (lastPage: PaginatedResponse<Product>) => {
-      if (!lastPage.next) return undefined
-      // Extract page number from URL
-      try {
-        const url = new URL(lastPage.next)
-        const nextPage = url.searchParams.get('page')
-        return nextPage ? parseInt(nextPage) : undefined
-      } catch (e) {
-        // If next is not a valid URL, try to parse it as a relative path
-        const match = lastPage.next.match(/page=(\d+)/)
-        return match?.[1] ? parseInt(match[1]) : undefined
-      }
-    },
-    initialPageParam: 1,
     staleTime: 60000, // 1 minute
-    refetchOnWindowFocus: false
+    refetchOnWindowFocus: false,
+    gcTime: 5 * 60 * 1000, // 5 minutes cache time
+    retry: (failureCount, error) => {
+      // Don't retry on 4xx errors (client errors)
+      if (error && typeof error === 'object' && 'status' in error) {
+        const status = (error as any).status
+        if (status >= 400 && status < 500) {
+          return false
+        }
+      }
+      // Retry up to 3 times for other errors
+      return failureCount < 3
+    }
   })
 }
 
@@ -146,6 +168,16 @@ export function useFetchProductsOld(
         // Add search term if provided
         if (filterParams.searchTerm) {
           queryParams.search = filterParams.searchTerm
+        }
+        
+        // Add name filter if provided
+        if (filterParams.name) {
+          queryParams.name = filterParams.name
+        }
+        
+        // Add sku filter if provided
+        if (filterParams.sku) {
+          queryParams.sku = filterParams.sku
         }
         
         // Add category filter if provided
@@ -227,6 +259,8 @@ export function useFetchProductsOld(
     pagination.pageIndex, 
     pagination.pageSize,
     filterParams.searchTerm,
+    filterParams.name,
+    filterParams.sku,
     filterParams.category,
     filterParams.status,
     filterParams.minPrice,
@@ -236,4 +270,61 @@ export function useFetchProductsOld(
   ])
   
   return state
+}
+
+// Enhanced hook for on-demand detail fetching
+export function useFetchProductDetail(productId: number | undefined, options?: {
+  includeAssets?: boolean
+  includeAttributeGroups?: boolean
+}) {
+  const { includeAssets = false, includeAttributeGroups = false } = options || {}
+  
+  return useQuery({
+    queryKey: ['product-detail', productId, { includeAssets, includeAttributeGroups }],
+    queryFn: async () => {
+      if (!productId) throw new Error('Product ID is required')
+      
+      const product = await productService.getProduct(productId)
+      
+      // Fetch additional data on demand
+      const additionalData: any = {}
+      
+      if (includeAssets) {
+        try {
+          const assets = await productService.getProductAssets(productId)
+          additionalData.assets = assets
+        } catch (error) {
+          console.warn('Failed to fetch assets:', error)
+          additionalData.assets = []
+        }
+      }
+      
+      if (includeAttributeGroups) {
+        try {
+          // This would be the call to fetch attribute groups
+          // const attributeGroups = await productService.getProductAttributeGroups(productId)
+          // additionalData.attribute_groups = attributeGroups
+        } catch (error) {
+          console.warn('Failed to fetch attribute groups:', error)
+          additionalData.attribute_groups = []
+        }
+      }
+      
+      return { ...product, ...additionalData }
+    },
+    enabled: !!productId,
+    staleTime: 2 * 60 * 1000, // 2 minutes for detail data
+    gcTime: 10 * 60 * 1000, // 10 minutes cache time for detail data
+    retry: (failureCount, error) => {
+      // Don't retry on 4xx errors (client errors)
+      if (error && typeof error === 'object' && 'status' in error) {
+        const status = (error as any).status
+        if (status >= 400 && status < 500) {
+          return false
+        }
+      }
+      // Retry up to 3 times for other errors
+      return failureCount < 3
+    }
+  })
 } 

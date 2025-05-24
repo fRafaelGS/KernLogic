@@ -1024,6 +1024,7 @@ export function ProductForm({ product: initialProduct }: ProductFormProps) {
                   locale={selectedLocale}
                   channel={selectedChannel}
                   familyId={selectedFamily?.id}
+                  enabled={true}
                 />
               )}
               {!productId && (
